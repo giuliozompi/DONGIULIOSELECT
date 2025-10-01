@@ -8,6 +8,8 @@ import TasteRating from '@/components/TasteRating';
 import ProductAccordion from '@/components/ProductAccordion';
 import RelatedProducts from '@/components/RelatedProducts';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
 
 //todo: remove mock functionality
 const mockProduct = {
@@ -81,6 +83,18 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
+      <div className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm">
+        <div className="p-2">
+          <Button 
+            size="icon" 
+            variant="ghost"
+            onClick={() => setLocation('/')}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
       <ProductGallery images={mockProduct.images} />
 
       <div className="p-6 space-y-6">

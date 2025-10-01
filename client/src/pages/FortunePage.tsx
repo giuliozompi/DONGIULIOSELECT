@@ -4,7 +4,8 @@ import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import FortuneWheel from '@/components/FortuneWheel';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Gift } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Gift, ArrowLeft } from 'lucide-react';
 
 //todo: remove mock functionality
 const mockPrizes = [
@@ -39,9 +40,19 @@ export default function FortunePage() {
   return (
     <div className="min-h-screen bg-background pb-6">
       <div className="sticky top-0 z-50 bg-background border-b p-4">
-        <h1 className="text-2xl font-bold" data-testid="text-title">
-          Колесо Фортуны
-        </h1>
+        <div className="flex items-center gap-3">
+          <Button 
+            size="icon" 
+            variant="ghost"
+            onClick={() => setLocation('/')}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-2xl font-bold" data-testid="text-title">
+            Колесо Фортуны
+          </h1>
+        </div>
       </div>
 
       <div className="p-6 space-y-6">

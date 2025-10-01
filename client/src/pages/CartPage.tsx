@@ -5,7 +5,8 @@ import { useTelegramMainButton } from '@/hooks/useTelegramMainButton';
 import { hapticFeedback } from '@/lib/telegram';
 import CartItem from '@/components/CartItem';
 import { Card } from '@/components/ui/card';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 //todo: remove mock functionality
 interface CartItemType {
@@ -81,9 +82,19 @@ export default function CartPage() {
   return (
     <div className="min-h-screen bg-background pb-24">
       <div className="sticky top-0 z-50 bg-background border-b p-4">
-        <h1 className="text-2xl font-bold" data-testid="text-title">
-          Корзина
-        </h1>
+        <div className="flex items-center gap-3">
+          <Button 
+            size="icon" 
+            variant="ghost"
+            onClick={() => setLocation('/')}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-2xl font-bold" data-testid="text-title">
+            Корзина
+          </h1>
+        </div>
       </div>
 
       <div className="p-4 space-y-4">

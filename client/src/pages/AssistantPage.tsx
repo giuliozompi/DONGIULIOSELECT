@@ -1,6 +1,8 @@
 import { useLocation } from 'wouter';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import AIAssistant from '@/components/AIAssistant';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
 
 export default function AssistantPage() {
   const [, setLocation] = useLocation();
@@ -25,9 +27,19 @@ export default function AssistantPage() {
   return (
     <div className="h-screen flex flex-col bg-background">
       <div className="sticky top-0 z-50 bg-background border-b p-4 flex-shrink-0">
-        <h1 className="text-2xl font-bold" data-testid="text-title">
-          AI-Ассистент
-        </h1>
+        <div className="flex items-center gap-3">
+          <Button 
+            size="icon" 
+            variant="ghost"
+            onClick={() => setLocation('/')}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-2xl font-bold" data-testid="text-title">
+            AI-Ассистент
+          </h1>
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden">
