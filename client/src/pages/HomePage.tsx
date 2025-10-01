@@ -80,6 +80,7 @@ export default function HomePage() {
               src={logoImage} 
               alt="Don Giulio Select" 
               className="h-16 w-auto"
+              style={{ mixBlendMode: 'multiply' }}
               data-testid="img-logo"
             />
           </div>
