@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useLocation } from 'wouter';
 import CategoryNav from '@/components/CategoryNav';
 import ProductCard from '@/components/ProductCard';
-import logoImage from '@assets/dgselect_tiffany_print_ready_Страница_1_Изображение_0001_1759313793382.jpg';
 
 //todo: remove mock functionality
 const mockCategories = [
@@ -75,14 +74,10 @@ export default function HomePage() {
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-50 bg-background border-b">
         <div className="p-4 space-y-4">
-          <div className="flex items-center justify-center">
-            <img 
-              src={logoImage} 
-              alt="Don Giulio Select" 
-              className="h-16 w-auto"
-              style={{ mixBlendMode: 'multiply' }}
-              data-testid="img-logo"
-            />
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold" data-testid="text-title">
+              Don Giulio Select
+            </h1>
           </div>
           <CategoryNav
             categories={mockCategories}
