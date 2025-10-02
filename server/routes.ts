@@ -424,15 +424,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content,
       });
       
-      // TODO: Chiamata a OpenRouter API verrà implementata nel task successivo
-      // Per ora restituisci risposta mock
-      const mockResponse = 'Ciao! Sono il tuo assistente Don Giulio Select. Come posso aiutarti oggi con i nostri deliziosi prodotti italiani?';
+      // Ottieni storico messaggi per contesto
+      const conversationMessages = await storage.getMessagesByConversationId(convId);
+      
+      // Prepara messaggi per OpenRouter (escludi l'ultimo che abbiamo appena aggiunto)
+      const { generateAssistantResponse } = await import('./services/openrouter');
+      const aiMessages = conversationMessages.map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      }));
+      
+      // Genera risposta AI
+      const aiResponse = await generateAssistantResponse(aiMessages);
       
       // Salva risposta assistente
       const assistantMessage = await storage.createMessage({
         conversationId: convId,
         role: 'assistant',
-        content: mockResponse,
+        content: aiResponse,
       });
       
       res.json({
