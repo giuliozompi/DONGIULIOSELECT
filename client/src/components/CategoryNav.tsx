@@ -8,7 +8,7 @@ interface Category {
 
 interface CategoryNavProps {
   categories: Category[];
-  activeId: string;
+  activeId?: string;
   onCategorySelect: (id: string) => void;
 }
 

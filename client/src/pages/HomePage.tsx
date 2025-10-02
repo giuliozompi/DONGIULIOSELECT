@@ -1,74 +1,32 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import CategoryNav from '@/components/CategoryNav';
 import ProductCard from '@/components/ProductCard';
-
-//todo: remove mock functionality
-const mockCategories = [
-  { id: 'cheese', name: 'Сыры', count: 24 },
-  { id: 'meat', name: 'Мясные деликатесы', count: 18 },
-  { id: 'grocery', name: 'Бакалея', count: 32 },
-  { id: 'desserts', name: 'Десерты', count: 12 },
-  { id: 'dishes', name: 'Посуда', count: 8 },
-];
-
-//todo: remove mock functionality
-const mockProducts = [
-  {
-    id: '1',
-    name: 'Сыр Моцарелла',
-    category: 'Сыры / Рассольные',
-    price: 890,
-    priceOld: 1200,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1589881133595-39464f7aa2e4?w=400&h=400&fit=crop',
-  },
-  {
-    id: '2',
-    name: 'Пармезан Реджано',
-    category: 'Сыры / Твердые',
-    price: 1490,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=400&h=400&fit=crop',
-  },
-  {
-    id: '3',
-    name: 'Горгонзола',
-    category: 'Сыры / Мягкие',
-    price: 1290,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=400&h=400&fit=crop',
-  },
-  {
-    id: '4',
-    name: 'Рикотта',
-    category: 'Сыры / Мягкие',
-    price: 790,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=400&h=400&fit=crop',
-  },
-  {
-    id: '5',
-    name: 'Прошутто',
-    category: 'Мясные деликатесы',
-    price: 2490,
-    priceOld: 2890,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1542843137-8791a6904d14?w=400&h=400&fit=crop',
-  },
-  {
-    id: '6',
-    name: 'Салями',
-    category: 'Мясные деликатесы',
-    price: 1890,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1599909575473-4f4e29ab8e81?w=400&h=400&fit=crop',
-  },
-];
+import type { Category, Product } from '@shared/schema';
 
 export default function HomePage() {
   const [, setLocation] = useLocation();
-  const [activeCategory, setActiveCategory] = useState('cheese');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  // Fetch categories
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
+    queryKey: ['/api/categories'],
+  });
+
+  // Fetch products (filtrati per categoria se selezionata)
+  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
+    queryKey: activeCategory ? ['/api/products', `categoryId=${activeCategory}`] : ['/api/products'],
+  });
+
+  // Trasforma categories in formato per CategoryNav
+  const topLevelCategories = categories
+    .filter(cat => !cat.parentId)
+    .map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      count: products.filter(p => p.categoryId === cat.id).length,
+    }));
 
   return (
     <div className="min-h-screen bg-background">
@@ -79,24 +37,47 @@ export default function HomePage() {
               Don Giulio Select
             </h1>
           </div>
-          <CategoryNav
-            categories={mockCategories}
-            activeId={activeCategory}
-            onCategorySelect={setActiveCategory}
-          />
+          
+          {categoriesLoading ? (
+            <div className="h-10 bg-muted animate-pulse rounded-md" />
+          ) : (
+            <CategoryNav
+              categories={topLevelCategories}
+              activeId={activeCategory ?? undefined}
+              onCategorySelect={(id) => setActiveCategory(id || null)}
+            />
+          )}
         </div>
       </div>
 
       <div className="p-4">
-        <div className="grid grid-cols-2 gap-4">
-          {mockProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              {...product}
-              onClick={() => setLocation(`/product/${product.id}`)}
-            />
-          ))}
-        </div>
+        {productsLoading ? (
+          <div className="grid grid-cols-2 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-64 bg-muted animate-pulse rounded-lg" />
+            ))}
+          </div>
+        ) : products.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <p>Нет продуктов в этой категории</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            {products.map((product) => (
+              <ProductCard
+                key={product.id}
+                id={product.id}
+                name={product.name}
+                category={categories.find(c => c.id === product.categoryId)?.name || ''}
+                price={parseFloat(product.price)}
+                priceOld={product.priceOld ? parseFloat(product.priceOld) : undefined}
+                unit={product.unit}
+                image={product.images[0] || 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=400&h=400&fit=crop'}
+                onClick={() => setLocation(`/product/${product.id}`)}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
