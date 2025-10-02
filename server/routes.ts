@@ -478,22 +478,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Forbidden' });
       }
       
-      // TODO: Integrazione reale con СБП verrà implementata nel task successivo
-      // Per ora crea mock payment intent
-      const mockRedirectUrl = `https://sbp-mock.example.com/pay/${orderId}`;
+      // Crea payment intent СБП
+      const { createSBPPaymentIntent } = await import('./services/sbp-payment');
+      const sbpIntent = await createSBPPaymentIntent(orderId, order.amount, 'RUB');
       
+      // Salva payment intent nel database
       const paymentIntent = await storage.createPaymentIntent({
         orderId,
         provider: 'SBP',
         status: 'pending',
         amount: order.amount,
-        redirectUrl: mockRedirectUrl,
+        redirectUrl: sbpIntent.redirectUrl,
+        raw: {
+          sbpPaymentId: sbpIntent.id,
+          qrCodeData: sbpIntent.qrCodeData,
+          expiresAt: sbpIntent.expiresAt.toISOString(),
+        },
       });
       
       // Aggiorna stato ordine
       await storage.updateOrderStatus(orderId, 'pending_payment', paymentIntent.id);
       
-      res.json(paymentIntent);
+      res.json({
+        ...paymentIntent,
+        qrCodeData: sbpIntent.qrCodeData,
+        expiresAt: sbpIntent.expiresAt,
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
@@ -506,30 +516,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/payments/sbp/webhook - Webhook per aggiornamenti pagamento
   app.post("/api/payments/sbp/webhook", async (req, res) => {
     try {
-      // SECURITY: In production, questo endpoint DEVE:
-      // 1. Verificare la firma del webhook СБП usando HMAC o PKI secondo specifiche provider
-      // 2. Validare IP sorgente contro whitelist provider
-      // 3. Implementare idempotency per prevenire replay attacks
-      
-      // Per ora, permetti solo in development
-      if (process.env.NODE_ENV !== 'development') {
-        // TODO: Implementare verifica firma СБП prima di abilitare in production
-        console.error('Webhook called in production without signature verification');
-        return res.status(403).json({ error: 'Signature verification required' });
-      }
-      
       const schema = z.object({
         paymentIntentId: z.string(),
         status: z.enum(['completed', 'failed']),
+        transactionId: z.string().optional(),
+        errorCode: z.string().optional(),
+        errorMessage: z.string().optional(),
+        signature: z.string(),
       });
       
-      const { paymentIntentId, status } = schema.parse(req.body);
+      const webhookPayload = schema.parse(req.body);
+      
+      // Verifica firma webhook
+      const { verifySBPWebhookSignature } = await import('./services/sbp-payment');
+      const { signature, ...payloadToVerify } = webhookPayload;
+      
+      const isValid = verifySBPWebhookSignature(payloadToVerify, signature);
+      
+      if (!isValid) {
+        console.error('Invalid webhook signature');
+        return res.status(403).json({ error: 'Invalid signature' });
+      }
       
       // Aggiorna payment intent
       const paymentIntent = await storage.updatePaymentIntentStatus(
-        paymentIntentId,
-        status,
-        req.body
+        webhookPayload.paymentIntentId,
+        webhookPayload.status,
+        {
+          transactionId: webhookPayload.transactionId,
+          errorCode: webhookPayload.errorCode,
+          errorMessage: webhookPayload.errorMessage,
+        }
       );
       
       if (!paymentIntent) {
@@ -537,7 +554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Aggiorna stato ordine
-      const orderStatus = status === 'completed' ? 'paid' : 'failed';
+      const orderStatus = webhookPayload.status === 'completed' ? 'paid' : 'failed';
       await storage.updateOrderStatus(paymentIntent.orderId, orderStatus);
       
       res.json({ success: true });
@@ -546,6 +563,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
       console.error('Error processing webhook:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/payments/sbp/simulate - Simula completamento pagamento (solo development)
+  app.post("/api/payments/sbp/simulate", async (req, res) => {
+    if (process.env.NODE_ENV !== 'development') {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    
+    try {
+      const schema = z.object({
+        paymentIntentId: z.string(),
+        success: z.boolean().default(true),
+      });
+      
+      const { paymentIntentId, success } = schema.parse(req.body);
+      
+      // Simula webhook СБП
+      const { simulatePaymentCompletion } = await import('./services/sbp-payment');
+      const webhookPayload = await simulatePaymentCompletion(paymentIntentId, success);
+      
+      // Invia webhook a noi stessi
+      const baseUrl = process.env.APP_URL || 'http://localhost:5000';
+      const webhookResponse = await fetch(`${baseUrl}/api/payments/sbp/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(webhookPayload),
+      });
+      
+      if (!webhookResponse.ok) {
+        throw new Error(`Webhook failed: ${webhookResponse.statusText}`);
+      }
+      
+      res.json({
+        success: true,
+        webhookPayload,
+        message: success ? 'Payment simulated as successful' : 'Payment simulated as failed',
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error simulating payment:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
