@@ -2,7 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
-import { insertProductSchema, insertOrderSchema } from "@shared/schema";
+import { requireAdmin } from "./middleware/requireAdmin";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -711,6 +712,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
       console.error('Error simulating payment:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ==================== ADMIN ROUTES ====================
+  
+  // GET /api/admin/check - Verifica se l'utente corrente è admin
+  // SECURITY: Richiede sia auth Telegram che verifica admin per non esporre la lista admin
+  app.get("/api/admin/check", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      // Se arriviamo qui, l'utente è sicuramente admin (requireAdmin lo ha verificato)
+      res.json({ isAdmin: true });
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/categories - Crea categoria (ADMIN ONLY)
+  app.post("/api/admin/categories", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const categoryData = insertCategorySchema.parse(req.body);
+      const category = await storage.createCategory(categoryData);
+      res.json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error creating category:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // PATCH /api/admin/categories/:id - Aggiorna categoria (ADMIN ONLY)
+  app.patch("/api/admin/categories/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const updates = insertCategorySchema.partial().parse(req.body);
+      const category = await storage.updateCategory(req.params.id, updates);
+      if (!category) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+      res.json(category);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating category:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/admin/categories/:id - Elimina categoria (ADMIN ONLY)
+  app.delete("/api/admin/categories/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const success = await storage.deleteCategory(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/products - Crea prodotto (ADMIN ONLY)
+  app.post("/api/admin/products", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const productData = insertProductSchema.parse(req.body);
+      const product = await storage.createProduct(productData);
+      res.json(product);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error creating product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // PATCH /api/admin/products/:id - Aggiorna prodotto (ADMIN ONLY)
+  app.patch("/api/admin/products/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const updates = insertProductSchema.partial().parse(req.body);
+      const product = await storage.updateProduct(req.params.id, updates);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      res.json(product);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/admin/products/:id - Elimina prodotto (ADMIN ONLY)
+  app.delete("/api/admin/products/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const success = await storage.deleteProduct(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting product:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
