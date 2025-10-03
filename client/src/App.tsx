@@ -14,6 +14,7 @@ import CartPage from '@/pages/CartPage';
 import OrderDetailPage from '@/pages/OrderDetailPage';
 import FortunePage from '@/pages/FortunePage';
 import AssistantPage from '@/pages/AssistantPage';
+import AdminPage from '@/pages/AdminPage';
 import NotFound from '@/pages/not-found';
 
 function Router() {
@@ -28,6 +29,7 @@ function Router() {
         <Route path="/order/:id" component={OrderDetailPage} />
         <Route path="/fortune" component={FortunePage} />
         <Route path="/assistant" component={AssistantPage} />
+        <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />
       </Switch>
       <BottomNav />
