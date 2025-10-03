@@ -54,12 +54,15 @@ Preferred communication style: Simple, everyday language.
 - `/api/payments/sbp` - Payment processing integration
 - `/api/fortune` - Gamification (fortune wheel, prizes)
 - `/api/assistant` - AI-powered product assistant
+- `/api/admin/*` - Admin panel endpoints (protected)
 
 **Authentication & Security**
 - Telegram WebApp init data verification using HMAC-SHA256
 - User identity from Telegram user data (id, username, firstName, lastName)
 - Development mode bypass for testing
 - CSRF protection via Telegram signature validation
+- Admin authentication via whitelist (`admins` table)
+- Protected admin routes use middleware chain: `verifyTelegramInitData` + `requireAdmin`
 
 **Business Logic**
 - Product catalog with 3-level category hierarchy
@@ -67,6 +70,62 @@ Preferred communication style: Simple, everyday language.
 - Order lifecycle: new → pending_payment → paid/failed/cancelled
 - Taste rating system for products (tasty/very_tasty/super)
 - Fortune wheel token system with prize distribution
+
+### Admin Panel
+
+**Access Control**
+- Admin users are defined in the `admins` database table (whitelist approach)
+- Admin status is verified via GET `/api/admin/check` endpoint
+- All admin routes protected by middleware chain: `verifyTelegramInitData` → `requireAdmin`
+- Unauthorized access returns 403 Forbidden
+- Admin navigation link appears only for authorized users
+
+**Admin UI** (`/admin` route)
+- Tab-based interface for Categories and Products management
+- Built with shadcn/ui components (Tabs, Card, Form, Button)
+- Real-time updates via TanStack Query cache invalidation
+- Toast notifications for success/error feedback
+
+**Category Management**
+- **Create**: Form with name, slug, icon, parentId, sortOrder
+- **Edit**: Inline editing with pre-populated form
+- **Delete**: Cascade deletes products in category
+- API endpoints:
+  - POST `/api/admin/categories` - Create new category
+  - PATCH `/api/admin/categories/:id` - Update category
+  - DELETE `/api/admin/categories/:id` - Delete category
+
+**Product Management**
+- **Create/Edit**: Comprehensive form with all product fields
+  - Basic: name, slug, categoryId
+  - Pricing: price, priceOld (optional)
+  - Media: images (comma-separated URLs)
+  - Attributes: unit, inStock, tasteVariations (comma-separated)
+  - Descriptions: descriptionShort, descriptionFull
+- **Type Conversion**: Form handles string inputs, converts to proper types before submission
+  - Arrays: comma-separated strings → string arrays
+  - Numbers: string inputs → decimal/numeric types
+- **Validation**: Backend validates with Zod schemas from `shared/schema.ts`
+- API endpoints:
+  - POST `/api/admin/products` - Create new product
+  - PATCH `/api/admin/products/:id` - Update product
+  - DELETE `/api/admin/products/:id` - Delete product
+
+**Security Implementation**
+- Middleware: `server/middleware/requireAdmin.ts`
+  - Verifies `req.userId` is set (from Telegram auth)
+  - Checks if `userId` exists in `admins` table
+  - Returns 401 if not authenticated, 403 if not admin
+- Storage methods: `storage.isAdmin(userId)`, `storage.addAdmin(userId)`
+- No privilege escalation: Admin status cannot be self-assigned via UI
+
+**Testing**
+- End-to-end Playwright tests verify:
+  - Admin authentication and access control
+  - Category CRUD operations
+  - Product CRUD with proper type conversion
+  - Database persistence and data integrity
+  - UI feedback and navigation
 
 ### Data Storage
 
@@ -77,6 +136,7 @@ Preferred communication style: Simple, everyday language.
 
 **Schema Design**
 - `users` - Telegram user profiles
+- `admins` - Admin user whitelist (userId references)
 - `categories` - 3-level hierarchical categories (parentId relationship)
 - `products` - Product catalog with images, pricing, variations
 - `carts` - User shopping carts with JSONB items
