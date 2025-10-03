@@ -49,6 +49,7 @@ export default function CheckoutPage() {
 
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutFormSchema),
+    mode: 'onChange',
     defaultValues: {
       customerName: '',
       customerPhone: '',
