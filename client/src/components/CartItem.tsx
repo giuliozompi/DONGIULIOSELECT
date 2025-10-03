@@ -23,14 +23,26 @@ export default function CartItem({
   onQuantityChange,
   onRemove,
 }: CartItemProps) {
+  const isWeightBased = unit === 'кг';
+  const step = isWeightBased ? 0.1 : 1;
+  const minQty = step;
+
+  const formatQuantity = (qty: number) => {
+    if (unit === 'кг') {
+      return qty < 1 ? `${Math.round(qty * 1000)}г` : `${qty}${unit}`;
+    }
+    return `${qty} ${unit}`;
+  };
+
   const handleDecrease = () => {
-    if (quantity > 1) {
-      onQuantityChange(quantity - 1);
+    const newQty = Math.max(minQty, quantity - step);
+    if (newQty !== quantity) {
+      onQuantityChange(newQty);
     }
   };
 
   const handleIncrease = () => {
-    onQuantityChange(quantity + 1);
+    onQuantityChange(quantity + step);
   };
 
   return (
@@ -67,8 +79,8 @@ export default function CartItem({
               >
                 <Minus className="h-3 w-3" />
               </Button>
-              <span className="text-sm font-medium min-w-[2rem] text-center" data-testid="text-quantity">
-                {quantity} {unit}
+              <span className="text-sm font-medium min-w-[3rem] text-center" data-testid="text-quantity">
+                {formatQuantity(quantity)}
               </span>
               <Button
                 size="icon"

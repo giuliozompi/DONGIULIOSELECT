@@ -1,71 +1,131 @@
-import { useState } from 'react';
 import { useLocation } from 'wouter';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import { useTelegramMainButton } from '@/hooks/useTelegramMainButton';
 import { hapticFeedback } from '@/lib/telegram';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import CartItem from '@/components/CartItem';
 import { Card } from '@/components/ui/card';
 import { ShoppingCart, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-//todo: remove mock functionality
-interface CartItemType {
-  id: string;
-  name: string;
-  image: string;
-  price: number;
-  unit: string;
-  quantity: number;
-}
+import type { Cart, Product } from '@shared/schema';
 
 export default function CartPage() {
   const [, setLocation] = useLocation();
-  const [cartItems, setCartItems] = useState<CartItemType[]>([
-    {
-      id: '1',
-      name: 'Сыр Моцарелла',
-      image: 'https://images.unsplash.com/photo-1589881133595-39464f7aa2e4?w=200&h=200&fit=crop',
-      price: 890,
-      unit: 'кг',
-      quantity: 2,
+  const { toast } = useToast();
+
+  const { data: cart, isLoading } = useQuery<Cart>({
+    queryKey: ['/api/cart'],
+  });
+
+  const { data: allProducts = [] } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+  });
+
+  const updateQuantityMutation = useMutation({
+    mutationFn: async ({ productId, quantity }: { productId: string; quantity: number }) => {
+      const res = await apiRequest('PATCH', `/api/cart/items/${productId}`, { quantity });
+      return await res.json();
     },
-    {
-      id: '2',
-      name: 'Пармезан Реджано',
-      image: 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=200&h=200&fit=crop',
-      price: 1490,
-      unit: 'кг',
-      quantity: 1,
+    onSuccess: () => {
+      hapticFeedback('light');
+      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
     },
-  ]);
+    onError: (error: Error) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const removeItemMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      const res = await apiRequest('DELETE', `/api/cart/items/${productId}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      hapticFeedback('light');
+      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+      toast({
+        title: 'Удалено',
+        description: 'Товар удален из корзины',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const createOrderMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/orders', {});
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      hapticFeedback('success');
+      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+      setLocation(`/order/${data.id}`);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Ошибка создания заказа',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
   useTelegramBackButton(() => setLocation('/'), true);
 
-  const totalAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const cartItems = cart?.items || [];
 
-  useTelegramMainButton({
-    text: `Оформить заказ на ${totalAmount} ₽`,
-    onClick: () => {
-      hapticFeedback('success');
-      console.log('Checkout:', cartItems);
-      setLocation('/checkout');
-    },
-    show: cartItems.length > 0,
-    enabled: cartItems.length > 0,
+  const enrichedItems = cartItems.map((item) => {
+    const product = allProducts.find(p => p.id === item.productId);
+    return {
+      id: item.productId,
+      name: product?.name || 'Загрузка...',
+      image: product?.images[0] || 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=200&h=200&fit=crop',
+      price: parseFloat(item.priceAtAdd),
+      unit: product?.unit || 'шт',
+      quantity: Number(item.quantity.toFixed(2)),
+      product,
+    };
   });
 
-  const handleQuantityChange = (id: string, quantity: number) => {
-    setCartItems((items) =>
-      items.map((item) => (item.id === id ? { ...item, quantity } : item))
+  const totalAmount = enrichedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  useTelegramMainButton({
+    text: `Оформить заказ на ${Math.round(totalAmount)} ₽`,
+    onClick: () => createOrderMutation.mutate(),
+    show: enrichedItems.length > 0,
+    enabled: !createOrderMutation.isPending && enrichedItems.length > 0,
+  });
+
+  const handleQuantityChange = (productId: string, quantity: number) => {
+    const roundedQty = Number(quantity.toFixed(2));
+    updateQuantityMutation.mutate({ productId, quantity: roundedQty });
+  };
+
+  const handleRemove = (productId: string) => {
+    removeItemMutation.mutate(productId);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Загрузка корзины...</p>
+      </div>
     );
-  };
+  }
 
-  const handleRemove = (id: string) => {
-    hapticFeedback('light');
-    setCartItems((items) => items.filter((item) => item.id !== id));
-  };
-
-  if (cartItems.length === 0) {
+  if (enrichedItems.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="text-center space-y-4">
@@ -74,6 +134,12 @@ export default function CartPage() {
           </div>
           <h2 className="text-xl font-semibold">Корзина пуста</h2>
           <p className="text-muted-foreground">Добавьте товары из каталога</p>
+          <Button 
+            onClick={() => setLocation('/')}
+            data-testid="button-goto-catalog"
+          >
+            Перейти в каталог
+          </Button>
         </div>
       </div>
     );
@@ -98,10 +164,15 @@ export default function CartPage() {
       </div>
 
       <div className="p-4 space-y-4">
-        {cartItems.map((item) => (
+        {enrichedItems.map((item) => (
           <CartItem
             key={item.id}
-            {...item}
+            id={item.id}
+            name={item.name}
+            image={item.image}
+            price={item.price}
+            unit={item.unit}
+            quantity={item.quantity}
             onQuantityChange={(quantity) => handleQuantityChange(item.id, quantity)}
             onRemove={() => handleRemove(item.id)}
           />
@@ -111,7 +182,7 @@ export default function CartPage() {
           <div className="flex items-center justify-between">
             <p className="text-lg font-semibold">Итого:</p>
             <p className="text-2xl font-bold" data-testid="text-total-amount">
-              {totalAmount} ₽
+              {Math.round(totalAmount)} ₽
             </p>
           </div>
         </Card>

@@ -184,16 +184,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ==================== ORDINI ====================
   
-  // POST /api/orders - Crea nuovo ordine
+  // POST /api/orders - Crea nuovo ordine dal carrello
   app.post("/api/orders", verifyTelegramInitData, async (req, res) => {
     try {
-      const schema = insertOrderSchema.omit({ status: true, paymentId: true });
-      const orderData = schema.parse({
-        ...req.body,
-        userId: req.userId,
+      // Ottieni carrello utente
+      const cart = await storage.getCart(req.userId!);
+      if (!cart || cart.items.length === 0) {
+        return res.status(400).json({ error: 'Cart is empty' });
+      }
+      
+      // Popola items con dettagli prodotto
+      const orderItems = await Promise.all(
+        cart.items.map(async (item) => {
+          const product = await storage.getProductById(item.productId);
+          if (!product) {
+            throw new Error(`Product ${item.productId} not found`);
+          }
+          return {
+            productId: item.productId,
+            productName: product.name,
+            quantity: item.quantity,
+            price: item.priceAtAdd,
+            unit: product.unit,
+          };
+        })
+      );
+      
+      // Calcola totale
+      const amount = orderItems.reduce((sum, item) => 
+        sum + parseFloat(item.price) * item.quantity, 
+        0
+      ).toFixed(2);
+      
+      // Crea ordine
+      const order = await storage.createOrder({
+        userId: req.userId!,
+        items: orderItems,
+        amount,
       });
       
-      const order = await storage.createOrder(orderData);
+      // Svuota carrello
+      await storage.clearCart(req.userId!);
+      
       res.json(order);
     } catch (error) {
       if (error instanceof z.ZodError) {

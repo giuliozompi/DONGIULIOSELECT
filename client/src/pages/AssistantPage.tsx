@@ -1,27 +1,91 @@
+import { useState, useEffect, useRef } from 'react';
+import { nanoid } from 'nanoid';
 import { useLocation } from 'wouter';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
-import AIAssistant from '@/components/AIAssistant';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ArrowLeft, Bot, User, Send } from 'lucide-react';
+import type { Message } from '@shared/schema';
 
 export default function AssistantPage() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [input, setInput] = useState('');
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const { data: messagesData } = useQuery<{ conversationId: string; messages: Message[] }>({
+    queryKey: conversationId ? ['/api/assistant/messages', `conversationId=${conversationId}`] : ['/api/assistant/messages'],
+    enabled: true,
+  });
+
+  useEffect(() => {
+    if (messagesData) {
+      setLocalMessages(messagesData.messages);
+      if (messagesData.conversationId && !conversationId) {
+        setConversationId(messagesData.conversationId);
+      }
+    }
+  }, [messagesData]);
+
+  const messages = localMessages;
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async ({ tempId, content }: { tempId: string; content: string }) => {
+      const res = await apiRequest('POST', '/api/assistant/messages', {
+        conversationId: conversationId || undefined,
+        content,
+      });
+      return { tempId, data: await res.json() };
+    },
+    onMutate: async ({ tempId, content }) => {
+      const userMessage: Message = {
+        id: tempId,
+        conversationId: conversationId || '',
+        role: 'user',
+        content,
+        createdAt: new Date(),
+      };
+      setLocalMessages(prev => [...prev, userMessage]);
+    },
+    onSuccess: ({ tempId, data }) => {
+      if (!conversationId) {
+        setConversationId(data.conversationId);
+      }
+      setLocalMessages(prev => prev.filter(m => m.id !== tempId).concat(data.userMessage, data.assistantMessage));
+      queryClient.invalidateQueries({ queryKey: ['/api/assistant/messages'] });
+    },
+    onError: (error: Error, { tempId }) => {
+      setLocalMessages(prev => prev.filter(m => m.id !== tempId));
+      toast({
+        title: 'Ошибка',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
   useTelegramBackButton(() => setLocation('/'), true);
 
-  //todo: remove mock functionality and connect to OpenRouter API
-  const handleSendMessage = async (message: string) => {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    if (message.toLowerCase().includes('моцарелл')) {
-      return 'Моцарелла - прекрасный выбор! Рекомендую нашу буйволиную моцареллу. Она идеально сочетается с томатами и базиликом в салате Капрезе.';
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-    
-    if (message.toLowerCase().includes('пармезан')) {
-      return 'Пармезан Реджано - король итальянских сыров! Выдержанный 24 месяца, он добавит глубину вкуса любому блюду. Попробуйте его с виноградом или медом.';
-    }
+  }, [messages]);
 
-    return `Спасибо за ваш вопрос о "${message}". Наши эксперты рекомендуют попробовать наши сыры из коровьего молока - они отлично подходят для повседневного употребления!`;
+  const handleSend = async () => {
+    if (!input.trim() || sendMessageMutation.isPending) return;
+    
+    const messageContent = input;
+    const tempId = `temp-${nanoid()}`;
+    setInput('');
+    sendMessageMutation.mutate({ tempId, content: messageContent });
   };
 
   return (
@@ -42,8 +106,83 @@ export default function AssistantPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
-        <AIAssistant onSendMessage={handleSendMessage} />
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <ScrollArea ref={scrollRef} className="flex-1 p-4">
+          <div className="space-y-4">
+            {messages.length === 0 && (
+              <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Bot className="w-5 h-5 text-primary" />
+                </div>
+                <Card className="p-3 bg-muted max-w-[80%]">
+                  <p className="text-sm">
+                    Здравствуйте! Я ваш помощник по выбору деликатесов. Чем могу помочь?
+                  </p>
+                </Card>
+              </div>
+            )}
+            
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                data-testid={`message-${message.role}`}
+              >
+                {message.role === 'assistant' && (
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-5 h-5 text-primary" />
+                  </div>
+                )}
+                <Card
+                  className={`p-3 max-w-[80%] ${
+                    message.role === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted'
+                  }`}
+                >
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                </Card>
+                {message.role === 'user' && (
+                  <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
+                    <User className="w-5 h-5" />
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {sendMessageMutation.isPending && (
+              <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Bot className="w-5 h-5 text-primary animate-pulse" />
+                </div>
+                <Card className="p-3 bg-muted">
+                  <p className="text-sm text-muted-foreground">Печатает...</p>
+                </Card>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        <div className="p-4 border-t">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Напишите ваш вопрос..."
+              disabled={sendMessageMutation.isPending}
+              data-testid="input-message"
+            />
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={!input.trim() || sendMessageMutation.isPending}
+              data-testid="button-send"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
