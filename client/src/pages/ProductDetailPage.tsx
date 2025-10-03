@@ -1,85 +1,119 @@
 import { useState } from 'react';
 import { useLocation, useParams } from 'wouter';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import { useTelegramMainButton } from '@/hooks/useTelegramMainButton';
 import { hapticFeedback } from '@/lib/telegram';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import ProductGallery from '@/components/ProductGallery';
 import TasteRating from '@/components/TasteRating';
 import ProductAccordion from '@/components/ProductAccordion';
 import RelatedProducts from '@/components/RelatedProducts';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
-
-//todo: remove mock functionality
-const mockProduct = {
-  id: '1',
-  name: 'Сыр Моцарелла',
-  category: 'Сыры / Рассольные',
-  price: 890,
-  priceOld: 1200,
-  unit: 'кг',
-  images: [
-    'https://images.unsplash.com/photo-1589881133595-39464f7aa2e4?w=800&h=800&fit=crop',
-    'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=800&h=800&fit=crop',
-    'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=800&h=800&fit=crop',
-  ],
-  tasteVariations: ['Классический', 'С травами', 'С перцем'],
-  tasteRatingStats: { tasty: 15, very_tasty: 25, super: 60 },
-  descriptionShort: 'Настоящая итальянская моцарелла из буйволиного молока',
-  descriptionFull:
-    'Настоящая итальянская моцарелла из буйволиного молока. Нежная текстура и сливочный вкус делают её идеальной для салата Капрезе. Производится традиционным методом в регионе Кампания.',
-  nutrition: {
-    bju: { proteins: 22, fats: 16, carbs: 3, calories: 280 },
-    values: ['Кальций', 'Витамин B12', 'Фосфор'],
-    composition: 'Молоко буйволиное пастеризованное, закваска молочнокислых культур, соль, сычужный фермент',
-  },
-  consumptionTips:
-    'Идеально сочетается с помидорами, базиликом и оливковым маслом первого отжима. Отлично подходит для пиццы Маргарита, салатов и закусок.',
-};
-
-//todo: remove mock functionality
-const relatedProducts = [
-  {
-    id: '2',
-    name: 'Пармезан Реджано',
-    price: 1490,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=400&h=400&fit=crop',
-  },
-  {
-    id: '3',
-    name: 'Горгонзола',
-    price: 1290,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=400&h=400&fit=crop',
-  },
-  {
-    id: '4',
-    name: 'Рикотта',
-    price: 790,
-    unit: 'кг',
-    image: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=400&h=400&fit=crop',
-  },
-];
+import { ArrowLeft, Plus, Minus } from 'lucide-react';
+import type { Product } from '@shared/schema';
 
 export default function ProductDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
-  const params = useParams();
-  const [selectedTaste, setSelectedTaste] = useState('Классический');
-  const [quantity, setQuantity] = useState(1);
+  const { toast } = useToast();
+  
+  const [selectedTaste, setSelectedTaste] = useState<string>('');
+  const [quantity, setQuantity] = useState(0.1);
 
-  useTelegramBackButton(() => setLocation('/'), true);
+  const { data: product, isLoading } = useQuery<Product>({
+    queryKey: ['/api/products', id],
+  });
+
+  const { data: allProducts = [] } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+  });
+
+  const addToCartMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', '/api/cart/items', {
+        productId: id,
+        quantity,
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      hapticFeedback('success');
+      toast({
+        title: 'Добавлено в корзину',
+        description: `${product?.name} (${formatQuantity(quantity, product?.unit || '')})`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  useTelegramBackButton(() => window.history.back(), true);
+
+  const isWeightBased = product?.unit === 'кг';
+  const step = isWeightBased ? 0.1 : 1;
+  const minQty = step;
+
+  const formatQuantity = (qty: number, unit: string) => {
+    if (unit === 'кг') {
+      return qty < 1 ? `${qty * 1000}г` : `${qty}кг`;
+    }
+    return `${qty} ${unit}`;
+  };
+
+  const totalPrice = product ? parseFloat(product.price) * quantity : 0;
+  const mainButtonText = product 
+    ? `Добавить ${formatQuantity(quantity, product.unit)} в корзину за ${Math.round(totalPrice)} ₽`
+    : 'Загрузка...';
 
   useTelegramMainButton({
-    text: `Добавить ${quantity} кг в корзину за ${mockProduct.price * quantity} ₽`,
-    onClick: () => {
-      hapticFeedback('success');
-      console.log('Added to cart:', { productId: params.id, quantity });
-    },
-    show: true,
-    enabled: true,
+    text: mainButtonText,
+    onClick: () => addToCartMutation.mutate(),
+    show: !!product,
+    enabled: !addToCartMutation.isPending && quantity >= minQty,
   });
+
+  if (!product && !isLoading) {
+    setLocation('/');
+    return null;
+  }
+
+  const relatedProducts = allProducts
+    .filter(p => p.categoryId === product?.categoryId && p.id !== id)
+    .slice(0, 3)
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      price: parseFloat(p.price),
+      unit: p.unit,
+      image: p.images[0] || 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=400&h=400&fit=crop',
+    }));
+
+  const handleIncrement = () => {
+    setQuantity(prev => prev + step);
+    hapticFeedback('light');
+  };
+
+  const handleDecrement = () => {
+    setQuantity(prev => Math.max(minQty, prev - step));
+    hapticFeedback('light');
+  };
+
+  if (isLoading || !product) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Загрузка...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -88,41 +122,39 @@ export default function ProductDetailPage() {
           <Button 
             size="icon" 
             variant="ghost"
-            onClick={() => setLocation('/')}
+            onClick={() => window.history.back()}
             data-testid="button-back"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </div>
       </div>
-      <ProductGallery images={mockProduct.images} />
+      
+      <ProductGallery images={product.images.length > 0 ? product.images : ['https://images.unsplash.com/photo-1452195100486-9cc805987862?w=800&h=800&fit=crop']} />
 
       <div className="p-6 space-y-6">
         <div>
-          <p className="text-sm text-muted-foreground mb-2" data-testid="text-category">
-            {mockProduct.category}
-          </p>
           <h1 className="text-2xl font-bold mb-4" data-testid="text-name">
-            {mockProduct.name}
+            {product.name}
           </h1>
 
           <div className="flex items-baseline gap-3 mb-4">
             <p className="text-3xl font-bold text-primary" data-testid="text-price">
-              {mockProduct.price} ₽
+              {Math.round(parseFloat(product.price))} ₽
             </p>
-            {mockProduct.priceOld && (
+            {product.priceOld && (
               <p className="text-xl text-muted-foreground line-through" data-testid="text-price-old">
-                {mockProduct.priceOld} ₽
+                {Math.round(parseFloat(product.priceOld))} ₽
               </p>
             )}
-            <p className="text-lg text-muted-foreground">/ {mockProduct.unit}</p>
+            <p className="text-lg text-muted-foreground">/ {product.unit}</p>
           </div>
 
-          {mockProduct.tasteVariations && (
+          {product.tasteVariations && product.tasteVariations.length > 0 && (
             <div className="space-y-2 mb-4">
               <p className="text-sm font-medium">Выберите вкус:</p>
               <div className="flex gap-2 flex-wrap">
-                {mockProduct.tasteVariations.map((taste) => (
+                {product.tasteVariations.map((taste) => (
                   <Badge
                     key={taste}
                     variant={selectedTaste === taste ? 'default' : 'outline'}
@@ -139,30 +171,79 @@ export default function ProductDetailPage() {
               </div>
             </div>
           )}
+
+          <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={handleDecrement}
+              disabled={quantity <= minQty}
+              data-testid="button-decrease-quantity"
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
+            <div className="flex-1 text-center">
+              <p className="text-2xl font-bold" data-testid="text-quantity">
+                {formatQuantity(quantity, product.unit)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {isWeightBased ? 'Шаг: 100г' : 'Шаг: 1 шт'}
+              </p>
+            </div>
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={handleIncrement}
+              data-testid="button-increase-quantity"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
-        <div>
-          <p className="text-base leading-relaxed text-foreground mb-4">
-            {mockProduct.descriptionShort}
-          </p>
-        </div>
+        {product.descriptionShort && (
+          <div>
+            <p className="text-base leading-relaxed text-foreground">
+              {product.descriptionShort}
+            </p>
+          </div>
+        )}
 
-        <TasteRating
-          stats={mockProduct.tasteRatingStats}
-          onRate={(rating) => console.log('Rated:', rating)}
-        />
+        {product.tasteRatingStats && (
+          <TasteRating
+            stats={{
+              tasty: product.tasteRatingStats.tasty || 0,
+              very_tasty: product.tasteRatingStats.veryTasty || 0,
+              super: product.tasteRatingStats.superTasty || 0,
+            }}
+            onRate={(rating) => console.log('Rated:', rating)}
+          />
+        )}
 
-        <ProductAccordion
-          fullDescription={mockProduct.descriptionFull}
-          nutrition={mockProduct.nutrition}
-          consumptionTips={mockProduct.consumptionTips}
-        />
+        {(product.descriptionFull || product.nutrition) && (
+          <ProductAccordion
+            fullDescription={product.descriptionFull || ''}
+            nutrition={product.nutrition ? {
+              bju: {
+                proteins: parseInt(product.nutrition.proteins) || 0,
+                fats: parseInt(product.nutrition.fats) || 0,
+                carbs: parseInt(product.nutrition.carbs) || 0,
+                calories: parseInt(product.nutrition.calories) || 0,
+              },
+              values: [],
+              composition: product.nutrition.composition?.join(', ') || '',
+            } : undefined}
+            consumptionTips=""
+          />
+        )}
 
-        <RelatedProducts
-          title="Похожие продукты"
-          products={relatedProducts}
-          onProductClick={(id) => setLocation(`/product/${id}`)}
-        />
+        {relatedProducts.length > 0 && (
+          <RelatedProducts
+            title="Похожие продукты"
+            products={relatedProducts}
+            onProductClick={(productId) => setLocation(`/product/${productId}`)}
+          />
+        )}
       </div>
     </div>
   );

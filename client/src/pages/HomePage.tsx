@@ -1,79 +1,74 @@
-import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import CategoryNav from '@/components/CategoryNav';
-import ProductCard from '@/components/ProductCard';
+import { Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import CategoryCard from '@/components/CategoryCard';
 import type { Category, Product } from '@shared/schema';
 
 export default function HomePage() {
   const [, setLocation] = useLocation();
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
-  // Fetch categories
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
   });
 
-  // Fetch products (filtrati per categoria se selezionata)
-  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
-    queryKey: activeCategory ? ['/api/products', `categoryId=${activeCategory}`] : ['/api/products'],
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
   });
 
-  // Trasforma categories in formato per CategoryNav
-  const topLevelCategories = categories
-    .filter(cat => !cat.parentId)
-    .map(cat => ({
-      id: cat.id,
-      name: cat.name,
-      count: products.filter(p => p.categoryId === cat.id).length,
-    }));
+  const topLevelCategories = categories.filter(cat => !cat.parentId);
+
+  const getCategoryProductCount = (categoryId: string): number => {
+    const directProducts = products.filter(p => p.categoryId === categoryId).length;
+    const subcategories = categories.filter(c => c.parentId === categoryId);
+    const subcategoryProducts = subcategories.reduce((sum, subcat) => 
+      sum + products.filter(p => p.categoryId === subcat.id).length, 0
+    );
+    return directProducts + subcategoryProducts;
+  };
 
   return (
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-50 bg-background border-b">
         <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold" data-testid="text-title">
-              Don Giulio Select
-            </h1>
-          </div>
+          <h1 className="text-2xl font-bold" data-testid="text-title">
+            Don Giulio Select
+          </h1>
           
-          {categoriesLoading ? (
-            <div className="h-10 bg-muted animate-pulse rounded-md" />
-          ) : (
-            <CategoryNav
-              categories={topLevelCategories}
-              activeId={activeCategory ?? undefined}
-              onCategorySelect={(id) => setActiveCategory(id || null)}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Поиск продуктов с помощью AI..."
+              className="pl-9"
+              onClick={() => setLocation('/search')}
+              readOnly
+              data-testid="input-search"
             />
-          )}
+          </div>
         </div>
       </div>
 
       <div className="p-4">
-        {productsLoading ? (
+        <h2 className="text-lg font-semibold mb-4">Категории</h2>
+        
+        {categoriesLoading ? (
           <div className="grid grid-cols-2 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-64 bg-muted animate-pulse rounded-lg" />
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
             ))}
           </div>
-        ) : products.length === 0 ? (
+        ) : topLevelCategories.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            <p>Нет продуктов в этой категории</p>
+            <p>Категории отсутствуют</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
-            {products.map((product) => (
-              <ProductCard
-                key={product.id}
-                id={product.id}
-                name={product.name}
-                category={categories.find(c => c.id === product.categoryId)?.name || ''}
-                price={parseFloat(product.price)}
-                priceOld={product.priceOld ? parseFloat(product.priceOld) : undefined}
-                unit={product.unit}
-                image={product.images[0] || 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=400&h=400&fit=crop'}
-                onClick={() => setLocation(`/product/${product.id}`)}
+            {topLevelCategories.map((category) => (
+              <CategoryCard
+                key={category.id}
+                category={category}
+                productCount={getCategoryProductCount(category.id)}
+                onClick={() => setLocation(`/category/${category.id}`)}
               />
             ))}
           </div>

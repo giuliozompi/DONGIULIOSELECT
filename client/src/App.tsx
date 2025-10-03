@@ -7,6 +7,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { initTelegramApp } from '@/lib/telegram';
 import BottomNav from '@/components/BottomNav';
 import HomePage from '@/pages/HomePage';
+import CategoryPage from '@/pages/CategoryPage';
+import SearchPage from '@/pages/SearchPage';
 import ProductDetailPage from '@/pages/ProductDetailPage';
 import CartPage from '@/pages/CartPage';
 import FortunePage from '@/pages/FortunePage';
@@ -18,6 +20,8 @@ function Router() {
     <div className="pb-16">
       <Switch>
         <Route path="/" component={HomePage} />
+        <Route path="/category/:id" component={CategoryPage} />
+        <Route path="/search" component={SearchPage} />
         <Route path="/product/:id" component={ProductDetailPage} />
         <Route path="/cart" component={CartPage} />
         <Route path="/fortune" component={FortunePage} />
