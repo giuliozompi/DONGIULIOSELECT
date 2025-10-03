@@ -168,6 +168,22 @@ export const insertMessageSchema = createInsertSchema(messages).omit({ id: true,
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
 
+// Бонусы (% от предыдущего заказа)
+export const bonuses = pgTable("bonuses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  percentage: integer("percentage").notNull(), // 5, 10, или 15
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Рассчитанная сумма бонуса
+  fromOrderId: varchar("from_order_id").references(() => orders.id), // Заказ, из которого рассчитан бонус
+  used: boolean("used").notNull().default(false),
+  usedInOrderId: varchar("used_in_order_id").references(() => orders.id), // Заказ, в котором использован
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertBonusSchema = createInsertSchema(bonuses).omit({ id: true, createdAt: true });
+export type InsertBonus = z.infer<typeof insertBonusSchema>;
+export type Bonus = typeof bonuses.$inferSelect;
+
 // Платежные интенты
 export const paymentIntents = pgTable("payment_intents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

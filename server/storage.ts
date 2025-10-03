@@ -13,6 +13,8 @@ import {
   type InsertPrize,
   type Spin,
   type InsertSpin,
+  type Bonus,
+  type InsertBonus,
   type Conversation,
   type InsertConversation,
   type Message,
@@ -146,6 +148,12 @@ export interface IStorage {
   getPaymentIntentById(id: string): Promise<PaymentIntent | undefined>;
   getPaymentIntentByOrderId(orderId: string): Promise<PaymentIntent | undefined>;
   updatePaymentIntentStatus(id: string, status: string, raw?: any): Promise<PaymentIntent | undefined>;
+
+  // Бонусы
+  createBonus(bonus: InsertBonus): Promise<Bonus>;
+  getUnusedBonusesByUserId(userId: string): Promise<Bonus[]>;
+  markBonusAsUsed(id: string, orderId: string): Promise<Bonus | undefined>;
+  getBonusesByUserId(userId: string): Promise<Bonus[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -567,6 +575,46 @@ export class MemStorage implements IStorage {
     const updated = { ...intent, status, ...(raw && { raw }) };
     this.paymentIntents.set(id, updated);
     return updated;
+  }
+
+  // Бонусы (MemStorage stub - не используется)
+  private bonuses: Map<string, Bonus> = new Map();
+
+  async createBonus(insertBonus: InsertBonus): Promise<Bonus> {
+    const id = randomUUID();
+    const bonus: Bonus = {
+      id,
+      userId: insertBonus.userId,
+      percentage: insertBonus.percentage,
+      amount: insertBonus.amount,
+      fromOrderId: insertBonus.fromOrderId ?? null,
+      used: insertBonus.used ?? false,
+      usedInOrderId: insertBonus.usedInOrderId ?? null,
+      createdAt: new Date(),
+    };
+    this.bonuses.set(id, bonus);
+    return bonus;
+  }
+
+  async getUnusedBonusesByUserId(userId: string): Promise<Bonus[]> {
+    return Array.from(this.bonuses.values())
+      .filter(b => b.userId === userId && !b.used)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()); // FIFO
+  }
+
+  async markBonusAsUsed(id: string, orderId: string): Promise<Bonus | undefined> {
+    const bonus = this.bonuses.get(id);
+    if (!bonus) return undefined;
+    
+    const updated = { ...bonus, used: true, usedInOrderId: orderId };
+    this.bonuses.set(id, updated);
+    return updated;
+  }
+
+  async getBonusesByUserId(userId: string): Promise<Bonus[]> {
+    return Array.from(this.bonuses.values())
+      .filter(b => b.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Newest first
   }
 }
 

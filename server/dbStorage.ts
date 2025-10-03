@@ -9,6 +9,7 @@ import {
   fortuneSpinTokens,
   prizes,
   spins,
+  bonuses,
   conversations,
   messages,
   paymentIntents,
@@ -26,6 +27,8 @@ import {
   type InsertPrize,
   type Spin,
   type InsertSpin,
+  type Bonus,
+  type InsertBonus,
   type Conversation,
   type InsertConversation,
   type Message,
@@ -301,5 +304,36 @@ export class DbStorage implements IStorage {
       .where(eq(paymentIntents.id, id))
       .returning();
     return result[0];
+  }
+
+  // Бонусы
+  async createBonus(insertBonus: InsertBonus): Promise<Bonus> {
+    const result = await db.insert(bonuses).values(insertBonus).returning();
+    return result[0];
+  }
+
+  async getUnusedBonusesByUserId(userId: string): Promise<Bonus[]> {
+    return await db
+      .select()
+      .from(bonuses)
+      .where(and(eq(bonuses.userId, userId), eq(bonuses.used, false)))
+      .orderBy(bonuses.createdAt); // FIFO: ordine cronologico
+  }
+
+  async markBonusAsUsed(id: string, orderId: string): Promise<Bonus | undefined> {
+    const result = await db
+      .update(bonuses)
+      .set({ used: true, usedInOrderId: orderId })
+      .where(eq(bonuses.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async getBonusesByUserId(userId: string): Promise<Bonus[]> {
+    return await db
+      .select()
+      .from(bonuses)
+      .where(eq(bonuses.userId, userId))
+      .orderBy(desc(bonuses.createdAt));
   }
 }
