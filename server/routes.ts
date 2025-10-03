@@ -450,7 +450,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Salva messaggio utente
-      await storage.createMessage({
+      const userMessage = await storage.createMessage({
         conversationId: convId,
         role: 'user',
         content,
@@ -459,7 +459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ottieni storico messaggi per contesto
       const conversationMessages = await storage.getMessagesByConversationId(convId);
       
-      // Prepara messaggi per OpenRouter (escludi l'ultimo che abbiamo appena aggiunto)
+      // Prepara messaggi per OpenRouter
       const { generateAssistantResponse } = await import('./services/openrouter');
       const aiMessages = conversationMessages.map(msg => ({
         role: msg.role as 'user' | 'assistant',
@@ -478,7 +478,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         conversationId: convId,
-        message: assistantMessage,
+        userMessage,
+        assistantMessage,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

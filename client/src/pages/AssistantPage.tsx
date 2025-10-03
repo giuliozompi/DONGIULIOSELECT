@@ -58,7 +58,8 @@ export default function AssistantPage() {
       if (!conversationId) {
         setConversationId(data.conversationId);
       }
-      setLocalMessages(prev => prev.filter(m => m.id !== tempId).concat(data.userMessage, data.assistantMessage));
+      const newMessages = [data.userMessage, data.assistantMessage].filter(Boolean);
+      setLocalMessages(prev => prev.filter(m => m.id !== tempId).concat(newMessages));
       queryClient.invalidateQueries({ queryKey: ['/api/assistant/messages'] });
     },
     onError: (error: Error, { tempId }) => {
@@ -122,7 +123,7 @@ export default function AssistantPage() {
               </div>
             )}
             
-            {messages.map((message) => (
+            {messages.filter(Boolean).map((message) => (
               <div
                 key={message.id}
                 className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}

@@ -81,10 +81,12 @@ export default function ProductDetailPage() {
     ? `Добавить ${formatQuantity(quantity, product.unit)} в корзину за ${Math.round(totalPrice)} ₽`
     : 'Загрузка...';
 
+  const isTelegramAvailable = typeof window !== 'undefined' && window.Telegram?.WebApp?.initData;
+
   useTelegramMainButton({
     text: mainButtonText,
     onClick: () => addToCartMutation.mutate(),
-    show: !!product,
+    show: !!product && isTelegramAvailable,
     enabled: !addToCartMutation.isPending && quantity >= minQty,
   });
 
@@ -140,6 +142,16 @@ export default function ProductDetailPage() {
       <ProductGallery images={product.images.length > 0 ? product.images : ['https://images.unsplash.com/photo-1452195100486-9cc805987862?w=800&h=800&fit=crop']} />
 
       <div className="p-6 space-y-6">
+        {!isTelegramAvailable && (
+          <Button
+            className="w-full"
+            onClick={() => addToCartMutation.mutate()}
+            disabled={addToCartMutation.isPending || quantity < minQty}
+            data-testid="button-add-to-cart"
+          >
+            {mainButtonText}
+          </Button>
+        )}
         <div>
           <h1 className="text-2xl font-bold mb-4" data-testid="text-name">
             {product.name}
