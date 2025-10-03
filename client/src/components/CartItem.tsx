@@ -25,24 +25,26 @@ export default function CartItem({
 }: CartItemProps) {
   const isWeightBased = unit === 'кг';
   const step = isWeightBased ? 0.1 : 1;
-  const minQty = step;
+  const minQty = isWeightBased ? 0.2 : 1; // Minimo 200g per prodotti a peso
 
   const formatQuantity = (qty: number) => {
     if (unit === 'кг') {
-      return qty < 1 ? `${Math.round(qty * 1000)}г` : `${qty}${unit}`;
+      const roundedQty = Math.round(qty * 10) / 10; // Arrotonda a 1 decimale
+      return roundedQty < 1 ? `${Math.round(roundedQty * 1000)}г` : `${roundedQty}кг`;
     }
     return `${qty} ${unit}`;
   };
 
   const handleDecrease = () => {
-    const newQty = Math.max(minQty, quantity - step);
+    const newQty = Number((Math.max(minQty, quantity - step)).toFixed(1));
     if (newQty !== quantity) {
       onQuantityChange(newQty);
     }
   };
 
   const handleIncrease = () => {
-    onQuantityChange(quantity + step);
+    const newQty = Number((quantity + step).toFixed(1));
+    onQuantityChange(newQty);
   };
 
   return (
@@ -94,7 +96,7 @@ export default function CartItem({
             </div>
             
             <p className="text-base font-bold" data-testid="text-total">
-              {price * quantity} ₽
+              {Math.round(price * quantity)} ₽
             </p>
           </div>
         </div>
