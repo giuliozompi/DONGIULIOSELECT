@@ -11,6 +11,7 @@ import CategoryPage from '@/pages/CategoryPage';
 import SearchPage from '@/pages/SearchPage';
 import ProductDetailPage from '@/pages/ProductDetailPage';
 import CartPage from '@/pages/CartPage';
+import CheckoutPage from '@/pages/CheckoutPage';
 import OrderDetailPage from '@/pages/OrderDetailPage';
 import FortunePage from '@/pages/FortunePage';
 import AssistantPage from '@/pages/AssistantPage';
@@ -26,6 +27,7 @@ function Router() {
         <Route path="/search" component={SearchPage} />
         <Route path="/product/:id" component={ProductDetailPage} />
         <Route path="/cart" component={CartPage} />
+        <Route path="/checkout" component={CheckoutPage} />
         <Route path="/order/:id" component={OrderDetailPage} />
         <Route path="/fortune" component={FortunePage} />
         <Route path="/assistant" component={AssistantPage} />

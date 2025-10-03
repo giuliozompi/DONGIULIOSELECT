@@ -188,6 +188,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/orders - Crea nuovo ordine dal carrello
   app.post("/api/orders", verifyTelegramInitData, async (req, res) => {
     try {
+      // Valida dati cliente
+      const customerDataSchema = z.object({
+        customerName: z.string().min(2),
+        customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/),
+        deliveryAddress: z.string().min(10),
+        deliveryNotes: z.string().optional(),
+      });
+      
+      const customerData = customerDataSchema.parse(req.body);
+      
       // Ottieni carrello utente
       const cart = await storage.getCart(req.userId!);
       if (!cart || cart.items.length === 0) {
@@ -246,11 +256,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const finalAmount = Math.max(0, initialAmount - totalBonusApplied).toFixed(2);
       
-      // Crea ordine con importo finale scontato
+      // Crea ordine con importo finale scontato e dati cliente
       const order = await storage.createOrder({
         userId: req.userId!,
         items: orderItems,
         amount: finalAmount,
+        customerName: customerData.customerName,
+        customerPhone: customerData.customerPhone,
+        deliveryAddress: customerData.deliveryAddress,
+        deliveryNotes: customerData.deliveryNotes,
       });
       
       // Marca bonuses come usati

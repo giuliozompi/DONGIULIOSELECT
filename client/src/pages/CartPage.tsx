@@ -72,25 +72,6 @@ export default function CartPage() {
     },
   });
 
-  const createOrderMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/orders', {});
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      hapticFeedback('success');
-      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
-      setLocation(`/order/${data.id}`);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Ошибка создания заказа',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
-
   useTelegramBackButton(() => setLocation('/'), true);
 
   const cartItems = cart?.items || [];
@@ -114,11 +95,14 @@ export default function CartPage() {
 
   useTelegramMainButton({
     text: totalBonusAmount > 0 
-      ? `Оформить заказ на ${Math.round(finalAmount)} ₽` 
-      : `Оформить заказ на ${Math.round(totalAmount)} ₽`,
-    onClick: () => createOrderMutation.mutate(),
+      ? `Продолжить (${Math.round(finalAmount)} ₽)` 
+      : `Продолжить (${Math.round(totalAmount)} ₽)`,
+    onClick: () => {
+      hapticFeedback('light');
+      setLocation('/checkout');
+    },
     show: enrichedItems.length > 0,
-    enabled: !createOrderMutation.isPending && enrichedItems.length > 0,
+    enabled: enrichedItems.length > 0,
   });
 
   const handleQuantityChange = (productId: string, quantity: number) => {

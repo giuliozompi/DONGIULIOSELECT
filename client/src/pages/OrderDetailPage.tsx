@@ -188,6 +188,31 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
+        {/* Dati di consegna */}
+        <div>
+          <h2 className="text-lg font-semibold mb-3">Данные доставки</h2>
+          <Card className="p-4 space-y-3">
+            <div>
+              <p className="text-sm text-muted-foreground">Получатель:</p>
+              <p className="font-medium" data-testid="text-customer-name">{order.customerName}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Телефон:</p>
+              <p className="font-medium" data-testid="text-customer-phone">{order.customerPhone}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Адрес доставки:</p>
+              <p className="font-medium" data-testid="text-delivery-address">{order.deliveryAddress}</p>
+            </div>
+            {order.deliveryNotes && (
+              <div>
+                <p className="text-sm text-muted-foreground">Комментарий:</p>
+                <p className="text-sm" data-testid="text-delivery-notes">{order.deliveryNotes}</p>
+              </div>
+            )}
+          </Card>
+        </div>
+
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <p className="text-lg font-semibold">Итого к оплате:</p>

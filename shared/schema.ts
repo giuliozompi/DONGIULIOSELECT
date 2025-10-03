@@ -106,6 +106,13 @@ export const orders = pgTable("orders", {
     unit: string;
   }>>().notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  
+  // Dati cliente per la consegna
+  customerName: text("customer_name").notNull(),
+  customerPhone: text("customer_phone").notNull(),
+  deliveryAddress: text("delivery_address").notNull(),
+  deliveryNotes: text("delivery_notes"),
+  
   status: text("status").notNull().default('new'), // 'new' | 'pending_payment' | 'paid' | 'failed' | 'cancelled'
   paymentId: varchar("payment_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
