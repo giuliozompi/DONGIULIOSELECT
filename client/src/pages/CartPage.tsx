@@ -178,13 +178,23 @@ export default function CartPage() {
           />
         ))}
 
-        <Card className="p-4">
+        <Card className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-lg font-semibold">Итого:</p>
             <p className="text-2xl font-bold" data-testid="text-total-amount">
               {Math.round(totalAmount)} ₽
             </p>
           </div>
+          
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={() => createOrderMutation.mutate()}
+            disabled={createOrderMutation.isPending || enrichedItems.length === 0}
+            data-testid="button-checkout"
+          >
+            {createOrderMutation.isPending ? 'Оформление...' : `Оформить заказ на ${Math.round(totalAmount)} ₽`}
+          </Button>
         </Card>
       </div>
     </div>
