@@ -29,7 +29,7 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     if (product) {
-      const initialQty = product.unit === 'кг' ? 0.1 : 1;
+      const initialQty = product.unit === 'кг' ? 0.2 : 1;
       setQuantity(initialQty);
     }
   }, [product]);
@@ -66,7 +66,7 @@ export default function ProductDetailPage() {
   useTelegramBackButton(() => window.history.back(), true);
 
   const isWeightBased = product?.unit === 'кг';
-  const step = isWeightBased ? 0.1 : 1;
+  const step = isWeightBased ? 0.2 : 1;
   const minQty = step;
 
   const formatQuantity = (qty: number, unit: string) => {
@@ -81,7 +81,7 @@ export default function ProductDetailPage() {
     ? `Добавить ${formatQuantity(quantity, product.unit)} в корзину за ${Math.round(totalPrice)} ₽`
     : 'Загрузка...';
 
-  const isTelegramAvailable = typeof window !== 'undefined' && window.Telegram?.WebApp?.initData;
+  const isTelegramAvailable = typeof window !== 'undefined' && window.Telegram?.WebApp && (window.Telegram.WebApp as any).initData;
 
   useTelegramMainButton({
     text: mainButtonText,
@@ -206,7 +206,7 @@ export default function ProductDetailPage() {
                 {formatQuantity(quantity, product.unit)}
               </p>
               <p className="text-sm text-muted-foreground">
-                {isWeightBased ? 'Шаг: 100г' : 'Шаг: 1 шт'}
+                {isWeightBased ? 'Шаг: 200г' : 'Шаг: 1 шт'}
               </p>
             </div>
             <Button

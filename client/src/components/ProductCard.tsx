@@ -31,7 +31,7 @@ export default function ProductCard({
 }: ProductCardProps) {
   const { toast } = useToast();
   const isWeightBased = unit === 'кг';
-  const step = isWeightBased ? 0.1 : 1;
+  const step = isWeightBased ? 0.2 : 1;
   const minQty = step;
   
   const [quantity, setQuantity] = useState(minQty);

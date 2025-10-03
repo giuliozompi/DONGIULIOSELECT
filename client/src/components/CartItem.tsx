@@ -24,7 +24,7 @@ export default function CartItem({
   onRemove,
 }: CartItemProps) {
   const isWeightBased = unit === 'кг';
-  const step = isWeightBased ? 0.1 : 1;
+  const step = isWeightBased ? 0.2 : 1;
   const minQty = step;
 
   const formatQuantity = (qty: number) => {
