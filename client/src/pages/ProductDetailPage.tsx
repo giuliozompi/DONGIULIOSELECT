@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useParams } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
@@ -26,6 +26,13 @@ export default function ProductDetailPage() {
   const { data: product, isLoading } = useQuery<Product>({
     queryKey: ['/api/products', id],
   });
+
+  useEffect(() => {
+    if (product) {
+      const initialQty = product.unit === 'кг' ? 0.1 : 1;
+      setQuantity(initialQty);
+    }
+  }, [product]);
 
   const { data: allProducts = [] } = useQuery<Product[]>({
     queryKey: ['/api/products'],
