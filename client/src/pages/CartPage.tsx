@@ -213,15 +213,9 @@ export default function CartPage() {
             </div>
           </div>
           
-          <Button
-            className="w-full"
-            size="lg"
-            onClick={() => createOrderMutation.mutate()}
-            disabled={createOrderMutation.isPending || enrichedItems.length === 0}
-            data-testid="button-checkout"
-          >
-            {createOrderMutation.isPending ? 'Оформление...' : `Оформить заказ на ${Math.round(finalAmount)} ₽`}
-          </Button>
+          <p className="text-xs text-muted-foreground text-center mt-4">
+            Нажмите кнопку внизу экрана для продолжения
+          </p>
         </Card>
       </div>
     </div>
