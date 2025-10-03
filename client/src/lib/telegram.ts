@@ -54,6 +54,7 @@ declare global {
             language_code?: string;
           };
         };
+        initData: string;
       };
     };
   }
@@ -102,15 +103,11 @@ export function getTelegramUser() {
  * Ottieni initData di Telegram per autenticazione backend
  */
 export function getTelegramInitData(): string | undefined {
-  // In un vero Telegram WebApp, questo sarebbe disponibile come query string
-  // Per development/testing, usiamo un valore mock
   if (typeof window === 'undefined') return undefined;
   
-  const urlParams = new URLSearchParams(window.location.hash.slice(1));
-  const tgWebAppData = urlParams.get('tgWebAppData');
-  
-  if (tgWebAppData) {
-    return decodeURIComponent(tgWebAppData);
+  // Usa i dati di init dal Telegram WebApp SDK
+  if (tg?.initData) {
+    return tg.initData;
   }
   
   // Fallback: development mode senza initData
