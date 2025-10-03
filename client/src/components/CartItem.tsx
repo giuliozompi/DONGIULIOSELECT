@@ -76,6 +76,7 @@ export default function CartItem({
                 variant="outline"
                 className="h-8 w-8 rounded-full"
                 onClick={handleDecrease}
+                disabled={quantity <= minQty}
                 data-testid="button-decrease"
               >
                 <Minus className="h-3 w-3" />

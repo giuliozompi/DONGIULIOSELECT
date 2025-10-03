@@ -33,7 +33,7 @@ export default function ProductCard({
   const isWeightBased = unit === 'кг';
   const step = isWeightBased ? 0.1 : 1;
   const initialQty = isWeightBased ? 0.2 : 1;
-  const minQty = step;
+  const minQty = initialQty; // Quantità minima = quantità iniziale
   
   const [quantity, setQuantity] = useState(initialQty);
 

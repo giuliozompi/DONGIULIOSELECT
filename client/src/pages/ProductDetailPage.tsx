@@ -67,7 +67,8 @@ export default function ProductDetailPage() {
 
   const isWeightBased = product?.unit === 'кг';
   const step = isWeightBased ? 0.1 : 1;
-  const minQty = step;
+  const initialQty = isWeightBased ? 0.2 : 1;
+  const minQty = initialQty; // Quantità minima = quantità iniziale
 
   const formatQuantity = (qty: number, unit: string) => {
     if (unit === 'кг') {
