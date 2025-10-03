@@ -31,10 +31,11 @@ export default function ProductCard({
 }: ProductCardProps) {
   const { toast } = useToast();
   const isWeightBased = unit === 'кг';
-  const step = isWeightBased ? 0.2 : 1;
+  const step = isWeightBased ? 0.1 : 1;
+  const initialQty = isWeightBased ? 0.2 : 1;
   const minQty = step;
   
-  const [quantity, setQuantity] = useState(minQty);
+  const [quantity, setQuantity] = useState(initialQty);
 
   const addToCartMutation = useMutation({
     mutationFn: async () => {
@@ -51,7 +52,7 @@ export default function ProductCard({
         description: `${name} (${formatQuantity(quantity, unit)})`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
-      setQuantity(minQty); // Reset quantity after adding
+      setQuantity(initialQty); // Reset quantity after adding
     },
     onError: (error: Error) => {
       toast({

@@ -66,7 +66,7 @@ export default function ProductDetailPage() {
   useTelegramBackButton(() => window.history.back(), true);
 
   const isWeightBased = product?.unit === 'кг';
-  const step = isWeightBased ? 0.2 : 1;
+  const step = isWeightBased ? 0.1 : 1;
   const minQty = step;
 
   const formatQuantity = (qty: number, unit: string) => {
@@ -206,7 +206,7 @@ export default function ProductDetailPage() {
                 {formatQuantity(quantity, product.unit)}
               </p>
               <p className="text-sm text-muted-foreground">
-                {isWeightBased ? 'Шаг: 200г' : 'Шаг: 1 шт'}
+                {isWeightBased ? 'Шаг: 100г' : 'Шаг: 1 шт'}
               </p>
             </div>
             <Button
