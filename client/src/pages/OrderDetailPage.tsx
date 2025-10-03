@@ -68,7 +68,7 @@ export default function OrderDetailPage() {
 
   const formatQuantity = (qty: number, unit: string) => {
     if (unit === 'кг') {
-      return qty < 1 ? `${Math.round(qty * 1000)}г` : `${qty}${unit}`;
+      return `${qty.toFixed(2)} кг`;
     }
     return `${qty} ${unit}`;
   };

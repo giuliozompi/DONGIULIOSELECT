@@ -29,8 +29,7 @@ export default function CartItem({
 
   const formatQuantity = (qty: number) => {
     if (unit === 'кг') {
-      const roundedQty = Math.round(qty * 10) / 10; // Arrotonda a 1 decimale
-      return roundedQty < 1 ? `${Math.round(roundedQty * 1000)}г` : `${roundedQty}кг`;
+      return `${qty.toFixed(2)} кг`;
     }
     return `${qty} ${unit}`;
   };

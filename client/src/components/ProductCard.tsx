@@ -65,7 +65,7 @@ export default function ProductCard({
 
   const formatQuantity = (qty: number, u: string) => {
     if (u === 'кг') {
-      return qty < 1 ? `${qty * 1000}г` : `${qty}кг`;
+      return `${qty.toFixed(2)} кг`;
     }
     return `${qty} ${u}`;
   };
