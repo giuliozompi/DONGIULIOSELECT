@@ -7,12 +7,14 @@ import FortuneWheel from '@/components/FortuneWheel';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Gift, ArrowLeft } from 'lucide-react';
-import type { Prize } from '@shared/schema';
+import { Gift, ArrowLeft, Percent } from 'lucide-react';
+import type { Prize, Bonus } from '@shared/schema';
 
 interface FortuneData {
   spinTokens: number;
   prizes: Prize[];
+  bonuses: Bonus[];
+  totalBonusAmount: string;
 }
 
 export default function FortunePage() {
@@ -30,10 +32,19 @@ export default function FortunePage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/fortune'] });
-      toast({
-        title: 'Приз получен!',
-        description: data.prize.name,
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+      
+      if (data.result.type === 'bonus') {
+        toast({
+          title: 'Бонус получен!',
+          description: `${data.result.percentage}% на следующий заказ (+${Math.round(parseFloat(data.result.amount))} ₽)`,
+        });
+      } else {
+        toast({
+          title: 'Приз получен!',
+          description: data.result.name,
+        });
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -48,12 +59,7 @@ export default function FortunePage() {
 
   const handleSpin = async () => {
     const result = await spinMutation.mutateAsync();
-    return {
-      id: result.prize.id,
-      name: result.prize.name,
-      type: result.prize.type,
-      value: result.prize.value,
-    };
+    return result.result; // Ritorna direttamente result che contiene il bonus o prodotto
   };
 
   if (isLoading) {
@@ -65,7 +71,9 @@ export default function FortunePage() {
   }
 
   const prizes = fortuneData?.prizes || [];
+  const bonuses = fortuneData?.bonuses || [];
   const spinTokens = fortuneData?.spinTokens || 0;
+  const totalBonusAmount = parseFloat(fortuneData?.totalBonusAmount || '0');
 
   const getPrizeTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
@@ -96,6 +104,48 @@ export default function FortunePage() {
 
       <div className="p-6 space-y-6">
         <FortuneWheel spinTokens={spinTokens} onSpin={handleSpin} />
+
+        {/* Sezione Bonuses */}
+        {bonuses.length > 0 && (
+          <Card className="p-4 bg-primary/5 border-primary">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Percent className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-semibold">Ваши бонусы</h3>
+              </div>
+              <Badge variant="default" data-testid="badge-bonus-total">
+                {Math.round(totalBonusAmount)} ₽
+              </Badge>
+            </div>
+            <div className="space-y-2">
+              {bonuses.map((bonus) => (
+                <div
+                  key={bonus.id}
+                  className="flex items-center justify-between p-3 bg-background rounded-lg"
+                  data-testid={`bonus-${bonus.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl">🎁</span>
+                    </div>
+                    <div>
+                      <p className="font-medium">{bonus.percentage}% бонус</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(bonus.createdAt).toLocaleDateString('ru-RU')}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-lg font-bold text-primary">
+                    {Math.round(parseFloat(bonus.amount))} ₽
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3 text-center">
+              Бонусы автоматически применяются при оформлении заказа
+            </p>
+          </Card>
+        )}
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">

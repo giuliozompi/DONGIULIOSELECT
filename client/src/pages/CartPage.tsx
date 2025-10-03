@@ -7,9 +7,10 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import CartItem from '@/components/CartItem';
 import { Card } from '@/components/ui/card';
-import { ShoppingCart, ArrowLeft } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { ShoppingCart, ArrowLeft, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { Cart, Product } from '@shared/schema';
+import type { Cart, Product, Bonus } from '@shared/schema';
 
 export default function CartPage() {
   const [, setLocation] = useLocation();
@@ -21,6 +22,14 @@ export default function CartPage() {
 
   const { data: allProducts = [] } = useQuery<Product[]>({
     queryKey: ['/api/products'],
+  });
+
+  const { data: fortuneData } = useQuery<{
+    spinTokens: number;
+    bonuses: Bonus[];
+    totalBonusAmount: string;
+  }>({
+    queryKey: ['/api/fortune'],
   });
 
   const updateQuantityMutation = useMutation({
@@ -100,9 +109,13 @@ export default function CartPage() {
   });
 
   const totalAmount = enrichedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const totalBonusAmount = parseFloat(fortuneData?.totalBonusAmount || '0');
+  const finalAmount = Math.max(0, totalAmount - totalBonusAmount);
 
   useTelegramMainButton({
-    text: `Оформить заказ на ${Math.round(totalAmount)} ₽`,
+    text: totalBonusAmount > 0 
+      ? `Оформить заказ на ${Math.round(finalAmount)} ₽` 
+      : `Оформить заказ на ${Math.round(totalAmount)} ₽`,
     onClick: () => createOrderMutation.mutate(),
     show: enrichedItems.length > 0,
     enabled: !createOrderMutation.isPending && enrichedItems.length > 0,
@@ -179,11 +192,41 @@ export default function CartPage() {
         ))}
 
         <Card className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-lg font-semibold">Итого:</p>
-            <p className="text-2xl font-bold" data-testid="text-total-amount">
-              {Math.round(totalAmount)} ₽
-            </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-base text-muted-foreground">Сумма товаров:</p>
+              <p className="text-lg font-semibold">
+                {Math.round(totalAmount)} ₽
+              </p>
+            </div>
+
+            {totalBonusAmount > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-primary" />
+                    <p className="text-base text-muted-foreground">Бонусы:</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-lg font-semibold text-primary">
+                      -{Math.round(totalBonusAmount)} ₽
+                    </p>
+                    <Badge variant="secondary" className="text-xs">
+                      Автоприменение
+                    </Badge>
+                  </div>
+                </div>
+                
+                <div className="h-px bg-border" />
+              </>
+            )}
+            
+            <div className="flex items-center justify-between">
+              <p className="text-lg font-semibold">К оплате:</p>
+              <p className="text-2xl font-bold" data-testid="text-total-amount">
+                {Math.round(finalAmount)} ₽
+              </p>
+            </div>
           </div>
           
           <Button
@@ -193,7 +236,7 @@ export default function CartPage() {
             disabled={createOrderMutation.isPending || enrichedItems.length === 0}
             data-testid="button-checkout"
           >
-            {createOrderMutation.isPending ? 'Оформление...' : `Оформить заказ на ${Math.round(totalAmount)} ₽`}
+            {createOrderMutation.isPending ? 'Оформление...' : `Оформить заказ на ${Math.round(finalAmount)} ₽`}
           </Button>
         </Card>
       </div>
