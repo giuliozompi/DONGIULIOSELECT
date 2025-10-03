@@ -210,23 +210,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
       
-      // Calcola totale
-      const amount = orderItems.reduce((sum, item) => 
+      // Calcola totale iniziale
+      const initialAmount = orderItems.reduce((sum, item) => 
         sum + parseFloat(item.price) * item.quantity, 
         0
-      ).toFixed(2);
+      );
       
-      // Crea ordine
+      // Ottieni bonuses disponibili (FIFO: ordinati per createdAt)
+      const availableBonuses = await storage.getUnusedBonusesByUserId(req.userId!);
+      
+      // Applica bonuses automaticamente (FIFO)
+      let remainingAmount = initialAmount;
+      const usedBonuses: string[] = [];
+      let totalBonusApplied = 0;
+      
+      for (const bonus of availableBonuses) {
+        if (remainingAmount <= 0) break;
+        
+        const bonusAmount = parseFloat(bonus.amount);
+        const appliedAmount = Math.min(bonusAmount, remainingAmount);
+        
+        totalBonusApplied += appliedAmount;
+        remainingAmount -= appliedAmount;
+        usedBonuses.push(bonus.id);
+        
+        // Se il bonus è completamente usato, procedi al prossimo
+        if (appliedAmount >= bonusAmount) {
+          continue;
+        } else {
+          // Il bonus copre completamente il resto, ferma
+          break;
+        }
+      }
+      
+      const finalAmount = Math.max(0, initialAmount - totalBonusApplied).toFixed(2);
+      
+      // Crea ordine con importo finale scontato
       const order = await storage.createOrder({
         userId: req.userId!,
         items: orderItems,
-        amount,
+        amount: finalAmount,
       });
+      
+      // Marca bonuses come usati
+      for (const bonusId of usedBonuses) {
+        await storage.markBonusAsUsed(bonusId, order.id);
+      }
       
       // Svuota carrello
       await storage.clearCart(req.userId!);
       
-      res.json(order);
+      res.json({
+        ...order,
+        bonusApplied: totalBonusApplied.toFixed(2),
+        bonusesUsed: usedBonuses.length,
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
@@ -269,15 +307,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ==================== FORTUNE WHEEL ====================
   
-  // GET /api/fortune - Ottieni spin tokens e premi dell'utente
+  // GET /api/fortune - Ottieni spin tokens, premi e bonuses dell'utente
   app.get("/api/fortune", verifyTelegramInitData, async (req, res) => {
     try {
       const tokens = await storage.getSpinTokens(req.userId!);
       const prizes = await storage.getPrizesByUserId(req.userId!);
+      const bonuses = await storage.getUnusedBonusesByUserId(req.userId!);
+      
+      // Calcola totale bonus disponibile
+      const totalBonusAmount = bonuses.reduce((sum, b) => sum + parseFloat(b.amount), 0);
       
       res.json({
         spinTokens: tokens.tokens,
         prizes,
+        bonuses,
+        totalBonusAmount: totalBonusAmount.toFixed(2),
       });
     } catch (error) {
       console.error('Error fetching fortune data:', error);
@@ -291,8 +335,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Verifica che l'utente abbia token disponibili
       const tokens = await storage.getSpinTokens(req.userId!);
       if (tokens.tokens <= 0) {
-        return res.status(400).json({ error: 'No spin tokens available' });
+        return res.status(400).json({ error: 'Нет доступных вращений' });
       }
+      
+      // Verifica che l'utente abbia almeno un ordine completato
+      const orders = await storage.getOrdersByUserId(req.userId!);
+      const paidOrders = orders.filter(o => o.status === 'paid');
+      
+      if (paidOrders.length === 0) {
+        return res.status(400).json({ error: 'Необходимо сделать хотя бы один заказ' });
+      }
+      
+      // Ottieni l'ultimo ordine completato (per calcolare il bonus)
+      const lastPaidOrder = paidOrders[0]; // Orders sono già ordinati per createdAt desc
+      const lastOrderAmount = parseFloat(lastPaidOrder.amount);
       
       // Decrementa token
       const updatedTokens = await storage.decrementSpinTokens(req.userId!);
@@ -300,22 +356,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Failed to decrement tokens' });
       }
       
-      // Genera premio casuale
-      const prizeTypes = [
-        { name: 'Скидка 5%', type: 'discount', value: '5', weight: 30 },
-        { name: 'Скидка 10%', type: 'discount', value: '10', weight: 20 },
-        { name: 'Скидка 15%', type: 'discount', value: '15', weight: 15 },
-        { name: 'Скидка 20%', type: 'discount', value: '20', weight: 10 },
-        { name: 'Бесплатная доставка', type: 'delivery_coupon', value: 'free', weight: 15 },
-        { name: 'Подарок: Оливки 200г', type: 'gift', value: 'olives_200g', weight: 7 },
-        { name: 'Подарок: Брускетта', type: 'gift', value: 'bruschetta', weight: 3 },
+      // Premi con probabilità corrette
+      const prizeOptions = [
+        { percentage: 5, weight: 50, name: '5% бонус' },    // 50%
+        { percentage: 10, weight: 15, name: '10% бонус' },  // 15%
+        { percentage: 15, weight: 7, name: '15% бонус' },   // 7%
+        { percentage: 0, weight: 28, name: 'Продукт' },     // 28% (prodotto da provare)
       ];
       
-      const totalWeight = prizeTypes.reduce((sum, p) => sum + p.weight, 0);
+      const totalWeight = prizeOptions.reduce((sum, p) => sum + p.weight, 0);
       let random = Math.random() * totalWeight;
       
-      let selectedPrize = prizeTypes[0];
-      for (const prize of prizeTypes) {
+      let selectedPrize = prizeOptions[0];
+      for (const prize of prizeOptions) {
         random -= prize.weight;
         if (random <= 0) {
           selectedPrize = prize;
@@ -323,23 +376,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Crea premio
-      const prize = await storage.createPrize({
-        userId: req.userId!,
-        name: selectedPrize.name,
-        type: selectedPrize.type,
-        value: selectedPrize.value,
-        claimed: false,
-      });
+      // Calcola importo bonus (% dell'ultimo ordine)
+      const bonusAmount = (lastOrderAmount * selectedPrize.percentage) / 100;
       
-      // Crea record spin
-      await storage.createSpin({
-        userId: req.userId!,
-        prizeId: prize.id,
-      });
+      let result: any;
+      
+      if (selectedPrize.percentage > 0) {
+        // Crea bonus (persistente)
+        const bonus = await storage.createBonus({
+          userId: req.userId!,
+          percentage: selectedPrize.percentage,
+          amount: bonusAmount.toFixed(2),
+          fromOrderId: lastPaidOrder.id,
+          used: false,
+        });
+        
+        result = {
+          type: 'bonus',
+          percentage: selectedPrize.percentage,
+          amount: bonusAmount.toFixed(2),
+          name: selectedPrize.name,
+          bonus,
+        };
+      } else {
+        // Prodotto da provare (implementazione futura)
+        result = {
+          type: 'product',
+          name: 'Образец продукта',
+          description: 'Вы получите образец нашего продукта!',
+        };
+      }
       
       res.json({
-        prize,
+        result,
         remainingTokens: updatedTokens.tokens,
       });
     } catch (error) {
