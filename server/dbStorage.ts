@@ -2,6 +2,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { db } from './db';
 import {
   users,
+  admins,
   categories,
   products,
   carts,
@@ -15,6 +16,7 @@ import {
   paymentIntents,
   type User,
   type InsertUser,
+  type Admin,
   type Category,
   type InsertCategory,
   type Product,
@@ -50,6 +52,20 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  // Администраторы
+  async isAdmin(userId: string): Promise<boolean> {
+    const result = await db.select().from(admins).where(eq(admins.userId, userId));
+    return result.length > 0;
+  }
+
+  async addAdmin(userId: string): Promise<void> {
+    await db.insert(admins).values({ userId }).onConflictDoNothing();
+  }
+
+  async removeAdmin(userId: string): Promise<void> {
+    await db.delete(admins).where(eq(admins.userId, userId));
+  }
+
   // Категории
   async getAllCategories(): Promise<Category[]> {
     return await db.select().from(categories);
@@ -68,6 +84,19 @@ export class DbStorage implements IStorage {
   async createCategory(insertCategory: InsertCategory): Promise<Category> {
     const result = await db.insert(categories).values(insertCategory).returning();
     return result[0];
+  }
+
+  async updateCategory(id: string, updates: Partial<InsertCategory>): Promise<Category | undefined> {
+    const result = await db.update(categories)
+      .set(updates)
+      .where(eq(categories.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCategory(id: string): Promise<boolean> {
+    const result = await db.delete(categories).where(eq(categories.id, id)).returning();
+    return result.length > 0;
   }
 
   // Продукты

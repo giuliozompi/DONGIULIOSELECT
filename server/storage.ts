@@ -102,11 +102,18 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
 
+  // Администраторы
+  isAdmin(userId: string): Promise<boolean>;
+  addAdmin(userId: string): Promise<void>;
+  removeAdmin(userId: string): Promise<void>;
+
   // Категории
   getAllCategories(): Promise<Category[]>;
   getCategoryById(id: string): Promise<Category | undefined>;
   getCategoryBySlug(slug: string): Promise<Category | undefined>;
   createCategory(category: InsertCategory): Promise<Category>;
+  updateCategory(id: string, updates: Partial<InsertCategory>): Promise<Category | undefined>;
+  deleteCategory(id: string): Promise<boolean>;
 
   // Продукты
   getAllProducts(filters?: { categoryId?: string; inStock?: boolean }): Promise<Product[]>;
@@ -314,6 +321,21 @@ export class MemStorage implements IStorage {
     return user;
   }
 
+  // Администраторы (stub - not used in production)
+  private admins: Set<string> = new Set();
+
+  async isAdmin(userId: string): Promise<boolean> {
+    return this.admins.has(userId);
+  }
+
+  async addAdmin(userId: string): Promise<void> {
+    this.admins.add(userId);
+  }
+
+  async removeAdmin(userId: string): Promise<void> {
+    this.admins.delete(userId);
+  }
+
   // Категории
   async getAllCategories(): Promise<Category[]> {
     return Array.from(this.categories.values());
@@ -338,6 +360,19 @@ export class MemStorage implements IStorage {
     };
     this.categories.set(id, category);
     return category;
+  }
+
+  async updateCategory(id: string, updates: Partial<InsertCategory>): Promise<Category | undefined> {
+    const category = this.categories.get(id);
+    if (!category) return undefined;
+    
+    const updated = { ...category, ...updates };
+    this.categories.set(id, updated);
+    return updated;
+  }
+
+  async deleteCategory(id: string): Promise<boolean> {
+    return this.categories.delete(id);
   }
 
   // Продукты
