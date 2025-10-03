@@ -18,24 +18,76 @@ interface FortuneWheelProps {
   onSpin: () => Promise<Prize>;
 }
 
+// Icone SVG italiane custom (sostituiscono emoji)
+const CheeseIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <path d="M4 20 L16 8 L28 20 L28 28 L4 28 Z" fill="#FFD700" stroke="#D4A017" strokeWidth="2"/>
+    <circle cx="12" cy="18" r="2" fill="#FFA500" opacity="0.6"/>
+    <circle cx="20" cy="22" r="2.5" fill="#FFA500" opacity="0.6"/>
+  </svg>
+);
+
+const TomatoIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <circle cx="16" cy="18" r="10" fill="#FF6347" stroke="#C1440E" strokeWidth="2"/>
+    <path d="M14 8 L16 4 L18 8" fill="#228B22" stroke="#1B5E20" strokeWidth="1.5"/>
+  </svg>
+);
+
+const SalamiIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <ellipse cx="16" cy="16" rx="10" ry="8" fill="#8B4513" stroke="#654321" strokeWidth="2"/>
+    <circle cx="13" cy="14" r="1.5" fill="#FFF" opacity="0.8"/>
+    <circle cx="18" cy="16" r="1.5" fill="#FFF" opacity="0.8"/>
+    <circle cx="15" cy="18" r="1.5" fill="#FFF" opacity="0.8"/>
+  </svg>
+);
+
+const GrapesIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <circle cx="16" cy="18" r="4" fill="#8B008B"/>
+    <circle cx="12" cy="14" r="3.5" fill="#8B008B"/>
+    <circle cx="20" cy="14" r="3.5" fill="#8B008B"/>
+    <circle cx="14" cy="22" r="3" fill="#8B008B"/>
+    <circle cx="18" cy="22" r="3" fill="#8B008B"/>
+    <path d="M16 10 L16 6 L14 8 L18 8 Z" fill="#228B22"/>
+  </svg>
+);
+
+const ProsciuttoIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <ellipse cx="16" cy="16" rx="11" ry="9" fill="#CD5C5C" stroke="#8B3A3A" strokeWidth="2"/>
+    <path d="M10 14 Q16 12 22 14" stroke="#FFF" strokeWidth="1" opacity="0.6"/>
+    <path d="M10 18 Q16 16 22 18" stroke="#FFF" strokeWidth="1" opacity="0.6"/>
+  </svg>
+);
+
+const LettuceIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <path d="M16 8 L22 14 L20 22 L12 22 L10 14 Z" fill="#90EE90" stroke="#228B22" strokeWidth="2"/>
+    <path d="M14 14 L18 14 M13 18 L19 18" stroke="#228B22" strokeWidth="1" opacity="0.6"/>
+  </svg>
+);
+
 export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
   const [rotation, setRotation] = useState(0);
 
-  // 8 segmenti con icone e colori italiani
+  // 8 segmenti con icone SVG e colori italiani
+  // Distribuiti secondo probabilità: 5% (50%), 10% (15%), 15% (7%), Prodotto (28%)
   const segments = [
-    { label: '5%', icon: '🧀', color: '#FFD700', weight: 4 }, // Formaggio - 4/8 = 50%
-    { label: 'Продукт', icon: '🍅', color: '#FF6B6B', weight: 2 }, // Pomodoro - 2/8 = 25%
-    { label: '5%', icon: '🥓', color: '#D4AF37', weight: 4 }, // Salame
-    { label: '10%', icon: '🍇', color: '#9B59B6', weight: 1.2 }, // Uva - 1.2/8 = 15%
-    { label: '5%', icon: '🧀', color: '#FFA500', weight: 4 }, // Formaggio
-    { label: 'Продукт', icon: '🥬', color: '#27AE60', weight: 2.24 }, // Verdura - 2.24/8 = 28%
-    { label: '5%', icon: '🍖', color: '#C85A54', weight: 4 }, // Prosciutto
-    { label: '15%', icon: '🍇', color: '#8E44AD', weight: 0.56 }, // Uva - 0.56/8 = 7%
+    { label: '5%', type: 'bonus_5', Icon: CheeseIcon, color: '#FFD700' },      // 0: 5% - Formaggio
+    { label: 'Продукт', type: 'product', Icon: TomatoIcon, color: '#FF6B6B' },  // 1: Prodotto - Pomodoro
+    { label: '5%', type: 'bonus_5', Icon: SalamiIcon, color: '#D4AF37' },      // 2: 5% - Salame
+    { label: '10%', type: 'bonus_10', Icon: GrapesIcon, color: '#9B59B6' },    // 3: 10% - Uva
+    { label: '5%', type: 'bonus_5', Icon: CheeseIcon, color: '#FFA500' },      // 4: 5% - Formaggio
+    { label: 'Продукт', type: 'product', Icon: LettuceIcon, color: '#27AE60' },// 5: Prodotto - Verdura
+    { label: '5%', type: 'bonus_5', Icon: ProsciuttoIcon, color: '#C85A54' },  // 6: 5% - Prosciutto
+    { label: '15%', type: 'bonus_15', Icon: GrapesIcon, color: '#8E44AD' },    // 7: 15% - Uva
   ];
 
-  const segmentAngle = 360 / segments.length;
+  const segmentAngle = 360 / segments.length; // 45 gradi per segmento
 
   const handleSpin = async () => {
     if (spinTokens <= 0 || isSpinning) return;
@@ -46,9 +98,41 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
     try {
       const prize = await onSpin();
       
-      // Calcola rotazione finale (5-8 giri completi + angolo del premio)
-      const spinsCount = 5 + Math.random() * 3;
-      const finalRotation = rotation + (360 * spinsCount) + Math.random() * 360;
+      // Mappa il premio a un indice di segmento
+      let targetSegmentIndex = 0;
+      
+      if (prize.type === 'bonus' && prize.percentage) {
+        // Trova un segmento che corrisponde al bonus vinto
+        const matchingSegments = segments
+          .map((seg, idx) => ({ seg, idx }))
+          .filter(({ seg }) => seg.type === `bonus_${prize.percentage}`);
+        
+        // Sceglie casualmente tra i segmenti corrispondenti
+        if (matchingSegments.length > 0) {
+          const randomMatch = matchingSegments[Math.floor(Math.random() * matchingSegments.length)];
+          targetSegmentIndex = randomMatch.idx;
+        }
+      } else if (prize.type === 'product') {
+        // Trova un segmento prodotto
+        const productSegments = segments
+          .map((seg, idx) => ({ seg, idx }))
+          .filter(({ seg }) => seg.type === 'product');
+        
+        if (productSegments.length > 0) {
+          const randomMatch = productSegments[Math.floor(Math.random() * productSegments.length)];
+          targetSegmentIndex = randomMatch.idx;
+        }
+      }
+      
+      // Calcola l'angolo target:
+      // - L'indicatore è a 0° (top)
+      // - Ogni segmento inizia a (index * segmentAngle)
+      // - Vogliamo che il CENTRO del segmento sia sotto l'indicatore
+      const targetAngle = targetSegmentIndex * segmentAngle + (segmentAngle / 2);
+      
+      // Giri completi + angolo target (normalizzato per rotazione in senso orario)
+      const spinsCount = 5 + Math.random() * 3; // 5-8 giri
+      const finalRotation = rotation + (360 * spinsCount) + (360 - targetAngle);
       
       setRotation(finalRotation);
 
@@ -117,10 +201,12 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
 
                     const pathData = `M 0 0 L ${x1} ${y1} A 95 95 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
 
-                    // Posizione testo e icona
+                    // Posizione icona e testo
                     const midAngle = (startAngle + endAngle) / 2;
-                    const textX = 65 * Math.cos(midAngle);
-                    const textY = 65 * Math.sin(midAngle);
+                    const iconX = 60 * Math.cos(midAngle);
+                    const iconY = 60 * Math.sin(midAngle);
+                    const textX = 70 * Math.cos(midAngle);
+                    const textY = 70 * Math.sin(midAngle) + 18;
 
                     return (
                       <g key={index}>
@@ -130,19 +216,20 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
                           stroke="#fff"
                           strokeWidth="2"
                         />
+                        <foreignObject
+                          x={iconX - 16}
+                          y={iconY - 16}
+                          width="32"
+                          height="32"
+                          transform={`rotate(${index * segmentAngle}, ${iconX}, ${iconY})`}
+                        >
+                          <div className="flex items-center justify-center w-full h-full">
+                            <segment.Icon />
+                          </div>
+                        </foreignObject>
                         <text
                           x={textX}
                           y={textY}
-                          fontSize="28"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          transform={`rotate(${index * segmentAngle}, ${textX}, ${textY})`}
-                        >
-                          {segment.icon}
-                        </text>
-                        <text
-                          x={textX}
-                          y={textY + 18}
                           fontSize="11"
                           fontWeight="bold"
                           textAnchor="middle"
@@ -150,7 +237,7 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
                           fill="#fff"
                           stroke="#000"
                           strokeWidth="0.5"
-                          transform={`rotate(${index * segmentAngle}, ${textX}, ${textY + 18})`}
+                          transform={`rotate(${index * segmentAngle}, ${textX}, ${textY})`}
                         >
                           {segment.label}
                         </text>
@@ -192,8 +279,8 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
       {wonPrize && (
         <Card className="p-6 bg-primary/5 border-primary" data-testid="card-prize-won">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-2xl">
-              🎉
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-6 h-6 text-primary" />
             </div>
             <div className="flex-1">
               <h4 className="font-semibold mb-1">Поздравляем!</h4>
