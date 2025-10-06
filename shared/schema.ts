@@ -144,6 +144,23 @@ export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, cre
 export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type Order = typeof orders.$inferSelect;
 
+// Order status constants
+export const ORDER_STATUSES = {
+  FORMED: 'ОФОРМЛЕН',
+  PREPARED: 'СОБРАН',
+  PAYMENT_LINK_SENT: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
+  PAID: 'ОПЛАЧЕН',
+  COURIER_CALLED: 'ВЫЗВАН КУРЬЕР',
+  RECEIVED: 'ПОЛУЧЕН',
+} as const;
+
+// Stati che indicano che l'ordine è stato pagato (include stati post-pagamento)
+export const PAID_ORDER_STATUSES = [
+  ORDER_STATUSES.PAID,
+  ORDER_STATUSES.COURIER_CALLED,
+  ORDER_STATUSES.RECEIVED,
+] as const;
+
 // Токены вращений колеса фортуны
 export const fortuneSpinTokens = pgTable("fortune_spin_tokens", {
   userId: varchar("user_id").primaryKey(),

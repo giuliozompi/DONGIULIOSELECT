@@ -12,11 +12,12 @@ import { ArrowLeft, CheckCircle2, Clock, XCircle, AlertCircle } from 'lucide-rea
 import type { Order } from '@shared/schema';
 
 const statusConfig = {
-  new: { label: 'Новый', icon: Clock, variant: 'secondary' as const },
-  pending_payment: { label: 'Ожидание оплаты', icon: Clock, variant: 'default' as const },
-  paid: { label: 'Оплачен', icon: CheckCircle2, variant: 'default' as const },
-  failed: { label: 'Ошибка оплаты', icon: XCircle, variant: 'destructive' as const },
-  cancelled: { label: 'Отменен', icon: AlertCircle, variant: 'outline' as const },
+  'ОФОРМЛЕН': { label: 'Оформлен', icon: Clock, variant: 'secondary' as const },
+  'СОБРАН': { label: 'Собран', icon: Clock, variant: 'default' as const },
+  'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ': { label: 'Ожидание оплаты', icon: Clock, variant: 'default' as const },
+  'ОПЛАЧЕН': { label: 'Оплачен', icon: CheckCircle2, variant: 'default' as const },
+  'ВЫЗВАН КУРЬЕР': { label: 'Вызван курьер', icon: Clock, variant: 'default' as const },
+  'ПОЛУЧЕН': { label: 'Получен', icon: CheckCircle2, variant: 'default' as const },
 };
 
 export default function OrderDetailPage() {
@@ -73,9 +74,9 @@ export default function OrderDetailPage() {
     return `${qty} ${unit}`;
   };
 
-  const canPay = order?.status === 'new' || order?.status === 'failed';
+  const canPay = order?.status === 'ОФОРМЛЕН' || order?.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ';
   const orderAmount = order ? parseFloat(order.amount) : 0;
-  const mainButtonText = order?.status === 'paid' 
+  const mainButtonText = order?.status === 'ОПЛАЧЕН' || order?.status === 'ВЫЗВАН КУРЬЕР' || order?.status === 'ПОЛУЧЕН'
     ? 'Заказ оплачен'
     : `Оплатить ${formatPrice(orderAmount)}`;
 
@@ -108,7 +109,7 @@ export default function OrderDetailPage() {
     );
   }
 
-  const statusInfo = statusConfig[order.status as keyof typeof statusConfig] || statusConfig.new;
+  const statusInfo = statusConfig[order.status as keyof typeof statusConfig] || statusConfig['ОФОРМЛЕН'];
   const StatusIcon = statusInfo.icon;
 
   return (

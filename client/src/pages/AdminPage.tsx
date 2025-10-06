@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { insertCategorySchema, insertProductSchema, type Category, type Product } from '@shared/schema';
-import { Trash2, Edit, Plus } from 'lucide-react';
+import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin } from '@shared/schema';
+import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import type { SubmitHandler } from 'react-hook-form';
 
 // Nota: Telegram types già definiti in lib/telegram.ts
@@ -56,9 +57,11 @@ export default function AdminPage() {
       <h1 className="text-3xl font-bold mb-6">Панель администратора</h1>
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2" data-testid="admin-tabs">
+        <TabsList className="grid w-full grid-cols-4" data-testid="admin-tabs">
           <TabsTrigger value="categories" data-testid="tab-categories">Категории</TabsTrigger>
           <TabsTrigger value="products" data-testid="tab-products">Продукты</TabsTrigger>
+          <TabsTrigger value="orders" data-testid="tab-orders">Заказы</TabsTrigger>
+          <TabsTrigger value="admins" data-testid="tab-admins">Админы</TabsTrigger>
         </TabsList>
         
         <TabsContent value="categories">
@@ -67,6 +70,14 @@ export default function AdminPage() {
         
         <TabsContent value="products">
           <ProductsManager />
+        </TabsContent>
+        
+        <TabsContent value="orders">
+          <OrdersManager />
+        </TabsContent>
+        
+        <TabsContent value="admins">
+          <AdminsManager />
         </TabsContent>
       </Tabs>
     </div>
@@ -655,8 +666,8 @@ function ProductsManager() {
                     <FormControl>
                       <Input 
                         {...field} 
-                        placeholder="Классический, С трюфелем, Выдержанный"
-                        data-testid="input-product-variations"
+                        placeholder="Классический, Острый, С трюфелем"
+                        data-testid="input-product-taste"
                       />
                     </FormControl>
                     <FormMessage />
@@ -669,12 +680,31 @@ function ProductsManager() {
                 name="descriptionShort"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Краткое описание</FormLabel>
+                    <FormLabel>Краткое описание (опционально)</FormLabel>
                     <FormControl>
                       <Textarea 
                         {...field} 
-                        value={field.value || ''} 
-                        data-testid="input-product-description-short"
+                        value={field.value || ''}
+                        data-testid="input-product-desc-short"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="descriptionFull"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Полное описание (опционально)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        {...field} 
+                        value={field.value || ''}
+                        rows={6}
+                        data-testid="input-product-desc-full"
                       />
                     </FormControl>
                     <FormMessage />
@@ -749,6 +779,309 @@ function ProductsManager() {
                 </div>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ========== ORDERS MANAGER ==========
+
+const ORDER_STATUSES = ['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', 'ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН'] as const;
+
+function OrdersManager() {
+  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  
+  // Fetch orders with filter
+  const { data: orders = [], isLoading } = useQuery<Order[]>({
+    queryKey: ['/api/admin/orders', statusFilter !== 'all' ? statusFilter : undefined],
+  });
+
+  // Update status mutation
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
+      return await apiRequest(`/api/admin/orders/${orderId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({ title: '✅ Статус обновлен' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось обновить статус',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Call courier mutation
+  const callCourierMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return await apiRequest(`/api/admin/orders/${orderId}/call-courier`, {
+        method: 'POST',
+        body: JSON.stringify({ courierService: 'manual' }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({ title: '✅ Курьер вызван' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось вызвать курьера',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const getStatusBadgeVariant = (status: string) => {
+    switch (status) {
+      case 'ОФОРМЛЕН': return 'default';
+      case 'СОБРАН': return 'secondary';
+      case 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ': return 'outline';
+      case 'ОПЛАЧЕН': return 'default';
+      case 'ВЫЗВАН КУРЬЕР': return 'secondary';
+      case 'ПОЛУЧЕН': return 'default';
+      default: return 'default';
+    }
+  };
+
+  if (isLoading) {
+    return <div className="py-4">Загрузка заказов...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Filter */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Фильтр по статусу</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger data-testid="select-order-status-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Все заказы</SelectItem>
+              {ORDER_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>{status}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {/* Orders list */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Заказы ({orders.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4" data-testid="orders-list">
+            {orders.length === 0 ? (
+              <p className="text-muted-foreground">Нет заказов</p>
+            ) : (
+              orders.map((order) => (
+                <div 
+                  key={order.id} 
+                  className="border rounded-md p-4 space-y-3 hover-elevate"
+                  data-testid={`order-item-${order.id}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium">Заказ #{order.id.slice(0, 8)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {order.customerName} • {order.amount}₽
+                      </p>
+                    </div>
+                    <Badge variant={getStatusBadgeVariant(order.status)} data-testid={`badge-status-${order.id}`}>
+                      {order.status}
+                    </Badge>
+                  </div>
+
+                  <div className="flex gap-2 items-center">
+                    <Label className="text-sm font-medium">Изменить статус:</Label>
+                    <Select 
+                      value={order.status}
+                      onValueChange={(newStatus) => updateStatusMutation.mutate({ orderId: order.id, status: newStatus })}
+                      disabled={updateStatusMutation.isPending}
+                    >
+                      <SelectTrigger className="w-[280px]" data-testid={`select-status-${order.id}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ORDER_STATUSES.map((status) => (
+                          <SelectItem key={status} value={status}>{status}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {order.status === 'ОПЛАЧЕН' && (
+                    <Button 
+                      size="sm"
+                      onClick={() => callCourierMutation.mutate(order.id)}
+                      disabled={callCourierMutation.isPending}
+                      data-testid={`button-call-courier-${order.id}`}
+                    >
+                      <Truck className="w-4 h-4 mr-2" />
+                      Вызвать курьера
+                    </Button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ========== ADMINS MANAGER ==========
+
+function AdminsManager() {
+  const { toast } = useToast();
+  const [newUsername, setNewUsername] = useState('');
+  
+  // Fetch admins
+  const { data: admins = [], isLoading } = useQuery<Admin[]>({
+    queryKey: ['/api/admin/admins'],
+  });
+
+  // Add admin mutation
+  const addAdminMutation = useMutation({
+    mutationFn: async (telegramUsername: string) => {
+      return await apiRequest('/api/admin/admins', {
+        method: 'POST',
+        body: JSON.stringify({ telegramUsername }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/admins'] });
+      setNewUsername('');
+      toast({ title: '✅ Администратор добавлен' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось добавить администратора',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Remove admin mutation
+  const removeAdminMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return await apiRequest(`/api/admin/admins/${userId}`, {
+        method: 'DELETE',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/admins'] });
+      toast({ title: '✅ Администратор удален' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось удалить администратора',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const handleAddAdmin = () => {
+    if (!newUsername.trim()) {
+      toast({ 
+        title: 'Ошибка', 
+        description: 'Введите имя пользователя',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    addAdminMutation.mutate(newUsername.trim());
+  };
+
+  if (isLoading) {
+    return <div className="py-4">Загрузка администраторов...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Add admin form */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Добавить администратора</CardTitle>
+          <CardDescription>
+            Введите Telegram username пользователя (без @)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Input 
+              placeholder="username"
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddAdmin()}
+              data-testid="input-new-admin-username"
+            />
+            <Button 
+              onClick={handleAddAdmin}
+              disabled={addAdminMutation.isPending}
+              data-testid="button-add-admin"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Добавить
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Admins list */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Администраторы ({admins.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2" data-testid="admins-list">
+            {admins.length === 0 ? (
+              <p className="text-muted-foreground">Нет администраторов</p>
+            ) : (
+              admins.map((admin) => (
+                <div 
+                  key={admin.userId} 
+                  className="flex items-center justify-between p-4 border rounded-md hover-elevate"
+                  data-testid={`admin-item-${admin.userId}`}
+                >
+                  <div>
+                    <p className="font-medium">@{admin.telegramUsername}</p>
+                    <p className="text-sm text-muted-foreground">User ID: {admin.userId}</p>
+                  </div>
+                  <Button 
+                    size="icon" 
+                    variant="destructive" 
+                    onClick={() => {
+                      if (confirm(`Удалить администратора @${admin.telegramUsername}?`)) {
+                        removeAdminMutation.mutate(admin.userId);
+                      }
+                    }}
+                    disabled={removeAdminMutation.isPending}
+                    data-testid={`button-remove-admin-${admin.userId}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

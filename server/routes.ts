@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, PAID_ORDER_STATUSES } from "@shared/schema";
 import { z } from "zod";
 import { getDaDataService } from "./services/dadata";
 
@@ -368,7 +368,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Verifica che l'utente abbia almeno un ordine completato
       const orders = await storage.getOrdersByUserId(req.userId!);
-      const paidOrders = orders.filter(o => o.status === 'paid');
+      // Stati che indicano che l'ordine è stato pagato (include stati post-pagamento)
+      const paidOrders = orders.filter(o => PAID_ORDER_STATUSES.includes(o.status as any));
       
       if (paidOrders.length === 0) {
         return res.status(400).json({ error: 'Необходимо сделать хотя бы один заказ' });
@@ -626,8 +627,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
       
-      // Aggiorna stato ordine
-      await storage.updateOrderStatus(orderId, 'pending_payment', paymentIntent.id);
+      // Aggiorna stato ordine a "link inviato" solo se non è già in uno stato più avanzato
+      if (order.status === 'ОФОРМЛЕН' || order.status === 'СОБРАН') {
+        await storage.updateOrderStatus(orderId, 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', paymentIntent.id);
+      }
       
       res.json({
         ...paymentIntent,
@@ -683,8 +686,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Payment intent not found' });
       }
       
-      // Aggiorna stato ordine
-      const orderStatus = webhookPayload.status === 'completed' ? 'paid' : 'failed';
+      // Aggiorna stato ordine con nuovo stato russo
+      const orderStatus = webhookPayload.status === 'completed' ? 'ОПЛАЧЕН' : 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ';
       await storage.updateOrderStatus(paymentIntent.orderId, orderStatus);
       
       res.json({ success: true });
@@ -847,6 +850,213 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ==================== ADMIN ORDER MANAGEMENT ====================
+  
+  // GET /api/admin/orders - Ottieni tutti gli ordini (ADMIN ONLY)
+  app.get("/api/admin/orders", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      
+      const orders = await storage.getAllOrders({ status, limit });
+      res.json(orders);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // PATCH /api/admin/orders/:id/status - Aggiorna stato ordine (ADMIN ONLY)
+  app.patch("/api/admin/orders/:id/status", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        status: z.enum(['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', 'ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН']),
+      });
+      
+      const { status } = schema.parse(req.body);
+      const orderId = req.params.id;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Aggiorna stato
+      const updatedOrder = await storage.updateOrder(orderId, { status });
+      
+      // Se lo stato è СОБРАН, genera e invia link pagamento automaticamente
+      if (status === 'СОБРАН') {
+        try {
+          // Verifica se esiste già un payment intent per questo ordine
+          let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
+          let sbpIntent: any;
+          
+          if (!paymentIntent || paymentIntent.status !== 'pending') {
+            // Crea nuovo payment intent СБП solo se non esiste o se è scaduto/completato
+            const { createSBPPaymentIntent } = await import('./services/sbp-payment');
+            sbpIntent = await createSBPPaymentIntent(orderId, order.amount, 'RUB');
+            
+            // Salva payment intent nel database
+            paymentIntent = await storage.createPaymentIntent({
+              orderId,
+              provider: 'SBP',
+              status: 'pending',
+              amount: order.amount,
+              redirectUrl: sbpIntent.redirectUrl,
+              raw: {
+                sbpPaymentId: sbpIntent.id,
+                qrCodeData: sbpIntent.qrCodeData,
+                expiresAt: sbpIntent.expiresAt.toISOString(),
+              },
+            });
+          } else {
+            // Riusa payment intent esistente
+            sbpIntent = {
+              redirectUrl: paymentIntent.redirectUrl,
+              ...(paymentIntent.raw as any),
+            };
+          }
+          
+          // Invia link pagamento via Telegram
+          const { sendPaymentLink } = await import('./services/telegram-bot');
+          await sendPaymentLink(
+            order.userId,
+            orderId,
+            order.amount,
+            sbpIntent.redirectUrl
+          );
+          
+          // Invia link pagamento via email (se disponibile)
+          if (order.customerEmail) {
+            const { sendPaymentLinkEmail } = await import('./services/email');
+            await sendPaymentLinkEmail(
+              order.customerEmail,
+              orderId,
+              order.customerName,
+              order.amount,
+              sbpIntent.redirectUrl
+            );
+          }
+          
+          // Aggiorna ordine con info pagamento e timestamp invio link
+          await storage.updateOrder(orderId, {
+            status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
+            paymentId: paymentIntent.id,
+            paymentLinkSentAt: new Date(),
+          });
+          
+          return res.json({
+            ...updatedOrder,
+            status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
+            paymentLinkSent: true,
+          });
+        } catch (error) {
+          console.error('Error sending payment link:', error);
+          return res.status(500).json({ 
+            error: 'Order status updated but payment link sending failed',
+            details: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating order status:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/call-courier - Chiama corriere per ordine (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/call-courier", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        courierService: z.string().default('manual'),
+        courierOrderId: z.string().optional(),
+        courierTrackingUrl: z.string().optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      const orderId = req.params.id;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Aggiorna ordine con info corriere
+      const updatedOrder = await storage.updateOrder(orderId, {
+        status: 'ВЫЗВАН КУРЬЕР',
+        courierService: data.courierService,
+        courierOrderId: data.courierOrderId || null,
+        courierTrackingUrl: data.courierTrackingUrl || null,
+        courierCalledAt: new Date(),
+      });
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error calling courier:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // ==================== ADMIN MANAGEMENT ====================
+  
+  // GET /api/admin/admins - Ottieni lista amministratori (ADMIN ONLY)
+  app.get("/api/admin/admins", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const admins = await storage.getAllAdmins();
+      res.json(admins);
+    } catch (error) {
+      console.error('Error fetching admins:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/admins - Aggiungi amministratore (ADMIN ONLY)
+  app.post("/api/admin/admins", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        userId: z.string(),
+        telegramUsername: z.string().optional(),
+      });
+      
+      const { userId, telegramUsername } = schema.parse(req.body);
+      
+      await storage.addAdmin(userId, telegramUsername);
+      res.json({ success: true, userId, telegramUsername });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error adding admin:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // DELETE /api/admin/admins/:userId - Rimuovi amministratore (ADMIN ONLY)
+  app.delete("/api/admin/admins/:userId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      
+      // Impedisci auto-rimozione
+      if (userId === req.userId) {
+        return res.status(400).json({ error: 'Cannot remove yourself as admin' });
+      }
+      
+      await storage.removeAdmin(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing admin:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
