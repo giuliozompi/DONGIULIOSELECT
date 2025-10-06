@@ -110,7 +110,18 @@ export const orders = pgTable("orders", {
   // Dati cliente per la consegna
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
+  
+  // Indirizzo completo (backward compatibility)
   deliveryAddress: text("delivery_address").notNull(),
+  
+  // Indirizzo strutturato per integrazione logistica russa
+  deliveryCity: text("delivery_city"),
+  deliveryStreet: text("delivery_street"),
+  deliveryBuilding: text("delivery_building"),
+  deliveryFlat: text("delivery_flat"),
+  deliveryPostalCode: text("delivery_postal_code"),
+  dadataFiasId: text("dadata_fias_id"), // FIAS ID per riferimento ufficiale
+  
   deliveryNotes: text("delivery_notes"),
   
   status: text("status").notNull().default('new'), // 'new' | 'pending_payment' | 'paid' | 'failed' | 'cancelled'

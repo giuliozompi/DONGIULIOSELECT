@@ -5,6 +5,7 @@ import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verif
 import { requireAdmin } from "./middleware/requireAdmin";
 import { insertProductSchema, insertOrderSchema, insertCategorySchema } from "@shared/schema";
 import { z } from "zod";
+import { getDaDataService } from "./services/dadata";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== CATEGORIE ====================
@@ -193,6 +194,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerName: z.string().min(2),
         customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/),
         deliveryAddress: z.string().min(10),
+        deliveryCity: z.string().optional(),
+        deliveryStreet: z.string().optional(),
+        deliveryBuilding: z.string().optional(),
+        deliveryFlat: z.string().optional(),
+        deliveryPostalCode: z.string().optional(),
+        dadataFiasId: z.string().optional(),
         deliveryNotes: z.string().optional(),
       });
       
@@ -264,6 +271,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerName: customerData.customerName,
         customerPhone: customerData.customerPhone,
         deliveryAddress: customerData.deliveryAddress,
+        deliveryCity: customerData.deliveryCity,
+        deliveryStreet: customerData.deliveryStreet,
+        deliveryBuilding: customerData.deliveryBuilding,
+        deliveryFlat: customerData.deliveryFlat,
+        deliveryPostalCode: customerData.deliveryPostalCode,
+        dadataFiasId: customerData.dadataFiasId,
         deliveryNotes: customerData.deliveryNotes,
       });
       
@@ -834,6 +847,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ==================== DADATA ADDRESS SUGGESTIONS ====================
+  
+  // GET /api/address/suggest - Suggerimenti indirizzi russi via DaData
+  app.get("/api/address/suggest", async (req, res) => {
+    try {
+      const query = req.query.query as string;
+      
+      if (!query || query.length < 2) {
+        return res.json({ suggestions: [] });
+      }
+
+      const dadataService = getDaDataService();
+      
+      if (!dadataService) {
+        // Fallback: return empty suggestions if DaData not configured
+        return res.json({ suggestions: [] });
+      }
+
+      const suggestions = await dadataService.suggestAddress(query);
+      res.json({ suggestions });
+    } catch (error) {
+      console.error('Error fetching address suggestions:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
