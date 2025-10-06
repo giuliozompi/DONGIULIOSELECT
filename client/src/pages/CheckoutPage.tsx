@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { ShoppingBag, Gift } from 'lucide-react';
 import type { Cart, Product, Bonus } from '@shared/schema';
 
@@ -21,15 +22,26 @@ const checkoutFormSchema = z.object({
   customerName: z.string().min(2, 'Введите имя (минимум 2 символа)'),
   customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/, 'Введите корректный номер телефона'),
   deliveryAddress: z.string().min(10, 'Введите полный адрес доставки'),
+  deliveryFlat: z.string().optional(),
   deliveryNotes: z.string().optional(),
 });
 
 type CheckoutFormData = z.infer<typeof checkoutFormSchema>;
 
+interface StructuredAddress {
+  deliveryCity?: string;
+  deliveryStreet?: string;
+  deliveryBuilding?: string;
+  deliveryFlat?: string;
+  deliveryPostalCode?: string;
+  dadataFiasId?: string;
+}
+
 export default function CheckoutPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [structuredAddress, setStructuredAddress] = useState<StructuredAddress>({});
 
   const { data: cart, isLoading } = useQuery<Cart>({
     queryKey: ['/api/cart'],
@@ -54,13 +66,19 @@ export default function CheckoutPage() {
       customerName: '',
       customerPhone: '',
       deliveryAddress: '',
+      deliveryFlat: '',
       deliveryNotes: '',
     },
   });
 
   const createOrderMutation = useMutation({
     mutationFn: async (data: CheckoutFormData) => {
-      const res = await apiRequest('POST', '/api/orders', data);
+      const orderData = {
+        ...data,
+        ...structuredAddress,
+        deliveryFlat: data.deliveryFlat || structuredAddress.deliveryFlat,
+      };
+      const res = await apiRequest('POST', '/api/orders', orderData);
       return await res.json();
     },
     onSuccess: (data) => {
@@ -240,11 +258,45 @@ export default function CheckoutPage() {
                   <FormItem>
                     <FormLabel>Адрес доставки *</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <AddressAutocomplete
+                        value={field.value}
+                        onChange={(value, suggestion) => {
+                          field.onChange(value);
+                          if (suggestion) {
+                            setStructuredAddress({
+                              deliveryCity: suggestion.city || undefined,
+                              deliveryStreet: suggestion.street || undefined,
+                              deliveryBuilding: suggestion.building || undefined,
+                              deliveryPostalCode: suggestion.postalCode || undefined,
+                              dadataFiasId: suggestion.fiasId,
+                            });
+                            if (suggestion.flat) {
+                              form.setValue('deliveryFlat', suggestion.flat);
+                            }
+                          } else {
+                            setStructuredAddress({});
+                          }
+                        }}
+                        placeholder="Начните вводить адрес: город, улица, дом..."
+                        testId="input-delivery-address"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="deliveryFlat"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Номер квартиры</FormLabel>
+                    <FormControl>
+                      <Input 
                         {...field} 
-                        placeholder="Город, улица, дом, квартира"
-                        rows={3}
-                        data-testid="input-delivery-address"
+                        placeholder="45"
+                        data-testid="input-delivery-flat"
                       />
                     </FormControl>
                     <FormMessage />
