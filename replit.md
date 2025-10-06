@@ -140,7 +140,9 @@ Preferred communication style: Simple, everyday language.
 - `categories` - 3-level hierarchical categories (parentId relationship)
 - `products` - Product catalog with images, pricing, variations
 - `carts` - User shopping carts with JSONB items
-- `orders` - Order records with status tracking
+- `orders` - Order records with status tracking and delivery information
+  - Legacy: `deliveryAddress` (full text address for backward compatibility)
+  - Structured: `deliveryCity`, `deliveryStreet`, `deliveryBuilding`, `deliveryFlat`, `deliveryPostalCode`, `dadataFiasId` (for logistics integration)
 - `payment_intents` - Payment transaction records
 - `fortune_spin_tokens` - Gamification tokens per user
 - `prizes` - Available prizes (discounts, gifts, coupons)
@@ -173,6 +175,21 @@ Preferred communication style: Simple, everyday language.
    - Implementation: Mock service (`server/services/sbp-payment.ts`)
    - Note: Production requires real Sberbank API integration
    - Features: Payment intent creation, QR codes, webhook callbacks
+
+4. **DaData.ru Address Autocomplete**
+   - Purpose: Russian address validation and standardization for logistics integration
+   - Service: `server/services/dadata.ts`
+   - API Token: `DADATA_API_TOKEN` environment variable (optional - graceful fallback if not configured)
+   - Features:
+     - Address autocomplete with FIAS (Federal Information Address System) integration
+     - Structured address decomposition (city, street, building, apartment, postal code)
+     - Real-time suggestions with debounced search (300ms)
+     - Automatic postal code and FIAS ID retrieval for logistics services
+   - Implementation:
+     - Frontend: `AddressAutocomplete` component in checkout form
+     - Backend: `/api/address/suggest` endpoint for proxy requests
+     - Fallback: Works without API token, allows manual address entry
+     - Data Consistency: Resets structured address when user edits manually
 
 4. **Neon Database**
    - Purpose: Serverless PostgreSQL hosting
