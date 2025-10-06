@@ -17,6 +17,7 @@ import { insertCategorySchema, insertProductSchema, type Category, type Product,
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { SubmitHandler } from 'react-hook-form';
+import { format } from 'date-fns';
 
 // Nota: Telegram types già definiti in lib/telegram.ts
 
@@ -891,7 +892,9 @@ function OrdersManager() {
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-medium">Заказ #{order.id.slice(0, 8)}</p>
+                      <p className="font-medium">
+                        Заказ #{order.id.slice(0, 8)} • {format(new Date(order.createdAt), 'dd.MM.yyyy HH:mm')}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {order.customerName} • {order.amount}₽
                       </p>
