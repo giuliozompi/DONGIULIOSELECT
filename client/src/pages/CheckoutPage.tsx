@@ -21,6 +21,7 @@ import type { Cart, Product, Bonus } from '@shared/schema';
 const checkoutFormSchema = z.object({
   customerName: z.string().min(2, 'Введите имя (минимум 2 символа)'),
   customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/, 'Введите корректный номер телефона'),
+  customerEmail: z.string().email('Введите корректный адрес электронной почты'),
   deliveryAddress: z.string().min(10, 'Введите полный адрес доставки'),
   deliveryFlat: z.string().optional(),
   deliveryNotes: z.string().optional(),
@@ -65,6 +66,7 @@ export default function CheckoutPage() {
     defaultValues: {
       customerName: '',
       customerPhone: '',
+      customerEmail: '',
       deliveryAddress: '',
       deliveryFlat: '',
       deliveryNotes: '',
@@ -244,6 +246,25 @@ export default function CheckoutPage() {
                         type="tel"
                         placeholder="+79991234567"
                         data-testid="input-customer-phone"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="customerEmail"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>E-mail *</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="email"
+                        placeholder="ivanov@example.com"
+                        data-testid="input-customer-email"
                       />
                     </FormControl>
                     <FormMessage />
