@@ -25,9 +25,12 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
   try {
     const initData = req.headers['x-telegram-init-data'] as string;
     
+    console.log('[Telegram Auth] Request to:', req.method, req.path);
+    console.log('[Telegram Auth] Has initData:', !!initData);
+    
     // In development, permetti bypass per test
     if (process.env.NODE_ENV === 'development' && !initData) {
-      // Usa un utente di test in development
+      console.log('[Telegram Auth] Development mode bypass - using test user');
       const testUserId = 'test_user_123';
       req.userId = testUserId;
       req.telegramUser = {
@@ -40,6 +43,7 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     }
     
     if (!initData) {
+      console.log('[Telegram Auth] ERROR: Missing init data');
       return res.status(401).json({ error: 'Missing Telegram init data' });
     }
     
@@ -49,13 +53,16 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     params.delete('hash');
     
     if (!hash) {
+      console.log('[Telegram Auth] ERROR: Missing hash in init data');
       return res.status(401).json({ error: 'Invalid init data: missing hash' });
     }
+    
+    console.log('[Telegram Auth] InitData params:', Array.from(params.keys()));
     
     // Ottieni il bot token (deve essere configurato come secret)
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
-      console.error('TELEGRAM_BOT_TOKEN non configurato');
+      console.error('[Telegram Auth] ERROR: TELEGRAM_BOT_TOKEN non configurato');
       return res.status(500).json({ error: 'Server configuration error' });
     }
     
@@ -68,7 +75,14 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     const secretKey = createHmac('sha256', 'WebAppData').update(botToken).digest();
     const calculatedHash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
     
+    console.log('[Telegram Auth] Hash verification:', {
+      provided: hash.substring(0, 10) + '...',
+      calculated: calculatedHash.substring(0, 10) + '...',
+      matches: calculatedHash === hash
+    });
+    
     if (calculatedHash !== hash) {
+      console.log('[Telegram Auth] ERROR: Invalid signature');
       return res.status(401).json({ error: 'Invalid init data signature' });
     }
     
@@ -78,8 +92,18 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
       const authTimestamp = parseInt(authDate, 10);
       const now = Math.floor(Date.now() / 1000);
       const maxAge = 24 * 60 * 60; // 24 ore
+      const age = now - authTimestamp;
+      
+      console.log('[Telegram Auth] Auth date check:', {
+        authTimestamp,
+        now,
+        ageInSeconds: age,
+        maxAge,
+        expired: age > maxAge
+      });
       
       if (now - authTimestamp > maxAge) {
+        console.log('[Telegram Auth] ERROR: Init data expired');
         return res.status(401).json({ error: 'Init data expired' });
       }
     }
@@ -87,15 +111,23 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     // Estrai informazioni utente
     const userParam = params.get('user');
     if (!userParam) {
+      console.log('[Telegram Auth] ERROR: Missing user data in params');
       return res.status(401).json({ error: 'Missing user data' });
     }
     
     const userData = JSON.parse(userParam);
     const telegramUserId = String(userData.id);
     
+    console.log('[Telegram Auth] User data extracted:', {
+      id: telegramUserId,
+      username: userData.username,
+      firstName: userData.first_name
+    });
+    
     // Crea o ottieni l'utente
     storage.getUser(telegramUserId).then(user => {
       if (!user) {
+        console.log('[Telegram Auth] Creating new user:', telegramUserId);
         return storage.createUser({
           id: telegramUserId,
           username: userData.username,
@@ -103,6 +135,7 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
           lastName: userData.last_name,
         });
       }
+      console.log('[Telegram Auth] User found:', telegramUserId);
       return user;
     }).then(user => {
       req.userId = user.id;
@@ -112,14 +145,15 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
         firstName: user.firstName ?? undefined,
         lastName: user.lastName ?? undefined,
       };
+      console.log('[Telegram Auth] SUCCESS: User authenticated:', user.id);
       next();
     }).catch(error => {
-      console.error('Error creating/fetching user:', error);
+      console.error('[Telegram Auth] ERROR creating/fetching user:', error);
       res.status(500).json({ error: 'Internal server error' });
     });
     
   } catch (error) {
-    console.error('Error verifying Telegram init data:', error);
+    console.error('[Telegram Auth] ERROR verifying init data:', error);
     res.status(401).json({ error: 'Invalid init data format' });
   }
 }
