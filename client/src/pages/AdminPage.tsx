@@ -802,10 +802,7 @@ function OrdersManager() {
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      return await apiRequest(`/api/admin/orders/${orderId}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      });
+      return await apiRequest('PATCH', `/api/admin/orders/${orderId}/status`, { status });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
@@ -823,10 +820,7 @@ function OrdersManager() {
   // Call courier mutation
   const callCourierMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      return await apiRequest(`/api/admin/orders/${orderId}/call-courier`, {
-        method: 'POST',
-        body: JSON.stringify({ courierService: 'manual' }),
-      });
+      return await apiRequest('POST', `/api/admin/orders/${orderId}/call-courier`, { courierService: 'manual' });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
@@ -950,6 +944,7 @@ function OrdersManager() {
 
 function AdminsManager() {
   const { toast } = useToast();
+  const [newUserId, setNewUserId] = useState('');
   const [newUsername, setNewUsername] = useState('');
   
   // Fetch admins
@@ -959,14 +954,12 @@ function AdminsManager() {
 
   // Add admin mutation
   const addAdminMutation = useMutation({
-    mutationFn: async (telegramUsername: string) => {
-      return await apiRequest('/api/admin/admins', {
-        method: 'POST',
-        body: JSON.stringify({ telegramUsername }),
-      });
+    mutationFn: async ({ userId, telegramUsername }: { userId: string; telegramUsername?: string }) => {
+      return await apiRequest('POST', '/api/admin/admins', { userId, telegramUsername });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/admins'] });
+      setNewUserId('');
       setNewUsername('');
       toast({ title: '✅ Администратор добавлен' });
     },
@@ -982,9 +975,7 @@ function AdminsManager() {
   // Remove admin mutation
   const removeAdminMutation = useMutation({
     mutationFn: async (userId: string) => {
-      return await apiRequest(`/api/admin/admins/${userId}`, {
-        method: 'DELETE',
-      });
+      return await apiRequest('DELETE', `/api/admin/admins/${userId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/admins'] });
@@ -1000,15 +991,18 @@ function AdminsManager() {
   });
 
   const handleAddAdmin = () => {
-    if (!newUsername.trim()) {
+    if (!newUserId.trim()) {
       toast({ 
         title: 'Ошибка', 
-        description: 'Введите имя пользователя',
+        description: 'Введите User ID',
         variant: 'destructive' 
       });
       return;
     }
-    addAdminMutation.mutate(newUsername.trim());
+    addAdminMutation.mutate({ 
+      userId: newUserId.trim(), 
+      telegramUsername: newUsername.trim() || undefined 
+    });
   };
 
   if (isLoading) {
@@ -1022,13 +1016,19 @@ function AdminsManager() {
         <CardHeader>
           <CardTitle>Добавить администратора</CardTitle>
           <CardDescription>
-            Введите Telegram username пользователя (без @)
+            Введите Telegram User ID (обязательно) и username (опционально)
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2">
+          <div className="space-y-3">
             <Input 
-              placeholder="username"
+              placeholder="User ID (es: 123456789)"
+              value={newUserId}
+              onChange={(e) => setNewUserId(e.target.value)}
+              data-testid="input-new-admin-userid"
+            />
+            <Input 
+              placeholder="Username (опционально, без @)"
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddAdmin()}
@@ -1038,9 +1038,10 @@ function AdminsManager() {
               onClick={handleAddAdmin}
               disabled={addAdminMutation.isPending}
               data-testid="button-add-admin"
+              className="w-full"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Добавить
+              Добавить администратора
             </Button>
           </div>
         </CardContent>
