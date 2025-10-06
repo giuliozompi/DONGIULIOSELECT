@@ -18,6 +18,7 @@ export type User = typeof users.$inferSelect;
 // Администраторы (whitelist)
 export const admins = pgTable("admins", {
   userId: varchar("user_id").primaryKey(),
+  telegramUsername: text("telegram_username"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -125,8 +126,17 @@ export const orders = pgTable("orders", {
   
   deliveryNotes: text("delivery_notes"),
   
-  status: text("status").notNull().default('new'), // 'new' | 'pending_payment' | 'paid' | 'failed' | 'cancelled'
+  // Stati ordine: ОФОРМЛЕН (confermato) | СОБРАН (preparato) | ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ (link inviato) | ОПЛАЧЕН (pagato) | ВЫЗВАН КУРЬЕР (corriere chiamato) | ПОЛУЧЕН (ricevuto)
+  status: text("status").notNull().default('ОФОРМЛЕН'),
   paymentId: varchar("payment_id"),
+  paymentLinkSentAt: timestamp("payment_link_sent_at"),
+  
+  // Logistica
+  courierService: text("courier_service"), // 'yandex_go' | 'manual' | altro
+  courierOrderId: text("courier_order_id"), // ID ordine dal servizio di logistica
+  courierTrackingUrl: text("courier_tracking_url"),
+  courierCalledAt: timestamp("courier_called_at"),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

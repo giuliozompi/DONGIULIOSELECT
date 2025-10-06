@@ -104,8 +104,9 @@ export interface IStorage {
 
   // Администраторы
   isAdmin(userId: string): Promise<boolean>;
-  addAdmin(userId: string): Promise<void>;
+  addAdmin(userId: string, telegramUsername?: string): Promise<void>;
   removeAdmin(userId: string): Promise<void>;
+  getAllAdmins(): Promise<Array<{ userId: string; telegramUsername: string | null; createdAt: Date }>>;
 
   // Категории
   getAllCategories(): Promise<Category[]>;
@@ -132,7 +133,9 @@ export interface IStorage {
   createOrder(order: InsertOrder): Promise<Order>;
   getOrderById(id: string): Promise<Order | undefined>;
   getOrdersByUserId(userId: string): Promise<Order[]>;
+  getAllOrders(filters?: { status?: string; limit?: number }): Promise<Order[]>;
   updateOrderStatus(id: string, status: string, paymentId?: string): Promise<Order | undefined>;
+  updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined>;
 
   // Fortune Wheel
   getSpinTokens(userId: string): Promise<FortuneSpinTokens>;
@@ -322,18 +325,27 @@ export class MemStorage implements IStorage {
   }
 
   // Администраторы (stub - not used in production)
-  private admins: Set<string> = new Set();
+  private admins: Map<string, { userId: string; telegramUsername: string | null; createdAt: Date }> = new Map();
 
   async isAdmin(userId: string): Promise<boolean> {
     return this.admins.has(userId);
   }
 
-  async addAdmin(userId: string): Promise<void> {
-    this.admins.add(userId);
+  async addAdmin(userId: string, telegramUsername?: string): Promise<void> {
+    const existing = this.admins.get(userId);
+    this.admins.set(userId, {
+      userId,
+      telegramUsername: telegramUsername || existing?.telegramUsername || null,
+      createdAt: existing?.createdAt || new Date(),
+    });
   }
 
   async removeAdmin(userId: string): Promise<void> {
     this.admins.delete(userId);
+  }
+
+  async getAllAdmins(): Promise<Array<{ userId: string; telegramUsername: string | null; createdAt: Date }>> {
+    return Array.from(this.admins.values());
   }
 
   // Категории
@@ -447,6 +459,7 @@ export class MemStorage implements IStorage {
       amount: insertOrder.amount,
       customerName: insertOrder.customerName,
       customerPhone: insertOrder.customerPhone,
+      customerEmail: insertOrder.customerEmail ?? null,
       deliveryAddress: insertOrder.deliveryAddress,
       deliveryCity: insertOrder.deliveryCity ?? null,
       deliveryStreet: insertOrder.deliveryStreet ?? null,
@@ -455,8 +468,13 @@ export class MemStorage implements IStorage {
       deliveryPostalCode: insertOrder.deliveryPostalCode ?? null,
       dadataFiasId: insertOrder.dadataFiasId ?? null,
       deliveryNotes: insertOrder.deliveryNotes ?? null,
-      status: insertOrder.status ?? 'new',
+      status: insertOrder.status ?? 'ОФОРМЛЕН',
       paymentId: insertOrder.paymentId ?? null,
+      paymentLinkSentAt: insertOrder.paymentLinkSentAt ?? null,
+      courierService: insertOrder.courierService ?? null,
+      courierOrderId: insertOrder.courierOrderId ?? null,
+      courierTrackingUrl: insertOrder.courierTrackingUrl ?? null,
+      courierCalledAt: insertOrder.courierCalledAt ?? null,
       createdAt: new Date(),
     };
     this.orders.set(id, order);
@@ -468,7 +486,24 @@ export class MemStorage implements IStorage {
   }
 
   async getOrdersByUserId(userId: string): Promise<Order[]> {
-    return Array.from(this.orders.values()).filter(o => o.userId === userId);
+    return Array.from(this.orders.values())
+      .filter(o => o.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getAllOrders(filters?: { status?: string; limit?: number }): Promise<Order[]> {
+    let orders = Array.from(this.orders.values())
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
+    if (filters?.status) {
+      orders = orders.filter(o => o.status === filters.status);
+    }
+    
+    if (filters?.limit) {
+      orders = orders.slice(0, filters.limit);
+    }
+    
+    return orders;
   }
 
   async updateOrderStatus(id: string, status: string, paymentId?: string): Promise<Order | undefined> {
@@ -476,6 +511,15 @@ export class MemStorage implements IStorage {
     if (!order) return undefined;
     
     const updated = { ...order, status, ...(paymentId && { paymentId }) };
+    this.orders.set(id, updated);
+    return updated;
+  }
+
+  async updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined> {
+    const order = this.orders.get(id);
+    if (!order) return undefined;
+    
+    const updated = { ...order, ...updates };
     this.orders.set(id, updated);
     return updated;
   }

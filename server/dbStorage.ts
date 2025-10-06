@@ -58,12 +58,28 @@ export class DbStorage implements IStorage {
     return result.length > 0;
   }
 
-  async addAdmin(userId: string): Promise<void> {
-    await db.insert(admins).values({ userId }).onConflictDoNothing();
+  async addAdmin(userId: string, telegramUsername?: string): Promise<void> {
+    await db.insert(admins)
+      .values({ userId, telegramUsername: telegramUsername || null })
+      .onConflictDoUpdate({
+        target: admins.userId,
+        set: {
+          telegramUsername: telegramUsername || null,
+        },
+      });
   }
 
   async removeAdmin(userId: string): Promise<void> {
     await db.delete(admins).where(eq(admins.userId, userId));
+  }
+
+  async getAllAdmins(): Promise<Array<{ userId: string; telegramUsername: string | null; createdAt: Date }>> {
+    const result = await db.select().from(admins);
+    return result.map(admin => ({
+      userId: admin.userId,
+      telegramUsername: admin.telegramUsername,
+      createdAt: admin.createdAt,
+    }));
   }
 
   // Категории
@@ -197,10 +213,35 @@ export class DbStorage implements IStorage {
       .orderBy(desc(orders.createdAt));
   }
 
+  async getAllOrders(filters?: { status?: string; limit?: number }): Promise<Order[]> {
+    let query = db.select().from(orders);
+    
+    if (filters?.status) {
+      query = query.where(eq(orders.status, filters.status)) as typeof query;
+    }
+    
+    query = query.orderBy(desc(orders.createdAt)) as typeof query;
+    
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as typeof query;
+    }
+    
+    return await query;
+  }
+
   async updateOrderStatus(id: string, status: string, paymentId?: string): Promise<Order | undefined> {
     const result = await db
       .update(orders)
       .set({ status, ...(paymentId && { paymentId }) })
+      .where(eq(orders.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined> {
+    const result = await db
+      .update(orders)
+      .set(updates as any)
       .where(eq(orders.id, id))
       .returning();
     return result[0];
