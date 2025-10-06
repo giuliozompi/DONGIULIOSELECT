@@ -110,7 +110,7 @@ export const orders = pgTable("orders", {
   // Dati cliente per la consegna
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
-  customerEmail: text("customer_email").notNull(),
+  customerEmail: text("customer_email"),
   
   // Indirizzo completo (backward compatibility)
   deliveryAddress: text("delivery_address").notNull(),
