@@ -28,16 +28,16 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     console.log('[Telegram Auth] Request to:', req.method, req.path);
     console.log('[Telegram Auth] Has initData:', !!initData);
     
-    // In development, permetti bypass per test
+    // In development, permetti bypass per test usando l'admin reale
     if (process.env.NODE_ENV === 'development' && !initData) {
-      console.log('[Telegram Auth] Development mode bypass - using test user');
-      const testUserId = 'test_user_123';
-      req.userId = testUserId;
+      console.log('[Telegram Auth] Development mode bypass - using admin user');
+      const adminUserId = '201331998'; // DonGiulioMoscow (admin reale)
+      req.userId = adminUserId;
       req.telegramUser = {
-        id: testUserId,
-        username: 'test_user',
-        firstName: 'Test',
-        lastName: 'User',
+        id: adminUserId,
+        username: 'DonGiulioMoscow',
+        firstName: 'Don Giulio',
+        lastName: 'Moscow',
       };
       return next();
     }
