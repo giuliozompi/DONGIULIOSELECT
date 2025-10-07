@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin } from '@shared/schema';
@@ -761,6 +762,347 @@ function ProductsManager() {
   );
 }
 
+// ========== ORDER EDIT DIALOG ==========
+
+interface OrderEditDialogProps {
+  order: Order;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
+  const { toast } = useToast();
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [newQuantity, setNewQuantity] = useState<number>(0);
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [addQuantity, setAddQuantity] = useState<number>(1);
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [discountValue, setDiscountValue] = useState<string>('');
+  const [newAddress, setNewAddress] = useState<string>(order.deliveryAddress || '');
+
+  // Fetch all products for adding
+  const { data: allProducts = [] } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+  });
+
+  // Fetch order logs
+  const { data: logs = [] } = useQuery<any[]>({
+    queryKey: [`/api/admin/orders/${order.id}/logs`],
+    enabled: open,
+  });
+
+  // Update quantity mutation
+  const updateQuantityMutation = useMutation({
+    mutationFn: async ({ productId, newQuantity }: { productId: string; newQuantity: number }) => {
+      return await apiRequest('POST', `/api/admin/orders/${order.id}/update-quantity`, { 
+        productId, 
+        newQuantity 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      setEditingProductId(null);
+      toast({ title: '✅ Количество обновлено' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Add product mutation
+  const addProductMutation = useMutation({
+    mutationFn: async ({ productId, quantity }: { productId: string; quantity: number }) => {
+      return await apiRequest('POST', `/api/admin/orders/${order.id}/add-product`, { 
+        productId, 
+        quantity 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      setSelectedProductId('');
+      setAddQuantity(1);
+      toast({ title: '✅ Продукт добавлен' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Remove product mutation
+  const removeProductMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      return await apiRequest('POST', `/api/admin/orders/${order.id}/remove-product`, { productId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      toast({ title: '✅ Продукт удален' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Apply discount mutation
+  const applyDiscountMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', `/api/admin/orders/${order.id}/apply-discount`, { 
+        discountType, 
+        discountValue 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      setDiscountValue('');
+      toast({ title: '✅ Скидка применена' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Change address mutation
+  const changeAddressMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', `/api/admin/orders/${order.id}/change-address`, { 
+        deliveryAddress: newAddress 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      toast({ title: '✅ Адрес обновлен' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Редактирование заказа #{order.id.slice(0, 8)}</DialogTitle>
+          <DialogDescription>
+            {order.customerName} • {format(new Date(order.createdAt), 'dd.MM.yyyy HH:mm')}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 py-4">
+          {/* Products */}
+          <div className="space-y-3">
+            <h3 className="font-semibold">Продукты</h3>
+            {order.items.map((item: any) => (
+              <div key={item.productId} className="flex items-center justify-between gap-4 border rounded-md p-3">
+                <div className="flex-1">
+                  <p className="font-medium">{item.productName}</p>
+                  <p className="text-sm text-muted-foreground">{item.price}₽ × {item.quantity} {item.unit}</p>
+                </div>
+                
+                {editingProductId === item.productId ? (
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.001"
+                      value={newQuantity}
+                      onChange={(e) => setNewQuantity(parseFloat(e.target.value))}
+                      className="w-24"
+                      data-testid={`input-quantity-${item.productId}`}
+                    />
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        updateQuantityMutation.mutate({ 
+                          productId: item.productId, 
+                          newQuantity 
+                        });
+                      }}
+                      data-testid={`button-save-quantity-${item.productId}`}
+                    >
+                      Сохранить
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => setEditingProductId(null)}
+                      data-testid={`button-cancel-quantity-${item.productId}`}
+                    >
+                      Отмена
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setEditingProductId(item.productId);
+                        setNewQuantity(item.quantity);
+                      }}
+                      data-testid={`button-edit-quantity-${item.productId}`}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="destructive"
+                      onClick={() => {
+                        if (confirm('Удалить продукт из заказа?')) {
+                          removeProductMutation.mutate(item.productId);
+                        }
+                      }}
+                      data-testid={`button-remove-product-${item.productId}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Add Product */}
+          <div className="space-y-3">
+            <h3 className="font-semibold">Добавить продукт</h3>
+            <div className="flex gap-2">
+              <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                <SelectTrigger className="flex-1" data-testid="select-add-product">
+                  <SelectValue placeholder="Выберите продукт" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allProducts.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name} ({product.price}₽)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="number"
+                step="0.001"
+                value={addQuantity}
+                onChange={(e) => setAddQuantity(parseFloat(e.target.value))}
+                className="w-24"
+                placeholder="Кол-во"
+                data-testid="input-add-quantity"
+              />
+              <Button 
+                onClick={() => {
+                  if (selectedProductId && addQuantity > 0) {
+                    addProductMutation.mutate({ productId: selectedProductId, quantity: addQuantity });
+                  }
+                }}
+                disabled={!selectedProductId || addQuantity <= 0}
+                data-testid="button-add-product"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Добавить
+              </Button>
+            </div>
+          </div>
+
+          {/* Apply Discount */}
+          <div className="space-y-3">
+            <h3 className="font-semibold">Применить скидку</h3>
+            <div className="flex gap-2">
+              <Select value={discountType} onValueChange={(val) => setDiscountType(val as 'percentage' | 'fixed')}>
+                <SelectTrigger className="w-[150px]" data-testid="select-discount-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percentage">Процент (%)</SelectItem>
+                  <SelectItem value="fixed">Фиксированная (₽)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                type="number"
+                step="0.01"
+                value={discountValue}
+                onChange={(e) => setDiscountValue(e.target.value)}
+                className="flex-1"
+                placeholder={discountType === 'percentage' ? 'Процент скидки' : 'Сумма скидки'}
+                data-testid="input-discount-value"
+              />
+              <Button 
+                onClick={() => {
+                  if (discountValue && parseFloat(discountValue) > 0) {
+                    applyDiscountMutation.mutate();
+                  }
+                }}
+                disabled={!discountValue || parseFloat(discountValue) <= 0}
+                data-testid="button-apply-discount"
+              >
+                Применить
+              </Button>
+            </div>
+            {order.discount && (
+              <p className="text-sm text-muted-foreground">
+                Текущая скидка: {order.discount}₽ 
+                ({order.discountType === 'percentage' ? `${order.discountValue}%` : `${order.discountValue}₽`})
+              </p>
+            )}
+          </div>
+
+          {/* Change Address */}
+          <div className="space-y-3">
+            <h3 className="font-semibold">Изменить адрес доставки</h3>
+            <div className="flex gap-2">
+              <Textarea
+                value={newAddress}
+                onChange={(e) => setNewAddress(e.target.value)}
+                className="flex-1"
+                placeholder="Адрес доставки"
+                data-testid="textarea-delivery-address"
+              />
+              <Button 
+                onClick={() => {
+                  if (newAddress && newAddress !== order.deliveryAddress) {
+                    changeAddressMutation.mutate();
+                  }
+                }}
+                disabled={!newAddress || newAddress === order.deliveryAddress}
+                data-testid="button-change-address"
+              >
+                Обновить
+              </Button>
+            </div>
+          </div>
+
+          {/* Order Total */}
+          <div className="border-t pt-4">
+            <div className="flex justify-between items-center font-semibold text-lg">
+              <span>Итого:</span>
+              <span>{order.amount}₽</span>
+            </div>
+          </div>
+
+          {/* Change Logs */}
+          {logs.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="font-semibold">История изменений</h3>
+              <div className="space-y-2">
+                {logs.map((log: any) => (
+                  <div key={log.id} className="text-sm border rounded-md p-2">
+                    <p className="font-medium">
+                      {format(new Date(log.createdAt), 'dd.MM.yyyy HH:mm')} • {log.changeType}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {JSON.stringify(log.changeData, null, 2)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ========== ORDERS MANAGER ==========
 
 const ORDER_STATUSES = ['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', 'ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН'] as const;
@@ -768,6 +1110,7 @@ const ORDER_STATUSES = ['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕН�
 function OrdersManager() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   
   // Fetch orders with filter
   const { data: orders = [], isLoading } = useQuery<Order[]>({
@@ -896,23 +1239,44 @@ function OrdersManager() {
                     </Select>
                   </div>
 
-                  {order.status === 'ОПЛАЧЕН' && (
+                  <div className="flex gap-2">
                     <Button 
                       size="sm"
-                      onClick={() => callCourierMutation.mutate(order.id)}
-                      disabled={callCourierMutation.isPending}
-                      data-testid={`button-call-courier-${order.id}`}
+                      variant="outline"
+                      onClick={() => setEditingOrder(order)}
+                      data-testid={`button-edit-order-${order.id}`}
                     >
-                      <Truck className="w-4 h-4 mr-2" />
-                      Вызвать курьера
+                      <Edit className="w-4 h-4 mr-2" />
+                      Редактировать
                     </Button>
-                  )}
+                    
+                    {order.status === 'ОПЛАЧЕН' && (
+                      <Button 
+                        size="sm"
+                        onClick={() => callCourierMutation.mutate(order.id)}
+                        disabled={callCourierMutation.isPending}
+                        data-testid={`button-call-courier-${order.id}`}
+                      >
+                        <Truck className="w-4 h-4 mr-2" />
+                        Вызвать курьера
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))
             )}
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Order Dialog */}
+      {editingOrder && (
+        <OrderEditDialog 
+          order={editingOrder}
+          open={!!editingOrder}
+          onOpenChange={(open) => !open && setEditingOrder(null)}
+        />
+      )}
     </div>
   );
 }
