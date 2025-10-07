@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Plus, Minus, ShoppingCart } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { hapticFeedback } from '@/lib/telegram';
+import ProductRecommendationsDialog from './ProductRecommendationsDialog';
 
 interface ProductCardProps {
   id: string;
@@ -36,6 +37,14 @@ export default function ProductCard({
   const minQty = initialQty; // Quantità minima = quantità iniziale
   
   const [quantity, setQuantity] = useState(initialQty);
+  const [showRecommendations, setShowRecommendations] = useState(false);
+  const [recommendedProductId, setRecommendedProductId] = useState<string | null>(null);
+
+  // Check for recommendations when dialog should open
+  const { data: recommendations } = useQuery({
+    queryKey: ['/api/products', id, 'recommendations'],
+    enabled: showRecommendations,
+  });
 
   const addToCartMutation = useMutation({
     mutationFn: async () => {
@@ -45,7 +54,7 @@ export default function ProductCard({
       });
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       hapticFeedback('success');
       toast({
         title: 'Добавлено в корзину',
@@ -53,6 +62,10 @@ export default function ProductCard({
       });
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
       setQuantity(initialQty); // Reset quantity after adding
+      
+      // Check for recommendations
+      setRecommendedProductId(id);
+      setShowRecommendations(true);
     },
     onError: (error: Error) => {
       toast({
@@ -88,11 +101,12 @@ export default function ProductCard({
   };
 
   return (
-    <Card
-      className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
-      onClick={onClick}
-      data-testid={`card-product-${name}`}
-    >
+    <>
+      <Card
+        className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
+        onClick={onClick}
+        data-testid={`card-product-${name}`}
+      >
       <div className="aspect-square bg-muted relative overflow-hidden">
         <img
           src={image}
@@ -168,5 +182,13 @@ export default function ProductCard({
         </div>
       </div>
     </Card>
+    
+    <ProductRecommendationsDialog
+      productId={recommendedProductId}
+      productName={name}
+      open={showRecommendations && !!recommendations && recommendations.length > 0}
+      onOpenChange={setShowRecommendations}
+    />
+    </>
   );
 }
