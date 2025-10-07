@@ -14,7 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin } from '@shared/schema';
+import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { SubmitHandler } from 'react-hook-form';
@@ -59,9 +59,10 @@ export default function AdminPage() {
       <h1 className="text-3xl font-bold mb-6">Панель администратора</h1>
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4" data-testid="admin-tabs">
+        <TabsList className="grid w-full grid-cols-5" data-testid="admin-tabs">
           <TabsTrigger value="categories" data-testid="tab-categories">Категории</TabsTrigger>
           <TabsTrigger value="products" data-testid="tab-products">Продукты</TabsTrigger>
+          <TabsTrigger value="associations" data-testid="tab-associations">Рекомендации</TabsTrigger>
           <TabsTrigger value="orders" data-testid="tab-orders">Заказы</TabsTrigger>
           <TabsTrigger value="admins" data-testid="tab-admins">Админы</TabsTrigger>
         </TabsList>
@@ -72,6 +73,10 @@ export default function AdminPage() {
         
         <TabsContent value="products">
           <ProductsManager />
+        </TabsContent>
+        
+        <TabsContent value="associations">
+          <ProductAssociationsManager />
         </TabsContent>
         
         <TabsContent value="orders">
@@ -1425,6 +1430,199 @@ function AdminsManager() {
               ))
             )}
           </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ========== PRODUCT ASSOCIATIONS MANAGER ==========
+
+type AssociationWithProducts = ProductAssociation & {
+  sourceProduct: Product;
+  targetProduct: Product;
+};
+
+function ProductAssociationsManager() {
+  const { toast } = useToast();
+  const [sourceProductId, setSourceProductId] = useState('');
+  const [targetProductId, setTargetProductId] = useState('');
+  const [reason, setReason] = useState('');
+
+  const { data: products = [] } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
+  });
+
+  const { data: associations = [], isLoading } = useQuery<AssociationWithProducts[]>({
+    queryKey: ['/api/admin/product-associations'],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', '/api/admin/product-associations', {
+        sourceProductId,
+        targetProductId,
+        reason: reason || null,
+        sortOrder: 0,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/product-associations'] });
+      setSourceProductId('');
+      setTargetProductId('');
+      setReason('');
+      toast({ title: '✅ Ассоциация создана' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: '❌ Ошибка', 
+        description: error.message || 'Не удалось создать ассоциацию',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('DELETE', `/api/admin/product-associations/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/product-associations'] });
+      toast({ title: '✅ Ассоциация удалена' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: '❌ Ошибка', 
+        description: error.message || 'Не удалось удалить ассоциацию',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleCreate = () => {
+    if (!sourceProductId || !targetProductId) {
+      toast({ 
+        title: '⚠️ Внимание', 
+        description: 'Выберите оба продукта',
+        variant: 'destructive',
+      });
+      return;
+    }
+    createMutation.mutate();
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Создать ассоциацию</CardTitle>
+          <CardDescription>
+            Укажите продукт и рекомендуемый к нему товар
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Основной продукт</Label>
+              <Select value={sourceProductId} onValueChange={setSourceProductId}>
+                <SelectTrigger data-testid="select-source-product">
+                  <SelectValue placeholder="Выберите продукт" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Рекомендуемый продукт</Label>
+              <Select value={targetProductId} onValueChange={setTargetProductId}>
+                <SelectTrigger data-testid="select-target-product">
+                  <SelectValue placeholder="Выберите продукт" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Описание (опционально)</Label>
+            <Input
+              placeholder="Почему эти продукты хорошо сочетаются"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              data-testid="input-reason"
+            />
+          </div>
+
+          <Button 
+            onClick={handleCreate}
+            disabled={createMutation.isPending}
+            data-testid="button-create-association"
+            className="w-full"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Создать ассоциацию
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ассоциации продуктов ({associations.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-muted-foreground">Загрузка...</p>
+          ) : associations.length === 0 ? (
+            <p className="text-muted-foreground">Нет ассоциаций</p>
+          ) : (
+            <div className="space-y-3" data-testid="associations-list">
+              {associations.map((association) => (
+                <div 
+                  key={association.id} 
+                  className="flex items-center justify-between p-4 border rounded-md hover-elevate"
+                  data-testid={`association-item-${association.id}`}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline">{association.sourceProduct.name}</Badge>
+                      <span className="text-muted-foreground">→</span>
+                      <Badge variant="default">{association.targetProduct.name}</Badge>
+                    </div>
+                    {association.reason && (
+                      <p className="text-sm text-muted-foreground">{association.reason}</p>
+                    )}
+                  </div>
+                  <Button 
+                    size="icon" 
+                    variant="destructive" 
+                    onClick={() => {
+                      if (confirm('Удалить эту ассоциацию?')) {
+                        deleteMutation.mutate(association.id);
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                    data-testid={`button-delete-association-${association.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
