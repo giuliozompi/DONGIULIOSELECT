@@ -1009,6 +1009,338 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // ==================== ORDER EDITING (ADMIN) ====================
+  
+  // POST /api/admin/orders/:id/update-quantity - Modifica quantità prodotto (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/update-quantity", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        productId: z.string(),
+        newQuantity: z.number().positive(),
+        notes: z.string().optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      const orderId = req.params.id;
+      const adminUserId = req.userId!;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Trova il prodotto nell'ordine
+      const itemIndex = order.items.findIndex((item: any) => item.productId === data.productId);
+      if (itemIndex === -1) {
+        return res.status(404).json({ error: 'Product not found in order' });
+      }
+      
+      const oldQuantity = order.items[itemIndex].quantity;
+      const productName = order.items[itemIndex].productName;
+      
+      // Aggiorna quantità
+      const newItems = [...order.items];
+      newItems[itemIndex] = { ...newItems[itemIndex], quantity: data.newQuantity };
+      
+      // Ricalcola totale
+      const newAmount = newItems.reduce((sum: number, item: any) => 
+        sum + parseFloat(item.price) * item.quantity, 0
+      );
+      
+      // Aggiorna ordine
+      const updatedOrder = await storage.updateOrder(orderId, {
+        items: newItems,
+        amount: newAmount.toFixed(2),
+      });
+      
+      // Crea log
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId,
+        changeType: 'quantity_changed',
+        changeData: {
+          productId: data.productId,
+          productName,
+          oldQuantity,
+          newQuantity: data.newQuantity,
+          notes: data.notes,
+        },
+      });
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating quantity:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/add-product - Aggiungi prodotto (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/add-product", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        productId: z.string(),
+        quantity: z.number().positive(),
+        notes: z.string().optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      const orderId = req.params.id;
+      const adminUserId = req.userId!;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Ottieni info prodotto
+      const product = await storage.getProductById(data.productId);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
+      // Aggiungi prodotto
+      const newItem = {
+        productId: product.id,
+        productName: product.name,
+        quantity: data.quantity,
+        price: product.price,
+        unit: product.unit,
+      };
+      
+      const newItems = [...order.items, newItem];
+      
+      // Ricalcola totale
+      const newAmount = newItems.reduce((sum: number, item: any) => 
+        sum + parseFloat(item.price) * item.quantity, 0
+      );
+      
+      // Aggiorna ordine
+      const updatedOrder = await storage.updateOrder(orderId, {
+        items: newItems,
+        amount: newAmount.toFixed(2),
+      });
+      
+      // Crea log
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId,
+        changeType: 'product_added',
+        changeData: {
+          addedProductId: product.id,
+          addedProductName: product.name,
+          addedQuantity: data.quantity,
+          addedPrice: product.price,
+          notes: data.notes,
+        },
+      });
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error adding product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/remove-product - Rimuovi prodotto (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/remove-product", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        productId: z.string(),
+        notes: z.string().optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      const orderId = req.params.id;
+      const adminUserId = req.userId!;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const itemIndex = order.items.findIndex((item: any) => item.productId === data.productId);
+      if (itemIndex === -1) {
+        return res.status(404).json({ error: 'Product not found in order' });
+      }
+      
+      const removedProduct = order.items[itemIndex];
+      
+      // Rimuovi prodotto
+      const newItems = order.items.filter((_: any, idx: number) => idx !== itemIndex);
+      
+      if (newItems.length === 0) {
+        return res.status(400).json({ error: 'Cannot remove all products from order' });
+      }
+      
+      // Ricalcola totale
+      const newAmount = newItems.reduce((sum: number, item: any) => 
+        sum + parseFloat(item.price) * item.quantity, 0
+      );
+      
+      // Aggiorna ordine
+      const updatedOrder = await storage.updateOrder(orderId, {
+        items: newItems,
+        amount: newAmount.toFixed(2),
+      });
+      
+      // Crea log
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId,
+        changeType: 'product_removed',
+        changeData: {
+          removedProductId: removedProduct.productId,
+          removedProductName: removedProduct.productName,
+          notes: data.notes,
+        },
+      });
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error removing product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/apply-discount - Applica sconto (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/apply-discount", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        discountType: z.enum(['percentage', 'fixed']),
+        discountValue: z.string(),
+        notes: z.string().optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      const orderId = req.params.id;
+      const adminUserId = req.userId!;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const oldAmount = parseFloat(order.amount);
+      let discountAmount = 0;
+      
+      if (data.discountType === 'percentage') {
+        const percentage = parseFloat(data.discountValue);
+        discountAmount = (oldAmount * percentage) / 100;
+      } else {
+        discountAmount = parseFloat(data.discountValue);
+      }
+      
+      const newAmount = Math.max(0, oldAmount - discountAmount);
+      
+      // Aggiorna ordine
+      const updatedOrder = await storage.updateOrder(orderId, {
+        discount: discountAmount.toFixed(2),
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        amount: newAmount.toFixed(2),
+      });
+      
+      // Crea log
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId,
+        changeType: 'discount_applied',
+        changeData: {
+          discountType: data.discountType,
+          discountValue: data.discountValue,
+          oldAmount: oldAmount.toFixed(2),
+          newAmount: newAmount.toFixed(2),
+          notes: data.notes,
+        },
+      });
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error applying discount:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/change-address - Cambia indirizzo (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/change-address", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        deliveryAddress: z.string(),
+        deliveryCity: z.string().optional(),
+        deliveryStreet: z.string().optional(),
+        deliveryBuilding: z.string().optional(),
+        deliveryFlat: z.string().optional(),
+        deliveryPostalCode: z.string().optional(),
+        notes: z.string().optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      const orderId = req.params.id;
+      const adminUserId = req.userId!;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const oldAddress = order.deliveryAddress;
+      
+      // Aggiorna ordine
+      const updatedOrder = await storage.updateOrder(orderId, {
+        deliveryAddress: data.deliveryAddress,
+        deliveryCity: data.deliveryCity || null,
+        deliveryStreet: data.deliveryStreet || null,
+        deliveryBuilding: data.deliveryBuilding || null,
+        deliveryFlat: data.deliveryFlat || null,
+        deliveryPostalCode: data.deliveryPostalCode || null,
+      });
+      
+      // Crea log
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId,
+        changeType: 'address_changed',
+        changeData: {
+          oldAddress,
+          newAddress: data.deliveryAddress,
+          notes: data.notes,
+        },
+      });
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error changing address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET /api/admin/orders/:id/logs - Ottieni log modifiche (ADMIN ONLY)
+  app.get("/api/admin/orders/:id/logs", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const logs = await storage.getOrderChangeLogs(orderId);
+      res.json(logs);
+    } catch (error) {
+      console.error('Error fetching order logs:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // ==================== ADMIN MANAGEMENT ====================
   
   // GET /api/admin/admins - Ottieni lista amministratori (ADMIN ONLY)
