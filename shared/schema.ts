@@ -108,6 +108,11 @@ export const orders = pgTable("orders", {
   }>>().notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   
+  // Sconto applicato dall'admin (importo fisso)
+  discount: decimal("discount", { precision: 10, scale: 2 }).default('0'),
+  discountType: text("discount_type"), // 'percentage' | 'fixed' | null
+  discountValue: text("discount_value"), // Valore originale (es: "10%" o "500")
+  
   // Dati cliente per la consegna
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
@@ -255,3 +260,82 @@ export const paymentIntents = pgTable("payment_intents", {
 export const insertPaymentIntentSchema = createInsertSchema(paymentIntents).omit({ id: true, createdAt: true });
 export type InsertPaymentIntent = z.infer<typeof insertPaymentIntentSchema>;
 export type PaymentIntent = typeof paymentIntents.$inferSelect;
+
+// Indirizzi salvati degli utenti
+export const userAddresses = pgTable("user_addresses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  label: text("label").notNull(), // es: "Casa", "Ufficio", "Dacha"
+  
+  // Indirizzo completo
+  fullAddress: text("full_address").notNull(),
+  
+  // Indirizzo strutturato
+  city: text("city"),
+  street: text("street"),
+  building: text("building"),
+  flat: text("flat"),
+  postalCode: text("postal_code"),
+  dadataFiasId: text("dadata_fias_id"),
+  
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertUserAddressSchema = createInsertSchema(userAddresses).omit({ id: true, createdAt: true });
+export type InsertUserAddress = z.infer<typeof insertUserAddressSchema>;
+export type UserAddress = typeof userAddresses.$inferSelect;
+
+// Log delle modifiche agli ordini (per contestazioni)
+export const orderChangeLogs = pgTable("order_change_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  adminUserId: varchar("admin_user_id").notNull(), // Admin che ha fatto la modifica
+  changeType: text("change_type").notNull(), // 'quantity_changed' | 'product_added' | 'product_removed' | 'product_replaced' | 'discount_applied' | 'address_changed'
+  
+  // Dati della modifica in formato strutturato
+  changeData: jsonb("change_data").$type<{
+    // Per quantity_changed
+    productId?: string;
+    productName?: string;
+    oldQuantity?: number;
+    newQuantity?: number;
+    
+    // Per product_added
+    addedProductId?: string;
+    addedProductName?: string;
+    addedQuantity?: number;
+    addedPrice?: string;
+    
+    // Per product_removed
+    removedProductId?: string;
+    removedProductName?: string;
+    
+    // Per product_replaced
+    oldProductId?: string;
+    oldProductName?: string;
+    newProductId?: string;
+    newProductName?: string;
+    replacementQuantity?: number;
+    replacementPrice?: string;
+    
+    // Per discount_applied
+    discountType?: string; // 'percentage' | 'fixed'
+    discountValue?: string;
+    oldAmount?: string;
+    newAmount?: string;
+    
+    // Per address_changed
+    oldAddress?: string;
+    newAddress?: string;
+    
+    // Note dell'admin
+    notes?: string;
+  }>().notNull(),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertOrderChangeLogSchema = createInsertSchema(orderChangeLogs).omit({ id: true, createdAt: true });
+export type InsertOrderChangeLog = z.infer<typeof insertOrderChangeLogSchema>;
+export type OrderChangeLog = typeof orderChangeLogs.$inferSelect;

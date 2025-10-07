@@ -14,6 +14,8 @@ import {
   conversations,
   messages,
   paymentIntents,
+  userAddresses,
+  orderChangeLogs,
   type User,
   type InsertUser,
   type Admin,
@@ -37,6 +39,10 @@ import {
   type InsertMessage,
   type PaymentIntent,
   type InsertPaymentIntent,
+  type UserAddress,
+  type InsertUserAddress,
+  type OrderChangeLog,
+  type InsertOrderChangeLog,
 } from '@shared/schema';
 import type { IStorage } from './storage';
 
@@ -405,5 +411,61 @@ export class DbStorage implements IStorage {
       .from(bonuses)
       .where(eq(bonuses.userId, userId))
       .orderBy(desc(bonuses.createdAt));
+  }
+
+  // Indirizzi utente
+  async getUserAddresses(userId: string): Promise<UserAddress[]> {
+    return await db
+      .select()
+      .from(userAddresses)
+      .where(eq(userAddresses.userId, userId))
+      .orderBy(desc(userAddresses.isDefault), desc(userAddresses.createdAt));
+  }
+
+  async createUserAddress(address: InsertUserAddress): Promise<UserAddress> {
+    const result = await db.insert(userAddresses).values(address).returning();
+    return result[0];
+  }
+
+  async updateUserAddress(id: string, updates: Partial<UserAddress>): Promise<UserAddress | undefined> {
+    const result = await db
+      .update(userAddresses)
+      .set(updates)
+      .where(eq(userAddresses.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteUserAddress(id: string): Promise<boolean> {
+    const result = await db.delete(userAddresses).where(eq(userAddresses.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async setDefaultAddress(userId: string, addressId: string): Promise<void> {
+    // Reset all addresses to non-default
+    await db
+      .update(userAddresses)
+      .set({ isDefault: false })
+      .where(eq(userAddresses.userId, userId));
+    
+    // Set the selected address as default
+    await db
+      .update(userAddresses)
+      .set({ isDefault: true })
+      .where(eq(userAddresses.id, addressId));
+  }
+
+  // Log modifiche ordini
+  async createOrderChangeLog(insertLog: InsertOrderChangeLog): Promise<OrderChangeLog> {
+    const result = await db.insert(orderChangeLogs).values(insertLog as any).returning();
+    return result[0];
+  }
+
+  async getOrderChangeLogs(orderId: string): Promise<OrderChangeLog[]> {
+    return await db
+      .select()
+      .from(orderChangeLogs)
+      .where(eq(orderChangeLogs.orderId, orderId))
+      .orderBy(desc(orderChangeLogs.createdAt));
   }
 }

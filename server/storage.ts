@@ -21,6 +21,10 @@ import {
   type InsertMessage,
   type PaymentIntent,
   type InsertPaymentIntent,
+  type UserAddress,
+  type InsertUserAddress,
+  type OrderChangeLog,
+  type InsertOrderChangeLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -164,6 +168,17 @@ export interface IStorage {
   getUnusedBonusesByUserId(userId: string): Promise<Bonus[]>;
   markBonusAsUsed(id: string, orderId: string): Promise<Bonus | undefined>;
   getBonusesByUserId(userId: string): Promise<Bonus[]>;
+
+  // Indirizzi utente
+  getUserAddresses(userId: string): Promise<UserAddress[]>;
+  createUserAddress(address: InsertUserAddress): Promise<UserAddress>;
+  updateUserAddress(id: string, updates: Partial<UserAddress>): Promise<UserAddress | undefined>;
+  deleteUserAddress(id: string): Promise<boolean>;
+  setDefaultAddress(userId: string, addressId: string): Promise<void>;
+
+  // Log modifiche ordini
+  createOrderChangeLog(log: InsertOrderChangeLog): Promise<OrderChangeLog>;
+  getOrderChangeLogs(orderId: string): Promise<OrderChangeLog[]>;
 }
 
 export class MemStorage implements IStorage {
