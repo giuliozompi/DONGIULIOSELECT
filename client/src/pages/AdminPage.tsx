@@ -112,12 +112,7 @@ function CategoriesManager() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: CategoryFormData) => {
-      const response = await fetch('/api/admin/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error(await response.text());
+      const response = await apiRequest('POST', '/api/admin/categories', data);
       return response.json();
     },
     onSuccess: () => {
@@ -137,12 +132,7 @@ function CategoriesManager() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<CategoryFormData> }) => {
-      const response = await fetch(`/api/admin/categories/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error(await response.text());
+      const response = await apiRequest('PATCH', `/api/admin/categories/${id}`, data);
       return response.json();
     },
     onSuccess: () => {
@@ -163,10 +153,7 @@ function CategoriesManager() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/admin/categories/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error(await response.text());
+      const response = await apiRequest('DELETE', `/api/admin/categories/${id}`);
       return response.json();
     },
     onSuccess: () => {
@@ -409,12 +396,7 @@ function ProductsManager() {
   // Create mutation
   const createMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
-      const response = await fetch('/api/admin/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error(await response.text());
+      const response = await apiRequest('POST', '/api/admin/products', data);
       return response.json();
     },
     onSuccess: () => {
@@ -434,12 +416,7 @@ function ProductsManager() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<ProductFormData> }) => {
-      const response = await fetch(`/api/admin/products/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error(await response.text());
+      const response = await apiRequest('PATCH', `/api/admin/products/${id}`, data);
       return response.json();
     },
     onSuccess: () => {
@@ -460,10 +437,7 @@ function ProductsManager() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/admin/products/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error(await response.text());
+      const response = await apiRequest('DELETE', `/api/admin/products/${id}`);
       return response.json();
     },
     onSuccess: () => {
