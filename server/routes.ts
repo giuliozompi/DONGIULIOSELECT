@@ -746,6 +746,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== SETUP ENDPOINT (TEMPORANEO) ====================
+  
+  // POST /api/setup-admin - Endpoint temporaneo per aggiungere il primo admin
+  // SECURITY: Accetta solo user_id 201331998, verrà rimosso dopo l'uso
+  app.post("/api/setup-admin", verifyTelegramInitData, async (req, res) => {
+    try {
+      const ALLOWED_USER_ID = '201331998';
+      
+      if (req.userId !== ALLOWED_USER_ID) {
+        return res.status(403).json({ error: 'Not authorized for setup' });
+      }
+      
+      // Verifica se l'utente è già admin
+      const isAlreadyAdmin = await storage.isAdmin(req.userId);
+      if (isAlreadyAdmin) {
+        return res.json({ 
+          success: true, 
+          message: 'Already admin',
+          userId: req.userId 
+        });
+      }
+      
+      // Aggiungi come admin
+      await storage.addAdmin(req.userId, req.telegramUser?.username);
+      
+      res.json({ 
+        success: true, 
+        message: 'Admin added successfully',
+        userId: req.userId,
+        username: req.telegramUser?.username
+      });
+    } catch (error) {
+      console.error('Error in setup-admin:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // ==================== ADMIN ROUTES ====================
   
   // GET /api/admin/check - Verifica se l'utente corrente è admin
