@@ -128,6 +128,15 @@ export default function CheckoutPage() {
     }).format(price);
   };
 
+  const formatQuantity = (qty: number, unit?: string) => {
+    // Arrotonda a 3 decimali e rimuove zeri finali
+    const rounded = Number(qty.toFixed(3));
+    if (unit === 'кг') {
+      return `${rounded} кг`;
+    }
+    return `${rounded}`;
+  };
+
   // Calcola totali
   const cartItems = (cart?.items || []).map(item => {
     const product = allProducts.find(p => p.id === item.productId);
@@ -180,7 +189,7 @@ export default function CheckoutPage() {
             {cartItems.map((item) => (
               <div key={item.productId} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {item.product?.name} × {item.quantity}
+                  {item.product?.name} × {formatQuantity(item.quantity, item.product?.unit)}
                 </span>
                 <span className="font-medium">{formatPrice(item.total)}</span>
               </div>
