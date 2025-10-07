@@ -43,6 +43,11 @@ export default function ProductCard({
   // Check for recommendations when dialog should open
   const { data: recommendations } = useQuery({
     queryKey: ['/api/products', id, 'recommendations'],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/${id}/recommendations`);
+      if (!res.ok) throw new Error('Failed to fetch recommendations');
+      return res.json();
+    },
     enabled: showRecommendations,
   });
 

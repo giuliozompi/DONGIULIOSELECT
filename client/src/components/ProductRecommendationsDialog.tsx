@@ -30,6 +30,11 @@ export default function ProductRecommendationsDialog({
 
   const { data: recommendations = [] } = useQuery<RecommendationWithProduct[]>({
     queryKey: ['/api/products', productId, 'recommendations'],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/${productId}/recommendations`);
+      if (!res.ok) throw new Error('Failed to fetch recommendations');
+      return res.json();
+    },
     enabled: !!productId && open,
   });
 
