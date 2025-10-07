@@ -25,6 +25,8 @@ import {
   type InsertUserAddress,
   type OrderChangeLog,
   type InsertOrderChangeLog,
+  type ProductAssociation,
+  type InsertProductAssociation,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -179,6 +181,12 @@ export interface IStorage {
   // Log modifiche ordini
   createOrderChangeLog(log: InsertOrderChangeLog): Promise<OrderChangeLog>;
   getOrderChangeLogs(orderId: string): Promise<OrderChangeLog[]>;
+
+  // Associazioni prodotti (raccomandazioni)
+  getProductAssociations(sourceProductId: string): Promise<Array<ProductAssociation & { targetProduct: Product }>>;
+  getAllProductAssociations(): Promise<Array<ProductAssociation & { sourceProduct: Product; targetProduct: Product }>>;
+  createProductAssociation(association: InsertProductAssociation): Promise<ProductAssociation>;
+  deleteProductAssociation(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {

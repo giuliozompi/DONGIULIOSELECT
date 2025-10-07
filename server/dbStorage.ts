@@ -16,6 +16,7 @@ import {
   paymentIntents,
   userAddresses,
   orderChangeLogs,
+  productAssociations,
   type User,
   type InsertUser,
   type Admin,
@@ -43,6 +44,8 @@ import {
   type InsertUserAddress,
   type OrderChangeLog,
   type InsertOrderChangeLog,
+  type ProductAssociation,
+  type InsertProductAssociation,
 } from '@shared/schema';
 import type { IStorage } from './storage';
 
@@ -467,5 +470,93 @@ export class DbStorage implements IStorage {
       .from(orderChangeLogs)
       .where(eq(orderChangeLogs.orderId, orderId))
       .orderBy(desc(orderChangeLogs.createdAt));
+  }
+
+  // Associazioni prodotti (raccomandazioni)
+  async getProductAssociations(sourceProductId: string): Promise<Array<ProductAssociation & { targetProduct: Product }>> {
+    const results = await db
+      .select({
+        id: productAssociations.id,
+        sourceProductId: productAssociations.sourceProductId,
+        targetProductId: productAssociations.targetProductId,
+        reason: productAssociations.reason,
+        sortOrder: productAssociations.sortOrder,
+        createdAt: productAssociations.createdAt,
+        targetProduct: products,
+      })
+      .from(productAssociations)
+      .innerJoin(products, eq(productAssociations.targetProductId, products.id))
+      .where(eq(productAssociations.sourceProductId, sourceProductId))
+      .orderBy(productAssociations.sortOrder);
+    
+    return results.map(r => ({
+      id: r.id,
+      sourceProductId: r.sourceProductId,
+      targetProductId: r.targetProductId,
+      reason: r.reason,
+      sortOrder: r.sortOrder,
+      createdAt: r.createdAt,
+      targetProduct: r.targetProduct,
+    }));
+  }
+
+  async getAllProductAssociations(): Promise<Array<ProductAssociation & { sourceProduct: Product; targetProduct: Product }>> {
+    const results = await db
+      .select({
+        id: productAssociations.id,
+        sourceProductId: productAssociations.sourceProductId,
+        targetProductId: productAssociations.targetProductId,
+        reason: productAssociations.reason,
+        sortOrder: productAssociations.sortOrder,
+        createdAt: productAssociations.createdAt,
+        sourceProduct: {
+          id: products.id,
+          name: products.name,
+          slug: products.slug,
+          categoryId: products.categoryId,
+          images: products.images,
+          price: products.price,
+          priceOld: products.priceOld,
+          unit: products.unit,
+          inStock: products.inStock,
+          tasteVariations: products.tasteVariations,
+          tasteRatingStats: products.tasteRatingStats,
+          descriptionShort: products.descriptionShort,
+          descriptionFull: products.descriptionFull,
+          nutrition: products.nutrition,
+        },
+      })
+      .from(productAssociations)
+      .innerJoin(products, eq(productAssociations.sourceProductId, products.id))
+      .orderBy(productAssociations.sortOrder);
+    
+    // Ottieni prodotti target separatamente
+    const associationsWithTargets = await Promise.all(
+      results.map(async (r) => {
+        const targetProduct = await db.select().from(products).where(eq(products.id, r.targetProductId));
+        return {
+          id: r.id,
+          sourceProductId: r.sourceProductId,
+          targetProductId: r.targetProductId,
+          reason: r.reason,
+          sortOrder: r.sortOrder,
+          createdAt: r.createdAt,
+          sourceProduct: r.sourceProduct as Product,
+          targetProduct: targetProduct[0] as Product,
+        };
+      })
+    );
+    
+    return associationsWithTargets;
+  }
+
+  async createProductAssociation(insertAssociation: InsertProductAssociation): Promise<ProductAssociation> {
+    const result = await db.insert(productAssociations).values(insertAssociation).returning();
+    return result[0];
+  }
+
+  async deleteProductAssociation(id: string): Promise<boolean> {
+    const result = await db.delete(productAssociations).where(eq(productAssociations.id, id)).returning();
+    return result.length > 0;
   }
 }

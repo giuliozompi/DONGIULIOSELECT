@@ -339,3 +339,17 @@ export const orderChangeLogs = pgTable("order_change_logs", {
 export const insertOrderChangeLogSchema = createInsertSchema(orderChangeLogs).omit({ id: true, createdAt: true });
 export type InsertOrderChangeLog = z.infer<typeof insertOrderChangeLogSchema>;
 export type OrderChangeLog = typeof orderChangeLogs.$inferSelect;
+
+// Associazioni prodotti (raccomandazioni)
+export const productAssociations = pgTable("product_associations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceProductId: varchar("source_product_id").notNull().references(() => products.id),
+  targetProductId: varchar("target_product_id").notNull().references(() => products.id),
+  reason: text("reason"), // Descrizione perché associare (es: "Si abbina perfettamente")
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertProductAssociationSchema = createInsertSchema(productAssociations).omit({ id: true, createdAt: true });
+export type InsertProductAssociation = z.infer<typeof insertProductAssociationSchema>;
+export type ProductAssociation = typeof productAssociations.$inferSelect;
