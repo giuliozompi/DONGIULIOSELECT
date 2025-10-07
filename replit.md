@@ -81,7 +81,7 @@ Preferred communication style: Simple, everyday language.
 - Admin navigation link appears only for authorized users
 
 **Admin UI** (`/admin` route)
-- Tab-based interface for Categories and Products management
+- Tab-based interface with 5 tabs: Categories, Products, Orders, Admins, Recommendations
 - Built with shadcn/ui components (Tabs, Card, Form, Button)
 - Real-time updates via TanStack Query cache invalidation
 - Toast notifications for success/error feedback
@@ -141,6 +141,27 @@ Preferred communication style: Simple, everyday language.
   - POST `/api/admin/admins` - Add new admin
   - DELETE `/api/admin/admins/:userId` - Remove admin
 
+**Product Recommendations (NEW - October 2025)**
+- **Product Associations**: System to recommend complementary products when items are added to cart
+- **Association Management**: Admin interface to create source→target product relationships
+  - Create associations with optional reason text (e.g., "Mozzarella → Olive Oil: Perfect pairing")
+  - View all associations with product names displayed
+  - Delete associations when no longer relevant
+  - Sort order field for ranking multiple recommendations
+- **Customer Experience**: After adding a product to cart, a dialog appears showing recommended products
+  - Dialog displays: product images, names, prices, reason for recommendation
+  - Quick-add functionality: customers can add recommended products with one click
+  - Quantity controls within dialog for weight-based and unit-based products
+- **API Endpoints**:
+  - POST `/api/admin/product-associations` - Create product association (admin only)
+  - GET `/api/admin/product-associations` - List all associations with product details
+  - DELETE `/api/admin/product-associations/:id` - Delete association (admin only)
+  - GET `/api/products/:id/recommendations` - Get recommendations for a product (public)
+- **UI Components**:
+  - `ProductAssociationsManager` - Admin tab for managing associations
+  - `ProductRecommendationsDialog` - Customer-facing dialog with recommendations
+  - Integration in `ProductCard` - Triggers dialog after successful cart addition
+
 **Security Implementation**
 - Middleware: `server/middleware/requireAdmin.ts`
   - Verifies `req.userId` is set (from Telegram auth)
@@ -181,6 +202,11 @@ Preferred communication style: Simple, everyday language.
   - Fields: orderId, adminUserId, changeType, changeData (JSONB), createdAt
   - Change types: quantity_changed, product_added, product_removed, discount_applied, address_changed
   - Enables dispute resolution and customer service tracking
+- `product_associations` - Product recommendations system (NEW - October 2025)
+  - Fields: id, sourceProductId, targetProductId, sortOrder, reason (optional text)
+  - Defines complementary product relationships (e.g., Mozzarella → Olive Oil)
+  - Used to show recommendation dialog after cart additions
+  - Unique constraint on (sourceProductId, targetProductId) to prevent duplicates
 - `payment_intents` - Payment transaction records
 - `fortune_spin_tokens` - Gamification tokens per user
 - `prizes` - Available prizes (discounts, gifts, coupons)
