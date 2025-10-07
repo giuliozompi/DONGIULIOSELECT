@@ -111,6 +111,36 @@ Preferred communication style: Simple, everyday language.
   - PATCH `/api/admin/products/:id` - Update product
   - DELETE `/api/admin/products/:id` - Delete product
 
+**Order Management (NEW - October 2025)**
+- **Full Order Editing**: Admins can modify orders with comprehensive audit logging
+- **Edit Dialog**: Modal interface with all editing capabilities
+  - Modify product quantities with validation
+  - Add new products from catalog
+  - Remove products (prevents removing all items)
+  - Apply discounts (percentage or fixed amount)
+  - Change delivery address
+- **Audit Trail**: All changes logged in `order_change_logs` table
+  - Change types: `quantity_changed`, `product_added`, `product_removed`, `discount_applied`, `address_changed`
+  - Stores admin user ID, timestamp, and detailed change data (JSONB)
+  - Displayed in chronological order in edit dialog
+- **API Endpoints**:
+  - POST `/api/admin/orders/:id/update-quantity` - Update product quantity
+  - POST `/api/admin/orders/:id/add-product` - Add product to order
+  - POST `/api/admin/orders/:id/remove-product` - Remove product from order
+  - POST `/api/admin/orders/:id/apply-discount` - Apply percentage/fixed discount
+  - POST `/api/admin/orders/:id/change-address` - Update delivery address
+  - GET `/api/admin/orders/:id/logs` - Retrieve change history
+- **Automatic Recalculation**: Order totals automatically updated after each modification
+- **Dispute Resolution**: Complete audit trail enables customer service dispute resolution
+
+**Administrator Management**
+- **Add/Remove Admins**: Interface to manage admin whitelist
+- **Admin List**: Display all administrators with Telegram usernames
+- API endpoints:
+  - GET `/api/admin/admins` - List all admins
+  - POST `/api/admin/admins` - Add new admin
+  - DELETE `/api/admin/admins/:userId` - Remove admin
+
 **Security Implementation**
 - Middleware: `server/middleware/requireAdmin.ts`
   - Verifies `req.userId` is set (from Telegram auth)
@@ -143,6 +173,14 @@ Preferred communication style: Simple, everyday language.
 - `orders` - Order records with status tracking and delivery information
   - Legacy: `deliveryAddress` (full text address for backward compatibility)
   - Structured: `deliveryCity`, `deliveryStreet`, `deliveryBuilding`, `deliveryFlat`, `deliveryPostalCode`, `dadataFiasId` (for logistics integration)
+  - Discount fields: `discount` (amount), `discountType` (percentage/fixed), `discountValue` (original value)
+- `user_addresses` - Multiple saved addresses per user
+  - Fields: userId, fullAddress, city, street, building, flat, postalCode, fiasId, isDefault
+  - Enables quick address selection during checkout
+- `order_change_logs` - Audit trail for order modifications (NEW - October 2025)
+  - Fields: orderId, adminUserId, changeType, changeData (JSONB), createdAt
+  - Change types: quantity_changed, product_added, product_removed, discount_applied, address_changed
+  - Enables dispute resolution and customer service tracking
 - `payment_intents` - Payment transaction records
 - `fortune_spin_tokens` - Gamification tokens per user
 - `prizes` - Available prizes (discounts, gifts, coupons)
