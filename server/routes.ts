@@ -184,6 +184,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // GET /api/products/:id/recommendations - Ottieni prodotti raccomandati
+  app.get("/api/products/:id/recommendations", verifyTelegramInitData, async (req, res) => {
+    try {
+      const productId = req.params.id;
+      const associations = await storage.getProductAssociations(productId);
+      res.json(associations);
+    } catch (error) {
+      console.error('Error fetching product recommendations:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // ==================== ORDINI ====================
   
   // POST /api/orders - Crea nuovo ordine dal carrello
@@ -1389,6 +1401,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error('Error removing admin:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ==================== PRODUCT ASSOCIATIONS (ADMIN) ====================
+  
+  // GET /api/admin/product-associations - Ottieni tutte le associazioni prodotti (ADMIN ONLY)
+  app.get("/api/admin/product-associations", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const associations = await storage.getAllProductAssociations();
+      res.json(associations);
+    } catch (error) {
+      console.error('Error fetching product associations:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/product-associations - Crea associazione prodotto (ADMIN ONLY)
+  app.post("/api/admin/product-associations", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { insertProductAssociationSchema } = await import('@shared/schema');
+      const associationData = insertProductAssociationSchema.parse(req.body);
+      
+      // Verifica che i prodotti esistano
+      const sourceProduct = await storage.getProductById(associationData.sourceProductId);
+      const targetProduct = await storage.getProductById(associationData.targetProductId);
+      
+      if (!sourceProduct) {
+        return res.status(404).json({ error: 'Source product not found' });
+      }
+      
+      if (!targetProduct) {
+        return res.status(404).json({ error: 'Target product not found' });
+      }
+      
+      // Impedisci auto-associazione
+      if (associationData.sourceProductId === associationData.targetProductId) {
+        return res.status(400).json({ error: 'Cannot associate a product with itself' });
+      }
+      
+      const association = await storage.createProductAssociation(associationData);
+      res.json(association);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error creating product association:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // DELETE /api/admin/product-associations/:id - Elimina associazione (ADMIN ONLY)
+  app.delete("/api/admin/product-associations/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const id = req.params.id;
+      const success = await storage.deleteProductAssociation(id);
+      
+      if (!success) {
+        return res.status(404).json({ error: 'Association not found' });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting product association:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
