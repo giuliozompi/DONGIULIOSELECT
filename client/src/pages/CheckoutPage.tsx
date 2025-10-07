@@ -75,20 +75,15 @@ export default function CheckoutPage() {
 
   const createOrderMutation = useMutation({
     mutationFn: async (data: CheckoutFormData) => {
-      console.log('🔄 Creating order...', data);
       const orderData = {
         ...data,
         ...structuredAddress,
         deliveryFlat: data.deliveryFlat || structuredAddress.deliveryFlat,
       };
-      console.log('📦 Order data:', orderData);
       const res = await apiRequest('POST', '/api/orders', orderData);
-      const result = await res.json();
-      console.log('✅ Order created:', result);
-      return result;
+      return await res.json();
     },
     onSuccess: (data) => {
-      console.log('🎉 Order success:', data);
       hapticFeedback('success');
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
       queryClient.invalidateQueries({ queryKey: ['/api/fortune'] });
@@ -99,7 +94,6 @@ export default function CheckoutPage() {
       setLocation(`/order/${data.id}`);
     },
     onError: (error: Error) => {
-      console.error('❌ Order error:', error);
       toast({
         title: 'Ошибка создания заказа',
         description: error.message,
@@ -112,9 +106,6 @@ export default function CheckoutPage() {
   useTelegramBackButton(() => setLocation('/cart'), true);
 
   const onSubmit = (data: CheckoutFormData) => {
-    console.log('📝 Form submitted:', data);
-    console.log('📋 Form valid:', form.formState.isValid);
-    console.log('🏠 Structured address:', structuredAddress);
     setIsSubmitting(true);
     createOrderMutation.mutate(data);
   };

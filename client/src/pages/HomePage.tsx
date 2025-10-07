@@ -1,16 +1,12 @@
 import { useLocation } from 'wouter';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Search, Shield } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
 import CategoryCard from '@/components/CategoryCard';
 import type { Category, Product } from '@shared/schema';
 
 export default function HomePage() {
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
@@ -31,26 +27,6 @@ export default function HomePage() {
     return directProducts + subcategoryProducts;
   };
 
-  const setupAdminMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/setup-admin');
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: '✅ Admin Setup Completato!',
-        description: `User ID ${data.userId} è ora amministratore`,
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: '❌ Errore Setup Admin',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
-
   return (
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-50 bg-background border-b">
@@ -65,17 +41,6 @@ export default function HomePage() {
               data-testid="input-search"
             />
           </div>
-          
-          {/* TEMPORARY SETUP BUTTON - REMOVE AFTER USE */}
-          <Button
-            onClick={() => setupAdminMutation.mutate()}
-            disabled={setupAdminMutation.isPending}
-            className="w-full mt-3 bg-orange-500 hover:bg-orange-600"
-            data-testid="button-setup-admin"
-          >
-            <Shield className="w-4 h-4 mr-2" />
-            {setupAdminMutation.isPending ? 'Setup in corso...' : '🔧 SETUP ADMIN (clicca una volta)'}
-          </Button>
         </div>
       </div>
 
