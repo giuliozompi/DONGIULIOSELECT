@@ -17,6 +17,7 @@ import {
   userAddresses,
   orderChangeLogs,
   productAssociations,
+  adminActionLogs,
   type User,
   type InsertUser,
   type Admin,
@@ -46,6 +47,8 @@ import {
   type InsertOrderChangeLog,
   type ProductAssociation,
   type InsertProductAssociation,
+  type AdminActionLog,
+  type InsertAdminActionLog,
 } from '@shared/schema';
 import type { IStorage } from './storage';
 
@@ -558,5 +561,32 @@ export class DbStorage implements IStorage {
   async deleteProductAssociation(id: string): Promise<boolean> {
     const result = await db.delete(productAssociations).where(eq(productAssociations.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ==================== ADMIN ACTION LOGS ====================
+
+  async isMasterAdmin(userId: string): Promise<boolean> {
+    const masterAdminUserId = process.env.MASTER_ADMIN_USER_ID;
+    return userId === masterAdminUserId;
+  }
+
+  async createAdminActionLog(log: InsertAdminActionLog): Promise<AdminActionLog> {
+    const result = await db.insert(adminActionLogs).values(log).returning();
+    return result[0];
+  }
+
+  async getAdminActionLogs(filters?: { entityType?: string; entityId?: string; limit?: number }): Promise<AdminActionLog[]> {
+    let query = db.select().from(adminActionLogs);
+    
+    if (filters?.entityType) {
+      query = query.where(eq(adminActionLogs.entityType, filters.entityType)) as any;
+    }
+    
+    if (filters?.entityId) {
+      query = query.where(eq(adminActionLogs.entityId, filters.entityId)) as any;
+    }
+    
+    const results = await query.orderBy(desc(adminActionLogs.createdAt)).limit(filters?.limit || 100);
+    return results;
   }
 }

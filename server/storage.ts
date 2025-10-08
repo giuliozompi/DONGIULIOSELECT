@@ -27,6 +27,8 @@ import {
   type InsertOrderChangeLog,
   type ProductAssociation,
   type InsertProductAssociation,
+  type AdminActionLog,
+  type InsertAdminActionLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -187,6 +189,11 @@ export interface IStorage {
   getAllProductAssociations(): Promise<Array<ProductAssociation & { sourceProduct: Product; targetProduct: Product }>>;
   createProductAssociation(association: InsertProductAssociation): Promise<ProductAssociation>;
   deleteProductAssociation(id: string): Promise<boolean>;
+
+  // Log azioni amministrative
+  isMasterAdmin(userId: string): Promise<boolean>;
+  createAdminActionLog(log: InsertAdminActionLog): Promise<AdminActionLog>;
+  getAdminActionLogs(filters?: { entityType?: string; entityId?: string; limit?: number }): Promise<AdminActionLog[]>;
 }
 
 export class MemStorage implements IStorage {
