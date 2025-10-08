@@ -1023,6 +1023,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ==================== ORDER EDITING (ADMIN) ====================
   
+  // Helper function per calcolare totale ordine considerando sconto
+  function calculateOrderTotal(items: any[], discount?: string | null, discountType?: string | null, discountValue?: string | null) {
+    // Calcola totale prodotti
+    const subtotal = items.reduce((sum: number, item: any) => 
+      sum + parseFloat(item.price) * item.quantity, 0
+    );
+    
+    // Se non c'è sconto, ritorna subtotal
+    if (!discount || !discountType || !discountValue) {
+      return {
+        subtotal,
+        discountAmount: 0,
+        total: subtotal,
+      };
+    }
+    
+    // Calcola sconto
+    let discountAmount = 0;
+    if (discountType === 'percentage') {
+      const percentage = parseFloat(discountValue);
+      discountAmount = (subtotal * percentage) / 100;
+    } else {
+      discountAmount = parseFloat(discountValue);
+    }
+    
+    const total = Math.max(0, subtotal - discountAmount);
+    
+    return {
+      subtotal,
+      discountAmount,
+      total,
+    };
+  }
+  
   // POST /api/admin/orders/:id/update-quantity - Modifica quantità prodotto (ADMIN ONLY)
   app.post("/api/admin/orders/:id/update-quantity", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
@@ -1054,15 +1088,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newItems = [...order.items];
       newItems[itemIndex] = { ...newItems[itemIndex], quantity: data.newQuantity };
       
-      // Ricalcola totale
-      const newAmount = newItems.reduce((sum: number, item: any) => 
-        sum + parseFloat(item.price) * item.quantity, 0
+      // Ricalcola totale considerando lo sconto esistente
+      const totals = calculateOrderTotal(
+        newItems, 
+        order.discount, 
+        order.discountType, 
+        order.discountValue
       );
       
       // Aggiorna ordine
       const updatedOrder = await storage.updateOrder(orderId, {
         items: newItems,
-        amount: newAmount.toFixed(2),
+        amount: totals.total.toFixed(2),
+        discount: totals.discountAmount.toFixed(2),
       });
       
       // Crea log
@@ -1094,7 +1132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const schema = z.object({
         productId: z.string(),
-        quantity: z.number().positive(),
+        quantity: z.number().positive().optional(),
         notes: z.string().optional(),
       });
       
@@ -1113,26 +1151,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Product not found' });
       }
       
+      // Determina quantità default basata su unità di misura
+      let quantity = data.quantity;
+      if (!quantity) {
+        // Se unità è кг (peso), usa 0.2 come default, altrimenti 1
+        quantity = product.unit === 'кг' ? 0.2 : 1;
+      }
+      
       // Aggiungi prodotto
       const newItem = {
         productId: product.id,
         productName: product.name,
-        quantity: data.quantity,
+        quantity,
         price: product.price,
         unit: product.unit,
       };
       
       const newItems = [...order.items, newItem];
       
-      // Ricalcola totale
-      const newAmount = newItems.reduce((sum: number, item: any) => 
-        sum + parseFloat(item.price) * item.quantity, 0
+      // Ricalcola totale considerando lo sconto esistente
+      const totals = calculateOrderTotal(
+        newItems,
+        order.discount,
+        order.discountType,
+        order.discountValue
       );
       
       // Aggiorna ordine
       const updatedOrder = await storage.updateOrder(orderId, {
         items: newItems,
-        amount: newAmount.toFixed(2),
+        amount: totals.total.toFixed(2),
+        discount: totals.discountAmount.toFixed(2),
       });
       
       // Crea log
@@ -1143,7 +1192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         changeData: {
           addedProductId: product.id,
           addedProductName: product.name,
-          addedQuantity: data.quantity,
+          addedQuantity: quantity,
           addedPrice: product.price,
           notes: data.notes,
         },
@@ -1190,15 +1239,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Cannot remove all products from order' });
       }
       
-      // Ricalcola totale
-      const newAmount = newItems.reduce((sum: number, item: any) => 
-        sum + parseFloat(item.price) * item.quantity, 0
+      // Ricalcola totale considerando lo sconto esistente
+      const totals = calculateOrderTotal(
+        newItems,
+        order.discount,
+        order.discountType,
+        order.discountValue
       );
       
       // Aggiorna ordine
       const updatedOrder = await storage.updateOrder(orderId, {
         items: newItems,
-        amount: newAmount.toFixed(2),
+        amount: totals.total.toFixed(2),
+        discount: totals.discountAmount.toFixed(2),
       });
       
       // Crea log
@@ -1241,24 +1294,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Order not found' });
       }
       
+      // Calcola il totale dai prodotti (subtotal) e poi applica il nuovo sconto
+      const totals = calculateOrderTotal(
+        order.items,
+        '0', // Ignora sconto esistente per calcolare il subtotal
+        data.discountType,
+        data.discountValue
+      );
+      
       const oldAmount = parseFloat(order.amount);
-      let discountAmount = 0;
-      
-      if (data.discountType === 'percentage') {
-        const percentage = parseFloat(data.discountValue);
-        discountAmount = (oldAmount * percentage) / 100;
-      } else {
-        discountAmount = parseFloat(data.discountValue);
-      }
-      
-      const newAmount = Math.max(0, oldAmount - discountAmount);
       
       // Aggiorna ordine
       const updatedOrder = await storage.updateOrder(orderId, {
-        discount: discountAmount.toFixed(2),
+        discount: totals.discountAmount.toFixed(2),
         discountType: data.discountType,
         discountValue: data.discountValue,
-        amount: newAmount.toFixed(2),
+        amount: totals.total.toFixed(2),
       });
       
       // Crea log
@@ -1270,7 +1321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           discountType: data.discountType,
           discountValue: data.discountValue,
           oldAmount: oldAmount.toFixed(2),
-          newAmount: newAmount.toFixed(2),
+          newAmount: totals.total.toFixed(2),
           notes: data.notes,
         },
       });
