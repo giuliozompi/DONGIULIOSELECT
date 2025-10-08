@@ -40,17 +40,6 @@ export default function ProductCard({
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [recommendedProductId, setRecommendedProductId] = useState<string | null>(null);
 
-  // Check for recommendations when dialog should open
-  const { data: recommendations } = useQuery({
-    queryKey: ['/api/products', id, 'recommendations'],
-    queryFn: async () => {
-      const res = await fetch(`/api/products/${id}/recommendations`);
-      if (!res.ok) throw new Error('Failed to fetch recommendations');
-      return res.json();
-    },
-    enabled: showRecommendations,
-  });
-
   const addToCartMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest('POST', '/api/cart/items', {
@@ -191,7 +180,7 @@ export default function ProductCard({
     <ProductRecommendationsDialog
       productId={recommendedProductId}
       productName={name}
-      open={showRecommendations && !!recommendations && recommendations.length > 0}
+      open={showRecommendations}
       onOpenChange={setShowRecommendations}
     />
     </>

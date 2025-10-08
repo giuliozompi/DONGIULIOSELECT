@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ export default function ProductRecommendationsDialog({
 }: ProductRecommendationsDialogProps) {
   const { toast } = useToast();
 
-  const { data: recommendations = [] } = useQuery<RecommendationWithProduct[]>({
+  const { data: recommendations = [], isLoading } = useQuery<RecommendationWithProduct[]>({
     queryKey: ['/api/products', productId, 'recommendations'],
     queryFn: async () => {
       const res = await fetch(`/api/products/${productId}/recommendations`);
@@ -38,7 +38,15 @@ export default function ProductRecommendationsDialog({
     enabled: !!productId && open,
   });
 
-  if (!recommendations || recommendations.length === 0) {
+  // Close dialog automatically if no recommendations
+  useEffect(() => {
+    if (open && !isLoading && recommendations.length === 0) {
+      onOpenChange(false);
+    }
+  }, [open, isLoading, recommendations, onOpenChange]);
+
+  // Don't render anything if closed or no recommendations
+  if (!open || (!isLoading && recommendations.length === 0)) {
     return null;
   }
 
