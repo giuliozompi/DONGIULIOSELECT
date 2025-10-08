@@ -38,16 +38,41 @@ export default function ProductRecommendationsDialog({
     enabled: !!productId && open,
   });
 
-  // Close dialog automatically if no recommendations
-  useEffect(() => {
-    if (open && !isLoading && recommendations.length === 0) {
-      onOpenChange(false);
-    }
-  }, [open, isLoading, recommendations, onOpenChange]);
-
-  // Don't render anything if closed or no recommendations
-  if (!open || (!isLoading && recommendations.length === 0)) {
+  // Don't render if closed
+  if (!open) {
     return null;
+  }
+
+  // Show loading state while fetching
+  if (isLoading) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl" data-testid="recommendations-dialog">
+          <DialogHeader>
+            <DialogTitle>Рекомендуем к {productName}</DialogTitle>
+          </DialogHeader>
+          <div className="py-8 text-center text-muted-foreground">
+            Загрузка...
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Show message if no recommendations found
+  if (recommendations.length === 0) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl" data-testid="recommendations-dialog">
+          <DialogHeader>
+            <DialogTitle>Рекомендуем к {productName}</DialogTitle>
+          </DialogHeader>
+          <div className="py-8 text-center text-muted-foreground">
+            Нет рекомендаций для этого продукта
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   return (

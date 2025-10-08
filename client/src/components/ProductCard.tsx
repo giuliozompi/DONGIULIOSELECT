@@ -57,9 +57,11 @@ export default function ProductCard({
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
       setQuantity(initialQty); // Reset quantity after adding
       
-      // Check for recommendations
-      setRecommendedProductId(id);
-      setShowRecommendations(true);
+      // Check for recommendations - only if dialog is not already open (prevent loop)
+      if (!showRecommendations) {
+        setRecommendedProductId(id);
+        setShowRecommendations(true);
+      }
     },
     onError: (error: Error) => {
       toast({
