@@ -115,7 +115,7 @@ Preferred communication style: Simple, everyday language.
 - **Full Order Editing**: Admins can modify orders with comprehensive audit logging
 - **Edit Dialog**: Modal interface with all editing capabilities
   - Modify product quantities with validation
-  - Add new products from catalog
+  - Add new products from catalog (smart default: 0.2kg for weight-based, 1 for piece-based)
   - Remove products (prevents removing all items)
   - Apply discounts (percentage or fixed amount)
   - Change delivery address
@@ -125,12 +125,15 @@ Preferred communication style: Simple, everyday language.
   - Displayed in chronological order in edit dialog
 - **API Endpoints**:
   - POST `/api/admin/orders/:id/update-quantity` - Update product quantity
-  - POST `/api/admin/orders/:id/add-product` - Add product to order
+  - POST `/api/admin/orders/:id/add-product` - Add product to order (quantity optional)
   - POST `/api/admin/orders/:id/remove-product` - Remove product from order
   - POST `/api/admin/orders/:id/apply-discount` - Apply percentage/fixed discount
   - POST `/api/admin/orders/:id/change-address` - Update delivery address
   - GET `/api/admin/orders/:id/logs` - Retrieve change history
-- **Automatic Recalculation**: Order totals automatically updated after each modification
+- **Automatic Recalculation**: Helper function `calculateOrderTotal()` ensures correct totals
+  - Preserves existing discounts when modifying products (quantity/add/remove)
+  - Recalculates discount amount from subtotal (prevents compounding errors)
+  - Handles both percentage and fixed discounts correctly
 - **Dispute Resolution**: Complete audit trail enables customer service dispute resolution
 
 **Administrator Management**
