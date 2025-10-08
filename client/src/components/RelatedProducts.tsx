@@ -16,13 +16,13 @@ interface RelatedProductsProps {
 
 export default function RelatedProducts({ title, products, onProductClick }: RelatedProductsProps) {
   return (
-    <div className="space-y-4" data-testid="section-related">
-      <h3 className="text-lg font-semibold">{title}</h3>
-      <div className="flex gap-4 overflow-x-auto pb-4 -mx-6 px-6 scrollbar-hide">
+    <div className="space-y-3" data-testid="section-related">
+      <h3 className="text-base font-semibold">{title}</h3>
+      <div className="flex gap-3 overflow-x-auto pb-4 -mx-6 px-6 scrollbar-hide">
         {products.map((product) => (
           <Card
             key={product.id}
-            className="min-w-[160px] flex-shrink-0 overflow-hidden cursor-pointer hover-elevate active-elevate-2"
+            className="min-w-[120px] flex-shrink-0 overflow-hidden cursor-pointer hover-elevate active-elevate-2"
             onClick={() => onProductClick?.(product.id)}
             data-testid={`card-related-${product.id}`}
           >
@@ -33,12 +33,12 @@ export default function RelatedProducts({ title, products, onProductClick }: Rel
                 className="w-full h-full object-cover"
               />
             </div>
-            <div className="p-3">
-              <p className="text-sm font-medium line-clamp-2 min-h-[2.5rem] mb-1">
+            <div className="p-2">
+              <p className="text-xs font-medium line-clamp-2 min-h-[2rem] mb-1">
                 {product.name}
               </p>
-              <p className="text-sm font-bold">
-                {product.price} ₽ <span className="text-xs font-normal text-muted-foreground">/ {product.unit}</span>
+              <p className="text-xs font-bold">
+                {product.price} ₽ <span className="text-[10px] font-normal text-muted-foreground">/ {product.unit}</span>
               </p>
             </div>
           </Card>
