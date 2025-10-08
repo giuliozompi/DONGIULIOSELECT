@@ -18,19 +18,26 @@ The backend is an **Express.js** application written in TypeScript, implementing
 **PostgreSQL** (via Neon serverless) is the primary database, accessed using **Drizzle ORM** for type-safe queries. The schema includes tables for users, admins, product categories, products, shopping carts, orders (with detailed delivery and discount fields, and audit logs), user addresses, product associations for recommendations, payment intents, and gamification data (fortune spin tokens, prizes, spins). JSONB columns are used for flexible data structures.
 
 ### Admin Panel
-A tab-based admin interface (`/admin`) allows authorized users to manage various aspects of the application. The system implements a **two-tier administration model**:
+A sidebar-based admin interface (`/admin`) with hierarchical navigation allows authorized users to manage various aspects of the application. The system implements a **two-tier administration model**:
 
 #### Two-Tier Administration
 - **Master Administrator**: Defined by the `MASTER_ADMIN_USER_ID` environment secret (user ID: 201331998 / @DonGiulioMoscow). Has full privileges including managing other administrators.
 - **Regular Administrators**: Can manage categories, products, orders, and product recommendations, but cannot add/remove other administrators.
 
-#### Key Functionalities
-- **Category Management**: Create, edit, and delete product categories (all admins).
-- **Product Management**: Comprehensive forms for creating and editing products, including pricing, media, attributes, and descriptions (all admins).
-- **Order Management**: Full editing capabilities for orders, including product quantities, additions, removals, discounts, and delivery address changes (all admins).
-- **Administrator Management**: Add and remove users from the admin whitelist (master admin only).
-- **Product Recommendations**: Manage associations between products to suggest complementary items to users (all admins).
-- **Action Logs**: View comprehensive audit trail of all admin actions (all admins).
+#### Navigation Structure
+The admin panel is organized with a collapsible sidebar containing:
+
+**A) Amministrazione** (Catalog Management)
+- **Categorie** (Categories): Create, edit, and delete product categories (all admins)
+- **Prodotti** (Products): Comprehensive forms for creating and editing products, including pricing, media, attributes, and descriptions (all admins)
+- **Raccomandazioni** (Recommendations): Manage associations between products to suggest complementary items to users (all admins)
+
+**B) Gestione** (Operations Management)
+- **Ordini** (Orders): Full editing capabilities for orders, including product quantities, additions, removals, discounts, and delivery address changes (all admins)
+
+**Additional Functions** (separate from groups)
+- **Администраторы** (Administrators): Add and remove users from the admin whitelist (master admin only)
+- **Логи** (Action Logs): View comprehensive audit trail of all admin actions (all admins)
 
 #### Audit Logging
 All administrative actions are tracked in the `admin_action_logs` table with the following information:
