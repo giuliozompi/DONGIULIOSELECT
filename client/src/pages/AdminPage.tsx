@@ -72,11 +72,11 @@ export default function AdminPage() {
       <div className="flex h-screen w-full" data-testid="admin-page">
         <Sidebar>
           <SidebarContent>
-            {/* Gruppo A) Amministrazione */}
+            {/* Группа A) Администрирование */}
             <SidebarGroup>
               <SidebarGroupLabel className="flex items-center gap-2">
                 <Settings className="w-4 h-4" />
-                A) Amministrazione
+                A) Администрирование
               </SidebarGroupLabel>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -86,7 +86,7 @@ export default function AdminPage() {
                     data-testid="button-nav-categories"
                   >
                     <FolderTree className="w-4 h-4" />
-                    <span>Categorie</span>
+                    <span>Категории</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -96,7 +96,7 @@ export default function AdminPage() {
                     data-testid="button-nav-products"
                   >
                     <Package className="w-4 h-4" />
-                    <span>Prodotti</span>
+                    <span>Продукты</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -106,17 +106,17 @@ export default function AdminPage() {
                     data-testid="button-nav-associations"
                   >
                     <Link className="w-4 h-4" />
-                    <span>Raccomandazioni</span>
+                    <span>Рекомендации</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroup>
 
-            {/* Gruppo B) Gestione */}
+            {/* Группа B) Управление */}
             <SidebarGroup>
               <SidebarGroupLabel className="flex items-center gap-2">
                 <ClipboardList className="w-4 h-4" />
-                B) Gestione
+                B) Управление
               </SidebarGroupLabel>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -126,13 +126,13 @@ export default function AdminPage() {
                     data-testid="button-nav-orders"
                   >
                     <ShoppingCart className="w-4 h-4" />
-                    <span>Ordini</span>
+                    <span>Заказы</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroup>
 
-            {/* Sezioni separate */}
+            {/* Отдельные разделы */}
             <SidebarGroup>
               <SidebarMenu>
                 {isMasterAdmin && (
