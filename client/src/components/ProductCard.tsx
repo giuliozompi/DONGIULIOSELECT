@@ -59,8 +59,20 @@ export default function ProductCard({
       
       // Check for recommendations - only if not skipped and dialog is not already open (prevent loop)
       if (!result.skipRecommendations && !showRecommendations) {
-        setRecommendedProductId(id);
-        setShowRecommendations(true);
+        // First check if there are actually recommendations before opening dialog
+        try {
+          const recRes = await apiRequest('GET', `/api/products/${id}/recommendations`);
+          const recommendations = await recRes.json();
+          
+          // Only open dialog if there are recommendations
+          if (recommendations && recommendations.length > 0) {
+            setRecommendedProductId(id);
+            setShowRecommendations(true);
+          }
+        } catch (error) {
+          console.error('Error checking recommendations:', error);
+          // Don't open dialog if there's an error
+        }
       }
     },
     onError: (error: Error) => {
