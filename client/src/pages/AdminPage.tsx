@@ -788,15 +788,6 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
   // Fetch current order data (refreshes after mutations)
   const { data: currentOrder } = useQuery<Order>({
     queryKey: ['/api/admin/orders', order.id],
-    queryFn: async () => {
-      const response = await fetch(`/api/admin/orders/${order.id}`, {
-        headers: {
-          'X-Telegram-Init-Data': (window as any).Telegram?.WebApp?.initData || ''
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch order');
-      return response.json();
-    },
     enabled: open,
     initialData: order, // Usa la prop come dati iniziali
   });
@@ -811,7 +802,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
 
   // Fetch order logs
   const { data: logs = [] } = useQuery<any[]>({
-    queryKey: [`/api/admin/orders/${order.id}/logs`],
+    queryKey: ['/api/admin/orders', order.id, 'logs'],
     enabled: open,
   });
 
@@ -826,7 +817,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
-      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id, 'logs'] });
       setEditingProductId(null);
       toast({ title: '✅ Количество обновлено' });
     },
@@ -846,7 +837,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
-      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id, 'logs'] });
       setSelectedProductId('');
       setAddQuantity(1);
       toast({ title: '✅ Продукт добавлен' });
@@ -864,7 +855,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
-      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id, 'logs'] });
       toast({ title: '✅ Продукт удален' });
     },
     onError: (error: any) => {
@@ -883,7 +874,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
-      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id, 'logs'] });
       setDiscountValue('');
       toast({ title: '✅ Скидка применена' });
     },
@@ -902,7 +893,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
-      queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id, 'logs'] });
       toast({ title: '✅ Адрес обновлен' });
     },
     onError: (error: any) => {
