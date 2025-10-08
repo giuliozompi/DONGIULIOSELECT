@@ -1403,6 +1403,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  // GET /api/admin/orders/:id - Ottieni singolo ordine (ADMIN ONLY)
+  // NOTA: Questa route deve essere DOPO tutte le route più specifiche (es. /:id/logs)
+  app.get("/api/admin/orders/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      res.json(order);
+    } catch (error) {
+      console.error('Error fetching order:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
   
   // ==================== ADMIN MANAGEMENT ====================
   

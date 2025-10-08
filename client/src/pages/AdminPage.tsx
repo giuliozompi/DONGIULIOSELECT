@@ -785,6 +785,25 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
   const [discountValue, setDiscountValue] = useState<string>('');
   const [newAddress, setNewAddress] = useState<string>(order.deliveryAddress || '');
 
+  // Fetch current order data (refreshes after mutations)
+  const { data: currentOrder } = useQuery<Order>({
+    queryKey: ['/api/admin/orders', order.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        headers: {
+          'X-Telegram-Init-Data': (window as any).Telegram?.WebApp?.initData || ''
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch order');
+      return response.json();
+    },
+    enabled: open,
+    initialData: order, // Usa la prop come dati iniziali
+  });
+
+  // Usa currentOrder invece di order per visualizzare i dati aggiornati
+  const displayOrder = currentOrder || order;
+
   // Fetch all products for adding
   const { data: allProducts = [] } = useQuery<Product[]>({
     queryKey: ['/api/products'],
@@ -806,6 +825,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
       setEditingProductId(null);
       toast({ title: '✅ Количество обновлено' });
@@ -825,6 +845,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
       setSelectedProductId('');
       setAddQuantity(1);
@@ -842,6 +863,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
       toast({ title: '✅ Продукт удален' });
     },
@@ -860,6 +882,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
       setDiscountValue('');
       toast({ title: '✅ Скидка применена' });
@@ -878,6 +901,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/orders/${order.id}/logs`] });
       toast({ title: '✅ Адрес обновлен' });
     },
@@ -900,7 +924,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
           {/* Products */}
           <div className="space-y-3">
             <h3 className="font-semibold">Продукты</h3>
-            {order.items.map((item: any) => (
+            {displayOrder.items.map((item: any) => (
               <div key={item.productId} className="flex items-center justify-between gap-4 border rounded-md p-3">
                 <div className="flex-1">
                   <p className="font-medium">{item.productName}</p>
@@ -1043,10 +1067,10 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                 Применить
               </Button>
             </div>
-            {order.discount && (
+            {displayOrder.discount && (
               <p className="text-sm text-muted-foreground">
-                Текущая скидка: {order.discount}₽ 
-                ({order.discountType === 'percentage' ? `${order.discountValue}%` : `${order.discountValue}₽`})
+                Текущая скидка: {displayOrder.discount}₽ 
+                ({displayOrder.discountType === 'percentage' ? `${displayOrder.discountValue}%` : `${displayOrder.discountValue}₽`})
               </p>
             )}
           </div>
@@ -1080,7 +1104,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
           <div className="border-t pt-4">
             <div className="flex justify-between items-center font-semibold text-lg">
               <span>Итого:</span>
-              <span>{order.amount}₽</span>
+              <span>{displayOrder.amount}₽</span>
             </div>
           </div>
 
