@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, Minus, ShoppingCart } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, Info } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { hapticFeedback } from '@/lib/telegram';
@@ -113,11 +113,15 @@ export default function ProductCard({
     addToCartMutation.mutate({}); // Allow recommendations dialog
   };
 
+  const handleInfoClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClick?.();
+  };
+
   return (
     <>
       <Card
-        className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
-        onClick={onClick}
+        className="overflow-hidden"
         data-testid={`card-product-${name}`}
       >
       <div className="aspect-square bg-muted relative overflow-hidden">
@@ -155,6 +159,17 @@ export default function ProductCard({
         </div>
 
         <div className="space-y-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            onClick={handleInfoClick}
+            data-testid={`button-info-${id}`}
+          >
+            <Info className="h-4 w-4 mr-2" />
+            Подробнее
+          </Button>
+
           <div className="flex items-center gap-2 bg-muted rounded-md p-2">
             <Button
               size="icon"
