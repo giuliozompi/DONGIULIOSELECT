@@ -41,14 +41,14 @@ export default function ProductCard({
   const [recommendedProductId, setRecommendedProductId] = useState<string | null>(null);
 
   const addToCartMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (options?: { skipRecommendations?: boolean }) => {
       const res = await apiRequest('POST', '/api/cart/items', {
         productId: id,
         quantity,
       });
-      return await res.json();
+      return { data: await res.json(), skipRecommendations: options?.skipRecommendations };
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       hapticFeedback('success');
       toast({
         title: 'Добавлено в корзину',
@@ -57,8 +57,8 @@ export default function ProductCard({
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
       setQuantity(initialQty); // Reset quantity after adding
       
-      // Check for recommendations - only if dialog is not already open (prevent loop)
-      if (!showRecommendations) {
+      // Check for recommendations - only if not skipped and dialog is not already open (prevent loop)
+      if (!result.skipRecommendations && !showRecommendations) {
         setRecommendedProductId(id);
         setShowRecommendations(true);
       }
@@ -93,7 +93,7 @@ export default function ProductCard({
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    addToCartMutation.mutate();
+    addToCartMutation.mutate({}); // Allow recommendations dialog
   };
 
   return (
