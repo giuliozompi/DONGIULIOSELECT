@@ -61,16 +61,21 @@ export default function ProductCard({
       if (!result.skipRecommendations && !showRecommendations) {
         // First check if there are actually recommendations before opening dialog
         try {
+          console.log('[ProductCard] Checking recommendations for product:', id);
           const recRes = await apiRequest('GET', `/api/products/${id}/recommendations`);
           const recommendations = await recRes.json();
+          console.log('[ProductCard] Recommendations received:', recommendations);
           
           // Only open dialog if there are recommendations
-          if (recommendations && recommendations.length > 0) {
+          if (recommendations && Array.isArray(recommendations) && recommendations.length > 0) {
+            console.log('[ProductCard] Opening recommendations dialog with', recommendations.length, 'items');
             setRecommendedProductId(id);
             setShowRecommendations(true);
+          } else {
+            console.log('[ProductCard] No recommendations found, not opening dialog');
           }
         } catch (error) {
-          console.error('Error checking recommendations:', error);
+          console.error('[ProductCard] Error checking recommendations:', error);
           // Don't open dialog if there's an error
         }
       }

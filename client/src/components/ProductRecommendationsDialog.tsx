@@ -28,15 +28,25 @@ export default function ProductRecommendationsDialog({
 }: ProductRecommendationsDialogProps) {
   const { toast } = useToast();
 
-  const { data: recommendations = [], isLoading } = useQuery<RecommendationWithProduct[]>({
+  const query = useQuery<RecommendationWithProduct[]>({
     queryKey: ['/api/products', productId, 'recommendations'],
     queryFn: async () => {
-      const res = await fetch(`/api/products/${productId}/recommendations`);
-      if (!res.ok) throw new Error('Failed to fetch recommendations');
+      const res = await apiRequest('GET', `/api/products/${productId}/recommendations`);
       return res.json();
     },
     enabled: !!productId && open,
   });
+
+  const recommendations = query.data ?? [];
+
+  // Auto-close ONLY if fetch completed successfully with no recommendations
+  // This prevents closing during initial empty state before fetch completes
+  useEffect(() => {
+    if (query.isSuccess && recommendations.length === 0 && open) {
+      console.log('[ProductRecommendationsDialog] Fetch completed with no recommendations, auto-closing');
+      onOpenChange(false);
+    }
+  }, [query.isSuccess, recommendations.length, open, onOpenChange]);
 
   // Don't render if closed
   if (!open) {
@@ -44,7 +54,7 @@ export default function ProductRecommendationsDialog({
   }
 
   // Show loading state while fetching
-  if (isLoading) {
+  if (query.isLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl" data-testid="recommendations-dialog">
@@ -59,20 +69,9 @@ export default function ProductRecommendationsDialog({
     );
   }
 
-  // Show message if no recommendations found
-  if (recommendations.length === 0) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl" data-testid="recommendations-dialog">
-          <DialogHeader>
-            <DialogTitle>Рекомендуем к {productName}</DialogTitle>
-          </DialogHeader>
-          <div className="py-8 text-center text-muted-foreground">
-            Нет рекомендаций для этого продукта
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
+  // If fetch completed with no recommendations, don't render (useEffect will close)
+  if (query.isSuccess && recommendations.length === 0) {
+    return null;
   }
 
   return (
