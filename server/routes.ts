@@ -197,6 +197,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // ==================== INDIRIZZI UTENTE ====================
+  
+  // GET /api/user/addresses - Ottieni tutti gli indirizzi dell'utente
+  app.get("/api/user/addresses", verifyTelegramInitData, async (req, res) => {
+    try {
+      const addresses = await storage.getUserAddresses(req.userId!);
+      res.json(addresses);
+    } catch (error) {
+      console.error('Error fetching user addresses:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/user/addresses - Crea nuovo indirizzo
+  app.post("/api/user/addresses", verifyTelegramInitData, async (req, res) => {
+    try {
+      const addressSchema = z.object({
+        label: z.string().min(1),
+        fullAddress: z.string().min(10),
+        city: z.string().optional(),
+        street: z.string().optional(),
+        building: z.string().optional(),
+        flat: z.string().optional(),
+        postalCode: z.string().optional(),
+        dadataFiasId: z.string().optional(),
+        isDefault: z.boolean().optional(),
+      });
+      
+      const addressData = addressSchema.parse(req.body);
+      
+      // Se questo indirizzo è impostato come default, rimuovi il flag da tutti gli altri
+      if (addressData.isDefault) {
+        const existingAddresses = await storage.getUserAddresses(req.userId!);
+        for (const addr of existingAddresses) {
+          if (addr.isDefault) {
+            await storage.updateUserAddress(addr.id, { isDefault: false });
+          }
+        }
+      }
+      
+      const address = await storage.createUserAddress({
+        ...addressData,
+        userId: req.userId!,
+      });
+      
+      res.json(address);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error creating user address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // DELETE /api/user/addresses/:id - Elimina indirizzo
+  app.delete("/api/user/addresses/:id", verifyTelegramInitData, async (req, res) => {
+    try {
+      const addressId = req.params.id;
+      
+      // Verifica che l'indirizzo appartenga all'utente
+      const addresses = await storage.getUserAddresses(req.userId!);
+      const addressToDelete = addresses.find(addr => addr.id === addressId);
+      
+      if (!addressToDelete) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      
+      const success = await storage.deleteUserAddress(addressId);
+      
+      if (!success) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting user address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/user/addresses/:id/set-default - Imposta indirizzo come default
+  app.post("/api/user/addresses/:id/set-default", verifyTelegramInitData, async (req, res) => {
+    try {
+      const addressId = req.params.id;
+      
+      // Verifica che l'indirizzo appartenga all'utente
+      const addresses = await storage.getUserAddresses(req.userId!);
+      const addressToUpdate = addresses.find(addr => addr.id === addressId);
+      
+      if (!addressToUpdate) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      
+      // Rimuovi flag default da tutti gli altri indirizzi
+      for (const addr of addresses) {
+        if (addr.isDefault && addr.id !== addressId) {
+          await storage.updateUserAddress(addr.id, { isDefault: false });
+        }
+      }
+      
+      // Imposta questo come default
+      await storage.updateUserAddress(addressId, { isDefault: true });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error setting default address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // ==================== ORDINI ====================
   
   // POST /api/orders - Crea nuovo ordine dal carrello
@@ -206,6 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customerDataSchema = z.object({
         customerName: z.string().min(2),
         customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/),
+        customerEmail: z.string().email().optional(),
         deliveryAddress: z.string().min(10),
         deliveryCity: z.string().optional(),
         deliveryStreet: z.string().optional(),
@@ -214,6 +326,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryPostalCode: z.string().optional(),
         dadataFiasId: z.string().optional(),
         deliveryNotes: z.string().optional(),
+        deliveryMethod: z.enum(['yandex_go', 'cdek', 'don_giulio_courier', 'pickup']).optional(),
+        saveAddress: z.boolean().optional(),
+        addressLabel: z.string().optional(),
       });
       
       const customerData = customerDataSchema.parse(req.body);
@@ -276,6 +391,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const finalAmount = Math.max(0, initialAmount - totalBonusApplied).toFixed(2);
       
+      // Salva indirizzo se richiesto
+      if (customerData.saveAddress && customerData.addressLabel) {
+        // Verifica se l'indirizzo esiste già
+        const existingAddresses = await storage.getUserAddresses(req.userId!);
+        const addressExists = existingAddresses.some(addr => 
+          addr.fullAddress === customerData.deliveryAddress && 
+          addr.city === customerData.deliveryCity
+        );
+        
+        if (!addressExists) {
+          await storage.createUserAddress({
+            userId: req.userId!,
+            label: customerData.addressLabel,
+            fullAddress: customerData.deliveryAddress,
+            city: customerData.deliveryCity,
+            street: customerData.deliveryStreet,
+            building: customerData.deliveryBuilding,
+            flat: customerData.deliveryFlat,
+            postalCode: customerData.deliveryPostalCode,
+            dadataFiasId: customerData.dadataFiasId,
+            isDefault: existingAddresses.length === 0, // Primo indirizzo diventa default
+          });
+        }
+      }
+      
       // Crea ordine con importo finale scontato e dati cliente
       const order = await storage.createOrder({
         userId: req.userId!,
@@ -291,6 +431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryPostalCode: customerData.deliveryPostalCode,
         dadataFiasId: customerData.dadataFiasId,
         deliveryNotes: customerData.deliveryNotes,
+        deliveryMethod: customerData.deliveryMethod,
       });
       
       // Marca bonuses come usati

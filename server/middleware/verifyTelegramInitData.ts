@@ -32,14 +32,33 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     if (process.env.NODE_ENV === 'development' && !initData) {
       console.log('[Telegram Auth] Development mode bypass - using admin user');
       const adminUserId = '201331998'; // DonGiulioMoscow (admin reale)
-      req.userId = adminUserId;
-      req.telegramUser = {
-        id: adminUserId,
-        username: 'DonGiulioMoscow',
-        firstName: 'Don Giulio',
-        lastName: 'Moscow',
-      };
-      return next();
+      
+      // Crea o ottieni l'utente admin in dev mode
+      storage.getUser(adminUserId).then(user => {
+        if (!user) {
+          console.log('[Telegram Auth] Creating admin user in dev mode:', adminUserId);
+          return storage.createUser({
+            id: adminUserId,
+            username: 'DonGiulioMoscow',
+            firstName: 'Don Giulio',
+            lastName: 'Moscow',
+          });
+        }
+        return user;
+      }).then(user => {
+        req.userId = user.id;
+        req.telegramUser = {
+          id: user.id,
+          username: user.username ?? undefined,
+          firstName: user.firstName ?? undefined,
+          lastName: user.lastName ?? undefined,
+        };
+        next();
+      }).catch(error => {
+        console.error('[Telegram Auth] ERROR creating/fetching admin user:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      });
+      return;
     }
     
     if (!initData) {

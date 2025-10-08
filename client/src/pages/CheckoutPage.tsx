@@ -11,12 +11,17 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
-import { ShoppingBag, Gift } from 'lucide-react';
-import type { Cart, Product, Bonus } from '@shared/schema';
+import { ShoppingBag, Gift, MapPin, X, Truck } from 'lucide-react';
+import type { Cart, Product, Bonus, UserAddress } from '@shared/schema';
+import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS } from '@shared/schema';
 
 const checkoutFormSchema = z.object({
   customerName: z.string().min(2, 'Введите имя (минимум 2 символа)'),
@@ -25,6 +30,24 @@ const checkoutFormSchema = z.object({
   deliveryAddress: z.string().min(10, 'Введите полный адрес доставки'),
   deliveryFlat: z.string().optional(),
   deliveryNotes: z.string().optional(),
+  deliveryMethod: z.enum([
+    DELIVERY_METHODS.YANDEX_GO,
+    DELIVERY_METHODS.CDEK,
+    DELIVERY_METHODS.DON_GIULIO_COURIER,
+    DELIVERY_METHODS.PICKUP,
+  ] as [string, ...string[]], {
+    required_error: 'Выберите способ доставки',
+  }),
+  saveAddress: z.boolean().default(false),
+  addressLabel: z.string().optional(),
+}).refine((data) => {
+  if (data.saveAddress && !data.addressLabel) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Введите название адреса',
+  path: ['addressLabel'],
 });
 
 type CheckoutFormData = z.infer<typeof checkoutFormSchema>;
@@ -43,6 +66,8 @@ export default function CheckoutPage() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [structuredAddress, setStructuredAddress] = useState<StructuredAddress>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState<string | null>(null);
 
   const { data: cart, isLoading } = useQuery<Cart>({
     queryKey: ['/api/cart'],
@@ -60,6 +85,10 @@ export default function CheckoutPage() {
     queryKey: ['/api/fortune'],
   });
 
+  const { data: savedAddresses = [], isLoading: isLoadingAddresses } = useQuery<UserAddress[]>({
+    queryKey: ['/api/user/addresses'],
+  });
+
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutFormSchema),
     mode: 'onChange',
@@ -70,6 +99,32 @@ export default function CheckoutPage() {
       deliveryAddress: '',
       deliveryFlat: '',
       deliveryNotes: '',
+      deliveryMethod: DELIVERY_METHODS.YANDEX_GO,
+      saveAddress: false,
+      addressLabel: '',
+    },
+  });
+
+  const deleteAddressMutation = useMutation({
+    mutationFn: async (addressId: string) => {
+      await apiRequest('DELETE', `/api/user/addresses/${addressId}`);
+    },
+    onSuccess: () => {
+      hapticFeedback('success');
+      queryClient.invalidateQueries({ queryKey: ['/api/user/addresses'] });
+      toast({
+        title: 'Адрес удалён',
+        description: 'Сохранённый адрес успешно удалён',
+      });
+      setDeleteDialogOpen(false);
+      setAddressToDelete(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Ошибка удаления',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -110,6 +165,34 @@ export default function CheckoutPage() {
     createOrderMutation.mutate(data);
   };
 
+  const handleUseAddress = (address: UserAddress) => {
+    hapticFeedback('light');
+    form.setValue('deliveryAddress', address.fullAddress);
+    if (address.flat) {
+      form.setValue('deliveryFlat', address.flat);
+    }
+    setStructuredAddress({
+      deliveryCity: address.city || undefined,
+      deliveryStreet: address.street || undefined,
+      deliveryBuilding: address.building || undefined,
+      deliveryFlat: address.flat || undefined,
+      deliveryPostalCode: address.postalCode || undefined,
+      dadataFiasId: address.dadataFiasId || undefined,
+    });
+  };
+
+  const handleDeleteAddress = (addressId: string) => {
+    hapticFeedback('light');
+    setAddressToDelete(addressId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteAddress = () => {
+    if (addressToDelete) {
+      deleteAddressMutation.mutate(addressToDelete);
+    }
+  };
+
   // Telegram MainButton для submit
   useTelegramMainButton({
     text: isSubmitting ? 'Обработка...' : 'Оформить заказ',
@@ -129,7 +212,6 @@ export default function CheckoutPage() {
   };
 
   const formatQuantity = (qty: number, unit?: string) => {
-    // Arrotonda a 3 decimali e rimuove zeri finali
     const rounded = Number(qty.toFixed(3));
     if (unit === 'кг') {
       return `${rounded} кг`;
@@ -164,6 +246,8 @@ export default function CheckoutPage() {
     setLocation('/cart');
     return null;
   }
+
+  const saveAddress = form.watch('saveAddress');
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -218,6 +302,56 @@ export default function CheckoutPage() {
             </div>
           </div>
         </Card>
+
+        {/* Indirizzi salvati */}
+        {!isLoadingAddresses && savedAddresses.length > 0 && (
+          <Card className="p-4">
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
+              Сохранённые адреса
+            </h3>
+            <div className="space-y-2">
+              {savedAddresses.map((address) => (
+                <div
+                  key={address.id}
+                  className="p-3 border rounded-md hover-elevate"
+                  data-testid={`saved-address-${address.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{address.label}</span>
+                        {address.isDefault && (
+                          <Badge variant="secondary" className="text-xs" data-testid={`badge-default-${address.id}`}>
+                            Default
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{address.fullAddress}</p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDeleteAddress(address.id)}
+                      data-testid={`button-delete-address-${address.id}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleUseAddress(address)}
+                    className="w-full"
+                    data-testid={`button-use-address-${address.id}`}
+                  >
+                    Использовать этот адрес
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Form dati cliente */}
         <Card className="p-4">
@@ -334,6 +468,93 @@ export default function CheckoutPage() {
                 )}
               />
 
+              {/* Save address checkbox */}
+              <FormField
+                control={form.control}
+                name="saveAddress"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-save-address"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>
+                        Сохранить этот адрес
+                      </FormLabel>
+                      <p className="text-sm text-muted-foreground">
+                        Адрес будет доступен для быстрого выбора в следующих заказах
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              {/* Address label input (shown when saveAddress is checked) */}
+              {saveAddress && (
+                <FormField
+                  control={form.control}
+                  name="addressLabel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Название адреса *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          placeholder='Например: "Дом", "Офис", "Дача"'
+                          data-testid="input-address-label"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Delivery method selection */}
+              <FormField
+                control={form.control}
+                name="deliveryMethod"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel className="flex items-center gap-2">
+                      <Truck className="w-4 h-4" />
+                      Способ доставки *
+                    </FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="space-y-2"
+                      >
+                        {Object.entries(DELIVERY_METHOD_LABELS).map(([value, label]) => (
+                          <div
+                            key={value}
+                            className="flex items-center space-x-3 space-y-0 rounded-md border p-3"
+                          >
+                            <RadioGroupItem
+                              value={value}
+                              id={value}
+                              data-testid={`radio-delivery-${value}`}
+                            />
+                            <label
+                              htmlFor={value}
+                              className="text-sm font-normal leading-tight cursor-pointer flex-1"
+                            >
+                              {label}
+                            </label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="deliveryNotes"
@@ -360,6 +581,27 @@ export default function CheckoutPage() {
           Нажмите кнопку внизу экрана для оформления заказа
         </p>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent data-testid="dialog-delete-address">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить адрес?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите удалить этот сохранённый адрес? Это действие нельзя отменить.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteAddress}
+              data-testid="button-confirm-delete"
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -131,6 +131,9 @@ export const orders = pgTable("orders", {
   
   deliveryNotes: text("delivery_notes"),
   
+  // Modalità di consegna
+  deliveryMethod: text("delivery_method"), // 'yandex_go' | 'cdek' | 'don_giulio_courier' | 'pickup'
+  
   // Stati ordine: ОФОРМЛЕН (confermato) | СОБРАН (preparato) | ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ (link inviato) | ОПЛАЧЕН (pagato) | ВЫЗВАН КУРЬЕР (corriere chiamato) | ПОЛУЧЕН (ricevuto)
   status: text("status").notNull().default('ОФОРМЛЕН'),
   paymentId: varchar("payment_id"),
@@ -165,6 +168,21 @@ export const PAID_ORDER_STATUSES = [
   ORDER_STATUSES.COURIER_CALLED,
   ORDER_STATUSES.RECEIVED,
 ] as const;
+
+// Delivery method constants
+export const DELIVERY_METHODS = {
+  YANDEX_GO: 'yandex_go',
+  CDEK: 'cdek',
+  DON_GIULIO_COURIER: 'don_giulio_courier',
+  PICKUP: 'pickup',
+} as const;
+
+export const DELIVERY_METHOD_LABELS = {
+  [DELIVERY_METHODS.YANDEX_GO]: 'Яндекс го (доставку оплачивается в приложение)',
+  [DELIVERY_METHODS.CDEK]: 'Сдек (оплата доставку по России при получением)',
+  [DELIVERY_METHODS.DON_GIULIO_COURIER]: 'Дон Джулио курьер (договариваетесь с менеджером)',
+  [DELIVERY_METHODS.PICKUP]: 'Самовывоз (бесплатно)',
+} as const;
 
 // Токены вращений колеса фортуны
 export const fortuneSpinTokens = pgTable("fortune_spin_tokens", {
