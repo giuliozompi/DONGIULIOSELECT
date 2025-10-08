@@ -1644,6 +1644,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/admin/action-logs - Ottieni log azioni amministrative (ADMIN ONLY)
+  app.get("/api/admin/action-logs", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const entityType = req.query.entityType as string | undefined;
+      const entityId = req.query.entityId as string | undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      
+      const logs = await storage.getAdminActionLogs({ entityType, entityId, limit });
+      res.json(logs);
+    } catch (error) {
+      console.error('Error fetching admin action logs:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // ==================== PRODUCT ASSOCIATIONS (ADMIN) ====================
   
   // GET /api/admin/product-associations - Ottieni tutte le associazioni prodotti (ADMIN ONLY)
