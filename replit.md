@@ -18,12 +18,29 @@ The backend is an **Express.js** application written in TypeScript, implementing
 **PostgreSQL** (via Neon serverless) is the primary database, accessed using **Drizzle ORM** for type-safe queries. The schema includes tables for users, admins, product categories, products, shopping carts, orders (with detailed delivery and discount fields, and audit logs), user addresses, product associations for recommendations, payment intents, and gamification data (fortune spin tokens, prizes, spins). JSONB columns are used for flexible data structures.
 
 ### Admin Panel
-A tab-based admin interface (`/admin`) allows authorized users to manage various aspects of the application. Key functionalities include:
-- **Category Management**: Create, edit, and delete product categories.
-- **Product Management**: Comprehensive forms for creating and editing products, including pricing, media, attributes, and descriptions.
-- **Order Management**: Full editing capabilities for orders, including product quantities, additions, removals, discounts, and delivery address changes, all with a detailed audit trail.
-- **Administrator Management**: Add and remove users from the admin whitelist.
-- **Product Recommendations**: Manage associations between products to suggest complementary items to users.
+A tab-based admin interface (`/admin`) allows authorized users to manage various aspects of the application. The system implements a **two-tier administration model**:
+
+#### Two-Tier Administration
+- **Master Administrator**: Defined by the `MASTER_ADMIN_USER_ID` environment secret (user ID: 201331998 / @DonGiulioMoscow). Has full privileges including managing other administrators.
+- **Regular Administrators**: Can manage categories, products, orders, and product recommendations, but cannot add/remove other administrators.
+
+#### Key Functionalities
+- **Category Management**: Create, edit, and delete product categories (all admins).
+- **Product Management**: Comprehensive forms for creating and editing products, including pricing, media, attributes, and descriptions (all admins).
+- **Order Management**: Full editing capabilities for orders, including product quantities, additions, removals, discounts, and delivery address changes (all admins).
+- **Administrator Management**: Add and remove users from the admin whitelist (master admin only).
+- **Product Recommendations**: Manage associations between products to suggest complementary items to users (all admins).
+- **Action Logs**: View comprehensive audit trail of all admin actions (all admins).
+
+#### Audit Logging
+All administrative actions are tracked in the `admin_action_logs` table with the following information:
+- Admin user ID and Telegram username
+- Action type (created, updated, deleted)
+- Entity type (category, product, product_association, admin)
+- Entity ID and detailed action data (JSONB)
+- Timestamp
+
+The audit log is accessible via the "Логи" (Logs) tab in the admin panel, displaying actions in chronological order with formatted details for accountability and troubleshooting.
 
 ## External Dependencies
 
