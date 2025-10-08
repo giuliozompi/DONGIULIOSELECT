@@ -3,7 +3,17 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Sidebar, 
+  SidebarContent, 
+  SidebarGroup, 
+  SidebarGroupLabel, 
+  SidebarMenu, 
+  SidebarMenuItem, 
+  SidebarMenuButton, 
+  SidebarProvider, 
+  SidebarTrigger 
+} from '@/components/ui/sidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +25,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { SubmitHandler } from 'react-hook-form';
@@ -25,7 +35,7 @@ import { format } from 'date-fns';
 
 export default function AdminPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('categories');
+  const [activeSection, setActiveSection] = useState('categories');
 
   // Check admin status
   const { data: adminCheck, isLoading: isCheckingAdmin } = useQuery<{ isAdmin: boolean; isMasterAdmin: boolean }>({
@@ -58,48 +68,116 @@ export default function AdminPage() {
   const isMasterAdmin = adminCheck?.isMasterAdmin || false;
 
   return (
-    <div className="container mx-auto py-6 px-4" data-testid="admin-page">
-      <h1 className="text-3xl font-bold mb-6">Панель администратора</h1>
-      
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className={`grid w-full ${isMasterAdmin ? 'grid-cols-6' : 'grid-cols-5'}`} data-testid="admin-tabs">
-          <TabsTrigger value="categories" data-testid="tab-categories">Категории</TabsTrigger>
-          <TabsTrigger value="products" data-testid="tab-products">Продукты</TabsTrigger>
-          <TabsTrigger value="associations" data-testid="tab-associations">Рекомендации</TabsTrigger>
-          <TabsTrigger value="orders" data-testid="tab-orders">Заказы</TabsTrigger>
-          <TabsTrigger value="logs" data-testid="tab-logs">Логи</TabsTrigger>
-          {isMasterAdmin && (
-            <TabsTrigger value="admins" data-testid="tab-admins">Админы</TabsTrigger>
-          )}
-        </TabsList>
-        
-        <TabsContent value="categories">
-          <CategoriesManager />
-        </TabsContent>
-        
-        <TabsContent value="products">
-          <ProductsManager />
-        </TabsContent>
-        
-        <TabsContent value="associations">
-          <ProductAssociationsManager />
-        </TabsContent>
-        
-        <TabsContent value="orders">
-          <OrdersManager />
-        </TabsContent>
-        
-        <TabsContent value="logs">
-          <LogsManager />
-        </TabsContent>
-        
-        {isMasterAdmin && (
-          <TabsContent value="admins">
-            <AdminsManager />
-          </TabsContent>
-        )}
-      </Tabs>
-    </div>
+    <SidebarProvider>
+      <div className="flex h-screen w-full" data-testid="admin-page">
+        <Sidebar>
+          <SidebarContent>
+            {/* Gruppo A) Amministrazione */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                A) Amministrazione
+              </SidebarGroupLabel>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setActiveSection('categories')}
+                    className={activeSection === 'categories' ? 'bg-sidebar-accent' : ''}
+                    data-testid="button-nav-categories"
+                  >
+                    <FolderTree className="w-4 h-4" />
+                    <span>Categorie</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setActiveSection('products')}
+                    className={activeSection === 'products' ? 'bg-sidebar-accent' : ''}
+                    data-testid="button-nav-products"
+                  >
+                    <Package className="w-4 h-4" />
+                    <span>Prodotti</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setActiveSection('associations')}
+                    className={activeSection === 'associations' ? 'bg-sidebar-accent' : ''}
+                    data-testid="button-nav-associations"
+                  >
+                    <Link className="w-4 h-4" />
+                    <span>Raccomandazioni</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
+
+            {/* Gruppo B) Gestione */}
+            <SidebarGroup>
+              <SidebarGroupLabel className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4" />
+                B) Gestione
+              </SidebarGroupLabel>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setActiveSection('orders')}
+                    className={activeSection === 'orders' ? 'bg-sidebar-accent' : ''}
+                    data-testid="button-nav-orders"
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                    <span>Ordini</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
+
+            {/* Sezioni separate */}
+            <SidebarGroup>
+              <SidebarMenu>
+                {isMasterAdmin && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setActiveSection('admins')}
+                      className={activeSection === 'admins' ? 'bg-sidebar-accent' : ''}
+                      data-testid="button-nav-admins"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>Администраторы</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setActiveSection('logs')}
+                    className={activeSection === 'logs' ? 'bg-sidebar-accent' : ''}
+                    data-testid="button-nav-logs"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Логи</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
+          </SidebarContent>
+        </Sidebar>
+
+        <div className="flex flex-col flex-1">
+          <header className="flex items-center justify-between gap-4 p-4 border-b">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <h1 className="text-xl font-bold">Панель администратора</h1>
+          </header>
+          <main className="flex-1 overflow-auto p-6">
+            {activeSection === 'categories' && <CategoriesManager />}
+            {activeSection === 'products' && <ProductsManager />}
+            {activeSection === 'associations' && <ProductAssociationsManager />}
+            {activeSection === 'orders' && <OrdersManager />}
+            {activeSection === 'logs' && <LogsManager />}
+            {activeSection === 'admins' && isMasterAdmin && <AdminsManager />}
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }
 
