@@ -14,9 +14,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation } from '@shared/schema';
+import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { SubmitHandler } from 'react-hook-form';
 import { format } from 'date-fns';
 
@@ -27,7 +28,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('categories');
 
   // Check admin status
-  const { data: adminCheck, isLoading: isCheckingAdmin } = useQuery<{ isAdmin: boolean }>({
+  const { data: adminCheck, isLoading: isCheckingAdmin } = useQuery<{ isAdmin: boolean; isMasterAdmin: boolean }>({
     queryKey: ['/api/admin/check'],
   });
 
@@ -54,17 +55,22 @@ export default function AdminPage() {
     );
   }
 
+  const isMasterAdmin = adminCheck?.isMasterAdmin || false;
+
   return (
     <div className="container mx-auto py-6 px-4" data-testid="admin-page">
       <h1 className="text-3xl font-bold mb-6">Панель администратора</h1>
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5" data-testid="admin-tabs">
+        <TabsList className={`grid w-full ${isMasterAdmin ? 'grid-cols-6' : 'grid-cols-5'}`} data-testid="admin-tabs">
           <TabsTrigger value="categories" data-testid="tab-categories">Категории</TabsTrigger>
           <TabsTrigger value="products" data-testid="tab-products">Продукты</TabsTrigger>
           <TabsTrigger value="associations" data-testid="tab-associations">Рекомендации</TabsTrigger>
           <TabsTrigger value="orders" data-testid="tab-orders">Заказы</TabsTrigger>
-          <TabsTrigger value="admins" data-testid="tab-admins">Админы</TabsTrigger>
+          <TabsTrigger value="logs" data-testid="tab-logs">Логи</TabsTrigger>
+          {isMasterAdmin && (
+            <TabsTrigger value="admins" data-testid="tab-admins">Админы</TabsTrigger>
+          )}
         </TabsList>
         
         <TabsContent value="categories">
@@ -83,9 +89,15 @@ export default function AdminPage() {
           <OrdersManager />
         </TabsContent>
         
-        <TabsContent value="admins">
-          <AdminsManager />
+        <TabsContent value="logs">
+          <LogsManager />
         </TabsContent>
+        
+        {isMasterAdmin && (
+          <TabsContent value="admins">
+            <AdminsManager />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
@@ -1298,6 +1310,129 @@ function OrdersManager() {
         />
       )}
     </div>
+  );
+}
+
+// ========== LOGS MANAGER ==========
+
+function LogsManager() {
+  const { data: logs = [], isLoading } = useQuery<AdminActionLog[]>({
+    queryKey: ['/api/admin/action-logs'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/action-logs?limit=50');
+      if (!response.ok) throw new Error('Failed to fetch logs');
+      return response.json();
+    },
+  });
+
+  const translateActionType = (actionType: string): string => {
+    const translations: Record<string, string> = {
+      created: 'Создано',
+      updated: 'Обновлено',
+      deleted: 'Удалено',
+    };
+    return translations[actionType] || actionType;
+  };
+
+  const translateEntityType = (entityType: string): string => {
+    const translations: Record<string, string> = {
+      category: 'Категория',
+      product: 'Продукт',
+      product_association: 'Ассоциация',
+      admin: 'Администратор',
+    };
+    return translations[entityType] || entityType;
+  };
+
+  const formatActionData = (actionData: any, actionType: string, entityType: string): string => {
+    if (!actionData || Object.keys(actionData).length === 0) return '-';
+
+    const parts: string[] = [];
+
+    if (entityType === 'category' && actionData.categoryName) {
+      parts.push(`"${actionData.categoryName}"`);
+      if (actionData.categorySlug) parts.push(`(${actionData.categorySlug})`);
+    } else if (entityType === 'product' && actionData.productName) {
+      parts.push(`"${actionData.productName}"`);
+      if (actionData.productSlug) parts.push(`(${actionData.productSlug})`);
+    } else if (entityType === 'product_association') {
+      if (actionData.sourceProductName && actionData.targetProductName) {
+        parts.push(`"${actionData.sourceProductName}" → "${actionData.targetProductName}"`);
+      }
+    } else if (entityType === 'admin' && actionData.affectedUsername) {
+      parts.push(`@${actionData.affectedUsername}`);
+    }
+
+    if (actionData.notes) {
+      parts.push(`(${actionData.notes})`);
+    }
+
+    if (actionType === 'updated' && actionData.oldData && actionData.newData) {
+      const changes = Object.keys(actionData.newData)
+        .filter(key => actionData.oldData[key] !== actionData.newData[key])
+        .map(key => `${key}: "${actionData.oldData[key]}" → "${actionData.newData[key]}"`)
+        .join(', ');
+      if (changes) parts.push(`[${changes}]`);
+    }
+
+    return parts.join(' ') || '-';
+  };
+
+  if (isLoading) {
+    return <div className="py-4" data-testid="loading-logs">Загрузка логов...</div>;
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Журнал действий администраторов</CardTitle>
+        <CardDescription>Последние 50 действий</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead data-testid="header-datetime">Дата/Время</TableHead>
+                <TableHead data-testid="header-admin">Администратор</TableHead>
+                <TableHead data-testid="header-action">Действие</TableHead>
+                <TableHead data-testid="header-entity">Тип сущности</TableHead>
+                <TableHead data-testid="header-details">Детали</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground" data-testid="no-logs">
+                    Нет записей
+                  </TableCell>
+                </TableRow>
+              ) : (
+                logs.map((log) => (
+                  <TableRow key={log.id} data-testid={`log-row-${log.id}`}>
+                    <TableCell data-testid={`log-datetime-${log.id}`}>
+                      {format(new Date(log.createdAt), 'dd.MM.yyyy HH:mm:ss')}
+                    </TableCell>
+                    <TableCell data-testid={`log-admin-${log.id}`}>
+                      {log.telegramUsername ? `@${log.telegramUsername}` : log.adminUserId}
+                    </TableCell>
+                    <TableCell data-testid={`log-action-${log.id}`}>
+                      <Badge variant="outline">{translateActionType(log.actionType)}</Badge>
+                    </TableCell>
+                    <TableCell data-testid={`log-entity-${log.id}`}>
+                      <Badge variant="secondary">{translateEntityType(log.entityType)}</Badge>
+                    </TableCell>
+                    <TableCell data-testid={`log-details-${log.id}`} className="max-w-md truncate">
+                      {formatActionData(log.actionData, log.actionType, log.entityType)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
