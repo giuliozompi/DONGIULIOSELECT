@@ -15,7 +15,22 @@ The frontend is built with **React 18** and TypeScript, using **Wouter** for rou
 The backend is an **Express.js** application written in TypeScript, implementing a RESTful API. It handles product catalog management, shopping cart logic, order processing, payment integration, gamification features, and an AI assistant. Authentication relies on Telegram WebApp init data verification, with session-based authentication and HMAC-SHA256 for security. An administrative panel is included for managing categories, products, orders (with audit logging), administrators, and product recommendations, protected by role-based access control.
 
 ### Data Storage
-**PostgreSQL** (via Neon serverless) is the primary database, accessed using **Drizzle ORM** for type-safe queries. The schema includes tables for users, admins, product categories, products, shopping carts, orders (with detailed delivery and discount fields, and audit logs), user addresses, product associations for recommendations, payment intents, and gamification data (fortune spin tokens, prizes, spins). JSONB columns are used for flexible data structures.
+**PostgreSQL** (via Neon serverless) is the primary database, accessed using **Drizzle ORM** for type-safe queries. The schema includes tables for users, admins, product categories, products, shopping carts, orders (with detailed delivery and discount fields, delivery method selection, and audit logs), user addresses (saved addresses with labels and default flag), product associations for recommendations, payment intents, and gamification data (fortune spin tokens, prizes, spins). JSONB columns are used for flexible data structures.
+
+#### Delivery Methods
+Orders support four delivery methods (stored in `orders.delivery_method`):
+- **yandex_go**: Яндекс го (доставку оплачивается в приложение) - Yandex Go delivery, paid in app
+- **cdek**: Сдек (оплата доставку по России при получением) - CDEK delivery, payment on delivery across Russia
+- **don_giulio_courier**: Дон Джулио курьер (договариваетесь с менеджером) - Don Giulio courier, arrange with manager
+- **pickup**: Самовывоз (бесплатно) - Self-pickup, free
+
+#### Saved Addresses
+Users can save delivery addresses for quick reuse in future orders. The `user_addresses` table stores:
+- Address label (e.g., "Дом", "Офис", "Дача")
+- Full address and structured fields (city, street, building, flat, postal code)
+- DaData FIAS ID for standardization
+- Default flag for automatic selection
+- Ownership verification ensures users can only access their own addresses
 
 ### Admin Panel
 A sidebar-based admin interface (`/admin`) with hierarchical navigation allows authorized users to manage various aspects of the application. The system implements a **two-tier administration model**:
