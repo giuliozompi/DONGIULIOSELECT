@@ -779,6 +779,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const categoryData = insertCategorySchema.parse(req.body);
       const category = await storage.createCategory(categoryData);
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'created',
+        entityType: 'category',
+        entityId: category.id,
+        actionData: {
+          categoryName: category.name,
+          categorySlug: category.slug,
+        },
+      });
+      
       res.json(category);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -793,10 +807,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/categories/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
       const updates = insertCategorySchema.partial().parse(req.body);
+      
+      // Ottieni dati vecchi prima dell'aggiornamento
+      const oldCategory = await storage.getCategoryById(req.params.id);
+      if (!oldCategory) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+      
       const category = await storage.updateCategory(req.params.id, updates);
       if (!category) {
         return res.status(404).json({ error: 'Category not found' });
       }
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'updated',
+        entityType: 'category',
+        entityId: category.id,
+        actionData: {
+          categoryName: category.name,
+          categorySlug: category.slug,
+          oldData: {
+            name: oldCategory.name,
+            slug: oldCategory.slug,
+            parentId: oldCategory.parentId,
+            sortOrder: oldCategory.sortOrder,
+          },
+          newData: {
+            name: category.name,
+            slug: category.slug,
+            parentId: category.parentId,
+            sortOrder: category.sortOrder,
+          },
+        },
+      });
+      
       res.json(category);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -810,10 +857,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // DELETE /api/admin/categories/:id - Elimina categoria (ADMIN ONLY)
   app.delete("/api/admin/categories/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
+      // Ottieni dati prima della cancellazione
+      const category = await storage.getCategoryById(req.params.id);
+      if (!category) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+      
       const success = await storage.deleteCategory(req.params.id);
       if (!success) {
         return res.status(404).json({ error: 'Category not found' });
       }
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'deleted',
+        entityType: 'category',
+        entityId: category.id,
+        actionData: {
+          categoryName: category.name,
+          categorySlug: category.slug,
+        },
+      });
+      
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting category:', error);
@@ -826,6 +893,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const productData = insertProductSchema.parse(req.body);
       const product = await storage.createProduct(productData);
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'created',
+        entityType: 'product',
+        entityId: product.id,
+        actionData: {
+          productName: product.name,
+          productSlug: product.slug,
+        },
+      });
+      
       res.json(product);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -840,10 +921,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/products/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
       const updates = insertProductSchema.partial().parse(req.body);
+      
+      // Ottieni dati vecchi prima dell'aggiornamento
+      const oldProduct = await storage.getProductById(req.params.id);
+      if (!oldProduct) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
       const product = await storage.updateProduct(req.params.id, updates);
       if (!product) {
         return res.status(404).json({ error: 'Product not found' });
       }
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'updated',
+        entityType: 'product',
+        entityId: product.id,
+        actionData: {
+          productName: product.name,
+          productSlug: product.slug,
+          oldData: {
+            name: oldProduct.name,
+            slug: oldProduct.slug,
+            categoryId: oldProduct.categoryId,
+            price: oldProduct.price,
+            inStock: oldProduct.inStock,
+          },
+          newData: {
+            name: product.name,
+            slug: product.slug,
+            categoryId: product.categoryId,
+            price: product.price,
+            inStock: product.inStock,
+          },
+        },
+      });
+      
       res.json(product);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -857,10 +973,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // DELETE /api/admin/products/:id - Elimina prodotto (ADMIN ONLY)
   app.delete("/api/admin/products/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
+      // Ottieni dati prima della cancellazione
+      const product = await storage.getProductById(req.params.id);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
       const success = await storage.deleteProduct(req.params.id);
       if (!success) {
         return res.status(404).json({ error: 'Product not found' });
       }
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'deleted',
+        entityType: 'product',
+        entityId: product.id,
+        actionData: {
+          productName: product.name,
+          productSlug: product.slug,
+        },
+      });
+      
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting product:', error);
@@ -1545,6 +1681,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const association = await storage.createProductAssociation(associationData);
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'created',
+        entityType: 'product_association',
+        entityId: association.id,
+        actionData: {
+          sourceProductName: sourceProduct.name,
+          targetProductName: targetProduct.name,
+        },
+      });
+      
       res.json(association);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1559,11 +1709,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/admin/product-associations/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
       const id = req.params.id;
+      
+      // Ottieni dati prima della cancellazione
+      const allAssociations = await storage.getAllProductAssociations();
+      const association = allAssociations.find(a => a.id === id);
+      
+      if (!association) {
+        return res.status(404).json({ error: 'Association not found' });
+      }
+      
       const success = await storage.deleteProductAssociation(id);
       
       if (!success) {
         return res.status(404).json({ error: 'Association not found' });
       }
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'deleted',
+        entityType: 'product_association',
+        entityId: id,
+        actionData: {
+          sourceProductName: association.sourceProduct.name,
+          targetProductName: association.targetProduct.name,
+        },
+      });
       
       res.json({ success: true });
     } catch (error) {
