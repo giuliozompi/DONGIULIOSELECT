@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
+import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
 import { insertProductSchema, insertOrderSchema, insertCategorySchema, PAID_ORDER_STATUSES } from "@shared/schema";
 import { z } from "zod";
 import { getDaDataService } from "./services/dadata";
@@ -764,8 +765,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SECURITY: Richiede sia auth Telegram che verifica admin per non esporre la lista admin
   app.get("/api/admin/check", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
-      // Se arriviamo qui, l'utente è sicuramente admin (requireAdmin lo ha verificato)
-      res.json({ isAdmin: true });
+      // Verifica anche se è master admin
+      const isMasterAdmin = await storage.isMasterAdmin(req.userId!);
+      res.json({ isAdmin: true, isMasterAdmin });
     } catch (error) {
       console.error('Error checking admin status:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -1424,8 +1426,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ==================== ADMIN MANAGEMENT ====================
   
-  // GET /api/admin/admins - Ottieni lista amministratori (ADMIN ONLY)
-  app.get("/api/admin/admins", verifyTelegramInitData, requireAdmin, async (req, res) => {
+  // GET /api/admin/admins - Ottieni lista amministratori (MASTER ADMIN ONLY)
+  app.get("/api/admin/admins", verifyTelegramInitData, requireAdmin, requireMasterAdmin, async (req, res) => {
     try {
       const admins = await storage.getAllAdmins();
       res.json(admins);
@@ -1435,8 +1437,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // POST /api/admin/admins - Aggiungi amministratore (ADMIN ONLY)
-  app.post("/api/admin/admins", verifyTelegramInitData, requireAdmin, async (req, res) => {
+  // POST /api/admin/admins - Aggiungi amministratore (MASTER ADMIN ONLY)
+  app.post("/api/admin/admins", verifyTelegramInitData, requireAdmin, requireMasterAdmin, async (req, res) => {
     try {
       const schema = z.object({
         userId: z.string(),
@@ -1446,6 +1448,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { userId, telegramUsername } = schema.parse(req.body);
       
       await storage.addAdmin(userId, telegramUsername);
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'created',
+        entityType: 'admin',
+        entityId: userId,
+        actionData: {
+          affectedUserId: userId,
+          affectedUsername: telegramUsername,
+        },
+      });
+      
       res.json({ success: true, userId, telegramUsername });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1456,8 +1472,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // DELETE /api/admin/admins/:userId - Rimuovi amministratore (ADMIN ONLY)
-  app.delete("/api/admin/admins/:userId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+  // DELETE /api/admin/admins/:userId - Rimuovi amministratore (MASTER ADMIN ONLY)
+  app.delete("/api/admin/admins/:userId", verifyTelegramInitData, requireAdmin, requireMasterAdmin, async (req, res) => {
     try {
       const userId = req.params.userId;
       
@@ -1466,7 +1482,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Cannot remove yourself as admin' });
       }
       
+      // Ottieni username prima della rimozione
+      const admins = await storage.getAllAdmins();
+      const adminToRemove = admins.find(a => a.userId === userId);
+      
       await storage.removeAdmin(userId);
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'deleted',
+        entityType: 'admin',
+        entityId: userId,
+        actionData: {
+          affectedUserId: userId,
+          affectedUsername: adminToRemove?.telegramUsername || undefined,
+        },
+      });
+      
       res.json({ success: true });
     } catch (error) {
       console.error('Error removing admin:', error);
