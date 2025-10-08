@@ -163,13 +163,54 @@ function RecommendationCard({ product, reason, onAddedToCart }: RecommendationCa
   return (
     <Card className="overflow-hidden hover-elevate" data-testid={`recommendation-card-${product.id}`}>
       <div className="flex gap-4 p-4">
-        <div className="w-24 h-24 flex-shrink-0 bg-muted rounded-md overflow-hidden">
-          <img
-            src={product.images[0] || 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=200&h=200&fit=crop'}
-            alt={product.name}
-            className="w-full h-full object-cover"
-            data-testid={`img-recommendation-${product.id}`}
-          />
+        <div className="flex flex-col gap-2">
+          <div className="w-24 h-24 flex-shrink-0 bg-muted rounded-md overflow-hidden">
+            <img
+              src={product.images[0] || 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=200&h=200&fit=crop'}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              data-testid={`img-recommendation-${product.id}`}
+            />
+          </div>
+          
+          <div className="flex flex-col gap-2 w-24">
+            <div className="flex items-center gap-1 bg-muted rounded-md p-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleDecrement}
+                disabled={quantity <= minQty}
+                className="h-7 w-7"
+                data-testid={`button-recommendation-decrease-${product.id}`}
+              >
+                <Minus className="h-3 w-3" />
+              </Button>
+              <div className="flex-1 text-center">
+                <p className="text-xs font-semibold" data-testid={`text-recommendation-quantity-${product.id}`}>
+                  {formatQuantity(quantity, product.unit)}
+                </p>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleIncrement}
+                className="h-7 w-7"
+                data-testid={`button-recommendation-increase-${product.id}`}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+
+            <Button
+              size="sm"
+              onClick={() => addToCartMutation.mutate()}
+              disabled={addToCartMutation.isPending}
+              data-testid={`button-recommendation-add-cart-${product.id}`}
+              className="w-full"
+            >
+              <ShoppingCart className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         
         <div className="flex-1 flex flex-col justify-between">
@@ -193,46 +234,6 @@ function RecommendationCard({ product, reason, onAddedToCart }: RecommendationCa
               )}
               <p className="text-xs text-muted-foreground">/ {product.unit}</p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 mt-3">
-            <div className="flex items-center gap-2 bg-muted rounded-md p-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleDecrement}
-                disabled={quantity <= minQty}
-                className="h-7 w-7"
-                data-testid={`button-recommendation-decrease-${product.id}`}
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <div className="min-w-[60px] text-center">
-                <p className="text-sm font-semibold" data-testid={`text-recommendation-quantity-${product.id}`}>
-                  {formatQuantity(quantity, product.unit)}
-                </p>
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={handleIncrement}
-                className="h-7 w-7"
-                data-testid={`button-recommendation-increase-${product.id}`}
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-
-            <Button
-              size="sm"
-              onClick={() => addToCartMutation.mutate()}
-              disabled={addToCartMutation.isPending}
-              data-testid={`button-recommendation-add-cart-${product.id}`}
-              className="flex-1"
-            >
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              {addToCartMutation.isPending ? 'Добавление...' : 'В корзину'}
-            </Button>
           </div>
         </div>
       </div>
