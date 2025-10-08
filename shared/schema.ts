@@ -353,3 +353,44 @@ export const productAssociations = pgTable("product_associations", {
 export const insertProductAssociationSchema = createInsertSchema(productAssociations).omit({ id: true, createdAt: true });
 export type InsertProductAssociation = z.infer<typeof insertProductAssociationSchema>;
 export type ProductAssociation = typeof productAssociations.$inferSelect;
+
+// Log delle azioni amministrative (per audit trail)
+export const adminActionLogs = pgTable("admin_action_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminUserId: varchar("admin_user_id").notNull(), // Admin che ha fatto l'azione
+  telegramUsername: text("telegram_username"), // Username Telegram dell'admin
+  
+  actionType: text("action_type").notNull(), // 'created' | 'updated' | 'deleted'
+  entityType: text("entity_type").notNull(), // 'category' | 'product' | 'product_association' | 'admin'
+  entityId: varchar("entity_id"), // ID dell'entità modificata (null per alcune azioni)
+  
+  // Dati dell'azione in formato strutturato
+  actionData: jsonb("action_data").$type<{
+    // Per categorie
+    categoryName?: string;
+    categorySlug?: string;
+    oldData?: any;
+    newData?: any;
+    
+    // Per prodotti
+    productName?: string;
+    productSlug?: string;
+    
+    // Per associazioni
+    sourceProductName?: string;
+    targetProductName?: string;
+    
+    // Per admin
+    affectedUserId?: string;
+    affectedUsername?: string;
+    
+    // Note generali
+    notes?: string;
+  }>().notNull().default({}),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAdminActionLogSchema = createInsertSchema(adminActionLogs).omit({ id: true, createdAt: true });
+export type InsertAdminActionLog = z.infer<typeof insertAdminActionLogSchema>;
+export type AdminActionLog = typeof adminActionLogs.$inferSelect;
