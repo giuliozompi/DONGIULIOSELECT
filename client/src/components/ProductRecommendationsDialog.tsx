@@ -223,16 +223,21 @@ function RecommendationCard({ product, reason, onAddedToCart }: RecommendationCa
                 {reason}
               </p>
             )}
-            <div className="flex items-baseline gap-2">
-              <p className="text-lg font-bold" data-testid={`text-recommendation-price-${product.id}`}>
-                {Math.round(parseFloat(product.price))} ₽
-              </p>
-              {product.priceOld && (
-                <p className="text-sm text-muted-foreground line-through">
-                  {Math.round(parseFloat(product.priceOld))} ₽
+            <div className="space-y-1">
+              <div className="flex items-baseline gap-2">
+                <p className="text-lg font-bold" data-testid={`text-recommendation-price-${product.id}`}>
+                  {Math.round(parseFloat(product.price))} ₽
                 </p>
-              )}
-              <p className="text-xs text-muted-foreground">/ {product.unit}</p>
+                {product.priceOld && (
+                  <p className="text-sm text-muted-foreground line-through">
+                    {Math.round(parseFloat(product.priceOld))} ₽
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">/ {product.unit}</p>
+              </div>
+              <p className="text-sm text-muted-foreground" data-testid={`text-recommendation-total-${product.id}`}>
+                {formatQuantity(quantity, product.unit)}: <span className="font-semibold text-foreground">{Math.round(parseFloat(product.price) * quantity)} ₽</span>
+              </p>
             </div>
           </div>
         </div>
