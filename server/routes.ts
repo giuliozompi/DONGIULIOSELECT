@@ -452,6 +452,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryMethod: customerData.deliveryMethod,
       });
       
+      // Salva dati utente (phone, email) per riproporli nel prossimo ordine
+      await storage.updateUser(req.userId!, {
+        phone: customerData.customerPhone,
+        email: customerData.customerEmail || undefined,
+      });
+      
       // Marca bonuses come usati
       for (const bonusId of usedBonuses) {
         await storage.markBonusAsUsed(bonusId, order.id);
