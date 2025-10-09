@@ -14,33 +14,75 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  price: string;
+  categoryId: string;
+  categoryName?: string;
+  unit: string;
+}
+
 export interface ChatCompletionOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  products?: Product[];
 }
 
 const DEFAULT_MODEL = 'anthropic/claude-3-haiku';
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_MAX_TOKENS = 1000;
 
-const SYSTEM_PROMPT = `Sei l'assistente virtuale di Don Giulio Select, un prestigioso negozio online di delikatessen italiani.
+function createSystemPrompt(products?: Product[]): string {
+  let prompt = `Sei l'assistente virtuale di Don Giulio Select, un prestigioso negozio online di delikatessen italiani.
 
-Il tuo ruolo:
+I tuoi ruoli professionali:
+- CHEESE SOMMELIER: esperto di formaggi italiani, stagionature, abbinamenti
+- MEAT EXPERT: specialista in salumi, prosciutti e carni di qualità
+- PRODUCT EXPERT: conoscitore approfondito di tutti i prodotti italiani di alta qualità
+- WINE SOMMELIER: esperto di abbinamenti vino-cibo
+
+Il tuo compito:
 - Aiutare i clienti a scoprire i migliori prodotti italiani di alta qualità
 - Fornire informazioni dettagliate su formaggi, salumi, pasta artigianale e altri prodotti
-- Suggerire abbinamenti perfetti e ricette tradizionali
+- Suggerire abbinamenti perfetti di vini e ricette tradizionali
 - Rispondere a domande su disponibilità, spedizioni e ordini
 - Essere cordiale, professionale e appassionato della cultura gastronomica italiana
 
+COMPORTAMENTO IMPORTANTE:
+1. Quando un cliente chiede un suggerimento, consulta PRIMA i prodotti disponibili nel nostro catalogo
+2. Suggerisci SEMPRE prodotti del nostro database quando appropriato
+3. Se nel nostro catalogo NON ci sono prodotti adatti alla richiesta, suggerisci al cliente di scrivere sul canale Telegram dove i manager lo aiuteranno a trovare il prodotto perfetto
+
+ABBINAMENTI VINI:
+- Puoi suggerire qualsiasi vino disponibile in Russia per abbinare i nostri prodotti
+- Spiega perché quel vino si abbina bene al prodotto scelto
+- In futuro avremo un database dei nostri vini, ma per ora puoi consigliare liberamente
+
 Linee guida:
 - Rispondi sempre in italiano
-- Sii conciso ma informativo
-- Mostra passione per i prodotti artigianali italiani
-- Suggerisci prodotti quando appropriato
-- Se non conosci una informazione specifica, sii onesto e offri di aiutare in altro modo
+- Sii conciso ma informativo e competente
+- Mostra la tua expertise come sommelier e gastronomo
+- Suggerisci prodotti dal catalogo quando possibile
+- Se non abbiamo il prodotto richiesto, suggerisci il canale Telegram
 
-Tono: Professionale ma caloroso, come un esperto sommelier o gastronomo italiano.`;
+Tono: Professionale, esperto e caloroso - come un sommelier italiano di alto livello.`;
+
+  if (products && products.length > 0) {
+    prompt += `\n\nPRODOTTI DISPONIBILI NEL NOSTRO CATALOGO:\n`;
+    products.forEach(p => {
+      prompt += `\n- ${p.name}`;
+      if (p.categoryName) prompt += ` (${p.categoryName})`;
+      prompt += ` - ${p.price}₽/${p.unit}`;
+      if (p.description) prompt += `\n  ${p.description}`;
+    });
+    prompt += `\n\nRicorda: suggerisci SEMPRE questi prodotti quando appropriato prima di consigliare il canale Telegram.`;
+  }
+
+  return prompt;
+}
 
 /**
  * Genera una risposta dall'AI Assistant usando OpenRouter
@@ -60,11 +102,15 @@ export async function generateAssistantResponse(
       model = DEFAULT_MODEL,
       temperature = DEFAULT_TEMPERATURE,
       maxTokens = DEFAULT_MAX_TOKENS,
+      products,
     } = options;
+
+    // Crea system prompt dinamico con prodotti disponibili
+    const systemPrompt = createSystemPrompt(products);
 
     // Prepara i messaggi con system prompt
     const fullMessages = [
-      { role: 'system' as const, content: SYSTEM_PROMPT },
+      { role: 'system' as const, content: systemPrompt },
       ...messages,
     ];
 
@@ -126,10 +172,14 @@ export async function* streamAssistantResponse(
       model = DEFAULT_MODEL,
       temperature = DEFAULT_TEMPERATURE,
       maxTokens = DEFAULT_MAX_TOKENS,
+      products,
     } = options;
 
+    // Crea system prompt dinamico con prodotti disponibili
+    const systemPrompt = createSystemPrompt(products);
+
     const fullMessages = [
-      { role: 'system' as const, content: SYSTEM_PROMPT },
+      { role: 'system' as const, content: systemPrompt },
       ...messages,
     ];
 
