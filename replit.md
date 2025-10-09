@@ -32,6 +32,20 @@ Users can save delivery addresses for quick reuse in future orders. The `user_ad
 - Default flag for automatic selection
 - Ownership verification ensures users can only access their own addresses
 
+#### Saved Customer Information
+The application automatically saves customer contact information from checkout forms for convenience in future orders. The `users` table stores:
+- **customerName**: Full name as entered by the user in checkout
+- **phone**: Phone number for order communication
+- **email**: Email address for order confirmations
+
+**Auto-save Flow:**
+1. User completes checkout with name, phone, and email
+2. Order is created successfully
+3. System automatically saves customerName, phone, and email to user's profile
+4. Next checkout visit: form fields are pre-filled with saved information
+
+This feature eliminates repetitive data entry while maintaining user privacy—each user only accesses their own saved information.
+
 ### Admin Panel
 A sidebar-based admin interface (`/admin`) with hierarchical navigation allows authorized users to manage various aspects of the application. The system implements a **two-tier administration model**:
 
