@@ -5,6 +5,7 @@ declare global {
         ready: () => void;
         expand: () => void;
         close: () => void;
+        colorScheme: 'light' | 'dark';
         themeParams: {
           bg_color?: string;
           text_color?: string;
@@ -16,6 +17,8 @@ declare global {
           header_bg_color?: string;
           accent_text_color?: string;
         };
+        onEvent: (eventType: string, eventHandler: () => void) => void;
+        offEvent: (eventType: string, eventHandler: () => void) => void;
         MainButton: {
           text: string;
           color: string;
