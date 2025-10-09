@@ -147,7 +147,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           {activeSection === 'categories' && <CategoriesManager />}
           {activeSection === 'products' && <ProductsManager />}
           {activeSection === 'associations' && <ProductAssociationsManager />}
-          {activeSection === 'orders' && <OrdersManager />}
+          {activeSection === 'orders' && <OrdersManager isMasterAdmin={isMasterAdmin} />}
           {activeSection === 'logs' && <LogsManager />}
           {activeSection === 'admins' && isMasterAdmin && <AdminsManager />}
         </main>
@@ -889,6 +889,9 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState<string>('');
   const [newAddress, setNewAddress] = useState<string>(order.deliveryAddress || '');
+  
+  // Determina se l'ordine è modificabile
+  const editable = isOrderEditable(order.status);
 
   // Fetch current order data (refreshes after mutations)
   const { data: currentOrder } = useQuery<Order>({
@@ -1016,6 +1019,14 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
+        {!editable && (
+          <div className="bg-muted p-4 rounded-md" data-testid="order-not-editable-notice">
+            <p className="text-sm font-medium text-muted-foreground">
+              ⚠️ Этот заказ не может быть изменен, так как для него уже была отправлена ссылка на оплату или он находится в более позднем статусе.
+            </p>
+          </div>
+        )}
+
         <div className="space-y-6 py-4">
           {/* Products */}
           <div className="space-y-3">
@@ -1035,6 +1046,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                       value={newQuantity}
                       onChange={(e) => setNewQuantity(parseFloat(e.target.value))}
                       className="w-24"
+                      disabled={!editable}
                       data-testid={`input-quantity-${item.productId}`}
                     />
                     <Button 
@@ -1045,6 +1057,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                           newQuantity 
                         });
                       }}
+                      disabled={!editable}
                       data-testid={`button-save-quantity-${item.productId}`}
                     >
                       Сохранить
@@ -1067,6 +1080,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                         setEditingProductId(item.productId);
                         setNewQuantity(item.quantity);
                       }}
+                      disabled={!editable}
                       data-testid={`button-edit-quantity-${item.productId}`}
                     >
                       <Edit className="w-4 h-4" />
@@ -1079,6 +1093,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                           removeProductMutation.mutate(item.productId);
                         }
                       }}
+                      disabled={!editable}
                       data-testid={`button-remove-product-${item.productId}`}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1093,7 +1108,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
           <div className="space-y-3">
             <h3 className="font-semibold">Добавить продукт</h3>
             <div className="flex gap-2">
-              <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+              <Select value={selectedProductId} onValueChange={setSelectedProductId} disabled={!editable}>
                 <SelectTrigger className="flex-1" data-testid="select-add-product">
                   <SelectValue placeholder="Выберите продукт" />
                 </SelectTrigger>
@@ -1112,6 +1127,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                 onChange={(e) => setAddQuantity(parseFloat(e.target.value))}
                 className="w-24"
                 placeholder="Кол-во"
+                disabled={!editable}
                 data-testid="input-add-quantity"
               />
               <Button 
@@ -1120,7 +1136,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                     addProductMutation.mutate({ productId: selectedProductId, quantity: addQuantity });
                   }
                 }}
-                disabled={!selectedProductId || addQuantity <= 0}
+                disabled={!editable || !selectedProductId || addQuantity <= 0}
                 data-testid="button-add-product"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -1133,7 +1149,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
           <div className="space-y-3">
             <h3 className="font-semibold">Применить скидку</h3>
             <div className="flex gap-2">
-              <Select value={discountType} onValueChange={(val) => setDiscountType(val as 'percentage' | 'fixed')}>
+              <Select value={discountType} onValueChange={(val) => setDiscountType(val as 'percentage' | 'fixed')} disabled={!editable}>
                 <SelectTrigger className="w-[150px]" data-testid="select-discount-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -1149,6 +1165,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                 onChange={(e) => setDiscountValue(e.target.value)}
                 className="flex-1"
                 placeholder={discountType === 'percentage' ? 'Процент скидки' : 'Сумма скидки'}
+                disabled={!editable}
                 data-testid="input-discount-value"
               />
               <Button 
@@ -1157,7 +1174,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                     applyDiscountMutation.mutate();
                   }
                 }}
-                disabled={!discountValue || parseFloat(discountValue) <= 0}
+                disabled={!editable || !discountValue || parseFloat(discountValue) <= 0}
                 data-testid="button-apply-discount"
               >
                 Применить
@@ -1180,6 +1197,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                 onChange={(e) => setNewAddress(e.target.value)}
                 className="flex-1"
                 placeholder="Адрес доставки"
+                disabled={!editable}
                 data-testid="textarea-delivery-address"
               />
               <Button 
@@ -1188,7 +1206,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                     changeAddressMutation.mutate();
                   }
                 }}
-                disabled={!newAddress || newAddress === order.deliveryAddress}
+                disabled={!editable || !newAddress || newAddress === order.deliveryAddress}
                 data-testid="button-change-address"
               >
                 Обновить
@@ -1232,7 +1250,22 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
 
 const ORDER_STATUSES = ['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', 'ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН'] as const;
 
-function OrdersManager() {
+// Helper function per determinare se un ordine è modificabile
+function isOrderEditable(status: string): boolean {
+  const statusIndex = ORDER_STATUSES.indexOf(status as any);
+  const paymentLinkSentIndex = ORDER_STATUSES.indexOf('ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ');
+  return statusIndex < paymentLinkSentIndex;
+}
+
+// Helper function per determinare se lo stato può essere cambiato
+function canChangeOrderStatus(status: string, isMasterAdmin: boolean): boolean {
+  if (isMasterAdmin) return true; // Master admin può sempre cambiare
+  const statusIndex = ORDER_STATUSES.indexOf(status as any);
+  const paidIndex = ORDER_STATUSES.indexOf('ОПЛАЧЕН');
+  return statusIndex < paidIndex; // Admin normali solo prima di "ОПЛАЧЕН"
+}
+
+function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -1351,7 +1384,7 @@ function OrdersManager() {
                     <Select 
                       value={order.status}
                       onValueChange={(newStatus) => updateStatusMutation.mutate({ orderId: order.id, status: newStatus })}
-                      disabled={updateStatusMutation.isPending}
+                      disabled={updateStatusMutation.isPending || !canChangeOrderStatus(order.status, isMasterAdmin)}
                     >
                       <SelectTrigger className="w-[280px]" data-testid={`select-status-${order.id}`}>
                         <SelectValue />
@@ -1362,6 +1395,9 @@ function OrdersManager() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {!canChangeOrderStatus(order.status, isMasterAdmin) && (
+                      <p className="text-xs text-muted-foreground">Только мастер-администратор может изменять оплаченные заказы</p>
+                    )}
                   </div>
 
                   <div className="flex gap-2">
@@ -1369,11 +1405,15 @@ function OrdersManager() {
                       size="sm"
                       variant="outline"
                       onClick={() => setEditingOrder(order)}
+                      disabled={!isOrderEditable(order.status)}
                       data-testid={`button-edit-order-${order.id}`}
                     >
                       <Edit className="w-4 h-4 mr-2" />
                       Редактировать
                     </Button>
+                    {!isOrderEditable(order.status) && (
+                      <p className="text-xs text-muted-foreground">Заказ не может быть изменен после отправки ссылки на оплату</p>
+                    )}
                     
                     {order.status === 'ОПЛАЧЕН' && (
                       <Button 
