@@ -54,6 +54,8 @@ The admin panel is organized with a collapsible sidebar containing:
 - **Администраторы** (Administrators): Add and remove users from the admin whitelist (master admin only)
 - **Логи** (Action Logs): View comprehensive audit trail of all admin actions (all admins)
 
+The sidebar automatically closes when a menu item is selected, allowing managers to immediately work on the selected section without manually closing the sidebar.
+
 #### Audit Logging
 All administrative actions are tracked in the `admin_action_logs` table with the following information:
 - Admin user ID and Telegram username
