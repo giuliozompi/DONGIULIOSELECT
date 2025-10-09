@@ -512,6 +512,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // POST /api/orders/:id/reorder - Riordina (aggiungi prodotti dell'ordine al carrello)
+  app.post("/api/orders/:id/reorder", verifyTelegramInitData, async (req, res) => {
+    try {
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verifica che l'ordine appartenga all'utente
+      if (order.userId !== req.userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      
+      // Recupera i prodotti attuali per verificare disponibilità e prezzi
+      const allProducts = await storage.getAllProducts();
+      const productsMap = new Map(allProducts.map(p => [p.id, p]));
+      
+      let addedCount = 0;
+      let unavailableCount = 0;
+      const unavailableProducts: string[] = [];
+      
+      // Ottieni carrello corrente
+      const currentCart = await storage.getCart(req.userId!);
+      const cartItems = currentCart?.items || [];
+      
+      // Aggiungi ogni prodotto al carrello
+      for (const item of order.items) {
+        const currentProduct = productsMap.get(item.productId);
+        
+        // Verifica che il prodotto esista ancora e sia disponibile
+        if (!currentProduct || !currentProduct.inStock) {
+          unavailableCount++;
+          unavailableProducts.push(item.productName);
+          continue;
+        }
+        
+        // Controlla se il prodotto esiste già nel carrello
+        const existingIndex = cartItems.findIndex(ci => ci.productId === item.productId);
+        
+        if (existingIndex >= 0) {
+          // Aggiorna quantità
+          cartItems[existingIndex].quantity += item.quantity;
+        } else {
+          // Aggiungi nuovo item con prezzo attuale
+          cartItems.push({
+            productId: item.productId,
+            quantity: item.quantity,
+            priceAtAdd: currentProduct.price,
+          });
+        }
+        addedCount++;
+      }
+      
+      // Salva carrello aggiornato
+      await storage.setCart(req.userId!, cartItems);
+      
+      res.json({
+        success: true,
+        addedCount,
+        unavailableCount,
+        unavailableProducts,
+        message: unavailableCount > 0 
+          ? `${addedCount} продуктов добавлено в корзину. ${unavailableCount} продуктов недоступны.`
+          : `Все ${addedCount} продуктов добавлены в корзину`,
+      });
+    } catch (error) {
+      console.error('Error reordering:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // ==================== FORTUNE WHEEL ====================
   
   // GET /api/fortune - Ottieni spin tokens, premi e bonuses dell'utente

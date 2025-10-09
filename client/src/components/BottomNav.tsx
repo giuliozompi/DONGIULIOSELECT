@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { Home, ShoppingCart, Sparkles, Bot, Shield } from 'lucide-react';
+import { Home, ShoppingCart, Sparkles, Package, Shield } from 'lucide-react';
 
 export default function BottomNav() {
   const [location, setLocation] = useLocation();
@@ -14,8 +14,8 @@ export default function BottomNav() {
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/cart', icon: ShoppingCart, label: 'Корзина' },
+    { path: '/orders', icon: Package, label: 'Заказы' },
     { path: '/fortune', icon: Sparkles, label: 'Призы' },
-    { path: '/assistant', icon: Bot, label: 'Помощник' },
   ];
 
   // Add admin link if user is admin
