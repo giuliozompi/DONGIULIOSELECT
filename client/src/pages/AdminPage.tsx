@@ -1412,7 +1412,11 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       Редактировать
                     </Button>
                     {!isOrderEditable(order.status) && (
-                      <p className="text-xs text-muted-foreground">Заказ не может быть изменен после отправки ссылки на оплату</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ORDER_STATUSES.indexOf(order.status as any) >= ORDER_STATUSES.indexOf('ОПЛАЧЕН')
+                          ? 'Оплаченные заказы не могут быть изменены'
+                          : 'Заказ не может быть изменен после отправки ссылки на оплату'}
+                      </p>
                     )}
                     
                     {order.status === 'ОПЛАЧЕН' && (

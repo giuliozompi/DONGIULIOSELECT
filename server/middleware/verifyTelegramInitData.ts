@@ -28,24 +28,30 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     console.log('[Telegram Auth] Request to:', req.method, req.path);
     console.log('[Telegram Auth] Has initData:', !!initData);
     
-    // In development, permetti bypass per test usando l'admin reale
+    // In development, permetti bypass per test usando un admin normale (non master)
     if (process.env.NODE_ENV === 'development' && !initData) {
-      console.log('[Telegram Auth] Development mode bypass - using admin user');
-      const adminUserId = '201331998'; // DonGiulioMoscow (admin reale)
+      console.log('[Telegram Auth] Development mode bypass - using normal admin user');
+      const adminUserId = '999999999'; // Admin normale per test (non master)
       
       // Crea o ottieni l'utente admin in dev mode
       storage.getUser(adminUserId).then(user => {
         if (!user) {
-          console.log('[Telegram Auth] Creating admin user in dev mode:', adminUserId);
+          console.log('[Telegram Auth] Creating normal admin user in dev mode:', adminUserId);
           return storage.createUser({
             id: adminUserId,
-            username: 'DonGiulioMoscow',
-            firstName: 'Don Giulio',
-            lastName: 'Moscow',
+            username: 'TestAdmin',
+            firstName: 'Test',
+            lastName: 'Admin',
           });
         }
         return user;
-      }).then(user => {
+      }).then(async (user) => {
+        // Assicurati che l'utente sia admin (ma non master)
+        const isAdmin = await storage.isAdmin(user.id);
+        if (!isAdmin) {
+          console.log('[Telegram Auth] Adding user to admins table');
+          await storage.addAdmin(user.id, 'TestAdmin');
+        }
         req.userId = user.id;
         req.telegramUser = {
           id: user.id,
