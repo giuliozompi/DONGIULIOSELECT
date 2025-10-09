@@ -145,16 +145,21 @@ export default function ProductCard({
           <h3 className="text-sm font-medium line-clamp-2 mb-2 min-h-[2.5rem]" data-testid="text-name">
             {name}
           </h3>
-          <div className="flex items-baseline gap-2">
-            <p className="text-lg font-bold" data-testid="text-price">
-              {price} ₽
-            </p>
-            {priceOld && (
-              <p className="text-sm text-muted-foreground line-through" data-testid="text-price-old">
-                {priceOld} ₽
+          <div className="space-y-1">
+            <div className="flex items-baseline gap-2">
+              <p className="text-lg font-bold" data-testid="text-price">
+                {price} ₽
               </p>
-            )}
-            <p className="text-xs text-muted-foreground">/ {unit}</p>
+              {priceOld && (
+                <p className="text-sm text-muted-foreground line-through" data-testid="text-price-old">
+                  {priceOld} ₽
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">/ {unit}</p>
+            </div>
+            <p className="text-sm text-muted-foreground" data-testid="text-total-for-quantity">
+              {formatQuantity(quantity, unit)}: <span className="font-semibold text-foreground">{Math.round(price * quantity)} ₽</span>
+            </p>
           </div>
         </div>
 
