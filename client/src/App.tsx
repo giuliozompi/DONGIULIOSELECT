@@ -17,6 +17,7 @@ import OrderDetailPage from '@/pages/OrderDetailPage';
 import FortunePage from '@/pages/FortunePage';
 import AssistantPage from '@/pages/AssistantPage';
 import AdminPage from '@/pages/AdminPage';
+import LegalPage from '@/pages/LegalPage';
 import NotFound from '@/pages/not-found';
 
 function Router() {
@@ -33,6 +34,7 @@ function Router() {
         <Route path="/fortune" component={FortunePage} />
         <Route path="/assistant" component={AssistantPage} />
         <Route path="/admin" component={AdminPage} />
+        <Route path="/legal" component={LegalPage} />
         <Route component={NotFound} />
       </Switch>
       <BottomNav />
