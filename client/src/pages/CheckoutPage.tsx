@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -89,6 +89,17 @@ export default function CheckoutPage() {
     queryKey: ['/api/user/addresses'],
   });
 
+  const { data: userData } = useQuery<{ 
+    id: string; 
+    username: string | null; 
+    firstName: string | null; 
+    lastName: string | null;
+    phone: string | null;
+    email: string | null;
+  }>({
+    queryKey: ['/api/user'],
+  });
+
   const form = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutFormSchema),
     mode: 'onChange',
@@ -104,6 +115,38 @@ export default function CheckoutPage() {
       addressLabel: '',
     },
   });
+
+  // Pre-compila form con dati utente salvati
+  useEffect(() => {
+    if (userData) {
+      const updates: Partial<CheckoutFormData> = {};
+      
+      // Pre-compila nome solo se l'utente ha firstName o lastName salvati
+      if (userData.firstName || userData.lastName) {
+        const fullName = [userData.firstName, userData.lastName].filter(Boolean).join(' ');
+        if (fullName) {
+          updates.customerName = fullName;
+        }
+      }
+      
+      // Pre-compila telefono se salvato
+      if (userData.phone) {
+        updates.customerPhone = userData.phone;
+      }
+      
+      // Pre-compila email se salvata
+      if (userData.email) {
+        updates.customerEmail = userData.email;
+      }
+      
+      // Aggiorna solo i campi che hanno valori salvati
+      if (Object.keys(updates).length > 0) {
+        Object.entries(updates).forEach(([key, value]) => {
+          form.setValue(key as keyof CheckoutFormData, value);
+        });
+      }
+    }
+  }, [userData, form]);
 
   const deleteAddressMutation = useMutation({
     mutationFn: async (addressId: string) => {
