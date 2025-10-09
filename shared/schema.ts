@@ -11,6 +11,7 @@ export const users = pgTable("users", {
   lastName: text("last_name"),
   phone: text("phone"),
   email: text("email"),
+  customerName: text("customer_name"), // Nome completo inserito dall'utente nel checkout
 });
 
 export const insertUserSchema = createInsertSchema(users);

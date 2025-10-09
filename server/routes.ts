@@ -452,8 +452,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryMethod: customerData.deliveryMethod,
       });
       
-      // Salva dati utente (phone, email) per riproporli nel prossimo ordine
+      // Salva dati utente (nome, phone, email) per riproporli nel prossimo ordine
       await storage.updateUser(req.userId!, {
+        customerName: customerData.customerName,
         phone: customerData.customerPhone,
         email: customerData.customerEmail || undefined,
       });

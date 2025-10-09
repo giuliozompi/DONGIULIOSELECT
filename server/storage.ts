@@ -352,6 +352,7 @@ export class MemStorage implements IStorage {
       lastName: insertUser.lastName ?? null,
       phone: insertUser.phone ?? null,
       email: insertUser.email ?? null,
+      customerName: insertUser.customerName ?? null,
     };
     this.users.set(user.id, user);
     return user;
@@ -368,6 +369,7 @@ export class MemStorage implements IStorage {
       ...(updates.lastName !== undefined && { lastName: updates.lastName }),
       ...(updates.phone !== undefined && { phone: updates.phone }),
       ...(updates.email !== undefined && { email: updates.email }),
+      ...(updates.customerName !== undefined && { customerName: updates.customerName }),
     };
     this.users.set(id, updated);
     return updated;

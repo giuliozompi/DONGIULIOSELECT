@@ -96,6 +96,7 @@ export default function CheckoutPage() {
     lastName: string | null;
     phone: string | null;
     email: string | null;
+    customerName: string | null;
   }>({
     queryKey: ['/api/user'],
   });
@@ -121,12 +122,9 @@ export default function CheckoutPage() {
     if (userData) {
       const updates: Partial<CheckoutFormData> = {};
       
-      // Pre-compila nome solo se l'utente ha firstName o lastName salvati
-      if (userData.firstName || userData.lastName) {
-        const fullName = [userData.firstName, userData.lastName].filter(Boolean).join(' ');
-        if (fullName) {
-          updates.customerName = fullName;
-        }
+      // Pre-compila nome se salvato dal precedente ordine
+      if (userData.customerName) {
+        updates.customerName = userData.customerName;
       }
       
       // Pre-compila telefono se salvato
