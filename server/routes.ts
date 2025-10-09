@@ -807,6 +807,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Ottieni storico messaggi per contesto
       const conversationMessages = await storage.getMessagesByConversationId(convId);
       
+      // Recupera tutti i prodotti disponibili per il context dell'AI
+      const allProducts = await storage.getAllProducts();
+      const categories = await storage.getAllCategories();
+      
+      // Crea mappa categorie per nome
+      const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+      
+      // Prepara prodotti per l'AI con informazioni categoria
+      const productsForAI = allProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.descriptionShort || p.descriptionFull,
+        price: p.price,
+        categoryId: p.categoryId,
+        categoryName: categoryMap.get(p.categoryId),
+        unit: p.unit,
+      }));
+      
       // Prepara messaggi per OpenRouter
       const { generateAssistantResponse } = await import('./services/openrouter');
       const aiMessages = conversationMessages.map(msg => ({
@@ -814,8 +832,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: msg.content,
       }));
       
-      // Genera risposta AI
-      const aiResponse = await generateAssistantResponse(aiMessages);
+      // Genera risposta AI con prodotti disponibili
+      const aiResponse = await generateAssistantResponse(aiMessages, {
+        products: productsForAI,
+      });
       
       // Salva risposta assistente
       const assistantMessage = await storage.createMessage({
