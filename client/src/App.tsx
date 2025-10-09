@@ -5,6 +5,7 @@ import { queryClient } from './lib/queryClient';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initTelegramApp } from '@/lib/telegram';
+import { TelegramThemeProvider } from '@/components/TelegramThemeProvider';
 import BottomNav from '@/components/BottomNav';
 import HomePage from '@/pages/HomePage';
 import CategoryPage from '@/pages/CategoryPage';
@@ -45,11 +46,13 @@ export default function App() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Router />
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <TelegramThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Router />
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </TelegramThemeProvider>
   );
 }
