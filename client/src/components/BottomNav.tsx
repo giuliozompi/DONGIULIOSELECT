@@ -23,6 +23,16 @@ export default function BottomNav() {
     retry: false,
   });
 
+  // Get cart data for badge
+  const { data: cartData } = useQuery<{
+    items: Array<{ productId: string; quantity: number; priceAtAdd: string }>;
+  }>({
+    queryKey: ['/api/cart'],
+    retry: false,
+  });
+
+  const cartItemCount = cartData?.items?.length || 0;
+
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/cart', icon: ShoppingCart, label: 'Корзина' },
@@ -42,7 +52,9 @@ export default function BottomNav() {
           const Icon = item.icon;
           const isActive = location === item.path;
           const isFortune = item.path === '/fortune';
-          const showBadge = isFortune && fortuneData && fortuneData.spinTokens > 0;
+          const isCart = item.path === '/cart';
+          const showFortuneBadge = isFortune && fortuneData && fortuneData.spinTokens > 0;
+          const showCartBadge = isCart && cartItemCount > 0;
           
           return (
             <button
@@ -55,12 +67,21 @@ export default function BottomNav() {
             >
               <div className="relative">
                 <Icon className="w-5 h-5" />
-                {showBadge && (
+                {showFortuneBadge && (
                   <Badge 
                     className="absolute -top-2 -right-2 h-4 min-w-4 px-1 flex items-center justify-center text-[10px] rounded-full"
                     data-testid="badge-fortune-tokens"
                   >
                     {fortuneData.spinTokens}
+                  </Badge>
+                )}
+                {showCartBadge && (
+                  <Badge 
+                    variant="destructive"
+                    className="absolute -top-2 -right-2 h-4 min-w-4 px-1 flex items-center justify-center text-[10px] rounded-full"
+                    data-testid="badge-cart-count"
+                  >
+                    {cartItemCount}
                   </Badge>
                 )}
               </div>
