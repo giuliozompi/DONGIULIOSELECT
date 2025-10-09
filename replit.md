@@ -9,7 +9,19 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend
-The frontend is built with **React 18** and TypeScript, using **Wouter** for routing and **TanStack Query v5** for server state management. **Vite** is used for development and building. The UI leverages **shadcn/ui** (based on Radix UI) and **Tailwind CSS** for styling, adhering to a mobile-first, minimalist design that aligns with native Telegram UI/UX patterns, including theme synchronization. The **Telegram WebApp SDK** (`@twa-dev/sdk`) is crucial for native integration and access to Telegram-specific features.
+The frontend is built with **React 18** and TypeScript, using **Wouter** for routing and **TanStack Query v5** for server state management. **Vite** is used for development and building. The UI leverages **shadcn/ui** (based on Radix UI) and **Tailwind CSS** for styling, adhering to a mobile-first, minimalist design that aligns with native Telegram UI/UX patterns, including **automatic theme synchronization** with Telegram's day/night mode. The **Telegram WebApp SDK** (`@twa-dev/sdk`) is crucial for native integration and access to Telegram-specific features.
+
+#### Telegram Theme Integration
+The application automatically synchronizes with Telegram's theme (day/night mode) in real-time:
+
+- **TelegramThemeProvider**: React component that wraps the entire app and manages theme synchronization
+- **Color Detection**: Analyzes Telegram's `bg_color` parameter to determine light/dark mode using luminance calculation (0.299R + 0.587G + 0.114B)
+- **Real-time Updates**: Listens to Telegram's `themeChanged` event to instantly update when users switch themes
+- **Fallback Strategy**: Uses `colorScheme` API when `bg_color` is unavailable
+- **CSS Integration**: Toggles the `dark` class on `document.documentElement`, triggering Tailwind's dark mode variants
+- **Seamless Transition**: Applies Telegram's background color to `body` for perfect visual continuity
+
+This ensures the app always matches the user's Telegram appearance settings, providing a native-feeling experience within the Telegram ecosystem.
 
 ### Backend
 The backend is an **Express.js** application written in TypeScript, implementing a RESTful API. It handles product catalog management, shopping cart logic, order processing, payment integration, gamification features, and an AI assistant. Authentication relies on Telegram WebApp init data verification, with session-based authentication and HMAC-SHA256 for security. An administrative panel is included for managing categories, products, orders (with audit logging), administrators, and product recommendations, protected by role-based access control.
