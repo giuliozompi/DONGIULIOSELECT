@@ -31,7 +31,8 @@ export default function BottomNav() {
     retry: false,
   });
 
-  const cartItemCount = cartData?.items?.length || 0;
+  // Calculate total quantity of products in cart
+  const cartItemCount = cartData?.items ? cartData.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
 
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
