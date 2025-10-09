@@ -109,6 +109,7 @@ export interface IStorage {
   // Пользователи
   getUser(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
 
   // Администраторы
   isAdmin(userId: string): Promise<boolean>;
@@ -349,9 +350,27 @@ export class MemStorage implements IStorage {
       username: insertUser.username ?? null,
       firstName: insertUser.firstName ?? null,
       lastName: insertUser.lastName ?? null,
+      phone: insertUser.phone ?? null,
+      email: insertUser.email ?? null,
     };
     this.users.set(user.id, user);
     return user;
+  }
+
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updated: User = {
+      ...user,
+      ...(updates.username !== undefined && { username: updates.username }),
+      ...(updates.firstName !== undefined && { firstName: updates.firstName }),
+      ...(updates.lastName !== undefined && { lastName: updates.lastName }),
+      ...(updates.phone !== undefined && { phone: updates.phone }),
+      ...(updates.email !== undefined && { email: updates.email }),
+    };
+    this.users.set(id, updated);
+    return updated;
   }
 
   // Администраторы (stub - not used in production)

@@ -9,6 +9,8 @@ export const users = pgTable("users", {
   username: text("username"),
   firstName: text("first_name"),
   lastName: text("last_name"),
+  phone: text("phone"),
+  email: text("email"),
 });
 
 export const insertUserSchema = createInsertSchema(users);
