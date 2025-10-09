@@ -69,7 +69,16 @@ export default function CartItem({
             </Button>
           </div>
           
-          <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground" data-testid="text-unit-price">
+                {Math.round(price)} ₽/{unit}
+              </p>
+              <p className="text-base font-bold" data-testid="text-total">
+                {Math.round(price * quantity)} ₽
+              </p>
+            </div>
+            
             <div className="flex items-center gap-2">
               <Button
                 size="icon"
@@ -94,10 +103,6 @@ export default function CartItem({
                 <Plus className="h-3 w-3" />
               </Button>
             </div>
-            
-            <p className="text-base font-bold" data-testid="text-total">
-              {Math.round(price * quantity)} ₽
-            </p>
           </div>
         </div>
       </div>
