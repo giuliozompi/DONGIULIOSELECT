@@ -1,6 +1,7 @@
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { Home, ShoppingCart, Sparkles, Package, Shield } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 export default function BottomNav() {
   const [location, setLocation] = useLocation();
@@ -8,6 +9,17 @@ export default function BottomNav() {
   // Check if user is admin
   const { data: adminCheck } = useQuery<{ isAdmin: boolean }>({
     queryKey: ['/api/admin/check'],
+    retry: false,
+  });
+
+  // Get fortune data for badge
+  const { data: fortuneData } = useQuery<{
+    spinTokens: number;
+    prizes: any[];
+    bonuses: any[];
+    totalBonusAmount: string;
+  }>({
+    queryKey: ['/api/fortune'],
     retry: false,
   });
 
@@ -29,6 +41,8 @@ export default function BottomNav() {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = location === item.path;
+          const isFortune = item.path === '/fortune';
+          const showBadge = isFortune && fortuneData && fortuneData.spinTokens > 0;
           
           return (
             <button
@@ -39,7 +53,17 @@ export default function BottomNav() {
               }`}
               data-testid={`button-nav-${item.label}`}
             >
-              <Icon className="w-5 h-5" />
+              <div className="relative">
+                <Icon className="w-5 h-5" />
+                {showBadge && (
+                  <Badge 
+                    className="absolute -top-2 -right-2 h-4 min-w-4 px-1 flex items-center justify-center text-[10px] rounded-full"
+                    data-testid="badge-fortune-tokens"
+                  >
+                    {fortuneData.spinTokens}
+                  </Badge>
+                )}
+              </div>
               <span className="text-xs">{item.label}</span>
             </button>
           );
