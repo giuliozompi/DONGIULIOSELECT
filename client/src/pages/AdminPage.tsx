@@ -298,6 +298,12 @@ function CategoriesManager() {
   const handleEdit = (category: Category) => {
     setEditingId(category.id);
     setHasUnsavedImage(false); // Reset quando si seleziona una categoria
+    console.log('🔍 DEBUG: Editing category:', {
+      id: category.id,
+      name: category.name,
+      image: category.image,
+      imageType: typeof category.image
+    });
     form.reset({
       name: category.name,
       slug: category.slug,
@@ -366,6 +372,11 @@ function CategoriesManager() {
                               src={category.image} 
                               alt={category.name}
                               className="w-10 h-10 object-cover rounded"
+                              onError={(e) => {
+                                console.error('❌ Menu image failed:', category.name, category.image);
+                                e.currentTarget.style.border = '2px solid red';
+                              }}
+                              onLoad={() => console.log('✅ Menu image loaded:', category.name)}
                             />
                           )}
                           <div className="flex-1 min-w-0">
@@ -483,11 +494,19 @@ function CategoriesManager() {
                         </ObjectUploader>
                       </div>
                       {field.value && (
-                        <img 
-                          src={field.value} 
-                          alt="Preview" 
-                          className="w-24 h-24 object-cover rounded-md border"
-                        />
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Preview: {field.value}</p>
+                          <img 
+                            src={field.value} 
+                            alt="Preview" 
+                            className="w-24 h-24 object-cover rounded-md border"
+                            onError={(e) => {
+                              console.error('❌ Image failed to load:', field.value);
+                              e.currentTarget.style.border = '2px solid red';
+                            }}
+                            onLoad={() => console.log('✅ Image loaded successfully:', field.value)}
+                          />
+                        </div>
                       )}
                     </div>
                     <FormMessage />
