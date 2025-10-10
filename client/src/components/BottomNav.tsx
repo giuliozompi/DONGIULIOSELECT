@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { Home, ShoppingCart, Sparkles, Package, Shield } from 'lucide-react';
+import { Home, ShoppingCart, Sparkles, Package, Shield, Bot } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export default function BottomNav() {
@@ -36,6 +36,7 @@ export default function BottomNav() {
 
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
+    { path: '/assistant', icon: Bot, label: 'Помощник' },
     { path: '/cart', icon: ShoppingCart, label: 'Корзина' },
     { path: '/orders', icon: Package, label: 'Заказы' },
     { path: '/fortune', icon: Sparkles, label: 'Призы' },
