@@ -504,11 +504,34 @@ function CategoriesManager() {
                           <div className="text-xs text-muted-foreground font-mono break-all bg-muted p-2 rounded">
                             {field.value}
                           </div>
-                          <img 
-                            src={getAbsoluteImageUrl(field.value) || field.value} 
-                            alt="Preview" 
-                            className="w-32 h-32 object-cover rounded-md border-2"
-                          />
+                          <div className="relative inline-block">
+                            <img 
+                              src={getAbsoluteImageUrl(field.value) || field.value} 
+                              alt="Preview" 
+                              className="w-32 h-32 object-cover rounded-md border-2"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                              onClick={() => {
+                                form.setValue('image', '', {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                  shouldTouch: true
+                                });
+                                setHasUnsavedImage(true);
+                                toast({
+                                  title: 'Изображение удалено',
+                                  description: 'Нажмите "Обновить" чтобы сохранить изменения'
+                                });
+                              }}
+                              data-testid="button-delete-category-image"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -977,12 +1000,36 @@ function ProductsManager() {
                             const trimmedUrl = url.trim();
                             if (!trimmedUrl) return null;
                             return (
-                              <img 
-                                key={idx}
-                                src={trimmedUrl} 
-                                alt={`Preview ${idx + 1}`} 
-                                className="w-20 h-20 object-cover rounded-md border"
-                              />
+                              <div key={idx} className="relative inline-block">
+                                <img 
+                                  src={getAbsoluteImageUrl(trimmedUrl) || trimmedUrl} 
+                                  alt={`Preview ${idx + 1}`} 
+                                  className="w-20 h-20 object-cover rounded-md border"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="icon"
+                                  className="absolute -top-2 -right-2 h-5 w-5 rounded-full"
+                                  onClick={() => {
+                                    const currentImages = field.value.split(',').map(s => s.trim()).filter(Boolean);
+                                    currentImages.splice(idx, 1);
+                                    const newValue = currentImages.join(', ');
+                                    form.setValue('images', newValue, {
+                                      shouldValidate: true,
+                                      shouldDirty: true,
+                                      shouldTouch: true
+                                    });
+                                    toast({
+                                      title: 'Изображение удалено',
+                                      description: 'Нажмите "Обновить" чтобы сохранить изменения'
+                                    });
+                                  }}
+                                  data-testid={`button-delete-product-image-${idx}`}
+                                >
+                                  <XCircle className="h-3 w-3" />
+                                </Button>
+                              </div>
                             );
                           })}
                         </div>
