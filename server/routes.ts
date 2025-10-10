@@ -8,6 +8,9 @@ import { insertProductSchema, insertOrderSchema, insertCategorySchema, PAID_ORDE
 import { z } from "zod";
 import { getDaDataService } from "./services/dadata";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import multer from "multer";
+import { randomUUID } from "crypto";
+import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== CATEGORIE ====================
@@ -2086,61 +2089,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/objects/upload - Get upload URL (ADMIN ONLY)
-  app.post("/api/objects/upload", verifyTelegramInitData, requireAdmin, async (req, res) => {
+  // Configura multer per upload in memoria
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB
+    },
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.startsWith('image/')) {
+        cb(new Error('Solo immagini permesse'));
+        return;
+      }
+      cb(null, true);
+    },
+  });
+
+  // POST /api/admin/uploads/image - Upload diretto di immagine (ADMIN ONLY)
+  app.post("/api/admin/uploads/image", verifyTelegramInitData, requireAdmin, upload.single('image'), async (req, res) => {
     try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'Nessun file caricato' });
+      }
+
+      const file = req.file;
+      const ext = path.extname(file.originalname) || '.jpg';
+      const objectId = randomUUID();
+      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || '';
+      const objectPath = `${privateObjectDir}/uploads/${objectId}${ext}`;
+
+      // Parse bucket e object name
+      const pathParts = objectPath.split('/');
+      const bucketName = pathParts[1];
+      const objectName = pathParts.slice(2).join('/');
+
+      // Ottieni presigned URL per upload
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      res.json({ uploadURL });
+
+      // Carica il file nell'object storage
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file.buffer,
+        headers: {
+          'Content-Type': file.mimetype,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload fallito');
+      }
+
+      // Imposta ACL pubblico
+      const normalizedPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
+      await objectStorageService.trySetObjectEntityAclPolicy(uploadURL, {
+        owner: req.userId!,
+        visibility: 'public',
+      });
+
+      res.json({ path: normalizedPath });
     } catch (error) {
-      console.error("Error getting upload URL:", error);
-      res.status(500).json({ error: "Internal server error" });
+      console.error("Error uploading image:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Errore upload" });
     }
   });
 
-  // PUT /api/admin/product-images - Save product image after upload (ADMIN ONLY)
-  app.put("/api/admin/product-images", verifyTelegramInitData, requireAdmin, async (req, res) => {
+  // DELETE /api/admin/uploads/image - Elimina immagine (ADMIN ONLY)
+  app.delete("/api/admin/uploads/image", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
-      if (!req.body.imageURL) {
-        return res.status(400).json({ error: "imageURL is required" });
+      const { path: imagePath } = req.body;
+      
+      if (!imagePath) {
+        return res.status(400).json({ error: 'Path mancante' });
       }
 
       const objectStorageService = new ObjectStorageService();
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.imageURL,
-        {
-          owner: req.userId!,
-          visibility: "public",
-        }
-      );
+      const objectFile = await objectStorageService.getObjectEntityFile(imagePath);
+      await objectFile.delete();
 
-      res.status(200).json({ objectPath });
+      res.json({ success: true });
     } catch (error) {
-      console.error("Error setting product image:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  // PUT /api/admin/category-images - Save category image after upload (ADMIN ONLY)
-  app.put("/api/admin/category-images", verifyTelegramInitData, requireAdmin, async (req, res) => {
-    try {
-      if (!req.body.imageURL) {
-        return res.status(400).json({ error: "imageURL is required" });
-      }
-
-      const objectStorageService = new ObjectStorageService();
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.imageURL,
-        {
-          owner: req.userId!,
-          visibility: "public",
-        }
-      );
-
-      res.status(200).json({ objectPath });
-    } catch (error) {
-      console.error("Error setting category image:", error);
-      res.status(500).json({ error: "Internal server error" });
+      console.error("Error deleting image:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Errore eliminazione" });
     }
   });
 
