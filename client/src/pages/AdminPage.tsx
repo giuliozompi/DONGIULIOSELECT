@@ -28,7 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle } from 'lucide-react';
-import { ObjectUploader } from '@/components/ObjectUploader';
+import { ImageUploadField } from '@/components/ImageUploadField';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -435,105 +435,29 @@ function CategoriesManager() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Изображение категории (опционально)</FormLabel>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            value={field.value || ''} 
-                            placeholder="/objects/uploads/..."
-                            data-testid="input-category-image" 
-                            readOnly
-                          />
-                        </FormControl>
-                        <ObjectUploader
-                          maxNumberOfFiles={1}
-                          maxFileSize={5242880}
-                          onGetUploadParameters={async () => {
-                            const response = await apiRequest('POST', '/api/objects/upload');
-                            const data = await response.json();
-                            return {
-                              method: 'PUT' as const,
-                              url: data.uploadURL,
-                            };
-                          }}
-                          onComplete={async (result) => {
-                            try {
-                              const uploadedFile = result.successful?.[0];
-                              if (uploadedFile?.uploadURL) {
-                                const response = await apiRequest('PUT', '/api/admin/category-images', {
-                                  imageURL: uploadedFile.uploadURL,
-                                });
-                                const data = await response.json();
-                                
-                                // Aggiorna il campo del form
-                                field.onChange(data.objectPath);
-                                
-                                // Forza l'aggiornamento del form per mostrare l'anteprima
-                                form.setValue('image', data.objectPath, { 
-                                  shouldValidate: true,
-                                  shouldDirty: true,
-                                  shouldTouch: true 
-                                });
-                                
-                                setHasUnsavedImage(true);
-                                
-                                toast({ 
-                                  title: 'Изображение загружено',
-                                  description: 'Теперь нажмите "Обновить" чтобы сохранить изменения'
-                                });
-                              }
-                            } catch (error) {
-                              console.error('Upload error:', error);
-                              toast({ 
-                                title: 'Ошибка загрузки',
-                                description: 'Не удалось загрузить изображение',
-                                variant: 'destructive'
-                              });
-                            }
-                          }}
-                          buttonVariant="outline"
-                        >
-                          <ImagePlus className="w-4 h-4 mr-2" />
-                          Загрузить
-                        </ObjectUploader>
-                      </div>
-                      {field.value && (
-                        <div className="space-y-2">
-                          <div className="text-xs text-muted-foreground font-mono break-all bg-muted p-2 rounded">
-                            {field.value}
-                          </div>
-                          <div className="relative inline-block">
-                            <img 
-                              src={getAbsoluteImageUrl(field.value) || field.value} 
-                              alt="Preview" 
-                              className="w-32 h-32 object-cover rounded-md border-2"
-                            />
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="icon"
-                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                              onClick={() => {
-                                form.setValue('image', null, {
-                                  shouldValidate: true,
-                                  shouldDirty: true,
-                                  shouldTouch: true
-                                });
-                                setHasUnsavedImage(true);
-                                toast({
-                                  title: 'Изображение удалено',
-                                  description: 'Нажмите "Обновить" чтобы сохранить изменения'
-                                });
-                              }}
-                              data-testid="button-delete-category-image"
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <FormControl>
+                      <ImageUploadField
+                        value={field.value}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          setHasUnsavedImage(true);
+                        }}
+                        onUploadComplete={(path) => {
+                          toast({
+                            title: 'Изображение загружено',
+                            description: 'Теперь нажмите "Обновить" чтобы сохранить изменения'
+                          });
+                        }}
+                        onUploadError={(error) => {
+                          toast({
+                            title: 'Ошибка загрузки',
+                            description: error,
+                            variant: 'destructive'
+                          });
+                        }}
+                        data-testid="category-image-upload"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
