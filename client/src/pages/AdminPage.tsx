@@ -448,14 +448,25 @@ function CategoriesManager() {
                             };
                           }}
                           onComplete={async (result) => {
-                            const uploadedFile = result.successful?.[0];
-                            if (uploadedFile?.uploadURL) {
-                              const response = await apiRequest('PUT', '/api/admin/category-images', {
-                                imageURL: uploadedFile.uploadURL,
+                            try {
+                              const uploadedFile = result.successful?.[0];
+                              if (uploadedFile?.uploadURL) {
+                                const response = await apiRequest('PUT', '/api/admin/category-images', {
+                                  imageURL: uploadedFile.uploadURL,
+                                });
+                                const data = await response.json();
+                                field.onChange(data.objectPath);
+                                toast({ 
+                                  title: '✅ Изображение загружено',
+                                  description: 'Теперь нажмите "Обновить" чтобы сохранить изменения'
+                                });
+                              }
+                            } catch (error) {
+                              toast({ 
+                                title: '❌ Ошибка загрузки',
+                                description: 'Не удалось загрузить изображение',
+                                variant: 'destructive'
                               });
-                              const data = await response.json();
-                              field.onChange(data.objectPath);
-                              toast({ title: '✅ Изображение загружено' });
                             }
                           }}
                           buttonVariant="outline"
