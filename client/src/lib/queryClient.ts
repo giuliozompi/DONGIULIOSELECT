@@ -3,8 +3,15 @@ import { getTelegramInitData } from "./telegram";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    try {
+      const errorData = await res.json();
+      const errorMessage = errorData.message || errorData.error || res.statusText;
+      throw new Error(errorMessage);
+    } catch (parseError) {
+      // Se non riesce a parsare come JSON, usa il testo grezzo
+      const text = res.statusText || 'Errore sconosciuto';
+      throw new Error(text);
+    }
   }
 }
 

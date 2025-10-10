@@ -1056,6 +1056,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
+      
+      // Controlla se è un errore di slug duplicato
+      if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
+        return res.status(400).json({ 
+          error: 'Slug già esistente', 
+          message: 'Una categoria con questo slug esiste già. Usa uno slug diverso.' 
+        });
+      }
+      
       console.error('Error creating category:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
