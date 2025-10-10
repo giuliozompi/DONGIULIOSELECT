@@ -154,7 +154,13 @@ export function ImageUploadField({
           });
           
           xhr.open('POST', '/api/admin/uploads/image');
-          xhr.setRequestHeader('x-telegram-init-data', localStorage.getItem('telegram-init-data') || '');
+          
+          // Invia header solo se presente (per evitare stringa vuota che blocca bypass dev)
+          const initData = localStorage.getItem('telegram-init-data');
+          if (initData) {
+            xhr.setRequestHeader('x-telegram-init-data', initData);
+          }
+          
           xhr.withCredentials = true;
           xhr.send(formData);
         });
@@ -198,12 +204,21 @@ export function ImageUploadField({
     if (pathToDelete) {
       try {
         setUploading(true);
+        
+        // Prepara headers
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        
+        // Invia header solo se presente (per evitare stringa vuota che blocca bypass dev)
+        const initData = localStorage.getItem('telegram-init-data');
+        if (initData) {
+          headers['x-telegram-init-data'] = initData;
+        }
+        
         const response = await fetch('/api/admin/uploads/image', {
           method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-telegram-init-data': localStorage.getItem('telegram-init-data') || '',
-          },
+          headers,
           credentials: 'include',
           body: JSON.stringify({ path: pathToDelete }),
         });
@@ -239,15 +254,23 @@ export function ImageUploadField({
     try {
       setUploading(true);
       
+      // Prepara headers
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Invia header solo se presente (per evitare stringa vuota che blocca bypass dev)
+      const initData = localStorage.getItem('telegram-init-data');
+      if (initData) {
+        headers['x-telegram-init-data'] = initData;
+      }
+      
       // Traccia successi e fallimenti separatamente
       const results = await Promise.allSettled(
         paths.map(async (path) => {
           const response = await fetch('/api/admin/uploads/image', {
             method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-telegram-init-data': localStorage.getItem('telegram-init-data') || '',
-            },
+            headers,
             credentials: 'include',
             body: JSON.stringify({ path }),
           });
