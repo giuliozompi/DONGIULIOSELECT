@@ -26,7 +26,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus } from 'lucide-react';
+import { ObjectUploader } from '@/components/ObjectUploader';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { SubmitHandler } from 'react-hook-form';
@@ -352,15 +353,54 @@ function CategoriesManager() {
                 name="image"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>URL изображения (опционально)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        {...field} 
-                        value={field.value || ''} 
-                        placeholder="https://example.com/category.jpg"
-                        data-testid="input-category-image" 
-                      />
-                    </FormControl>
+                    <FormLabel>Изображение категории (опционально)</FormLabel>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            value={field.value || ''} 
+                            placeholder="/objects/uploads/..."
+                            data-testid="input-category-image" 
+                            readOnly
+                          />
+                        </FormControl>
+                        <ObjectUploader
+                          maxNumberOfFiles={1}
+                          maxFileSize={5242880}
+                          onGetUploadParameters={async () => {
+                            const response = await apiRequest('POST', '/api/objects/upload');
+                            const data = await response.json();
+                            return {
+                              method: 'PUT' as const,
+                              url: data.uploadURL,
+                            };
+                          }}
+                          onComplete={async (result) => {
+                            const uploadedFile = result.successful?.[0];
+                            if (uploadedFile?.uploadURL) {
+                              const response = await apiRequest('PUT', '/api/admin/category-images', {
+                                imageURL: uploadedFile.uploadURL,
+                              });
+                              const data = await response.json();
+                              field.onChange(data.objectPath);
+                              toast({ title: '✅ Изображение загружено' });
+                            }
+                          }}
+                          buttonVariant="outline"
+                        >
+                          <ImagePlus className="w-4 h-4 mr-2" />
+                          Загрузить
+                        </ObjectUploader>
+                      </div>
+                      {field.value && (
+                        <img 
+                          src={field.value} 
+                          alt="Preview" 
+                          className="w-24 h-24 object-cover rounded-md border"
+                        />
+                      )}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -743,14 +783,73 @@ function ProductsManager() {
                 name="images"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>URL изображений (через запятую)</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        {...field} 
-                        placeholder="https://example.com/img1.jpg, https://example.com/img2.jpg"
-                        data-testid="input-product-images"
-                      />
-                    </FormControl>
+                    <FormLabel>Изображения продукта</FormLabel>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FormControl>
+                          <Textarea 
+                            {...field} 
+                            placeholder="/objects/uploads/..., /objects/uploads/..."
+                            rows={2}
+                            data-testid="input-product-images"
+                            readOnly
+                          />
+                        </FormControl>
+                        <ObjectUploader
+                          maxNumberOfFiles={5}
+                          maxFileSize={5242880}
+                          onGetUploadParameters={async () => {
+                            const response = await apiRequest('POST', '/api/objects/upload');
+                            const data = await response.json();
+                            return {
+                              method: 'PUT' as const,
+                              url: data.uploadURL,
+                            };
+                          }}
+                          onComplete={async (result) => {
+                            if (!result.successful || result.successful.length === 0) return;
+                            
+                            const uploadedPaths: string[] = [];
+                            for (const file of result.successful) {
+                              if (file?.uploadURL) {
+                                const response = await apiRequest('PUT', '/api/admin/product-images', {
+                                  imageURL: file.uploadURL,
+                                });
+                                const data = await response.json();
+                                uploadedPaths.push(data.objectPath);
+                              }
+                            }
+                            
+                            if (uploadedPaths.length > 0) {
+                              const currentImages = field.value ? field.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+                              const newImages = [...currentImages, ...uploadedPaths];
+                              field.onChange(newImages.join(', '));
+                              toast({ title: `✅ Загружено ${uploadedPaths.length} изображений` });
+                            }
+                          }}
+                          buttonVariant="outline"
+                        >
+                          <ImagePlus className="w-4 h-4 mr-2" />
+                          Загрузить
+                        </ObjectUploader>
+                      </div>
+                      {field.value && (
+                        <div className="flex gap-2 flex-wrap">
+                          {field.value.split(',').map((url, idx) => {
+                            const trimmedUrl = url.trim();
+                            if (!trimmedUrl) return null;
+                            return (
+                              <img 
+                                key={idx}
+                                src={trimmedUrl} 
+                                alt={`Preview ${idx + 1}`} 
+                                className="w-20 h-20 object-cover rounded-md border"
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
