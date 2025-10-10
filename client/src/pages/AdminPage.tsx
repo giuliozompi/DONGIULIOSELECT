@@ -298,16 +298,10 @@ function CategoriesManager() {
   const handleEdit = (category: Category) => {
     setEditingId(category.id);
     setHasUnsavedImage(false); // Reset quando si seleziona una categoria
-    console.log('🔍 DEBUG: Editing category:', {
-      id: category.id,
-      name: category.name,
-      image: category.image,
-      imageType: typeof category.image
-    });
     form.reset({
       name: category.name,
       slug: category.slug,
-      image: category.image,
+      image: category.image || '',
       parentId: category.parentId,
       sortOrder: category.sortOrder,
     });
@@ -367,17 +361,16 @@ function CategoriesManager() {
                         data-testid={`category-selector-${category.id}`}
                       >
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {category.image && (
+                          {category.image ? (
                             <img 
                               src={category.image} 
                               alt={category.name}
-                              className="w-10 h-10 object-cover rounded"
-                              onError={(e) => {
-                                console.error('❌ Menu image failed:', category.name, category.image);
-                                e.currentTarget.style.border = '2px solid red';
-                              }}
-                              onLoad={() => console.log('✅ Menu image loaded:', category.name)}
+                              className="w-10 h-10 object-cover rounded flex-shrink-0"
                             />
+                          ) : (
+                            <div className="w-10 h-10 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                              <ImagePlus className="w-5 h-5 text-muted-foreground" />
+                            </div>
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="font-medium truncate">{category.name}</p>
@@ -494,17 +487,14 @@ function CategoriesManager() {
                         </ObjectUploader>
                       </div>
                       {field.value && (
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">Preview: {field.value}</p>
+                        <div className="space-y-2">
+                          <div className="text-xs text-muted-foreground font-mono break-all bg-muted p-2 rounded">
+                            {field.value}
+                          </div>
                           <img 
                             src={field.value} 
                             alt="Preview" 
-                            className="w-24 h-24 object-cover rounded-md border"
-                            onError={(e) => {
-                              console.error('❌ Image failed to load:', field.value);
-                              e.currentTarget.style.border = '2px solid red';
-                            }}
-                            onLoad={() => console.log('✅ Image loaded successfully:', field.value)}
+                            className="w-32 h-32 object-cover rounded-md border-2"
                           />
                         </div>
                       )}

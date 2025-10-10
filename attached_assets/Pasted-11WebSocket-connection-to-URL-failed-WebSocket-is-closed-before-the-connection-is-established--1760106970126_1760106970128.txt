@@ -1,0 +1,406 @@
+11WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+Logger.ts:72 [2025-10-10T14:32:59.566Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+connect @ TelegramClient.ts:327
+await in connect
+start @ TelegramClient.ts:1255
+(анонимная) @ client.ts:129
+Ry @ init.ts:21
+(анонимная) @ worker.ts:57
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-10T14:33:00.570Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-10T14:33:06.960Z] [ERROR] - [undefined]
+Logger.ts:72 [2025-10-10T14:33:06.960Z] [WARN] - [Connection closed while receiving data]
+Logger.ts:72 [2025-10-10T14:33:26.487Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+_borrowExportedSender @ TelegramClient.ts:704
+getSender @ TelegramClient.ts:770
+(анонимная) @ downloadFile.ts:243
+ua @ downloadFile.ts:232
+await in ua
+(анонимная) @ downloadFile.ts:115
+downloadFile @ TelegramClient.ts:792
+_downloadPhoto @ TelegramClient.ts:951
+downloadMedia @ TelegramClient.ts:817
+(анонимная) @ media.ts:148
+$d @ media.ts:39
+lu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+Logger.ts:72 [2025-10-10T14:33:26.505Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+_borrowExportedSender @ TelegramClient.ts:704
+getSender @ TelegramClient.ts:770
+(анонимная) @ downloadFile.ts:243
+ua @ downloadFile.ts:232
+await in ua
+(анонимная) @ downloadFile.ts:115
+downloadFile @ TelegramClient.ts:792
+downloadProfilePhoto @ TelegramClient.ts:839
+(анонимная) @ media.ts:180
+$d @ media.ts:39
+lu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+Logger.ts:72 [2025-10-10T14:33:26.522Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+_borrowExportedSender @ TelegramClient.ts:704
+getSender @ TelegramClient.ts:770
+(анонимная) @ downloadFile.ts:243
+ua @ downloadFile.ts:232
+await in ua
+(анонимная) @ downloadFile.ts:115
+downloadFile @ TelegramClient.ts:792
+downloadProfilePhoto @ TelegramClient.ts:839
+(анонимная) @ media.ts:180
+$d @ media.ts:39
+lu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+Logger.ts:72 [2025-10-10T14:33:26.530Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+_borrowExportedSender @ TelegramClient.ts:704
+getSender @ TelegramClient.ts:770
+(анонимная) @ downloadFile.ts:243
+ua @ downloadFile.ts:232
+await in ua
+(анонимная) @ downloadFile.ts:115
+downloadFile @ TelegramClient.ts:792
+downloadProfilePhoto @ TelegramClient.ts:839
+(анонимная) @ media.ts:180
+$d @ media.ts:39
+lu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+Logger.ts:72 [2025-10-10T14:33:26.534Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+_borrowExportedSender @ TelegramClient.ts:704
+getSender @ TelegramClient.ts:770
+(анонимная) @ downloadFile.ts:243
+ua @ downloadFile.ts:232
+await in ua
+(анонимная) @ downloadFile.ts:115
+downloadFile @ TelegramClient.ts:792
+_downloadDocument @ TelegramClient.ts:990
+downloadMedia @ TelegramClient.ts:819
+(анонимная) @ media.ts:148
+$d @ media.ts:39
+lu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+a/:1 The provided application server key is not a VAPID key. Only VAPID keys will be supported in the future. For more information check https://crbug.com/979235.
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws4.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-10T14:33:28.553Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-10T14:33:28.555Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-10T14:33:28.559Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-10T14:33:28.619Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-10T14:33:28.636Z] [WARN] - [Using fallback connection]
+2715.5ea7efd43bb0a2a47f29.js:1 Error: TIMEOUT
+    at 2715.5ea7efd43bb0a2a47f29.js:1:1209
+    at async c (2715.5ea7efd43bb0a2a47f29.js:1:1150)
+    at async 2715.5ea7efd43bb0a2a47f29.js:1:9123
+c @ assetCache.ts:60
+await in c
+(анонимная) @ assetCache.ts:10
+(анонимная) @ index.ts:74
+Logger.ts:72 [2025-10-10T14:33:39.870Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+_borrowExportedSender @ TelegramClient.ts:704
+getSender @ TelegramClient.ts:770
+(анонимная) @ downloadFile.ts:243
+ua @ downloadFile.ts:232
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-10T14:33:40.871Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+Logger.ts:72 [2025-10-10T14:33:40.876Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+await in _connectSender
+_borrowExportedSender @ TelegramClient.ts:704
+getSender @ TelegramClient.ts:770
+(анонимная) @ downloadFile.ts:243
+ua @ downloadFile.ts:232
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-10T14:33:41.090Z] [WARN] - [Using fallback connection]
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-10T14:33:41.874Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-10T14:33:41.894Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-10T14:33:43.266Z] [WARN] - [Security error while unpacking a received message: Duplicate msgIds]
+Logger.ts:72 [2025-10-10T14:33:45.717Z] [WARN] - [Security error while unpacking a received message: Duplicate msgIds]
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_header_color {color_key: 'bg_color'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_background_color {color: '#ffffff'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_bottom_bar_color {color: '#f4f4f5'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_theme 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_viewport 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_safe_area 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_content_safe_area 
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent theme_changed {theme_params: {…}}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_secondary_button {is_visible: false}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_ready 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_expand 
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent visibility_changed {is_visible: true}
+don-giulio-catalog.replit.app/admin:1 Blocked aria-hidden on an element because its descendant retained focus. The focus must not be hidden from assistive technology users. Avoid using aria-hidden on a focused element or its ancestor. Consider using the inert attribute instead, which will also prevent focus. For more details, see the aria-hidden section of the WAI-ARIA specification at https://w3c.github.io/aria/#aria-hidden.
+Element with focus: <button.uppy-u-reset uppy-c-btn uppy-Dashboard-browse>
+Ancestor with aria-hidden: <div.uppy-Dashboard uppy-Dashboard--animateOpenClose uppy-Dashboard--modal uppy-Dashboard--isInnerWrapVisible> <div class=​"uppy-Dashboard uppy-Dashboard--animateOpenClose uppy-Dashboard--modal uppy-Dashboard--isInnerWrapVisible" data-uppy-theme=​"light" data-uppy-num-acquirers=​"0" data-uppy-drag-drop-supported=​"true" aria-hidden=​"true" aria-disabled=​"false" aria-label=​"Uppy Dashboard Window (Press escape to close)​">​…​</div>​
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+Logger.ts:72 [2025-10-10T14:33:57.981Z] [WARN] - [Security error while unpacking a received message: Duplicate msgIds]
+Logger.ts:72 [2025-10-10T14:34:00.619Z] [ERROR] - [TimeoutError: signal timed out]
+Logger.ts:72 [2025-10-10T14:34:00.620Z] [ERROR] - [undefined]
+Logger.ts:72 [2025-10-10T14:34:00.620Z] [WARN] - [Connection closed while receiving data]
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+Logger.ts:72 [2025-10-10T14:34:04.685Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_reconnect @ MTProtoSender.ts:1187
+(анонимная) @ MTProtoSender.ts:1148
+Promise.then
+reconnect @ MTProtoSender.ts:1145
+_sendLoop @ MTProtoSender.ts:660
+await in _sendLoop
+_connect @ MTProtoSender.ts:492
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+Logger.ts:72 [2025-10-10T14:34:05.697Z] [WARN] - [Using fallback connection]
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+Logger.ts:72 [2025-10-10T14:34:19.374Z] [ERROR] - [TimeoutError: signal timed out]
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+Logger.ts:72 [2025-10-10T14:34:57.446Z] [ERROR] - [AbortError: The user aborted a request.]
+Logger.ts:72 [2025-10-10T14:34:57.447Z] [ERROR] - [undefined]
+Logger.ts:72 [2025-10-10T14:34:57.448Z] [WARN] - [Connection closed while receiving data]
+Logger.ts:72 [2025-10-10T14:35:14.135Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:328 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:328
+await in connect
+_connectSender @ TelegramClient.ts:603
+_borrowExportedSender @ TelegramClient.ts:704
+getSender @ TelegramClient.ts:770
+(анонимная) @ downloadFile.ts:243
+ua @ downloadFile.ts:232
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-10T14:35:15.377Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-10T14:35:25.975Z] [ERROR] - [TimeoutError: signal timed out]
+Logger.ts:72 [2025-10-10T14:35:25.977Z] [ERROR] - [undefined]
+Logger.ts:72 [2025-10-10T14:35:25.985Z] [WARN] - [Connection closed while receiving data]
+Logger.ts:72 [2025-10-10T14:35:26.322Z] [ERROR] - [AbortError: The user aborted a request.]
