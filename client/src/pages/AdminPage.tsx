@@ -215,6 +215,7 @@ function CategoriesManager() {
     defaultValues: {
       name: '',
       slug: '',
+      image: null,
       parentId: null,
       sortOrder: 0,
     },
@@ -293,6 +294,7 @@ function CategoriesManager() {
     form.reset({
       name: category.name,
       slug: category.slug,
+      image: category.image,
       parentId: category.parentId,
       sortOrder: category.sortOrder,
     });
@@ -339,6 +341,25 @@ function CategoriesManager() {
                     <FormLabel>Slug (URL)</FormLabel>
                     <FormControl>
                       <Input {...field} data-testid="input-category-slug" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="image"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL изображения (опционально)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        value={field.value || ''} 
+                        placeholder="https://example.com/category.jpg"
+                        data-testid="input-category-image" 
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

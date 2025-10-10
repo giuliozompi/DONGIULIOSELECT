@@ -34,6 +34,7 @@ export const categories = pgTable("categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  image: text("image"), // URL изображения категории
   parentId: varchar("parent_id"),
   sortOrder: integer("sort_order").default(0),
 });
