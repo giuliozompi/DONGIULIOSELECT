@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Upload, X } from 'lucide-react';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
+import imageCompression from 'browser-image-compression';
 
 interface ImageUploadFieldProps {
   value: string | null;
@@ -31,6 +32,7 @@ export function ImageUploadField({
   'data-testid': testId,
 }: ImageUploadFieldProps) {
   const [uploading, setUploading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
 
@@ -61,22 +63,47 @@ export function ImageUploadField({
     const uploadedPaths: string[] = [];
 
     try {
-      setUploading(true);
-      setUploadProgress(1); // Inizia a 1% per mostrare subito la barra
+      setCompressing(true);
       onUploadStart?.();
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        
-        // Validazione dimensione
-        if (file.size > maxBytes) {
-          onUploadError?.(`${file.name}: troppo grande. Max ${maxSizeMB}MB`);
-          continue;
-        }
-
+      // Comprimi tutte le immagini prima dell'upload
+      const compressedFiles: File[] = [];
+      for (const file of files) {
         // Validazione tipo
         if (!file.type.startsWith('image/')) {
           onUploadError?.(`${file.name}: solo immagini permesse`);
+          continue;
+        }
+
+        try {
+          // Opzioni compressione ottimizzate per e-commerce
+          const options = {
+            maxSizeMB: 1,              // Target 1MB (ottimo per web)
+            maxWidthOrHeight: 1920,    // Sufficiente per prodotti
+            useWebWorker: true,        // Non blocca UI
+            fileType: 'image/webp',    // Formato moderno (30% più leggero)
+            initialQuality: 0.85,      // Qualità 85% (ottimo bilanciamento)
+          };
+
+          const compressedFile = await imageCompression(file, options);
+          compressedFiles.push(compressedFile);
+        } catch (error) {
+          // Fallback: usa file originale se compressione fallisce
+          console.warn('Compressione fallita per', file.name, error);
+          compressedFiles.push(file);
+        }
+      }
+
+      setCompressing(false);
+      setUploading(true);
+      setUploadProgress(1); // Inizia a 1% per mostrare subito la barra
+
+      for (let i = 0; i < compressedFiles.length; i++) {
+        const file = compressedFiles[i];
+        
+        // Validazione dimensione (dopo compressione)
+        if (file.size > maxBytes) {
+          onUploadError?.(`${file.name}: troppo grande anche dopo compressione. Max ${maxSizeMB}MB`);
           continue;
         }
 
@@ -156,6 +183,7 @@ export function ImageUploadField({
       onUploadError?.(message);
       // In caso di errore, mantieni uploading=false ma NON resettare uploadProgress
       // così la barra resta visibile all'ultimo valore
+      setCompressing(false);
       setUploading(false);
       event.target.value = '';
     }
@@ -281,13 +309,13 @@ export function ImageUploadField({
             <Button
               type="button"
               variant="outline"
-              disabled={uploading}
+              disabled={uploading || compressing}
               className="w-full"
               asChild
             >
               <span>
                 <Upload className="w-4 h-4 mr-2" />
-                {uploading ? 'Загрузка...' : multiple ? 'Выбрать файлы' : 'Выбрать файл'}
+                {compressing ? 'Сжатие...' : uploading ? 'Загрузка...' : multiple ? 'Выбрать файлы' : 'Выбрать файл'}
               </span>
             </Button>
           </label>
@@ -297,7 +325,7 @@ export function ImageUploadField({
               variant="destructive"
               size="icon"
               onClick={handleClear}
-              disabled={uploading}
+              disabled={uploading || compressing}
               data-testid={`${testId}-clear`}
             >
               <X className="w-4 h-4" />
