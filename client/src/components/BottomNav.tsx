@@ -36,10 +36,10 @@ export default function BottomNav() {
 
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
-    { path: '/assistant', icon: Bot, label: 'Помощник' },
     { path: '/cart', icon: ShoppingCart, label: 'Корзина' },
     { path: '/orders', icon: Package, label: 'Заказы' },
     { path: '/fortune', icon: Sparkles, label: 'Призы' },
+    { path: '/assistant', icon: Bot, label: 'Помощник' },
   ];
 
   // Add admin link if user is admin
