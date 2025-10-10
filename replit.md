@@ -101,7 +101,7 @@ The audit log is accessible via the "Логи" (Logs) tab in the admin panel, di
     - **Product Expert**: Deep knowledge of all Italian premium products
     - **Wine Sommelier**: Expert in wine-food pairings
     
-    The assistant prioritizes suggesting products from the database catalog first, then recommends contacting the Telegram channel if suitable products aren't available. For wine pairings, it can currently suggest any wines available in Russia; a proprietary wine database will be added in the future.
+    The assistant is **multilingual** and responds in the same language the customer uses (Russian, Italian, English, or any other language). It prioritizes suggesting products from the database catalog first, then recommends contacting the Telegram channel if suitable products aren't available. For wine pairings, it can currently suggest any wines available in Russia; a proprietary wine database will be added in the future.
 3.  **SBP (Sistema di Pagamenti Veloci) Payment Gateway**: Integrated for payment processing, with a mock service in the current implementation, pending full Sberbank API integration.
 4.  **DaData.ru Address Autocomplete**: Utilized for Russian address validation, standardization, and autocomplete, enhancing logistics integration with FIAS IDs and structured address data.
 5.  **Neon Database**: Provides serverless PostgreSQL hosting, configured via `DATABASE_URL`.
