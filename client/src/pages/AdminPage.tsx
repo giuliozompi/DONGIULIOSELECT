@@ -363,7 +363,7 @@ function CategoriesManager() {
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           {category.image ? (
                             <img 
-                              src={category.image} 
+                              src={category.image.startsWith('http') ? category.image : `${window.location.origin}${category.image}`} 
                               alt={category.name}
                               className="w-10 h-10 object-cover rounded flex-shrink-0"
                             />
@@ -492,7 +492,7 @@ function CategoriesManager() {
                             {field.value}
                           </div>
                           <img 
-                            src={field.value} 
+                            src={field.value.startsWith('http') ? field.value : `${window.location.origin}${field.value}`} 
                             alt="Preview" 
                             className="w-32 h-32 object-cover rounded-md border-2"
                           />
