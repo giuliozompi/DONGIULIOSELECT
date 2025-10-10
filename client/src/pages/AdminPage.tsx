@@ -27,7 +27,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle } from 'lucide-react';
 import { ObjectUploader } from '@/components/ObjectUploader';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -206,6 +206,7 @@ function CategoriesManager() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [hasUnsavedImage, setHasUnsavedImage] = useState(false);
 
   // Fetch categories
   const { data: categories = [], isLoading } = useQuery<Category[]>({
@@ -233,6 +234,7 @@ function CategoriesManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       form.reset();
+      setHasUnsavedImage(false); // Reset dopo la creazione
       toast({ title: '✅ Категория создана' });
     },
     onError: (error: any) => {
@@ -254,6 +256,7 @@ function CategoriesManager() {
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       form.reset();
       setEditingId(null);
+      setHasUnsavedImage(false); // Reset dopo il salvataggio
       toast({ title: '✅ Категория обновлена' });
     },
     onError: (error: any) => {
@@ -294,6 +297,7 @@ function CategoriesManager() {
 
   const handleEdit = (category: Category) => {
     setEditingId(category.id);
+    setHasUnsavedImage(false); // Reset quando si seleziona una categoria
     form.reset({
       name: category.name,
       slug: category.slug,
@@ -306,6 +310,7 @@ function CategoriesManager() {
 
   const handleCancelEdit = () => {
     setEditingId(null);
+    setHasUnsavedImage(false);
     form.reset();
   };
 
@@ -335,6 +340,7 @@ function CategoriesManager() {
                   <Button
                     onClick={() => {
                       setEditingId(null);
+                      setHasUnsavedImage(false); // Reset quando si crea nuova categoria
                       form.reset();
                       setSheetOpen(false);
                     }}
@@ -456,6 +462,7 @@ function CategoriesManager() {
                                 });
                                 const data = await response.json();
                                 field.onChange(data.objectPath);
+                                setHasUnsavedImage(true); // Marca come non salvata
                                 toast({ 
                                   title: '✅ Изображение загружено',
                                   description: 'Теперь нажмите "Обновить" чтобы сохранить изменения'
@@ -541,8 +548,20 @@ function CategoriesManager() {
                   type="submit" 
                   disabled={createMutation.isPending || updateMutation.isPending}
                   data-testid="button-submit-category"
+                  className={hasUnsavedImage ? 'animate-pulse' : ''}
                 >
-                  {editingId ? 'Обновить' : 'Создать'}
+                  {editingId ? (
+                    hasUnsavedImage ? (
+                      <>
+                        <AlertTriangle className="w-4 h-4 mr-2" />
+                        Обновить (есть несохраненное изображение)
+                      </>
+                    ) : (
+                      'Обновить'
+                    )
+                  ) : (
+                    'Создать'
+                  )}
                 </Button>
                 {editingId && (
                   <Button 
