@@ -118,16 +118,106 @@ export function ImageUploadField({
     }
   };
 
-  const handleRemove = (index: number) => {
+  const handleRemove = async (index: number) => {
     if (!value) return;
     const paths = value.split(',').map(p => p.trim()).filter(Boolean);
-    paths.splice(index, 1);
-    onChange(paths.length > 0 ? paths.join(', ') : null);
+    const pathToDelete = paths[index];
+    
+    // Cancella dal server prima di aggiornare lo stato
+    if (pathToDelete) {
+      try {
+        setUploading(true);
+        const response = await fetch('/api/admin/uploads/image', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-telegram-init-data': localStorage.getItem('telegram-init-data') || '',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ path: pathToDelete }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Errore eliminazione' }));
+          throw new Error(error.error || 'Errore eliminazione server');
+        }
+        
+        // Solo dopo successo, rimuovi dalla UI
+        paths.splice(index, 1);
+        onChange(paths.length > 0 ? paths.join(', ') : null);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Errore eliminazione';
+        console.error('Delete error:', error);
+        onUploadError?.(message);
+      } finally {
+        setUploading(false);
+      }
+    }
   };
 
-  const handleClear = () => {
-    onChange(null);
-    setPreviewUrls([]);
+  const handleClear = async () => {
+    if (!value) return;
+    
+    const paths = value.split(',').map(p => p.trim()).filter(Boolean);
+    if (paths.length === 0) {
+      onChange(null);
+      setPreviewUrls([]);
+      return;
+    }
+
+    try {
+      setUploading(true);
+      
+      // Traccia successi e fallimenti separatamente
+      const results = await Promise.allSettled(
+        paths.map(async (path) => {
+          const response = await fetch('/api/admin/uploads/image', {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-telegram-init-data': localStorage.getItem('telegram-init-data') || '',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ path }),
+          });
+          
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Errore eliminazione' }));
+            throw new Error(error.error || 'Errore eliminazione');
+          }
+          
+          return path;
+        })
+      );
+      
+      // Identifica successi e fallimenti
+      const deletedPaths = new Set<string>();
+      const failedPaths: string[] = [];
+      
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          deletedPaths.add(result.value);
+        } else {
+          failedPaths.push(paths[index]);
+        }
+      });
+      
+      // Aggiorna stato rimuovendo solo i path cancellati con successo
+      const remainingPaths = paths.filter(p => !deletedPaths.has(p));
+      onChange(remainingPaths.length > 0 ? remainingPaths.join(', ') : null);
+      
+      // Riporta errori solo se ci sono stati fallimenti
+      if (failedPaths.length > 0) {
+        const errorMsg = `Errore eliminazione: ${failedPaths.length} file non rimossi (${deletedPaths.size} rimossi con successo)`;
+        onUploadError?.(errorMsg);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Errore eliminazione file';
+      console.error('Delete error:', error);
+      onUploadError?.(message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
