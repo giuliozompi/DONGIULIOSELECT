@@ -451,9 +451,19 @@ function CategoriesManager() {
                 className="flex items-center justify-between p-4 border rounded-md hover-elevate"
                 data-testid={`category-item-${category.id}`}
               >
-                <div>
-                  <p className="font-medium">{category.name}</p>
-                  <p className="text-sm text-muted-foreground">/{category.slug}</p>
+                <div className="flex items-center gap-3">
+                  {category.image && (
+                    <img 
+                      src={category.image} 
+                      alt={category.name}
+                      className="w-12 h-12 object-cover rounded"
+                      data-testid={`img-category-${category.id}`}
+                    />
+                  )}
+                  <div>
+                    <p className="font-medium">{category.name}</p>
+                    <p className="text-sm text-muted-foreground">/{category.slug}</p>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button 
