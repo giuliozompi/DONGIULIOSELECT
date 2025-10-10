@@ -39,7 +39,7 @@ export default function CategoryCard({ category, productCount, onClick }: Catego
             {category.name}
           </h3>
           {productCount > 0 && (
-            <p className="text-white/80 text-sm" data-testid={`text-category-count-${category.id}`}>
+            <p className="text-white/80 text-xs" data-testid={`text-category-count-${category.id}`}>
               {productCount} {productCount === 1 ? 'продукт' : productCount < 5 ? 'продукта' : 'продуктов'}
             </p>
           )}
