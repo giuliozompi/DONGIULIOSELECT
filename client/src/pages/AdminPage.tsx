@@ -466,16 +466,28 @@ function CategoriesManager() {
                                   imageURL: uploadedFile.uploadURL,
                                 });
                                 const data = await response.json();
+                                
+                                // Aggiorna il campo del form
                                 field.onChange(data.objectPath);
-                                setHasUnsavedImage(true); // Marca come non salvata
+                                
+                                // Forza l'aggiornamento del form per mostrare l'anteprima
+                                form.setValue('image', data.objectPath, { 
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                  shouldTouch: true 
+                                });
+                                
+                                setHasUnsavedImage(true);
+                                
                                 toast({ 
-                                  title: '✅ Изображение загружено',
+                                  title: 'Изображение загружено',
                                   description: 'Теперь нажмите "Обновить" чтобы сохранить изменения'
                                 });
                               }
                             } catch (error) {
+                              console.error('Upload error:', error);
                               toast({ 
-                                title: '❌ Ошибка загрузки',
+                                title: 'Ошибка загрузки',
                                 description: 'Не удалось загрузить изображение',
                                 variant: 'destructive'
                               });
