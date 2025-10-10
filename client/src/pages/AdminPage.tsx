@@ -515,7 +515,7 @@ function CategoriesManager() {
                               size="icon"
                               className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
                               onClick={() => {
-                                form.setValue('image', '', {
+                                form.setValue('image', null, {
                                   shouldValidate: true,
                                   shouldDirty: true,
                                   shouldTouch: true
