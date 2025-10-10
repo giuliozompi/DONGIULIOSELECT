@@ -69,6 +69,14 @@ export function initTelegramApp() {
   if (tg) {
     tg.ready();
     tg.expand();
+    
+    // Salva initData in localStorage per autenticazione API
+    if (tg.initData) {
+      localStorage.setItem('telegram-init-data', tg.initData);
+      console.log('[Telegram] Init data saved to localStorage');
+    } else {
+      console.warn('[Telegram] No initData available');
+    }
   }
 }
 
