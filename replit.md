@@ -92,6 +92,38 @@ All administrative actions are tracked in the `admin_action_logs` table with the
 
 The audit log is accessible via the "Логи" (Logs) tab in the admin panel, displaying actions in chronological order with formatted details for accountability and troubleshooting.
 
+### Image Management & Object Storage
+The application uses **Replit Object Storage** for managing product and category images, providing secure admin-only uploads with public accessibility for all users.
+
+#### Architecture
+- **Server Components**: 
+  - `server/objectStorage.ts`: Core service for upload URL generation, file serving, and path normalization
+  - `server/objectAcl.ts`: ACL policy management with metadata-driven public/private visibility
+  - Protected API routes requiring admin authentication for uploads
+
+- **Frontend Components**:
+  - `ObjectUploader`: Reusable Uppy-based component for drag-drop file uploads with modal interface
+  - Integrated into admin category and product forms with real-time preview
+
+#### Upload Flow
+1. **Admin initiates upload**: Clicks "Загрузить" button in category/product form
+2. **Presigned URL**: Frontend requests POST `/api/objects/upload` (admin-only) to get temporary upload URL
+3. **Direct upload**: Uppy uploads file directly to object storage using presigned URL
+4. **ACL configuration**: Frontend calls PUT `/api/admin/category-images` or PUT `/api/admin/product-images` to set public visibility
+5. **Path normalization**: Server returns normalized path (`/objects/uploads/...`) stored in database
+6. **Public access**: Images are served via GET `/objects/:objectPath` route, accessible to all users
+
+#### Environment Variables
+- `DEFAULT_OBJECT_STORAGE_BUCKET_ID`: Replit-managed bucket identifier
+- `PUBLIC_OBJECT_SEARCH_PATHS`: Comma-separated paths for public asset resolution
+- `PRIVATE_OBJECT_DIR`: Base directory for admin-uploaded files (e.g., `.private`)
+
+#### Form Integration
+- **Category Form**: Single image upload with thumbnail preview, readonly path display
+- **Product Form**: Multiple image upload (up to 5 files), gallery preview, comma-separated paths in textarea
+
+All uploads are restricted to 5MB per file, images only, with automatic error handling and toast notifications.
+
 ## External Dependencies
 
 1.  **Telegram WebApp Platform**: Provides native app hosting, user authentication, and UI/UX integration via the Telegram WebApp SDK.
