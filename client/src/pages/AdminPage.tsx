@@ -866,97 +866,30 @@ function ProductsManager() {
                 name="images"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Изображения продукта</FormLabel>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FormControl>
-                          <Textarea 
-                            {...field} 
-                            placeholder="/objects/uploads/..., /objects/uploads/..."
-                            rows={2}
-                            data-testid="input-product-images"
-                            readOnly
-                          />
-                        </FormControl>
-                        <ObjectUploader
-                          maxNumberOfFiles={5}
-                          maxFileSize={5242880}
-                          onGetUploadParameters={async () => {
-                            const response = await apiRequest('POST', '/api/objects/upload');
-                            const data = await response.json();
-                            return {
-                              method: 'PUT' as const,
-                              url: data.uploadURL,
-                            };
-                          }}
-                          onComplete={async (result) => {
-                            if (!result.successful || result.successful.length === 0) return;
-                            
-                            const uploadedPaths: string[] = [];
-                            for (const file of result.successful) {
-                              if (file?.uploadURL) {
-                                const response = await apiRequest('PUT', '/api/admin/product-images', {
-                                  imageURL: file.uploadURL,
-                                });
-                                const data = await response.json();
-                                uploadedPaths.push(data.objectPath);
-                              }
-                            }
-                            
-                            if (uploadedPaths.length > 0) {
-                              const currentImages = field.value ? field.value.split(',').map(s => s.trim()).filter(Boolean) : [];
-                              const newImages = [...currentImages, ...uploadedPaths];
-                              field.onChange(newImages.join(', '));
-                              toast({ title: `✅ Загружено ${uploadedPaths.length} изображений` });
-                            }
-                          }}
-                          buttonVariant="outline"
-                        >
-                          <ImagePlus className="w-4 h-4 mr-2" />
-                          Загрузить
-                        </ObjectUploader>
-                      </div>
-                      {field.value && (
-                        <div className="flex gap-2 flex-wrap">
-                          {field.value.split(',').map((url, idx) => {
-                            const trimmedUrl = url.trim();
-                            if (!trimmedUrl) return null;
-                            return (
-                              <div key={idx} className="relative inline-block">
-                                <img 
-                                  src={getAbsoluteImageUrl(trimmedUrl) || trimmedUrl} 
-                                  alt={`Preview ${idx + 1}`} 
-                                  className="w-20 h-20 object-cover rounded-md border"
-                                />
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="icon"
-                                  className="absolute -top-2 -right-2 h-5 w-5 rounded-full"
-                                  onClick={() => {
-                                    const currentImages = field.value.split(',').map(s => s.trim()).filter(Boolean);
-                                    currentImages.splice(idx, 1);
-                                    const newValue = currentImages.join(', ');
-                                    form.setValue('images', newValue, {
-                                      shouldValidate: true,
-                                      shouldDirty: true,
-                                      shouldTouch: true
-                                    });
-                                    toast({
-                                      title: 'Изображение удалено',
-                                      description: 'Нажмите "Обновить" чтобы сохранить изменения'
-                                    });
-                                  }}
-                                  data-testid={`button-delete-product-image-${idx}`}
-                                >
-                                  <XCircle className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    <FormLabel>Изображения продукта (макс. 5)</FormLabel>
+                    <FormControl>
+                      <ImageUploadField
+                        value={field.value}
+                        onChange={field.onChange}
+                        multiple={true}
+                        maxFiles={5}
+                        onUploadComplete={(paths) => {
+                          const count = paths.split(',').length;
+                          toast({
+                            title: `Загружено ${count} ${count === 1 ? 'изображение' : 'изображений'}`,
+                            description: 'Нажмите "Обновить" чтобы сохранить изменения'
+                          });
+                        }}
+                        onUploadError={(error) => {
+                          toast({
+                            title: 'Ошибка загрузки',
+                            description: error,
+                            variant: 'destructive'
+                          });
+                        }}
+                        data-testid="product-images-upload"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
