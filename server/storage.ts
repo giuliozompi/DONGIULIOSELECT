@@ -230,14 +230,14 @@ export class MemStorage implements IStorage {
   private seedInitialData() {
     // Создание категорий
     const categories: Category[] = [
-      { id: '1', name: 'Сыры', slug: 'cheese', parentId: null, sortOrder: 1 },
-      { id: '2', name: 'Твердые сыры', slug: 'hard-cheese', parentId: '1', sortOrder: 1 },
-      { id: '3', name: 'Мягкие сыры', slug: 'soft-cheese', parentId: '1', sortOrder: 2 },
-      { id: '4', name: 'Колбасы', slug: 'salami', parentId: null, sortOrder: 2 },
-      { id: '5', name: 'Салями', slug: 'salami-type', parentId: '4', sortOrder: 1 },
-      { id: '6', name: 'Прошутто', slug: 'prosciutto', parentId: '4', sortOrder: 2 },
-      { id: '7', name: 'Масла и соусы', slug: 'oils', parentId: null, sortOrder: 3 },
-      { id: '8', name: 'Оливковое масло', slug: 'olive-oil', parentId: '7', sortOrder: 1 },
+      { id: '1', name: 'Сыры', slug: 'cheese', image: null, parentId: null, sortOrder: 1 },
+      { id: '2', name: 'Твердые сыры', slug: 'hard-cheese', image: null, parentId: '1', sortOrder: 1 },
+      { id: '3', name: 'Мягкие сыры', slug: 'soft-cheese', image: null, parentId: '1', sortOrder: 2 },
+      { id: '4', name: 'Колбасы', slug: 'salami', image: null, parentId: null, sortOrder: 2 },
+      { id: '5', name: 'Салями', slug: 'salami-type', image: null, parentId: '4', sortOrder: 1 },
+      { id: '6', name: 'Прошутто', slug: 'prosciutto', image: null, parentId: '4', sortOrder: 2 },
+      { id: '7', name: 'Масла и соусы', slug: 'oils', image: null, parentId: null, sortOrder: 3 },
+      { id: '8', name: 'Оливковое масло', slug: 'olive-oil', image: null, parentId: '7', sortOrder: 1 },
     ];
     categories.forEach(cat => this.categories.set(cat.id, cat));
 
@@ -418,6 +418,7 @@ export class MemStorage implements IStorage {
       id,
       name: insertCategory.name,
       slug: insertCategory.slug,
+      image: insertCategory.image ?? null,
       parentId: insertCategory.parentId ?? null,
       sortOrder: insertCategory.sortOrder ?? 0,
     };
