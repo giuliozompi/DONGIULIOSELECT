@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/card';
 import type { Category } from '@shared/schema';
+import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 
 interface CategoryCardProps {
   category: Category;
@@ -16,8 +17,9 @@ export default function CategoryCard({ category, productCount, onClick }: Catego
     'deserty': 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400&h=300&fit=crop',
   };
 
-  // Use uploaded image first, then fallback to mapping, then default
-  const image = category.image || categoryImages[category.slug] || 'https://images.unsplash.com/photo-1484980972926-edee96e0960d?w=400&h=300&fit=crop';
+  // Use uploaded image first (convert to absolute URL), then fallback to mapping, then default
+  const uploadedImage = getAbsoluteImageUrl(category.image);
+  const image = uploadedImage || categoryImages[category.slug] || 'https://images.unsplash.com/photo-1484980972926-edee96e0960d?w=400&h=300&fit=crop';
 
   return (
     <Card

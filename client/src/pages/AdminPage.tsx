@@ -29,6 +29,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle } from 'lucide-react';
 import { ObjectUploader } from '@/components/ObjectUploader';
+import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { SubmitHandler } from 'react-hook-form';
@@ -363,7 +364,7 @@ function CategoriesManager() {
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           {category.image ? (
                             <img 
-                              src={category.image.startsWith('http') ? category.image : `${window.location.origin}${category.image}`} 
+                              src={getAbsoluteImageUrl(category.image) || category.image} 
                               alt={category.name}
                               className="w-10 h-10 object-cover rounded flex-shrink-0"
                             />
@@ -492,7 +493,7 @@ function CategoriesManager() {
                             {field.value}
                           </div>
                           <img 
-                            src={field.value.startsWith('http') ? field.value : `${window.location.origin}${field.value}`} 
+                            src={getAbsoluteImageUrl(field.value) || field.value} 
                             alt="Preview" 
                             className="w-32 h-32 object-cover rounded-md border-2"
                           />
