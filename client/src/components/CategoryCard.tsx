@@ -35,7 +35,7 @@ export default function CategoryCard({ category, productCount, onClick }: Catego
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-4">
-          <h3 className="text-white font-semibold text-lg" data-testid={`text-category-name-${category.id}`}>
+          <h3 className="text-white font-semibold text-base" data-testid={`text-category-name-${category.id}`}>
             {category.name}
           </h3>
           {productCount > 0 && (
