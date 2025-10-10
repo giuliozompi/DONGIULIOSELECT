@@ -108,25 +108,48 @@ export default function AssistantPage() {
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
+        {messages.length === 0 && (
+          <div className="p-3 border-b">
+            <div className="flex gap-2 mb-3">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Bot className="w-5 h-5 text-primary" />
+              </div>
+              <Card className="p-2.5 bg-muted max-w-[85%]">
+                <p className="text-xs leading-relaxed">
+                  Здравствуйте! Я эксперт по итальянским деликатесам:<br/>
+                  • <strong>Сомелье по сырам</strong> - подбор и выдержка<br/>
+                  • <strong>Эксперт по мясу</strong> - прошутто и салями<br/>
+                  • <strong>Винный сомелье</strong> - идеальные сочетания<br/>
+                  • <strong>Специалист по продуктам</strong> - всё об Италии
+                </p>
+              </Card>
+            </div>
+          </div>
+        )}
+
+        <div className="p-3 border-b bg-background">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Напишите ваш вопрос..."
+              disabled={sendMessageMutation.isPending}
+              data-testid="input-message"
+            />
+            <Button
+              size="icon"
+              onClick={handleSend}
+              disabled={!input.trim() || sendMessageMutation.isPending}
+              data-testid="button-send"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
         <ScrollArea ref={scrollRef} className="flex-1 p-3">
           <div className="space-y-3">
-            {messages.length === 0 && (
-              <div className="flex gap-2">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Bot className="w-5 h-5 text-primary" />
-                </div>
-                <Card className="p-2.5 bg-muted max-w-[85%]">
-                  <p className="text-xs leading-relaxed">
-                    Здравствуйте! Я эксперт по итальянским деликатесам:<br/>
-                    • <strong>Сомелье по сырам</strong> - подбор и выдержка<br/>
-                    • <strong>Эксперт по мясу</strong> - прошутто и салями<br/>
-                    • <strong>Винный сомелье</strong> - идеальные сочетания<br/>
-                    • <strong>Специалист по продуктам</strong> - всё об Италии
-                  </p>
-                </Card>
-              </div>
-            )}
-            
             {messages.filter(Boolean).map((message) => (
               <div
                 key={message.id}
@@ -167,27 +190,6 @@ export default function AssistantPage() {
             )}
           </div>
         </ScrollArea>
-
-        <div className="p-3 border-t bg-background sticky bottom-0">
-          <div className="flex gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Напишите ваш вопрос..."
-              disabled={sendMessageMutation.isPending}
-              data-testid="input-message"
-            />
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim() || sendMessageMutation.isPending}
-              data-testid="button-send"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -102,6 +102,8 @@ The audit log is accessible via the "Логи" (Logs) tab in the admin panel, di
     - **Wine Sommelier**: Expert in wine-food pairings
     
     The assistant is **multilingual** and responds in the same language the customer uses (Russian, Italian, English, or any other language). It prioritizes suggesting products from the database catalog first, then recommends contacting the Telegram channel if suitable products aren't available. For wine pairings, it can currently suggest any wines available in Russia; a proprietary wine database will be added in the future.
+    
+    **Assistant UI/UX** (`/assistant`): The assistant page is optimized for small screens with a top-down layout: Header → Welcome message (with role descriptions) → Input field (fixed, always visible) → Scrollable message area. This ensures the input is immediately accessible without scrolling. The assistant is accessible via the bottom navigation (Bot icon, positioned after "Призы" and before "Админ" for admin users).
 3.  **SBP (Sistema di Pagamenti Veloci) Payment Gateway**: Integrated for payment processing, with a mock service in the current implementation, pending full Sberbank API integration.
 4.  **DaData.ru Address Autocomplete**: Utilized for Russian address validation, standardization, and autocomplete, enhancing logistics integration with FIAS IDs and structured address data.
 5.  **Neon Database**: Provides serverless PostgreSQL hosting, configured via `DATABASE_URL`.
