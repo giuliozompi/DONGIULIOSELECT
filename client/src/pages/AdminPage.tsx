@@ -255,10 +255,9 @@ function CategoriesManager() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
-      form.reset();
-      setEditingId(null);
-      setHasUnsavedImage(false); // Reset dopo il salvataggio
-      toast({ title: '✅ Категория обновлена' });
+      // NON resettare il form dopo il salvataggio - mantieni modalità modifica
+      setHasUnsavedImage(false); // Reset flag immagine non salvata
+      toast({ title: '✅ Categoria обновлена' });
     },
     onError: (error: any) => {
       toast({ 
@@ -695,8 +694,7 @@ function ProductsManager() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-      form.reset();
-      setEditingId(null);
+      // NON resettare il form dopo il salvataggio - mantieni modalità modifica
       toast({ title: '✅ Продукт обновлен' });
     },
     onError: (error: any) => {
