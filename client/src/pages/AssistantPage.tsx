@@ -21,7 +21,7 @@ export default function AssistantPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: messagesData } = useQuery<{ conversationId: string; messages: Message[] }>({
-    queryKey: conversationId ? ['/api/assistant/messages', `conversationId=${conversationId}`] : ['/api/assistant/messages'],
+    queryKey: conversationId ? [`/api/assistant/messages?conversationId=${conversationId}`] : ['/api/assistant/messages'],
     enabled: true,
   });
 
