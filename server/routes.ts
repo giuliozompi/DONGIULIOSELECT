@@ -2163,13 +2163,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Path mancante' });
       }
 
+      console.log('[DELETE IMAGE] Received path:', imagePath);
+
       const objectStorageService = new ObjectStorageService();
       const objectFile = await objectStorageService.getObjectEntityFile(imagePath);
       await objectFile.delete();
 
+      console.log('[DELETE IMAGE] Successfully deleted:', imagePath);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting image:", error);
+      console.error("[DELETE IMAGE] Error:", error);
+      console.error("[DELETE IMAGE] Path was:", imagePath);
       res.status(500).json({ error: error instanceof Error ? error.message : "Errore eliminazione" });
     }
   });
