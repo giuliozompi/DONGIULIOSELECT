@@ -416,3 +416,16 @@ export const adminActionLogs = pgTable("admin_action_logs", {
 export const insertAdminActionLogSchema = createInsertSchema(adminActionLogs).omit({ id: true, createdAt: true });
 export type InsertAdminActionLog = z.infer<typeof insertAdminActionLogSchema>;
 export type AdminActionLog = typeof adminActionLogs.$inferSelect;
+
+// Prodotti preferiti (favorites)
+export const favoriteProducts = pgTable("favorite_products", {
+  userId: varchar("user_id").notNull().references(() => users.id),
+  productId: varchar("product_id").notNull().references(() => products.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  pk: sql`PRIMARY KEY (${table.userId}, ${table.productId})`,
+}));
+
+export const insertFavoriteProductSchema = createInsertSchema(favoriteProducts).omit({ createdAt: true });
+export type InsertFavoriteProduct = z.infer<typeof insertFavoriteProductSchema>;
+export type FavoriteProduct = typeof favoriteProducts.$inferSelect;
