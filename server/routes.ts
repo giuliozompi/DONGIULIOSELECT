@@ -2156,15 +2156,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // DELETE /api/admin/uploads/image - Elimina immagine (ADMIN ONLY)
   app.delete("/api/admin/uploads/image", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    const { path: imagePath } = req.body;
+    
     try {
-      const { path: imagePath } = req.body;
-      
       if (!imagePath) {
         return res.status(400).json({ error: 'Path mancante' });
       }
 
       console.log('[DELETE IMAGE] Received path:', imagePath);
 
+      // Ignora URL esterni (Unsplash, ecc.) - non possono essere eliminati
+      if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+        console.log('[DELETE IMAGE] Skipping external URL:', imagePath);
+        return res.json({ success: true, skipped: true });
+      }
+
+      // Elimina solo file dal nostro object storage
       const objectStorageService = new ObjectStorageService();
       const objectFile = await objectStorageService.getObjectEntityFile(imagePath);
       await objectFile.delete();
