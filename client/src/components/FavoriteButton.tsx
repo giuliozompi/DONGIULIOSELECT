@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { hapticFeedback } from '@/lib/telegram';
+import { CheeseIcon } from '@/components/CheeseIcon';
 
 interface FavoriteButtonProps {
   productId: string;
@@ -63,63 +64,9 @@ export function FavoriteButton({ productId, className = '' }: FavoriteButtonProp
       aria-label={isFavorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
     >
       <CheeseIcon 
-        isFavorite={isFavorite} 
+        filled={isFavorite} 
         isAnimating={isAnimating}
       />
     </button>
-  );
-}
-
-interface CheeseIconProps {
-  isFavorite: boolean;
-  isAnimating: boolean;
-}
-
-function CheeseIcon({ isFavorite, isAnimating }: CheeseIconProps) {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={`transition-all duration-300 ${isAnimating ? 'rotate-12' : ''}`}
-    >
-      {/* Forma del formaggio (triangolo/cuneo) */}
-      <path
-        d="M3 20L12 4L21 20H3Z"
-        fill={isFavorite ? '#FFD700' : 'transparent'}
-        stroke={isFavorite ? '#FFA500' : 'currentColor'}
-        strokeWidth="2"
-        strokeLinejoin="round"
-        className="transition-all duration-300"
-      />
-      
-      {/* Buchi del formaggio */}
-      <circle
-        cx="9"
-        cy="14"
-        r="1.5"
-        fill={isFavorite ? '#FFA500' : 'currentColor'}
-        opacity={isFavorite ? '0.6' : '0.4'}
-        className="transition-all duration-300"
-      />
-      <circle
-        cx="14"
-        cy="12"
-        r="1.2"
-        fill={isFavorite ? '#FFA500' : 'currentColor'}
-        opacity={isFavorite ? '0.6' : '0.4'}
-        className="transition-all duration-300"
-      />
-      <circle
-        cx="12"
-        cy="16"
-        r="1"
-        fill={isFavorite ? '#FFA500' : 'currentColor'}
-        opacity={isFavorite ? '0.6' : '0.4'}
-        className="transition-all duration-300"
-      />
-    </svg>
   );
 }
