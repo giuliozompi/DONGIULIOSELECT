@@ -138,6 +138,12 @@ export interface IStorage {
   setCart(userId: string, items: Cart['items']): Promise<Cart>;
   clearCart(userId: string): Promise<void>;
 
+  // Preferiti
+  getFavoriteProducts(userId: string): Promise<Product[]>;
+  addFavoriteProduct(userId: string, productId: string): Promise<void>;
+  removeFavoriteProduct(userId: string, productId: string): Promise<void>;
+  isFavoriteProduct(userId: string, productId: string): Promise<boolean>;
+
   // Заказы
   createOrder(order: InsertOrder): Promise<Order>;
   getOrderById(id: string): Promise<Order | undefined>;
@@ -756,6 +762,23 @@ export class MemStorage implements IStorage {
     return Array.from(this.bonuses.values())
       .filter(b => b.userId === userId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Newest first
+  }
+
+  // Preferiti (stub - non implementato in MemStorage)
+  async getFavoriteProducts(_userId: string): Promise<Product[]> {
+    return [];
+  }
+
+  async addFavoriteProduct(_userId: string, _productId: string): Promise<void> {
+    // Not implemented
+  }
+
+  async removeFavoriteProduct(_userId: string, _productId: string): Promise<void> {
+    // Not implemented
+  }
+
+  async isFavoriteProduct(_userId: string, _productId: string): Promise<boolean> {
+    return false;
   }
 }
 

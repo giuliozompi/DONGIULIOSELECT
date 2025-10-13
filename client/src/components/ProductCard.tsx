@@ -8,6 +8,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { hapticFeedback } from '@/lib/telegram';
 import ProductRecommendationsDialog from './ProductRecommendationsDialog';
+import { FavoriteButton } from './FavoriteButton';
 
 interface ProductCardProps {
   id: string;
@@ -131,6 +132,9 @@ export default function ProductCard({
           className="w-full h-full object-cover"
           data-testid={`img-product-${name}`}
         />
+        <div className="absolute top-2 left-2 z-10">
+          <FavoriteButton productId={id} />
+        </div>
         {priceOld && (
           <Badge className="absolute top-2 right-2 bg-destructive text-destructive-foreground">
             Скидка

@@ -140,7 +140,10 @@ export default function ProductDetailPage() {
         </div>
       </div>
       
-      <ProductGallery images={product.images.length > 0 ? product.images : ['https://images.unsplash.com/photo-1452195100486-9cc805987862?w=800&h=800&fit=crop']} />
+      <ProductGallery 
+        images={product.images.length > 0 ? product.images : ['https://images.unsplash.com/photo-1452195100486-9cc805987862?w=800&h=800&fit=crop']} 
+        productId={product.id}
+      />
 
       <div className="p-6 space-y-6">
         {!isTelegramAvailable && (

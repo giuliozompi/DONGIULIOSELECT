@@ -18,6 +18,7 @@ import {
   orderChangeLogs,
   productAssociations,
   adminActionLogs,
+  favoriteProducts,
   type User,
   type InsertUser,
   type Admin,
@@ -212,6 +213,48 @@ export class DbStorage implements IStorage {
 
   async clearCart(userId: string): Promise<void> {
     await db.delete(carts).where(eq(carts.userId, userId));
+  }
+
+  // Preferiti
+  async getFavoriteProducts(userId: string): Promise<(Product & { categoryName: string })[]> {
+    const favorites = await db
+      .select({ 
+        product: products,
+        categoryName: categories.name 
+      })
+      .from(favoriteProducts)
+      .innerJoin(products, eq(favoriteProducts.productId, products.id))
+      .innerJoin(categories, eq(products.categoryId, categories.id))
+      .where(eq(favoriteProducts.userId, userId))
+      .orderBy(desc(favoriteProducts.createdAt));
+    
+    return favorites.map(f => ({ ...f.product, categoryName: f.categoryName }));
+  }
+
+  async addFavoriteProduct(userId: string, productId: string): Promise<void> {
+    await db.insert(favoriteProducts).values({ userId, productId }).onConflictDoNothing();
+  }
+
+  async removeFavoriteProduct(userId: string, productId: string): Promise<void> {
+    await db
+      .delete(favoriteProducts)
+      .where(and(
+        eq(favoriteProducts.userId, userId),
+        eq(favoriteProducts.productId, productId)
+      ));
+  }
+
+  async isFavoriteProduct(userId: string, productId: string): Promise<boolean> {
+    const result = await db
+      .select()
+      .from(favoriteProducts)
+      .where(and(
+        eq(favoriteProducts.userId, userId),
+        eq(favoriteProducts.productId, productId)
+      ))
+      .limit(1);
+    
+    return result.length > 0;
   }
 
   // Заказы

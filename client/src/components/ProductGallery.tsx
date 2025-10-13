@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FavoriteButton } from './FavoriteButton';
 
 interface ProductGalleryProps {
   images: string[];
+  productId?: string;
 }
 
-export default function ProductGallery({ images }: ProductGalleryProps) {
+export default function ProductGallery({ images, productId }: ProductGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const goToPrevious = () => {
@@ -25,6 +27,12 @@ export default function ProductGallery({ images }: ProductGalleryProps) {
         className="w-full h-full object-cover"
         data-testid={`img-gallery-${currentIndex}`}
       />
+      
+      {productId && (
+        <div className="absolute top-4 left-4 z-10">
+          <FavoriteButton productId={productId} />
+        </div>
+      )}
       
       {images.length > 1 && (
         <>

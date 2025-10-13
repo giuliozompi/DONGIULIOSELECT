@@ -201,6 +201,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // ==================== PREFERITI ====================
+  
+  // GET /api/favorites - Ottieni prodotti preferiti dell'utente
+  app.get("/api/favorites", verifyTelegramInitData, async (req, res) => {
+    try {
+      const favorites = await storage.getFavoriteProducts(req.userId!);
+      res.json(favorites);
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/favorites/:productId - Aggiungi prodotto ai preferiti
+  app.post("/api/favorites/:productId", verifyTelegramInitData, async (req, res) => {
+    try {
+      const productId = req.params.productId;
+      
+      // Verifica che il prodotto esista
+      const product = await storage.getProductById(productId);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
+      await storage.addFavoriteProduct(req.userId!, productId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error adding to favorites:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // DELETE /api/favorites/:productId - Rimuovi prodotto dai preferiti
+  app.delete("/api/favorites/:productId", verifyTelegramInitData, async (req, res) => {
+    try {
+      const productId = req.params.productId;
+      await storage.removeFavoriteProduct(req.userId!, productId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error removing from favorites:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET /api/favorites/:productId/check - Verifica se prodotto è nei preferiti
+  app.get("/api/favorites/:productId/check", verifyTelegramInitData, async (req, res) => {
+    try {
+      const productId = req.params.productId;
+      const isFavorite = await storage.isFavoriteProduct(req.userId!, productId);
+      res.json({ isFavorite });
+    } catch (error) {
+      console.error('Error checking favorite:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // ==================== UTENTE ====================
   
   // GET /api/user - Ottieni dati utente corrente
