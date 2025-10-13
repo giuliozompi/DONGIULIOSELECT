@@ -5,6 +5,8 @@ declare global {
         ready: () => void;
         expand: () => void;
         close: () => void;
+        enableClosingConfirmation: () => void;
+        disableClosingConfirmation: () => void;
         colorScheme: 'light' | 'dark';
         themeParams: {
           bg_color?: string;
@@ -69,6 +71,9 @@ export function initTelegramApp() {
   if (tg) {
     tg.ready();
     tg.expand();
+    
+    // Abilita conferma prima di chiudere l'app
+    tg.enableClosingConfirmation();
     
     // Salva initData in localStorage per autenticazione API
     if (tg.initData) {
