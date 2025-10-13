@@ -653,7 +653,7 @@ function ProductsManager() {
     // Converti stringhe separate da virgola in array
     const processedData: ProductFormData = {
       ...data,
-      images: data.images.split(',').map((s: string) => s.trim()).filter(Boolean),
+      images: data.images ? data.images.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
       tasteVariations: data.tasteVariations.split(',').map((s: string) => s.trim()).filter(Boolean),
     };
 
