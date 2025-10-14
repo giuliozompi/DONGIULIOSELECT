@@ -4,11 +4,16 @@ import { categories, products } from '@shared/schema';
 export async function seedDatabase() {
   console.log('🌱 Seeding database...');
 
-  // Check if already seeded
-  const existingCategories = await db.select().from(categories).limit(1);
-  if (existingCategories.length > 0) {
-    console.log('✅ Database already seeded');
-    return;
+  try {
+    // Check if already seeded
+    const existingCategories = await db.select().from(categories).limit(1);
+    if (existingCategories.length > 0) {
+      console.log('✅ Database already seeded');
+      return;
+    }
+  } catch (error) {
+    console.error('❌ Failed to check existing categories:', error);
+    throw error;
   }
 
   // Seed categories

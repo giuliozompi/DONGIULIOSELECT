@@ -39,7 +39,20 @@ app.use((req, res, next) => {
 
 (async () => {
   // Seed database with initial data (categories and products)
-  await seedDatabase();
+  // Skip seeding if it takes too long or fails
+  const seedPromise = seedDatabase().catch((error) => {
+    console.error('⚠️ Database seeding failed:', error);
+    console.log('Continuing without seeding...');
+  });
+  
+  // Don't wait more than 5 seconds for seeding
+  await Promise.race([
+    seedPromise,
+    new Promise((resolve) => setTimeout(() => {
+      console.log('⏱️ Seeding timeout - continuing without seed');
+      resolve(undefined);
+    }, 5000))
+  ]);
   
   const server = await registerRoutes(app);
 
