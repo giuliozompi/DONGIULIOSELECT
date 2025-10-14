@@ -69,7 +69,7 @@ export default function FavoritesPage() {
                 price={parseFloat(product.price)}
                 priceOld={product.priceOld ? parseFloat(product.priceOld) : undefined}
                 unit={product.unit}
-                image={product.images[0] || 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=400&h=400&fit=crop'}
+                image={product.images?.length > 0 ? product.images : ['https://images.unsplash.com/photo-1452195100486-9cc805987862?w=400&h=400&fit=crop']}
                 onClick={() => setLocation(`/products/${product.id}`)}
               />
             ))}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FavoriteButton } from './FavoriteButton';
@@ -11,6 +11,17 @@ interface ProductGalleryProps {
 export default function ProductGallery({ images, productId }: ProductGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Auto slideshow for multiple images
+  useEffect(() => {
+    if (images.length <= 1) return;
+    
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+    }, 5000); // 5 seconds
+    
+    return () => clearInterval(interval);
+  }, [images.length]);
+
   const goToPrevious = () => {
     setCurrentIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
   };
@@ -20,13 +31,18 @@ export default function ProductGallery({ images, productId }: ProductGalleryProp
   };
 
   return (
-    <div className="relative w-full aspect-square bg-muted" data-testid="gallery-product">
-      <img
-        src={images[currentIndex]}
-        alt={`Фото ${currentIndex + 1}`}
-        className="w-full h-full object-cover"
-        data-testid={`img-gallery-${currentIndex}`}
-      />
+    <div className="relative w-full aspect-square bg-muted overflow-hidden" data-testid="gallery-product">
+      {images.map((img, index) => (
+        <img
+          key={index}
+          src={img}
+          alt={`Фото ${index + 1}`}
+          className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-1000 ${
+            index === currentIndex ? 'opacity-100' : 'opacity-0'
+          }`}
+          data-testid={`img-gallery-${index}`}
+        />
+      ))}
       
       {productId && (
         <div className="absolute top-4 right-4 z-10">

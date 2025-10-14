@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +17,7 @@ interface ProductCardProps {
   price: number;
   priceOld?: number;
   unit: string;
-  image: string;
+  image: string | string[];
   onClick?: () => void;
 }
 
@@ -40,6 +40,22 @@ export default function ProductCard({
   const [quantity, setQuantity] = useState(initialQty);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const [recommendedProductId, setRecommendedProductId] = useState<string | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // Convert image to array for slideshow
+  const images = Array.isArray(image) ? image : [image];
+  const hasMultipleImages = images.length > 1;
+  
+  // Auto slideshow for multiple images
+  useEffect(() => {
+    if (!hasMultipleImages) return;
+    
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prevIndex) => (prevIndex + 1) % images.length);
+    }, 5000); // 5 seconds
+    
+    return () => clearInterval(interval);
+  }, [hasMultipleImages, images.length]);
 
   const addToCartMutation = useMutation({
     mutationFn: async (options?: { skipRecommendations?: boolean }) => {
@@ -126,12 +142,17 @@ export default function ProductCard({
         data-testid={`card-product-${name}`}
       >
       <div className="aspect-square bg-muted relative overflow-hidden">
-        <img
-          src={image}
-          alt={name}
-          className="w-full h-full object-cover"
-          data-testid={`img-product-${name}`}
-        />
+        {images.map((img, index) => (
+          <img
+            key={index}
+            src={img}
+            alt={`${name} - ${index + 1}`}
+            className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-1000 ${
+              index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+            }`}
+            data-testid={`img-product-${name}-${index}`}
+          />
+        ))}
         <div className="absolute top-2 right-2 z-10">
           <FavoriteButton productId={id} />
         </div>
