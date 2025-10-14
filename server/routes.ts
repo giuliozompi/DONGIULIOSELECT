@@ -275,6 +275,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // PUT /api/user - Aggiorna dati utente corrente
+  app.put("/api/user", verifyTelegramInitData, async (req, res) => {
+    try {
+      const updateSchema = z.object({
+        customerName: z.string().nullable().optional(),
+        phone: z.string().nullable().optional(),
+        email: z.union([z.string().email(), z.null()]).optional(),
+      });
+      
+      const updateData = updateSchema.parse(req.body);
+      await storage.updateUser(req.userId!, updateData);
+      
+      const updatedUser = await storage.getUser(req.userId!);
+      res.json(updatedUser);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid data', details: error.errors });
+      }
+      console.error('Error updating user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // ==================== INDIRIZZI UTENTE ====================
   
   // GET /api/user/addresses - Ottieni tutti gli indirizzi dell'utente

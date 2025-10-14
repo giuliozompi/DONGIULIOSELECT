@@ -17,6 +17,7 @@ import OrderDetailPage from '@/pages/OrderDetailPage';
 import MyOrdersPage from '@/pages/MyOrdersPage';
 import FavoritesPage from '@/pages/FavoritesPage';
 import ProfilePage from '@/pages/ProfilePage';
+import MyDataPage from '@/pages/MyDataPage';
 import FortunePage from '@/pages/FortunePage';
 import AssistantPage from '@/pages/AssistantPage';
 import AdminPage from '@/pages/AdminPage';
@@ -37,6 +38,7 @@ function Router() {
         <Route path="/orders" component={MyOrdersPage} />
         <Route path="/favorites" component={FavoritesPage} />
         <Route path="/lk" component={ProfilePage} />
+        <Route path="/my-data" component={MyDataPage} />
         <Route path="/fortune" component={FortunePage} />
         <Route path="/assistant" component={AssistantPage} />
         <Route path="/admin" component={AdminPage} />
