@@ -193,7 +193,7 @@ export default function AdminPage() {
   const isMasterAdmin = adminCheck?.isMasterAdmin || false;
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={true}>
       <AdminContent isMasterAdmin={isMasterAdmin} />
     </SidebarProvider>
   );
@@ -206,7 +206,7 @@ type CategoryFormData = z.infer<typeof insertCategorySchema>;
 function CategoriesManager() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [hasUnsavedImage, setHasUnsavedImage] = useState(false);
 
   // Fetch categories
@@ -297,6 +297,7 @@ function CategoriesManager() {
 
   const handleEdit = (category: Category) => {
     setEditingId(category.id);
+    setShowForm(true);
     setHasUnsavedImage(false); // Reset quando si seleziona una categoria
     form.reset({
       name: category.name,
@@ -305,11 +306,11 @@ function CategoriesManager() {
       parentId: category.parentId,
       sortOrder: category.sortOrder,
     });
-    setSheetOpen(false); // Chiude il menu laterale dopo la selezione
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
+    setShowForm(false);
     setHasUnsavedImage(false);
     form.reset();
   };
@@ -320,83 +321,77 @@ function CategoriesManager() {
 
   return (
     <div className="space-y-6">
-      {/* Form */}
-      <Card data-testid="category-form">
+      {/* Lista categorie */}
+      <Card data-testid="categories-list">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>{editingId ? 'Редактировать категорию' : 'Создать категорию'}</CardTitle>
-            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" data-testid="button-open-category-selector">
-                  <FolderTree className="w-4 h-4 mr-2" />
-                  Выбрать категорию
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-80">
-                <SheetHeader>
-                  <SheetTitle>Все категории</SheetTitle>
-                </SheetHeader>
-                <div className="mt-4 space-y-4">
-                  <Button
-                    onClick={() => {
-                      setEditingId(null);
-                      setHasUnsavedImage(false); // Reset quando si crea nuova categoria
-                      form.reset();
-                      setSheetOpen(false);
-                    }}
-                    className="w-full"
-                    data-testid="button-new-category"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Новая категория
-                  </Button>
-                  <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
-                    {categories.map((category) => (
-                      <div
-                        key={category.id}
-                        className={`flex items-center justify-between p-3 rounded-md cursor-pointer hover-elevate ${
-                          editingId === category.id ? 'bg-sidebar-accent' : ''
-                        }`}
-                        onClick={() => handleEdit(category)}
-                        data-testid={`category-selector-${category.id}`}
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {category.image ? (
-                            <img 
-                              src={getAbsoluteImageUrl(category.image) || category.image} 
-                              alt={category.name}
-                              className="w-10 h-10 object-cover rounded flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-muted rounded flex items-center justify-center flex-shrink-0">
-                              <ImagePlus className="w-5 h-5 text-muted-foreground" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{category.name}</p>
-                            <p className="text-sm text-muted-foreground truncate">/{category.slug}</p>
-                          </div>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('Удалить категорию?')) {
-                              deleteMutation.mutate(category.id);
-                            }
-                          }}
-                          data-testid={`button-delete-category-${category.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
+            <CardTitle>Категории ({categories.length})</CardTitle>
+            <Button
+              onClick={() => {
+                setEditingId(null);
+                setShowForm(true);
+                setHasUnsavedImage(false);
+                form.reset();
+              }}
+              data-testid="button-new-category"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Новая категория
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {categories.map((category) => (
+              <div
+                key={category.id}
+                className={`flex items-center justify-between p-3 rounded-md cursor-pointer hover-elevate ${
+                  editingId === category.id ? 'bg-sidebar-accent' : ''
+                }`}
+                onClick={() => handleEdit(category)}
+                data-testid={`category-item-${category.id}`}
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {category.image ? (
+                    <img 
+                      src={getAbsoluteImageUrl(category.image) || category.image} 
+                      alt={category.name}
+                      className="w-10 h-10 object-cover rounded flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                      <ImagePlus className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{category.name}</p>
+                    <p className="text-sm text-muted-foreground truncate">/{category.slug}</p>
                   </div>
                 </div>
-              </SheetContent>
-            </Sheet>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm('Удалить категорию?')) {
+                      deleteMutation.mutate(category.id);
+                    }
+                  }}
+                  data-testid={`button-delete-category-${category.id}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Form - mostrato solo quando necessario */}
+      {showForm && (
+        <Card data-testid="category-form">
+        <CardHeader>
+          <CardTitle>{editingId ? 'Редактировать категорию' : 'Создать категорию'}</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -437,7 +432,7 @@ function CategoriesManager() {
                     <FormLabel>Изображение категории (опционально)</FormLabel>
                     <FormControl>
                       <ImageUploadField
-                        value={field.value}
+                        value={field.value ?? null}
                         onChange={(value) => {
                           field.onChange(value);
                           setHasUnsavedImage(true);
@@ -545,7 +540,8 @@ function CategoriesManager() {
             </form>
           </Form>
         </CardContent>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }
@@ -557,7 +553,7 @@ type ProductFormData = z.infer<typeof insertProductSchema>;
 function ProductsManager() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [showForm, setShowForm] = useState(false);
 
   // Fetch products and categories
   const { data: products = [], isLoading: isLoadingProducts } = useQuery<Product[]>({
@@ -666,6 +662,7 @@ function ProductsManager() {
 
   const handleEdit = (product: Product) => {
     setEditingId(product.id);
+    setShowForm(true);
     form.reset({
       name: product.name,
       slug: product.slug,
@@ -679,11 +676,11 @@ function ProductsManager() {
       descriptionShort: product.descriptionShort,
       descriptionFull: product.descriptionFull,
     });
-    setSheetOpen(false); // Chiude il menu laterale dopo la selezione
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
+    setShowForm(false);
     form.reset();
   };
 
@@ -693,79 +690,73 @@ function ProductsManager() {
 
   return (
     <div className="space-y-6">
-      {/* Form */}
-      <Card data-testid="product-form">
+      {/* Lista prodotti */}
+      <Card data-testid="products-list">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>{editingId ? 'Редактировать продукт' : 'Создать продукт'}</CardTitle>
-            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" data-testid="button-open-product-selector">
-                  <Package className="w-4 h-4 mr-2" />
-                  Выбрать продукт
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-80">
-                <SheetHeader>
-                  <SheetTitle>Все продукты</SheetTitle>
-                </SheetHeader>
-                <div className="mt-4 space-y-4">
-                  <Button
-                    onClick={() => {
-                      setEditingId(null);
-                      form.reset();
-                      setSheetOpen(false);
-                    }}
-                    className="w-full"
-                    data-testid="button-new-product"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Новый продукт
-                  </Button>
-                  <div className="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto">
-                    {products.map((product) => (
-                      <div
-                        key={product.id}
-                        className={`flex items-center justify-between p-3 rounded-md cursor-pointer hover-elevate ${
-                          editingId === product.id ? 'bg-sidebar-accent' : ''
-                        }`}
-                        onClick={() => handleEdit(product)}
-                        data-testid={`product-selector-${product.id}`}
-                      >
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {product.images && product.images[0] && (
-                            <img 
-                              src={product.images[0]} 
-                              alt={product.name}
-                              className="w-10 h-10 object-cover rounded"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{product.name}</p>
-                            <p className="text-sm text-muted-foreground">{product.price} ₽/{product.unit}</p>
-                          </div>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('Удалить продукт?')) {
-                              deleteMutation.mutate(product.id);
-                            }
-                          }}
-                          data-testid={`button-delete-product-${product.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+            <CardTitle>Продукты ({products.length})</CardTitle>
+            <Button
+              onClick={() => {
+                setEditingId(null);
+                setShowForm(true);
+                form.reset();
+              }}
+              data-testid="button-new-product"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Новый продукт
+            </Button>
           </div>
         </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {products.map((product) => (
+              <div
+                key={product.id}
+                className={`flex items-center justify-between p-3 rounded-md cursor-pointer hover-elevate ${
+                  editingId === product.id ? 'bg-sidebar-accent' : ''
+                }`}
+                onClick={() => handleEdit(product)}
+                data-testid={`product-item-${product.id}`}
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {product.images && product.images[0] && (
+                    <img 
+                      src={product.images[0]} 
+                      alt={product.name}
+                      className="w-10 h-10 object-cover rounded flex-shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{product.name}</p>
+                    <p className="text-sm text-muted-foreground">{product.price} ₽/{product.unit}</p>
+                  </div>
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm('Удалить продукт?')) {
+                      deleteMutation.mutate(product.id);
+                    }
+                  }}
+                  data-testid={`button-delete-product-${product.id}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Form - mostrato solo quando necessario */}
+      {showForm && (
+        <Card data-testid="product-form">
+          <CardHeader>
+            <CardTitle>{editingId ? 'Редактировать продукт' : 'Создать продукт'}</CardTitle>
+          </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -990,7 +981,8 @@ function ProductsManager() {
             </form>
           </Form>
         </CardContent>
-      </Card>
+        </Card>
+      )}
     </div>
   );
 }
