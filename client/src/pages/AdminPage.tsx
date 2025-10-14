@@ -526,16 +526,14 @@ function CategoriesManager() {
                     'Создать'
                   )}
                 </Button>
-                {editingId && (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={handleCancelEdit}
-                    data-testid="button-cancel-edit-category"
-                  >
-                    Отменить
-                  </Button>
-                )}
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={handleCancelEdit}
+                  data-testid="button-cancel-edit-category"
+                >
+                  Отменить
+                </Button>
               </div>
             </form>
           </Form>
@@ -967,16 +965,14 @@ function ProductsManager() {
                 >
                   {editingId ? 'Обновить' : 'Создать'}
                 </Button>
-                {editingId && (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={handleCancelEdit}
-                    data-testid="button-cancel-edit-product"
-                  >
-                    Отменить
-                  </Button>
-                )}
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={handleCancelEdit}
+                  data-testid="button-cancel-edit-product"
+                >
+                  Отменить
+                </Button>
               </div>
             </form>
           </Form>

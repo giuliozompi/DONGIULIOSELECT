@@ -30,6 +30,13 @@ A sidebar-based admin interface (`/admin`) offers a two-tier administration mode
 - **Regular Administrators**: Manage categories, products, orders, and recommendations.
 The panel includes sections for Catalog Management (Categories, Products, Recommendations) and Operations Management (Orders), plus "Администраторы" (Master Admin only) and "Логи" (Audit Logs). All administrative actions are tracked in `admin_action_logs` for accountability.
 
+**UX Improvements (October 2025)**:
+- Sidebar opens automatically when accessing `/admin` (`defaultOpen={true}`)
+- Categories and Products managers prioritize content viewing: lists are shown immediately, forms are hidden by default
+- Forms appear only on explicit user action: clicking "New" button or selecting an existing item
+- Cancel/completion actions hide the form and return to list-only view
+- Cleaner, less cluttered interface that guides users through progressive disclosure
+
 ### Image Management & Object Storage
 **Replit Object Storage** is used for product and category images. It features secure admin-only uploads with public accessibility. Uploads are handled via presigned URLs and an Uppy-based frontend component, with images served via a custom route. All uploads are restricted to 5MB, images only, and stored with normalized paths.
 
