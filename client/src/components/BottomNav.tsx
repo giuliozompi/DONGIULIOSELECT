@@ -1,6 +1,6 @@
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { Home, ShoppingCart, Sparkles, Package, Shield, Bot, Heart } from 'lucide-react';
+import { Home, ShoppingCart, Sparkles, Package, Shield, Bot } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export default function BottomNav() {
@@ -37,16 +37,17 @@ export default function BottomNav() {
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/cart', icon: ShoppingCart, label: 'Корзина' },
-    { path: '/lk', icon: Package, label: 'ЛК' },
     { path: '/fortune', icon: Sparkles, label: 'Призы' },
-    { path: '/favorites', icon: Heart, label: 'Избранное' },
     { path: '/assistant', icon: Bot, label: 'Помощник' },
   ];
 
-  // Add admin link if user is admin
+  // Add admin link if user is admin (before ЛК)
   if (adminCheck?.isAdmin) {
     navItems.push({ path: '/admin', icon: Shield, label: 'Админ' });
   }
+
+  // ЛК is always last
+  navItems.push({ path: '/lk', icon: Package, label: 'ЛК' });
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-background border-t z-50" data-testid="nav-bottom">

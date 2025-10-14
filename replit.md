@@ -62,11 +62,14 @@ This feature eliminates repetitive data entry while maintaining user privacy—e
 The application features a **Personal Cabinet (ЛК - Личный кабинет)** accessible from the bottom navigation, serving as a central hub for user-related features:
 
 **Navigation Structure:**
-- Bottom navigation displays "ЛК" (Personal Cabinet) instead of direct "Заказы" (Orders) link
+- Bottom navigation displays "ЛК" (Personal Cabinet) as the **last menu item** (always positioned after all other items)
 - Package icon maintained for consistency
+- "Избранное" (Favorites) removed from main navigation, accessible only through ЛК hub
+- Menu order for regular users: Главная → Корзина → Призы → Помощник → **ЛК**
+- Menu order for admins: Главная → Корзина → Призы → Помощник → Админ → **ЛК**
 - Hub page (`/lk`) contains three main sections:
   1. **Мои данные** (`/my-data`) - Personal Information Management
-  2. **Мои избранные** (`/favorites`) - Favorite Products
+  2. **Мои избранные** (`/favorites`) - Favorite Products (only accessible via ЛК)
   3. **Заказы** (`/orders`) - Order History
 
 **Personal Data Management (`/my-data`):**
