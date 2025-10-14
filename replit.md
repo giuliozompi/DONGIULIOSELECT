@@ -58,6 +58,35 @@ The application automatically saves customer contact information from checkout f
 
 This feature eliminates repetitive data entry while maintaining user privacy—each user only accesses their own saved information.
 
+#### User Profile & Personal Cabinet (ЛК)
+The application features a **Personal Cabinet (ЛК - Личный кабинет)** accessible from the bottom navigation, serving as a central hub for user-related features:
+
+**Navigation Structure:**
+- Bottom navigation displays "ЛК" (Personal Cabinet) instead of direct "Заказы" (Orders) link
+- Package icon maintained for consistency
+- Hub page (`/lk`) contains three main sections:
+  1. **Мои данные** (`/my-data`) - Personal Information Management
+  2. **Мои избранные** (`/favorites`) - Favorite Products
+  3. **Заказы** (`/orders`) - Order History
+
+**Personal Data Management (`/my-data`):**
+- View and edit user profile information
+- Fields available for editing:
+  - **Полное имя** (Full Name) - customerName
+  - **Телефон** (Phone) - phone number
+  - **Email** - email address
+- Telegram information displayed (read-only): firstName, lastName, username
+- **Data persistence**: All fields support null values for deletion
+- **Validation**: Email validated only when provided (allows clearing)
+- **API**: Uses PUT `/api/user` with nullable schema for updates
+
+**Technical Implementation:**
+- Frontend uses `useEffect` to sync loaded user data with form state
+- Empty fields normalized to `null` before submission to allow field clearing
+- Backend Zod schema: `z.union([z.string().email(), z.null()]).optional()` for email
+- Pre-fill functionality ensures saved data appears on page load
+- Toast notifications for save confirmation
+
 ### Admin Panel
 A sidebar-based admin interface (`/admin`) with hierarchical navigation allows authorized users to manage various aspects of the application. The system implements a **two-tier administration model**:
 

@@ -41,7 +41,7 @@ export default function MyDataPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { customerName?: string; phone?: string; email?: string }) => {
+    mutationFn: async (data: { customerName?: string | null; phone?: string | null; email?: string | null }) => {
       return await apiRequest('PUT', '/api/user', data);
     },
     onSuccess: () => {
