@@ -32,7 +32,7 @@ The panel includes sections for Catalog Management (Categories, Products, Recomm
 
 **UX Improvements (October 2025)**:
 - Sidebar opens automatically when accessing `/admin` (`defaultOpen={true}`)
-- Sidebar remains open when navigating between sections for easy access
+- Sidebar closes after selecting a navigation item to give full space to the content
 - Categories and Products managers prioritize content viewing: lists are shown immediately, forms are hidden by default
 - Forms appear only on explicit user action: clicking "New" button or selecting an existing item
 - "Annulla" (Cancel) button is always visible when form is shown, both for creating and editing
