@@ -29,7 +29,7 @@ export default function ProductGallery({ images, productId }: ProductGalleryProp
       />
       
       {productId && (
-        <div className="absolute top-4 left-4 z-10">
+        <div className="absolute top-4 right-4 z-10">
           <FavoriteButton productId={productId} />
         </div>
       )}

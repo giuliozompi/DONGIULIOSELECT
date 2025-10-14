@@ -1,8 +1,7 @@
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { Home, ShoppingCart, Sparkles, Package, Shield, Bot } from 'lucide-react';
+import { Home, ShoppingCart, Sparkles, Package, Shield, Bot, Heart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { CheeseIcon } from '@/components/CheeseIcon';
 
 export default function BottomNav() {
   const [location, setLocation] = useLocation();
@@ -40,7 +39,7 @@ export default function BottomNav() {
     { path: '/cart', icon: ShoppingCart, label: 'Корзина' },
     { path: '/orders', icon: Package, label: 'Заказы' },
     { path: '/fortune', icon: Sparkles, label: 'Призы' },
-    { path: '/favorites', icon: 'cheese', label: 'Избранное' },
+    { path: '/favorites', icon: Heart, label: 'Избранное' },
     { path: '/assistant', icon: Bot, label: 'Помощник' },
   ];
 
@@ -53,8 +52,7 @@ export default function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 bg-background border-t z-50" data-testid="nav-bottom">
       <div className="flex items-center justify-around h-16">
         {navItems.map((item) => {
-          const Icon = typeof item.icon === 'string' ? null : item.icon;
-          const isCheese = item.icon === 'cheese';
+          const Icon = item.icon;
           const isActive = location === item.path;
           const isFortune = item.path === '/fortune';
           const isCart = item.path === '/cart';
@@ -71,11 +69,7 @@ export default function BottomNav() {
               data-testid={`button-nav-${item.label}`}
             >
               <div className="relative">
-                {isCheese ? (
-                  <CheeseIcon className="w-5 h-5" filled={isActive} />
-                ) : Icon ? (
-                  <Icon className="w-5 h-5" />
-                ) : null}
+                <Icon className="w-5 h-5" />
                 {showFortuneBadge && (
                   <Badge 
                     className="absolute -top-2 -right-2 h-4 min-w-4 px-1 flex items-center justify-center text-[10px] rounded-full"

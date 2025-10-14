@@ -2,9 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Heart } from 'lucide-react';
 import ProductCard from '@/components/ProductCard';
-import { CheeseIcon } from '@/components/CheeseIcon';
 import type { Product } from '@shared/schema';
 
 type FavoriteProduct = Product & { categoryName: string };
@@ -47,10 +46,10 @@ export default function FavoritesPage() {
       <div className="p-4">
         {favorites.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4" data-testid="empty-favorites">
-            <CheeseIcon className="w-24 h-24 mb-4 text-muted-foreground" />
+            <Heart className="w-24 h-24 mb-4 text-muted-foreground" />
             <h2 className="text-xl font-semibold mb-2">Нет избранных товаров</h2>
             <p className="text-muted-foreground text-center mb-6">
-              Добавьте товары в избранное, нажав на иконку сыра
+              Добавьте товары в избранное, нажав на иконку сердца
             </p>
             <Button
               onClick={() => setLocation('/')}

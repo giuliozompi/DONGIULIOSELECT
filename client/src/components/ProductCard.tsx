@@ -132,11 +132,11 @@ export default function ProductCard({
           className="w-full h-full object-cover"
           data-testid={`img-product-${name}`}
         />
-        <div className="absolute top-2 left-2 z-10">
+        <div className="absolute top-2 right-2 z-10">
           <FavoriteButton productId={id} />
         </div>
         {priceOld && (
-          <Badge className="absolute top-2 right-2 bg-destructive text-destructive-foreground">
+          <Badge className="absolute top-10 right-2 bg-destructive text-destructive-foreground">
             Скидка
           </Badge>
         )}
