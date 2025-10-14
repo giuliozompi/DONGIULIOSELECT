@@ -37,7 +37,7 @@ export default function BottomNav() {
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/cart', icon: ShoppingCart, label: 'Корзина' },
-    { path: '/orders', icon: Package, label: 'Заказы' },
+    { path: '/lk', icon: Package, label: 'ЛК' },
     { path: '/fortune', icon: Sparkles, label: 'Призы' },
     { path: '/favorites', icon: Heart, label: 'Избранное' },
     { path: '/assistant', icon: Bot, label: 'Помощник' },
