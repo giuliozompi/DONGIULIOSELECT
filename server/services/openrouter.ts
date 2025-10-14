@@ -22,6 +22,7 @@ export interface Product {
   categoryId: string;
   categoryName?: string;
   unit: string;
+  tasteVariations?: string[];
 }
 
 export interface ChatCompletionOptions {
@@ -84,6 +85,9 @@ Tono: Professionale, esperto e caloroso - come un sommelier italiano di alto liv
       if (p.categoryName) prompt += ` (${p.categoryName})`;
       prompt += ` - ${p.price}₽/${p.unit}`;
       if (p.description) prompt += `\n  ${p.description}`;
+      if (p.tasteVariations && p.tasteVariations.length > 0) {
+        prompt += `\n  Varianti di gusto disponibili: ${p.tasteVariations.join(', ')}`;
+      }
     });
     prompt += `\n\nRicorda: suggerisci SEMPRE questi prodotti quando appropriato prima di consigliare il canale Telegram.`;
   }

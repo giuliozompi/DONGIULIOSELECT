@@ -54,7 +54,8 @@ export default function SearchPage() {
     const filtered = products.filter(p =>
       p.name.toLowerCase().includes(searchLower) ||
       p.descriptionShort?.toLowerCase().includes(searchLower) ||
-      p.descriptionFull?.toLowerCase().includes(searchLower)
+      p.descriptionFull?.toLowerCase().includes(searchLower) ||
+      p.tasteVariations?.some(taste => taste.toLowerCase().includes(searchLower))
     );
     setFilteredProducts(filtered);
   }, [query, products]);

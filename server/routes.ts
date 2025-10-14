@@ -906,6 +906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         categoryId: p.categoryId,
         categoryName: categoryMap.get(p.categoryId),
         unit: p.unit,
+        tasteVariations: p.tasteVariations,
       }));
       
       // Prepara messaggi per OpenRouter

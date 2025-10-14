@@ -20,7 +20,6 @@ export default function ProductDetailPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
-  const [selectedTaste, setSelectedTaste] = useState<string>('');
   const [quantity, setQuantity] = useState(0.1);
 
   const { data: product, isLoading } = useQuery<Product>({
@@ -175,18 +174,14 @@ export default function ProductDetailPage() {
 
           {product.tasteVariations && product.tasteVariations.length > 0 && (
             <div className="space-y-2 mb-4">
-              <p className="text-sm font-medium">Выберите вкус:</p>
+              <p className="text-sm font-medium">Доступные вкусы:</p>
               <div className="flex gap-2 flex-wrap">
                 {product.tasteVariations.map((taste) => (
                   <Badge
                     key={taste}
-                    variant={selectedTaste === taste ? 'default' : 'outline'}
-                    className="cursor-pointer hover-elevate active-elevate-2 px-4 py-2"
-                    onClick={() => {
-                      hapticFeedback('light');
-                      setSelectedTaste(taste);
-                    }}
-                    data-testid={`button-taste-${taste}`}
+                    variant="secondary"
+                    className="px-4 py-2"
+                    data-testid={`badge-taste-${taste}`}
                   >
                     {taste}
                   </Badge>
