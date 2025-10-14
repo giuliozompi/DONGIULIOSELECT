@@ -40,12 +40,6 @@ import { format } from 'date-fns';
 // Componente interno che può usare useSidebar
 function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [activeSection, setActiveSection] = useState('categories');
-  const { setOpenMobile } = useSidebar();
-
-  const handleNavClick = (section: string) => {
-    setActiveSection(section);
-    setOpenMobile(false); // Chiude la sidebar quando viene selezionata un'opzione
-  };
 
   return (
     <div className="flex h-screen w-full" data-testid="admin-page">
@@ -60,7 +54,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => handleNavClick('categories')}
+                  onClick={() => setActiveSection('categories')}
                   className={activeSection === 'categories' ? 'bg-sidebar-accent' : ''}
                   data-testid="button-nav-categories"
                 >
@@ -70,7 +64,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => handleNavClick('products')}
+                  onClick={() => setActiveSection('products')}
                   className={activeSection === 'products' ? 'bg-sidebar-accent' : ''}
                   data-testid="button-nav-products"
                 >
@@ -80,7 +74,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => handleNavClick('associations')}
+                  onClick={() => setActiveSection('associations')}
                   className={activeSection === 'associations' ? 'bg-sidebar-accent' : ''}
                   data-testid="button-nav-associations"
                 >
@@ -100,7 +94,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => handleNavClick('orders')}
+                  onClick={() => setActiveSection('orders')}
                   className={activeSection === 'orders' ? 'bg-sidebar-accent' : ''}
                   data-testid="button-nav-orders"
                 >
@@ -117,7 +111,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               {isMasterAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => handleNavClick('admins')}
+                    onClick={() => setActiveSection('admins')}
                     className={activeSection === 'admins' ? 'bg-sidebar-accent' : ''}
                     data-testid="button-nav-admins"
                   >
@@ -128,7 +122,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               )}
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => handleNavClick('logs')}
+                  onClick={() => setActiveSection('logs')}
                   className={activeSection === 'logs' ? 'bg-sidebar-accent' : ''}
                   data-testid="button-nav-logs"
                 >
