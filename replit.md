@@ -33,6 +33,15 @@ The panel includes sections for Catalog Management (Categories, Products, Recomm
 ### Image Management & Object Storage
 **Replit Object Storage** is used for product and category images. It features secure admin-only uploads with public accessibility. Uploads are handled via presigned URLs and an Uppy-based frontend component, with images served via a custom route. All uploads are restricted to 5MB, images only, and stored with normalized paths.
 
+### Product Image Slideshow
+Products support multiple images that automatically rotate in both list views and detail pages. The slideshow system features:
+- **Auto-rotation**: 5-second intervals for automatic image transitions
+- **Smooth transitions**: 1-second opacity fade between images
+- **Infinite loop**: Seamlessly cycles through all product images
+- **Manual controls**: Users can navigate images using prev/next buttons or indicators (in ProductGallery)
+- **Fallback handling**: Single-image products display statically without slideshow
+- **Memory safe**: Intervals properly cleaned up on component unmount
+
 ## External Dependencies
 
 1.  **Telegram WebApp Platform**: Provides native app hosting, authentication, and UI/UX integration.
