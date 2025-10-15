@@ -36,8 +36,9 @@ The panel includes sections for Catalog Management (Categories, Products, Recomm
   - Contact information (name, phone, email, Telegram username)
   - Purchase statistics (total orders, total spent, average order value)
   - Top 5 most purchased products
-  - Complete order history
+  - Complete order history with edit capabilities
 - Edit client contact information (name, phone, email)
+- **Edit orders directly from client page**: Orders in processing (before payment link sent) can be modified using the same OrderEditDialog used in the Orders section
 - Clients sorted by total spent (descending)
 
 **UX Improvements (October 2025)**:

@@ -2138,6 +2138,7 @@ function ClientsManager() {
   const { toast } = useToast();
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editForm, setEditForm] = useState({
     customerName: '',
     phone: '',
@@ -2381,8 +2382,8 @@ function ClientsManager() {
                     <div className="space-y-3">
                       {clientDetail.orders.map((order) => (
                         <div key={order.id} className="p-4 border rounded-md space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div>
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1">
                               <p className="font-medium">Заказ #{order.id.slice(0, 8)}</p>
                               <p className="text-sm text-muted-foreground">
                                 {format(new Date(order.createdAt), 'dd.MM.yyyy HH:mm')}
@@ -2395,8 +2396,21 @@ function ClientsManager() {
                               </Badge>
                             </div>
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {order.items.length} {order.items.length === 1 ? 'товар' : order.items.length < 5 ? 'товара' : 'товаров'}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm text-muted-foreground">
+                              {order.items.length} {order.items.length === 1 ? 'товар' : order.items.length < 5 ? 'товара' : 'товаров'}
+                            </div>
+                            {isOrderEditable(order.status) && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingOrder(order)}
+                                data-testid={`button-edit-client-order-${order.id}`}
+                              >
+                                <Edit className="w-3 h-3 mr-1" />
+                                Редактировать
+                              </Button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -2455,6 +2469,17 @@ function ClientsManager() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Order Edit Dialog */}
+      {editingOrder && (
+        <OrderEditDialog
+          order={editingOrder}
+          open={!!editingOrder}
+          onOpenChange={(open) => {
+            if (!open) setEditingOrder(null);
+          }}
+        />
+      )}
     </div>
   );
 }
