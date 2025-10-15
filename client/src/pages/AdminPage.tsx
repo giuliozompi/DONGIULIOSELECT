@@ -28,7 +28,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { Badge } from '@/components/ui/badge';
@@ -2139,6 +2139,7 @@ function ClientsManager() {
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [editForm, setEditForm] = useState({
     customerName: '',
     phone: '',
@@ -2196,6 +2197,32 @@ function ClientsManager() {
     });
   };
 
+  // Filter clients based on search query
+  const filteredClients = clients.filter(client => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase().trim();
+    
+    // Search in customer name
+    const customerName = client.customerName?.toLowerCase() || '';
+    const firstName = client.firstName?.toLowerCase() || '';
+    const lastName = client.lastName?.toLowerCase() || '';
+    const fullName = `${firstName} ${lastName}`.toLowerCase();
+    
+    // Search in phone
+    const phone = client.phone?.toLowerCase() || '';
+    
+    // Search in last order ID (safely handle missing stats)
+    const orderId = client.stats?.lastOrderId?.toLowerCase() || '';
+    
+    return customerName.includes(query) || 
+           firstName.includes(query) || 
+           lastName.includes(query) ||
+           fullName.includes(query) ||
+           phone.includes(query) ||
+           orderId.includes(query);
+  });
+
   return (
     <div className="space-y-6">
       <Card data-testid="clients-list">
@@ -2204,10 +2231,26 @@ function ClientsManager() {
           <CardDescription>Список всех клиентов с статистикой покупок</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Search field */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Поиск по имени, телефону или номеру заказа..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-clients"
+              />
+            </div>
+          </div>
+
           {isLoading ? (
             <p className="text-muted-foreground">Загрузка...</p>
-          ) : clients.length === 0 ? (
-            <p className="text-muted-foreground">Нет клиентов</p>
+          ) : filteredClients.length === 0 ? (
+            <p className="text-muted-foreground">
+              {searchQuery ? 'Клиенты не найдены' : 'Нет клиентов'}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -2221,7 +2264,7 @@ function ClientsManager() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clients.map((client) => (
+                {filteredClients.map((client) => (
                   <TableRow 
                     key={client.id}
                     className="cursor-pointer hover-elevate"

@@ -31,6 +31,7 @@ A sidebar-based admin interface (`/admin`) offers a two-tier administration mode
 The panel includes sections for Catalog Management (Categories, Products, Recommendations) and Operations Management (Orders, Clients), plus "Администраторы" (Master Admin only) and "Логи" (Audit Logs). All administrative actions are tracked in `admin_action_logs` for accountability.
 
 **Client Management (`/admin` → Клиенты)**:
+- **Search functionality**: Search clients by name, phone number, or order ID with real-time filtering
 - View all customers with purchase statistics (total orders, total spent, last order date)
 - Detailed client view with:
   - Contact information (name, phone, email, Telegram username)
