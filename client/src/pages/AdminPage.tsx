@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useLocation } from 'wouter';
 import { 
   Sidebar, 
   SidebarContent, 
@@ -218,6 +219,7 @@ type CategoryFormData = z.infer<typeof insertCategorySchema>;
 
 function CategoriesManager() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [hasUnsavedImage, setHasUnsavedImage] = useState(false);
@@ -354,47 +356,61 @@ function CategoriesManager() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {categories.map((category) => (
-              <div
+              <Card
                 key={category.id}
-                className={`flex items-center justify-between p-3 rounded-md cursor-pointer hover-elevate ${
-                  editingId === category.id ? 'bg-sidebar-accent' : ''
-                }`}
-                onClick={() => handleEdit(category)}
+                className="cursor-pointer hover-elevate"
+                onClick={() => setLocation(`/admin/categories/${category.id}`)}
                 data-testid={`category-item-${category.id}`}
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  {category.image ? (
-                    <img 
-                      src={getAbsoluteImageUrl(category.image) || category.image} 
-                      alt={category.name}
-                      className="w-10 h-10 object-cover rounded flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 bg-muted rounded flex items-center justify-center flex-shrink-0">
-                      <ImagePlus className="w-5 h-5 text-muted-foreground" />
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-3">
+                    {category.image ? (
+                      <img 
+                        src={getAbsoluteImageUrl(category.image) || category.image} 
+                        alt={category.name}
+                        className="w-full h-32 object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-full h-32 bg-muted rounded flex items-center justify-center">
+                        <ImagePlus className="w-12 h-12 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <p className="font-medium text-lg truncate">{category.name}</p>
+                      <p className="text-sm text-muted-foreground truncate">/{category.slug}</p>
                     </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{category.name}</p>
-                    <p className="text-sm text-muted-foreground truncate">/{category.slug}</p>
+                    <div className="flex items-center justify-between pt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLocation(`/admin/categories/${category.id}`);
+                        }}
+                        data-testid={`button-edit-category-${category.id}`}
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Редактировать
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Удалить категорию?')) {
+                            deleteMutation.mutate(category.id);
+                          }
+                        }}
+                        data-testid={`button-delete-category-${category.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm('Удалить категорию?')) {
-                      deleteMutation.mutate(category.id);
-                    }
-                  }}
-                  data-testid={`button-delete-category-${category.id}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </CardContent>
@@ -563,6 +579,7 @@ type ProductFormData = z.infer<typeof insertProductSchema>;
 
 function ProductsManager() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
@@ -720,43 +737,64 @@ function ProductsManager() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {products.map((product) => (
-              <div
+              <Card
                 key={product.id}
-                className={`flex items-center justify-between p-3 rounded-md cursor-pointer hover-elevate ${
-                  editingId === product.id ? 'bg-sidebar-accent' : ''
-                }`}
-                onClick={() => handleEdit(product)}
+                className="cursor-pointer hover-elevate"
+                onClick={() => setLocation(`/admin/products/${product.id}`)}
                 data-testid={`product-item-${product.id}`}
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  {product.images && product.images[0] && (
-                    <img 
-                      src={product.images[0]} 
-                      alt={product.name}
-                      className="w-10 h-10 object-cover rounded flex-shrink-0"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">{product.price} ₽/{product.unit}</p>
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-3">
+                    {product.images && product.images[0] ? (
+                      <img 
+                        src={product.images[0]} 
+                        alt={product.name}
+                        className="w-full h-32 object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-full h-32 bg-muted rounded flex items-center justify-center">
+                        <Package className="w-12 h-12 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <p className="font-medium text-lg truncate">{product.name}</p>
+                      <p className="text-sm text-muted-foreground">{product.price} ₽/{product.unit}</p>
+                      {!product.inStock && (
+                        <Badge variant="destructive" className="text-xs">Нет в наличии</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between pt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLocation(`/admin/products/${product.id}`);
+                        }}
+                        data-testid={`button-edit-product-${product.id}`}
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Редактировать
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Удалить продукт?')) {
+                            deleteMutation.mutate(product.id);
+                          }
+                        }}
+                        data-testid={`button-delete-product-${product.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm('Удалить продукт?')) {
-                      deleteMutation.mutate(product.id);
-                    }
-                  }}
-                  data-testid={`button-delete-product-${product.id}`}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </CardContent>

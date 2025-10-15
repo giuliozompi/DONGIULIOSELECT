@@ -21,6 +21,8 @@ import MyDataPage from '@/pages/MyDataPage';
 import FortunePage from '@/pages/FortunePage';
 import AssistantPage from '@/pages/AssistantPage';
 import AdminPage from '@/pages/AdminPage';
+import EditCategoryPage from '@/pages/EditCategoryPage';
+import EditProductPage from '@/pages/EditProductPage';
 import LegalPage from '@/pages/LegalPage';
 import NotFound from '@/pages/not-found';
 
@@ -42,6 +44,8 @@ function Router() {
         <Route path="/fortune" component={FortunePage} />
         <Route path="/assistant" component={AssistantPage} />
         <Route path="/admin" component={AdminPage} />
+        <Route path="/admin/categories/:id" component={EditCategoryPage} />
+        <Route path="/admin/products/:id" component={EditProductPage} />
         <Route path="/legal" component={LegalPage} />
         <Route component={NotFound} />
       </Switch>
