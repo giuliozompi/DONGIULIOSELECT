@@ -1,4 +1,4 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { db } from './db';
 import {
   users,
@@ -360,6 +360,46 @@ export class DbStorage implements IStorage {
       .where(eq(fortuneSpinTokens.userId, userId))
       .returning();
     return result[0];
+  }
+
+  async awardSpinTokensForOrder(orderId: string, userId: string): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      // Atomicamente imposta spinTokensAwarded = true solo se è ancora false
+      const result = await tx
+        .update(orders)
+        .set({ spinTokensAwarded: true })
+        .where(and(
+          eq(orders.id, orderId),
+          eq(orders.spinTokensAwarded, false)
+        ))
+        .returning();
+      
+      // Se l'update ha modificato una riga, assegna i tokens
+      if (result.length > 0) {
+        // Verifica se l'utente ha già un record di tokens
+        const current = await tx
+          .select()
+          .from(fortuneSpinTokens)
+          .where(eq(fortuneSpinTokens.userId, userId));
+        
+        if (current[0]) {
+          // Incrementa tokens usando SQL atomico (previene lost updates)
+          await tx
+            .update(fortuneSpinTokens)
+            .set({ tokens: sql`${fortuneSpinTokens.tokens} + 1` })
+            .where(eq(fortuneSpinTokens.userId, userId));
+        } else {
+          // Crea nuovo record con 4 tokens (3 iniziali + 1 per questo ordine)
+          await tx
+            .insert(fortuneSpinTokens)
+            .values({ userId, tokens: 4 });
+        }
+        
+        return true;
+      }
+      
+      return false;
+    });
   }
 
   async createSpin(insertSpin: InsertSpin): Promise<Spin> {

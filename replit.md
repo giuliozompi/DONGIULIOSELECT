@@ -74,6 +74,15 @@ Products support multiple images that automatically rotate in both list views an
 - **Fallback handling**: Single-image products display statically without slideshow
 - **Memory safe**: Intervals properly cleaned up on component unmount
 
+### Gamification System
+The fortune wheel system automatically rewards users with spin tokens when orders are completed:
+- **Automatic Assignment**: 1 spin token per paid order (status: "ОПЛАЧЕН")
+- **Idempotent Logic**: Database-level transaction ensures tokens awarded exactly once per order
+- **Atomic Increment**: SQL-level increment (`tokens = tokens + 1`) prevents lost updates
+- **Dual Triggers**: Tokens assigned via payment webhook or admin manual status change
+- **Flag Tracking**: `spinTokensAwarded` boolean in orders table prevents duplicates
+- **Race-Safe**: Handles concurrent webhooks and multiple simultaneous orders correctly
+
 ## External Dependencies
 
 1.  **Telegram WebApp Platform**: Provides native app hosting, authentication, and UI/UX integration.

@@ -1040,9 +1040,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Payment intent not found' });
       }
       
+      // Ottieni l'ordine
+      const order = await storage.getOrderById(paymentIntent.orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
       // Aggiorna stato ordine con nuovo stato russo
       const orderStatus = webhookPayload.status === 'completed' ? 'ОПЛАЧЕН' : 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ';
       await storage.updateOrderStatus(paymentIntent.orderId, orderStatus);
+      
+      // Se l'ordine è completato, prova ad assegnare 1 spin token (atomicamente)
+      if (webhookPayload.status === 'completed') {
+        const awarded = await storage.awardSpinTokensForOrder(paymentIntent.orderId, order.userId);
+        if (awarded) {
+          console.log(`✅ Assigned 1 spin token to user ${order.userId} for completed order ${order.id} (webhook)`);
+        }
+      }
       
       res.json({ success: true });
     } catch (error) {
@@ -1387,6 +1401,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Aggiorna stato
       const updatedOrder = await storage.updateOrder(orderId, { status });
+      
+      // Se l'ordine passa a "ОПЛАЧЕН", prova ad assegnare 1 spin token (atomicamente)
+      if (status === 'ОПЛАЧЕН') {
+        const awarded = await storage.awardSpinTokensForOrder(orderId, order.userId);
+        if (awarded) {
+          console.log(`✅ Assigned 1 spin token to user ${order.userId} for order ${order.id} (admin status change)`);
+        }
+      }
       
       // Se lo stato è СОБРАН, genera e invia link pagamento automaticamente
       if (status === 'СОБРАН') {

@@ -143,6 +143,9 @@ export const orders = pgTable("orders", {
   paymentId: varchar("payment_id"),
   paymentLinkSentAt: timestamp("payment_link_sent_at"),
   
+  // Gamification: traccia se i spin tokens sono stati assegnati per questo ordine
+  spinTokensAwarded: boolean("spin_tokens_awarded").notNull().default(false),
+  
   // Logistica
   courierService: text("courier_service"), // 'yandex_go' | 'manual' | altro
   courierOrderId: text("courier_order_id"), // ID ordine dal servizio di logistica

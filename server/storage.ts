@@ -158,6 +158,7 @@ export interface IStorage {
   getSpinTokens(userId: string): Promise<FortuneSpinTokens>;
   decrementSpinTokens(userId: string): Promise<FortuneSpinTokens | undefined>;
   incrementSpinTokens(userId: string, amount: number): Promise<FortuneSpinTokens>;
+  awardSpinTokensForOrder(orderId: string, userId: string): Promise<boolean>;
   createSpin(spin: InsertSpin): Promise<Spin>;
   createPrize(prize: InsertPrize): Promise<Prize>;
   getPrizesByUserId(userId: string): Promise<Prize[]>;
@@ -525,6 +526,9 @@ export class MemStorage implements IStorage {
       userId: insertOrder.userId,
       items: normalizeOrderItems(insertOrder.items),
       amount: insertOrder.amount,
+      discount: insertOrder.discount ?? null,
+      discountType: insertOrder.discountType ?? null,
+      discountValue: insertOrder.discountValue ?? null,
       customerName: insertOrder.customerName,
       customerPhone: insertOrder.customerPhone,
       customerEmail: insertOrder.customerEmail ?? null,
@@ -536,9 +540,11 @@ export class MemStorage implements IStorage {
       deliveryPostalCode: insertOrder.deliveryPostalCode ?? null,
       dadataFiasId: insertOrder.dadataFiasId ?? null,
       deliveryNotes: insertOrder.deliveryNotes ?? null,
+      deliveryMethod: insertOrder.deliveryMethod ?? null,
       status: insertOrder.status ?? 'ОФОРМЛЕН',
       paymentId: insertOrder.paymentId ?? null,
       paymentLinkSentAt: insertOrder.paymentLinkSentAt ?? null,
+      spinTokensAwarded: insertOrder.spinTokensAwarded ?? false,
       courierService: insertOrder.courierService ?? null,
       courierOrderId: insertOrder.courierOrderId ?? null,
       courierTrackingUrl: insertOrder.courierTrackingUrl ?? null,
@@ -620,6 +626,22 @@ export class MemStorage implements IStorage {
     const updated = { ...tokens, tokens: tokens.tokens + amount };
     this.spinTokens.set(userId, updated);
     return updated;
+  }
+
+  async awardSpinTokensForOrder(orderId: string, userId: string): Promise<boolean> {
+    const order = this.orders.get(orderId);
+    if (!order || order.spinTokensAwarded) {
+      return false;
+    }
+    
+    // Imposta il flag
+    order.spinTokensAwarded = true;
+    this.orders.set(orderId, order);
+    
+    // Incrementa tokens
+    await this.incrementSpinTokens(userId, 1);
+    
+    return true;
   }
 
   async createSpin(insertSpin: InsertSpin): Promise<Spin> {
