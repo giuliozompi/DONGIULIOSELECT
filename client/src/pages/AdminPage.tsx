@@ -1452,6 +1452,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Fetch orders with filter
   const { data: orders = [], isLoading } = useQuery<Order[]>({
@@ -1506,6 +1507,26 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
     }
   };
 
+  // Filter orders based on search query
+  const filteredOrders = orders.filter(order => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase().trim();
+    
+    // Search in customer name
+    const customerName = order.customerName?.toLowerCase() || '';
+    
+    // Search in phone
+    const phone = order.customerPhone?.toLowerCase() || '';
+    
+    // Search in order ID
+    const orderId = order.id.toLowerCase();
+    
+    return customerName.includes(query) || 
+           phone.includes(query) ||
+           orderId.includes(query);
+  });
+
   if (isLoading) {
     return <div className="py-4">Загрузка заказов...</div>;
   }
@@ -1538,11 +1559,27 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           <CardTitle>Заказы ({orders.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Search field */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Поиск по имени клиента, телефону или номеру заказа..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+                data-testid="input-search-orders"
+              />
+            </div>
+          </div>
+
           <div className="space-y-4" data-testid="orders-list">
-            {orders.length === 0 ? (
-              <p className="text-muted-foreground">Нет заказов</p>
+            {filteredOrders.length === 0 ? (
+              <p className="text-muted-foreground">
+                {searchQuery ? 'Заказы не найдены' : 'Нет заказов'}
+              </p>
             ) : (
-              orders.map((order) => (
+              filteredOrders.map((order) => (
                 <div 
                   key={order.id} 
                   className="border rounded-md p-4 space-y-3 hover-elevate"
