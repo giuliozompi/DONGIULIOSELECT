@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -41,6 +41,14 @@ import { format } from 'date-fns';
 function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [activeSection, setActiveSection] = useState('categories');
   const { isMobile, open, setOpen, setOpenMobile } = useSidebar();
+
+  // Forza l'apertura della sidebar solo al mount iniziale (quando si accede a /admin)
+  useEffect(() => {
+    if (!isMobile) {
+      setOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run solo al mount
 
   const handleNavClick = (section: string) => {
     setActiveSection(section);
