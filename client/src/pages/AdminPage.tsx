@@ -360,56 +360,60 @@ function CategoriesManager() {
             {categories.map((category) => (
               <Card
                 key={category.id}
-                className="cursor-pointer hover-elevate"
+                className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
                 onClick={() => setLocation(`/admin/categories/${category.id}`)}
                 data-testid={`category-item-${category.id}`}
               >
-                <CardContent className="p-4">
-                  <div className="flex flex-col gap-3">
-                    {category.image ? (
-                      <img 
-                        src={getAbsoluteImageUrl(category.image) || category.image} 
-                        alt={category.name}
-                        className="w-full h-32 object-cover rounded"
-                      />
-                    ) : (
-                      <div className="w-full h-32 bg-muted rounded flex items-center justify-center">
-                        <ImagePlus className="w-12 h-12 text-muted-foreground" />
-                      </div>
-                    )}
-                    <div className="space-y-1">
-                      <p className="font-medium text-lg truncate">{category.name}</p>
-                      <p className="text-sm text-muted-foreground truncate">/{category.slug}</p>
+                <div className="relative h-32">
+                  {category.image ? (
+                    <img 
+                      src={getAbsoluteImageUrl(category.image) || category.image} 
+                      alt={category.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-muted flex items-center justify-center">
+                      <ImagePlus className="w-12 h-12 text-muted-foreground" />
                     </div>
-                    <div className="flex items-center justify-between pt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setLocation(`/admin/categories/${category.id}`);
-                        }}
-                        data-testid={`button-edit-category-${category.id}`}
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Редактировать
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('Удалить категорию?')) {
-                            deleteMutation.mutate(category.id);
-                          }
-                        }}
-                        data-testid={`button-delete-category-${category.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <h3 className="text-white font-semibold text-base">
+                      {category.name}
+                    </h3>
+                    <p className="text-white/70 text-xs">
+                      /{category.slug}
+                    </p>
                   </div>
-                </CardContent>
+                  <div className="absolute top-2 right-2 flex gap-2">
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocation(`/admin/categories/${category.id}`);
+                      }}
+                      data-testid={`button-edit-category-${category.id}`}
+                      className="h-8 w-8"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Удалить категорию?')) {
+                          deleteMutation.mutate(category.id);
+                        }
+                      }}
+                      data-testid={`button-delete-category-${category.id}`}
+                      className="h-8 w-8"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               </Card>
             ))}
           </div>
@@ -741,59 +745,65 @@ function ProductsManager() {
             {products.map((product) => (
               <Card
                 key={product.id}
-                className="cursor-pointer hover-elevate"
+                className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
                 onClick={() => setLocation(`/admin/products/${product.id}`)}
                 data-testid={`product-item-${product.id}`}
               >
-                <CardContent className="p-4">
-                  <div className="flex flex-col gap-3">
-                    {product.images && product.images[0] ? (
-                      <img 
-                        src={product.images[0]} 
-                        alt={product.name}
-                        className="w-full h-32 object-cover rounded"
-                      />
-                    ) : (
-                      <div className="w-full h-32 bg-muted rounded flex items-center justify-center">
-                        <Package className="w-12 h-12 text-muted-foreground" />
-                      </div>
-                    )}
-                    <div className="space-y-1">
-                      <p className="font-medium text-lg truncate">{product.name}</p>
-                      <p className="text-sm text-muted-foreground">{product.price} ₽/{product.unit}</p>
+                <div className="relative h-32">
+                  {product.images && product.images[0] ? (
+                    <img 
+                      src={product.images[0]} 
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-muted flex items-center justify-center">
+                      <Package className="w-12 h-12 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <h3 className="text-white font-semibold text-base">
+                      {product.name}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <p className="text-white/80 text-xs">
+                        {product.price} ₽/{product.unit}
+                      </p>
                       {!product.inStock && (
                         <Badge variant="destructive" className="text-xs">Нет в наличии</Badge>
                       )}
                     </div>
-                    <div className="flex items-center justify-between pt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setLocation(`/admin/products/${product.id}`);
-                        }}
-                        data-testid={`button-edit-product-${product.id}`}
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Редактировать
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('Удалить продукт?')) {
-                            deleteMutation.mutate(product.id);
-                          }
-                        }}
-                        data-testid={`button-delete-product-${product.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
                   </div>
-                </CardContent>
+                  <div className="absolute top-2 right-2 flex gap-2">
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLocation(`/admin/products/${product.id}`);
+                      }}
+                      data-testid={`button-edit-product-${product.id}`}
+                      className="h-8 w-8"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('Удалить продукт?')) {
+                          deleteMutation.mutate(product.id);
+                        }
+                      }}
+                      data-testid={`button-delete-product-${product.id}`}
+                      className="h-8 w-8"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               </Card>
             ))}
           </div>

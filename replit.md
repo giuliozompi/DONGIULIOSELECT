@@ -34,7 +34,7 @@ The panel includes sections for Catalog Management (Categories, Products, Recomm
 - Sidebar opens automatically when accessing `/admin` (`defaultOpen={true}`)
 - Sidebar closes after selecting a navigation item to give full space to the content
 - **Default Section**: Admin panel opens directly to "Заказы" (Orders) section by default
-- **Cards Grid Layout**: Categories and Products display as responsive card grids (1 column mobile, 2 columns tablet/desktop max)
+- **Cards Grid Layout**: Categories and Products display as responsive card grids (1 column mobile, 2 columns tablet/desktop max) with HomePage-style design (image background, dark gradient overlay, white text overlaid)
 - **Separate Edit Pages**: Dedicated edit pages at `/admin/categories/:id` and `/admin/products/:id` instead of inline forms
 - **Clean Navigation**: Click card or "Редактировать" button → navigate to edit page → save → return to admin grid
 - Categories and Products creation still uses inline forms that appear on "Nuovo" button click
