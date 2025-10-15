@@ -122,6 +122,16 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                   <span>Заказы</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => handleNavClick('clients')}
+                  className={activeSection === 'clients' ? 'bg-sidebar-accent' : ''}
+                  data-testid="button-nav-clients"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Клиенты</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
 
@@ -165,6 +175,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           {activeSection === 'products' && <ProductsManager />}
           {activeSection === 'associations' && <ProductAssociationsManager />}
           {activeSection === 'orders' && <OrdersManager isMasterAdmin={isMasterAdmin} />}
+          {activeSection === 'clients' && <ClientsManager />}
           {activeSection === 'logs' && <LogsManager />}
           {activeSection === 'admins' && isMasterAdmin && <AdminsManager />}
         </main>
@@ -2084,6 +2095,366 @@ function ProductAssociationsManager() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ==================== CLIENTS MANAGER ====================
+
+interface ClientWithStats {
+  id: string;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  email: string | null;
+  customerName: string | null;
+  stats: {
+    totalOrders: number;
+    totalSpent: string;
+    lastOrderDate: string | null;
+    lastOrderId: string | null;
+  };
+}
+
+interface ClientDetail extends ClientWithStats {
+  stats: {
+    totalOrders: number;
+    totalSpent: string;
+    lastOrderDate: string | null;
+    lastOrderId: string | null;
+    averageOrderValue: string;
+    topProducts: Array<{
+      productId: string;
+      productName: string;
+      totalQuantity: number;
+      totalSpent: string;
+    }>;
+  };
+  orders: Order[];
+}
+
+function ClientsManager() {
+  const { toast } = useToast();
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    customerName: '',
+    phone: '',
+    email: '',
+  });
+
+  // Fetch clients list
+  const { data: clients = [], isLoading } = useQuery<ClientWithStats[]>({
+    queryKey: ['/api/admin/clients'],
+  });
+
+  // Fetch selected client detail
+  const { data: clientDetail } = useQuery<ClientDetail>({
+    queryKey: ['/api/admin/clients', selectedClient],
+    enabled: !!selectedClient,
+  });
+
+  // Update client mutation
+  const updateMutation = useMutation({
+    mutationFn: async (data: { userId: string; updates: any }) => {
+      await apiRequest('PUT', `/api/admin/clients/${data.userId}`, data.updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/clients'] });
+      toast({ title: '✅ Клиент обновлен' });
+      setEditDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleEditClick = (client: ClientDetail) => {
+    setEditForm({
+      customerName: client.customerName || '',
+      phone: client.phone || '',
+      email: client.email || '',
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedClient) return;
+    updateMutation.mutate({
+      userId: selectedClient,
+      updates: {
+        customerName: editForm.customerName || null,
+        phone: editForm.phone || null,
+        email: editForm.email || null,
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card data-testid="clients-list">
+        <CardHeader>
+          <CardTitle>Клиенты ({clients.length})</CardTitle>
+          <CardDescription>Список всех клиентов с статистикой покупок</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-muted-foreground">Загрузка...</p>
+          ) : clients.length === 0 ? (
+            <p className="text-muted-foreground">Нет клиентов</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Клиент</TableHead>
+                  <TableHead>Контакты</TableHead>
+                  <TableHead>Заказов</TableHead>
+                  <TableHead>Всего потрачено</TableHead>
+                  <TableHead>Последний заказ</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {clients.map((client) => (
+                  <TableRow 
+                    key={client.id}
+                    className="cursor-pointer hover-elevate"
+                    onClick={() => setSelectedClient(client.id)}
+                    data-testid={`client-row-${client.id}`}
+                  >
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">
+                          {client.customerName || client.firstName || 'Имя не указано'}
+                        </p>
+                        {client.username && (
+                          <p className="text-sm text-muted-foreground">@{client.username}</p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {client.phone && <p>{client.phone}</p>}
+                        {client.email && <p className="text-muted-foreground">{client.email}</p>}
+                      </div>
+                    </TableCell>
+                    <TableCell>{client.stats.totalOrders}</TableCell>
+                    <TableCell className="font-semibold">{client.stats.totalSpent} ₽</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {client.stats.lastOrderDate 
+                        ? format(new Date(client.stats.lastOrderDate), 'dd.MM.yyyy HH:mm')
+                        : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedClient(client.id);
+                        }}
+                        data-testid={`button-view-client-${client.id}`}
+                      >
+                        Подробнее
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Client Detail Dialog */}
+      <Dialog open={!!selectedClient} onOpenChange={(open) => !open && setSelectedClient(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {clientDetail && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {clientDetail.customerName || clientDetail.firstName || 'Клиент'} 
+                  {clientDetail.username && <span className="text-muted-foreground ml-2">@{clientDetail.username}</span>}
+                </DialogTitle>
+                <DialogDescription>
+                  ID: {clientDetail.id}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6">
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-4">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardDescription>Всего заказов</CardDescription>
+                      <CardTitle className="text-2xl">{clientDetail.stats.totalOrders}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardDescription>Всего потрачено</CardDescription>
+                      <CardTitle className="text-2xl">{clientDetail.stats.totalSpent} ₽</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardDescription>Средний чек</CardDescription>
+                      <CardTitle className="text-2xl">{clientDetail.stats.averageOrderValue} ₽</CardTitle>
+                    </CardHeader>
+                  </Card>
+                </div>
+
+                {/* Contact Info */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Контактная информация</CardTitle>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEditClick(clientDetail)}
+                        data-testid="button-edit-client"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Редактировать
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Имя</p>
+                      <p className="font-medium">{clientDetail.customerName || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Telegram</p>
+                      <p className="font-medium">{clientDetail.username ? `@${clientDetail.username}` : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Телефон</p>
+                      <p className="font-medium">{clientDetail.phone || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Email</p>
+                      <p className="font-medium">{clientDetail.email || '—'}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Top Products */}
+                {clientDetail.stats.topProducts.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Топ-5 продуктов</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {clientDetail.stats.topProducts.map((product, index) => (
+                          <div key={product.productId} className="flex items-center justify-between p-3 border rounded-md">
+                            <div className="flex items-center gap-3">
+                              <Badge variant="outline">{index + 1}</Badge>
+                              <div>
+                                <p className="font-medium">{product.productName}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  Количество: {product.totalQuantity}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="font-semibold">{product.totalSpent} ₽</p>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Orders */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>История заказов</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {clientDetail.orders.map((order) => (
+                        <div key={order.id} className="p-4 border rounded-md space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium">Заказ #{order.id.slice(0, 8)}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {format(new Date(order.createdAt), 'dd.MM.yyyy HH:mm')}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">{order.amount} ₽</p>
+                              <Badge variant={order.status === 'ПОЛУЧЕН' ? 'default' : 'secondary'}>
+                                {order.status}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {order.items.length} {order.items.length === 1 ? 'товар' : order.items.length < 5 ? 'товара' : 'товаров'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Client Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Редактировать клиента</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Имя</Label>
+              <Input
+                value={editForm.customerName}
+                onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })}
+                placeholder="Имя клиента"
+                data-testid="input-edit-name"
+              />
+            </div>
+            <div>
+              <Label>Телефон</Label>
+              <Input
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                placeholder="+7..."
+                data-testid="input-edit-phone"
+              />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                placeholder="email@example.com"
+                data-testid="input-edit-email"
+              />
+            </div>
+            <Button
+              className="w-full"
+              onClick={handleSaveEdit}
+              disabled={updateMutation.isPending}
+              data-testid="button-save-edit"
+            >
+              {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

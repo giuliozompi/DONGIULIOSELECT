@@ -108,6 +108,8 @@ function mergeProductUpdate(product: Product, updates: Partial<InsertProduct>): 
 export interface IStorage {
   // Пользователи
   getUser(id: string): Promise<User | undefined>;
+  getUserById(id: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
 
@@ -348,6 +350,14 @@ export class MemStorage implements IStorage {
   // Пользователи
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    return this.users.get(id);
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {

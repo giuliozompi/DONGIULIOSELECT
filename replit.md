@@ -28,7 +28,17 @@ All fields support null values for deletion, and updates use PUT `/api/user`.
 A sidebar-based admin interface (`/admin`) offers a two-tier administration model:
 - **Master Administrator**: Full privileges, including managing other administrators (defined by `MASTER_ADMIN_USER_ID`).
 - **Regular Administrators**: Manage categories, products, orders, and recommendations.
-The panel includes sections for Catalog Management (Categories, Products, Recommendations) and Operations Management (Orders), plus "Администраторы" (Master Admin only) and "Логи" (Audit Logs). All administrative actions are tracked in `admin_action_logs` for accountability.
+The panel includes sections for Catalog Management (Categories, Products, Recommendations) and Operations Management (Orders, Clients), plus "Администраторы" (Master Admin only) and "Логи" (Audit Logs). All administrative actions are tracked in `admin_action_logs` for accountability.
+
+**Client Management (`/admin` → Клиенты)**:
+- View all customers with purchase statistics (total orders, total spent, last order date)
+- Detailed client view with:
+  - Contact information (name, phone, email, Telegram username)
+  - Purchase statistics (total orders, total spent, average order value)
+  - Top 5 most purchased products
+  - Complete order history
+- Edit client contact information (name, phone, email)
+- Clients sorted by total spent (descending)
 
 **UX Improvements (October 2025)**:
 - Sidebar opens automatically when accessing `/admin` (`defaultOpen={true}`)

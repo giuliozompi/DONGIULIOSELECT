@@ -2009,6 +2009,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== CLIENT MANAGEMENT (ADMIN) ====================
+  
+  // GET /api/admin/clients - Ottieni lista clienti con statistiche (ADMIN ONLY)
+  app.get("/api/admin/clients", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      const orders = await storage.getAllOrders({});
+      
+      // Calcola statistiche per ogni cliente
+      const clientsWithStats = users.map(user => {
+        const userOrders = orders.filter(o => o.userId === user.id);
+        const totalSpent = userOrders.reduce((sum, order) => sum + parseFloat(order.amount), 0);
+        const totalOrders = userOrders.length;
+        const lastOrder = userOrders.length > 0 
+          ? userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
+          : null;
+        
+        return {
+          ...user,
+          stats: {
+            totalOrders,
+            totalSpent: totalSpent.toFixed(2),
+            lastOrderDate: lastOrder?.createdAt || null,
+            lastOrderId: lastOrder?.id || null,
+          }
+        };
+      });
+      
+      // Ordina per totale speso (decrescente)
+      clientsWithStats.sort((a, b) => parseFloat(b.stats.totalSpent) - parseFloat(a.stats.totalSpent));
+      
+      res.json(clientsWithStats);
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET /api/admin/clients/:userId - Ottieni dettaglio cliente (ADMIN ONLY)
+  app.get("/api/admin/clients/:userId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      const user = await storage.getUserById(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+      
+      // Ottieni ordini del cliente
+      const orders = await storage.getAllOrders({});
+      const userOrders = orders.filter(o => o.userId === userId);
+      
+      // Calcola statistiche dettagliate
+      const totalSpent = userOrders.reduce((sum, order) => sum + parseFloat(order.amount), 0);
+      const averageOrderValue = userOrders.length > 0 ? totalSpent / userOrders.length : 0;
+      
+      // Prodotti più acquistati
+      const productCounts: Record<string, { count: number; name: string; total: number }> = {};
+      userOrders.forEach(order => {
+        order.items.forEach(item => {
+          if (!productCounts[item.productId]) {
+            productCounts[item.productId] = { 
+              count: 0, 
+              name: item.productName,
+              total: 0 
+            };
+          }
+          productCounts[item.productId].count += item.quantity;
+          productCounts[item.productId].total += parseFloat(item.price) * item.quantity;
+        });
+      });
+      
+      const topProducts = Object.entries(productCounts)
+        .map(([productId, data]) => ({
+          productId,
+          productName: data.name,
+          totalQuantity: data.count,
+          totalSpent: data.total.toFixed(2)
+        }))
+        .sort((a, b) => parseFloat(b.totalSpent) - parseFloat(a.totalSpent))
+        .slice(0, 5);
+      
+      res.json({
+        ...user,
+        stats: {
+          totalOrders: userOrders.length,
+          totalSpent: totalSpent.toFixed(2),
+          averageOrderValue: averageOrderValue.toFixed(2),
+          topProducts,
+        },
+        orders: userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      });
+    } catch (error) {
+      console.error('Error fetching client detail:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // PUT /api/admin/clients/:userId - Aggiorna dati cliente (ADMIN ONLY)
+  app.put("/api/admin/clients/:userId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        customerName: z.string().nullable().optional(),
+        phone: z.string().nullable().optional(),
+        email: z.string().email().nullable().optional(),
+      });
+      
+      const userId = req.params.userId;
+      const updates = schema.parse(req.body);
+      
+      const user = await storage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Client not found' });
+      }
+      
+      const updatedUser = await storage.updateUser(userId, updates);
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'updated',
+        entityType: 'user',
+        entityId: userId,
+        actionData: {
+          oldData: {
+            customerName: user.customerName,
+            phone: user.phone,
+            email: user.email,
+          },
+          newData: updates,
+        },
+      });
+      
+      res.json(updatedUser);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating client:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // ==================== PRODUCT ASSOCIATIONS (ADMIN) ====================
   
   // GET /api/admin/product-associations - Ottieni tutte le associazioni prodotti (ADMIN ONLY)
