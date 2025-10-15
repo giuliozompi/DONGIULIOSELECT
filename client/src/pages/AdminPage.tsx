@@ -40,7 +40,7 @@ import { format } from 'date-fns';
 
 // Componente interno che può usare useSidebar
 function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
-  const [activeSection, setActiveSection] = useState('categories');
+  const [activeSection, setActiveSection] = useState('orders');
   const { isMobile, open, setOpen, setOpenMobile } = useSidebar();
 
   // Forza l'apertura della sidebar solo al mount iniziale (quando si accede a /admin)
