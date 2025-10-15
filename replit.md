@@ -33,11 +33,12 @@ The panel includes sections for Catalog Management (Categories, Products, Recomm
 **UX Improvements (October 2025)**:
 - Sidebar opens automatically when accessing `/admin` (`defaultOpen={true}`)
 - Sidebar closes after selecting a navigation item to give full space to the content
-- Categories and Products managers prioritize content viewing: lists are shown immediately, forms are hidden by default
-- Forms appear only on explicit user action: clicking "New" button or selecting an existing item
-- "Annulla" (Cancel) button is always visible when form is shown, both for creating and editing
-- Cancel/completion actions hide the form and return to list-only view
-- Cleaner, less cluttered interface that guides users through progressive disclosure
+- **Cards Grid Layout**: Categories and Products display as responsive card grids (1 column mobile, 2 columns tablet, 3 columns desktop)
+- **Separate Edit Pages**: Dedicated edit pages at `/admin/categories/:id` and `/admin/products/:id` instead of inline forms
+- **Clean Navigation**: Click card or "Редактировать" button → navigate to edit page → save → return to admin grid
+- Categories and Products creation still uses inline forms that appear on "Nuovo" button click
+- Edit forms pre-populate with existing data and feature back/save buttons for navigation
+- Cleaner, less cluttered interface with better separation between list view and edit operations
 
 ### Image Management & Object Storage
 **Replit Object Storage** is used for product and category images. It features secure admin-only uploads with public accessibility. Uploads are handled via presigned URLs and an Uppy-based frontend component, with images served via a custom route. All uploads are restricted to 5MB, images only, and stored with normalized paths.
