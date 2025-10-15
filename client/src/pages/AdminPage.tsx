@@ -612,6 +612,7 @@ function ProductsManager() {
   const [, setLocation] = useLocation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
 
   // Fetch products and categories
   const { data: products = [], isLoading: isLoadingProducts } = useQuery<Product[]>({
@@ -621,6 +622,11 @@ function ProductsManager() {
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
   });
+
+  // Filter products by selected category
+  const filteredProducts = selectedCategoryId === 'all' 
+    ? products 
+    : products.filter(p => p.categoryId === selectedCategoryId);
 
   // Form - usa valori temporanei per input arrays
   type FormValues = Omit<ProductFormData, 'images' | 'tasteVariations'> & {
@@ -767,71 +773,98 @@ function ProductsManager() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Filtro per categoria */}
+          <div className="mb-4">
+            <Label>Фильтр по категории</Label>
+            <Select 
+              value={selectedCategoryId} 
+              onValueChange={setSelectedCategoryId}
+            >
+              <SelectTrigger data-testid="select-filter-category">
+                <SelectValue placeholder="Выберите категорию" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Все категории</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {products.map((product) => (
-              <Card
-                key={product.id}
-                className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
-                onClick={() => setLocation(`/admin/products/${product.id}`)}
-                data-testid={`product-item-${product.id}`}
-              >
-                <div className="relative h-32">
-                  {product.images && product.images[0] ? (
-                    <img 
-                      src={product.images[0]} 
-                      alt={product.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-muted flex items-center justify-center">
-                      <Package className="w-12 h-12 text-muted-foreground" />
+            {filteredProducts.length === 0 ? (
+              <p className="text-muted-foreground">
+                {selectedCategoryId === 'all' ? 'Нет продуктов' : 'Нет продуктов в этой категории'}
+              </p>
+            ) : (
+              filteredProducts.map((product) => (
+                <Card
+                  key={product.id}
+                  className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
+                  onClick={() => setLocation(`/admin/products/${product.id}`)}
+                  data-testid={`product-item-${product.id}`}
+                >
+                  <div className="relative h-32">
+                    {product.images && product.images[0] ? (
+                      <img 
+                        src={product.images[0]} 
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-muted flex items-center justify-center">
+                        <Package className="w-12 h-12 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <h3 className="text-white font-semibold text-base">
+                        {product.name}
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <p className="text-white/80 text-xs">
+                          {product.price} ₽/{product.unit}
+                        </p>
+                        {!product.inStock && (
+                          <Badge variant="destructive" className="text-xs">Нет в наличии</Badge>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-4">
-                    <h3 className="text-white font-semibold text-base">
-                      {product.name}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <p className="text-white/80 text-xs">
-                        {product.price} ₽/{product.unit}
-                      </p>
-                      {!product.inStock && (
-                        <Badge variant="destructive" className="text-xs">Нет в наличии</Badge>
-                      )}
+                    <div className="absolute top-2 right-2 flex gap-2">
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLocation(`/admin/products/${product.id}`);
+                        }}
+                        data-testid={`button-edit-product-${product.id}`}
+                        className="h-8 w-8"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Удалить продукт?')) {
+                            deleteMutation.mutate(product.id);
+                          }
+                        }}
+                        data-testid={`button-delete-product-${product.id}`}
+                        className="h-8 w-8"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="absolute top-2 right-2 flex gap-2">
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLocation(`/admin/products/${product.id}`);
-                      }}
-                      data-testid={`button-edit-product-${product.id}`}
-                      className="h-8 w-8"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="secondary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('Удалить продукт?')) {
-                          deleteMutation.mutate(product.id);
-                        }
-                      }}
-                      data-testid={`button-delete-product-${product.id}`}
-                      className="h-8 w-8"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>

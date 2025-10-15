@@ -56,6 +56,7 @@ The panel includes sections for Catalog Management (Categories, Products, Recomm
 - **Cards Grid Layout**: Categories and Products display as responsive card grids (1 column mobile, 2 columns tablet/desktop max) with HomePage-style design (image background, dark gradient overlay, white text overlaid)
 - **Separate Edit Pages**: Dedicated edit pages at `/admin/categories/:id` and `/admin/products/:id` instead of inline forms
 - **Section Persistence**: Admin section state preserved via URL query params (`/admin?section=products`); back navigation from edit pages returns to exact previous section
+- **Category Filter for Products**: Products section includes a category dropdown filter ("Фильтр по категории") to display products by category for easier management
 - **Clean Navigation**: Click card or "Редактировать" button → navigate to edit page → save/back → return to same admin section
 - Categories and Products creation still uses inline forms that appear on "Nuovo" button click
 - Edit forms pre-populate with existing data and feature back/save buttons for navigation
