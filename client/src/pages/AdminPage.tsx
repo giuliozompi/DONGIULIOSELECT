@@ -40,8 +40,21 @@ import { format } from 'date-fns';
 
 // Componente interno che può usare useSidebar
 function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
-  const [activeSection, setActiveSection] = useState('orders');
+  const [location, setLocation] = useLocation();
+  
+  // Leggi la sezione dai query params, default 'orders'
+  const urlParams = new URLSearchParams(window.location.search);
+  const sectionFromUrl = urlParams.get('section') || 'orders';
+  const [activeSection, setActiveSection] = useState(sectionFromUrl);
+  
   const { isMobile, open, setOpen, setOpenMobile } = useSidebar();
+
+  // Aggiorna activeSection quando cambiano i query params (es. quando si torna indietro)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const newSection = urlParams.get('section') || 'orders';
+    setActiveSection(newSection);
+  }, [location]); // Dipende da location per aggiornare quando l'URL cambia
 
   // Forza l'apertura della sidebar solo al mount iniziale (quando si accede a /admin)
   useEffect(() => {
@@ -53,6 +66,8 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
 
   const handleNavClick = (section: string) => {
     setActiveSection(section);
+    // Aggiorna i query params nell'URL
+    setLocation(`/admin?section=${section}`);
     // Chiude la sidebar dopo la selezione
     if (isMobile) {
       setOpenMobile(false);

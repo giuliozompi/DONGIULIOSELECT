@@ -86,7 +86,7 @@ export default function EditProductPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/products'] });
       toast({ title: '✅ Продукт обновлен' });
-      setLocation('/admin');
+      window.history.back();
     },
     onError: (error: any) => {
       toast({ 
@@ -127,7 +127,7 @@ export default function EditProductPage() {
       <div className="container mx-auto p-6 max-w-2xl">
         <Button
           variant="ghost"
-          onClick={() => setLocation('/admin')}
+          onClick={() => window.history.back()}
           className="mb-4"
           data-testid="button-back-to-admin"
         >

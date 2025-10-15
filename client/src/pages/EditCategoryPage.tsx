@@ -64,7 +64,7 @@ export default function EditCategoryPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
       toast({ title: '✅ Categoria обновлена' });
-      setLocation('/admin');
+      window.history.back();
     },
     onError: (error: any) => {
       toast({ 
@@ -100,7 +100,7 @@ export default function EditCategoryPage() {
       <div className="container mx-auto p-6 max-w-2xl">
         <Button
           variant="ghost"
-          onClick={() => setLocation('/admin')}
+          onClick={() => window.history.back()}
           className="mb-4"
           data-testid="button-back-to-admin"
         >
