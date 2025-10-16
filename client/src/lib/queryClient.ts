@@ -5,10 +5,20 @@ async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     try {
       const errorData = await res.json();
-      const errorMessage = errorData.message || errorData.error || res.statusText;
+      let errorMessage = errorData.message || errorData.error || res.statusText;
+      
+      // Se errore 401 in produzione, suggerisci di ricaricare Telegram
+      if (res.status === 401 && window.location.hostname !== 'localhost') {
+        errorMessage = '🔐 Sessione scaduta. Chiudi completamente Telegram e riapri l\'app per continuare.';
+      }
+      
       throw new Error(errorMessage);
     } catch (parseError) {
-      // Se non riesce a parsare come JSON, usa il testo grezzo
+      // Se errore 401, messaggio specifico
+      if (res.status === 401 && window.location.hostname !== 'localhost') {
+        throw new Error('🔐 Sessione scaduta. Chiudi completamente Telegram e riapri l\'app.');
+      }
+      
       const text = res.statusText || 'Errore sconosciuto';
       throw new Error(text);
     }

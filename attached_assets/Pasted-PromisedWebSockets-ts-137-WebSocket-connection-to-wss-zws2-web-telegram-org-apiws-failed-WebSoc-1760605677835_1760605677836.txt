@@ -1,0 +1,123 @@
+PromisedWebSockets.ts:137 WebSocket connection to 'wss://zws2.web.telegram.org/apiws' failed: WebSocket is closed before the connection is established.
+(anonymous) @ PromisedWebSockets.ts:137
+Logger.ts:72 [2025-10-16T09:03:21.199Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+PromisedWebSockets.ts:107 WebSocket error Event
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-16T09:03:22.204Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-16T09:03:24.230Z] [ERROR] - [undefined]
+Logger.ts:72 [2025-10-16T09:03:24.230Z] [WARN] - [Connection closed while receiving data]
+PromisedWebSockets.ts:137 WebSocket connection to 'wss://zws4-1.web.telegram.org/apiws_premium' failed: WebSocket is closed before the connection is established.
+(anonymous) @ PromisedWebSockets.ts:137
+Logger.ts:72 [2025-10-16T09:03:35.084Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+PromisedWebSockets.ts:137 WebSocket connection to 'wss://zws4-1.web.telegram.org/apiws_premium' failed: WebSocket is closed before the connection is established.
+(anonymous) @ PromisedWebSockets.ts:137
+Logger.ts:72 [2025-10-16T09:03:35.084Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+PromisedWebSockets.ts:107 WebSocket error Event
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws4-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws4-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:137 WebSocket connection to 'wss://zws2-1.web.telegram.org/apiws_premium' failed: WebSocket is closed before the connection is established.
+(anonymous) @ PromisedWebSockets.ts:137
+Logger.ts:72 [2025-10-16T09:03:35.088Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+PromisedWebSockets.ts:107 WebSocket error Event
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-16T09:03:36.110Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-16T09:03:36.140Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-16T09:03:36.148Z] [WARN] - [Using fallback connection]
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_header_color Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_background_color Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_bottom_bar_color Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_theme 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_viewport 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_safe_area 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_content_safe_area 
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent theme_changed Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_secondary_button Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_ready 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_expand 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_closing_behavior Object
+index-CVsixoJE.js:48 [Telegram] Init data saved to localStorage
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent visibility_changed Object
+index-CVsixoJE.js:327 `DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog
+(anonymous) @ index-CVsixoJE.js:327
+Qd @ index-CVsixoJE.js:40
+Va @ index-CVsixoJE.js:40
+RR @ index-CVsixoJE.js:40
+Ei @ index-CVsixoJE.js:40
+$y @ index-CVsixoJE.js:40
+wi @ index-CVsixoJE.js:38
+(anonymous) @ index-CVsixoJE.js:40
+index-CVsixoJE.js:327 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-CVsixoJE.js:327
+Qd @ index-CVsixoJE.js:40
+Va @ index-CVsixoJE.js:40
+RR @ index-CVsixoJE.js:40
+Ei @ index-CVsixoJE.js:40
+$y @ index-CVsixoJE.js:40
+wi @ index-CVsixoJE.js:38
+(anonymous) @ index-CVsixoJE.js:40
+don-giulio-catalog.replit.app/api/admin/clients/201331998:1  Failed to load resource: the server responded with a status of 401 ()
+TelegramClient.ts:443 Error: TIMEOUT
+    at TelegramClient.ts:1344:67
+    at async Ta (TelegramClient.ts:1355:7)
+    at async Ma._updateLoop (TelegramClient.ts:105:34)
+_updateLoop @ TelegramClient.ts:443
+Logger.ts:72 [2025-10-16T09:05:27.923Z] [ERROR] - [Error: Not connected]
+Logger.ts:72 [2025-10-16T09:05:27.923Z] [WARN] - [Connection closed while receiving data]
+index-CVsixoJE.js:327 `DialogContent` requires a `DialogTitle` for the component to be accessible for screen reader users.
+
+If you want to hide the `DialogTitle`, you can wrap it with our VisuallyHidden component.
+
+For more information, see https://radix-ui.com/primitives/docs/components/dialog
+(anonymous) @ index-CVsixoJE.js:327
+Qd @ index-CVsixoJE.js:40
+Va @ index-CVsixoJE.js:40
+RR @ index-CVsixoJE.js:40
+Ei @ index-CVsixoJE.js:40
+$y @ index-CVsixoJE.js:40
+wi @ index-CVsixoJE.js:38
+(anonymous) @ index-CVsixoJE.js:40
+index-CVsixoJE.js:327 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ index-CVsixoJE.js:327
+Qd @ index-CVsixoJE.js:40
+Va @ index-CVsixoJE.js:40
+RR @ index-CVsixoJE.js:40
+Ei @ index-CVsixoJE.js:40
+$y @ index-CVsixoJE.js:40
+wi @ index-CVsixoJE.js:38
+(anonymous) @ index-CVsixoJE.js:40
+don-giulio-catalog.replit.app/api/admin/clients/201331998:1  Failed to load resource: the server responded with a status of 401 ()
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}

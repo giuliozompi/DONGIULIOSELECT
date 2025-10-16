@@ -117,11 +117,13 @@ export function getTelegramUser() {
 
 /**
  * Ottieni initData di Telegram per autenticazione backend
+ * IMPORTANTE: Usa sempre l'initData fresco dal SDK, non dal localStorage
  */
 export function getTelegramInitData(): string | undefined {
   if (typeof window === 'undefined') return undefined;
   
-  // Usa i dati di init dal Telegram WebApp SDK
+  // SEMPRE usa l'initData fresco dal Telegram WebApp SDK
+  // Non usare localStorage perché l'initData scade dopo 24 ore
   if (tg?.initData) {
     return tg.initData;
   }
