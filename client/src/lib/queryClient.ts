@@ -21,6 +21,9 @@ function getAuthHeaders(): HeadersInit {
   
   if (initData) {
     headers['x-telegram-init-data'] = initData;
+    console.log('[Auth Headers] InitData presente:', initData.substring(0, 50) + '...');
+  } else {
+    console.warn('[Auth Headers] NESSUN initData disponibile!');
   }
   
   return headers;

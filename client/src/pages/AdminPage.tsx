@@ -2246,10 +2246,15 @@ function ClientsManager() {
   });
 
   // Fetch selected client detail
-  const { data: clientDetail, isLoading: isLoadingDetail } = useQuery<ClientDetail>({
+  const { data: clientDetail, isLoading: isLoadingDetail, error: clientDetailError } = useQuery<ClientDetail>({
     queryKey: ['/api/admin/clients', selectedClient],
     enabled: !!selectedClient,
   });
+  
+  // Log errori per debug produzione
+  if (clientDetailError) {
+    console.error('[ClientDetail] Errore caricamento:', clientDetailError);
+  }
 
   // Update client mutation
   const updateMutation = useMutation({
@@ -2417,6 +2422,18 @@ function ClientsManager() {
               <div className="text-center space-y-3">
                 <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
                 <p className="text-sm text-muted-foreground">Загрузка данных клиента...</p>
+              </div>
+            </div>
+          ) : clientDetailError ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="max-w-md p-6 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <h3 className="font-semibold text-destructive mb-2">Ошибка загрузки данных клиента</h3>
+                <p className="text-sm text-destructive/80 mb-3">
+                  {clientDetailError instanceof Error ? clientDetailError.message : 'Неизвестная ошибка'}
+                </p>
+                <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                  💡 <strong>Совет:</strong> Если видите ошибку авторизации, попробуйте полностью закрыть и снова открыть приложение в Telegram
+                </p>
               </div>
             </div>
           ) : clientDetail ? (
