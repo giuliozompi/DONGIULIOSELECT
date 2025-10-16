@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -73,6 +73,8 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
   const [isSpinning, setIsSpinning] = useState(false);
   const [wonPrize, setWonPrize] = useState<Prize | null>(null);
   const [rotation, setRotation] = useState(0);
+  const wheelRef = useRef<HTMLDivElement>(null);
+  const pendingPrizeRef = useRef<Prize | null>(null);
 
   // 8 segmenti con icone SVG e colori italiani
   // Distribuiti secondo probabilità: 5% (50%), 10% (15%), 15% (7%), Prodotto (28%)
@@ -88,6 +90,27 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
   ];
 
   const segmentAngle = 360 / segments.length; // 45 gradi per segmento
+
+  // Gestisce la fine dell'animazione CSS
+  useEffect(() => {
+    const wheel = wheelRef.current;
+    if (!wheel) return;
+
+    const handleTransitionEnd = (e: TransitionEvent) => {
+      // Verifica che sia la transizione della transform della ruota
+      if (e.propertyName === 'transform' && pendingPrizeRef.current) {
+        // Aspetta 600ms dopo la fine dell'animazione prima di mostrare il premio
+        setTimeout(() => {
+          setWonPrize(pendingPrizeRef.current);
+          setIsSpinning(false);
+          pendingPrizeRef.current = null;
+        }, 600);
+      }
+    };
+
+    wheel.addEventListener('transitionend', handleTransitionEnd);
+    return () => wheel.removeEventListener('transitionend', handleTransitionEnd);
+  }, []);
 
   const handleSpin = async () => {
     if (spinTokens <= 0 || isSpinning) return;
@@ -134,12 +157,10 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
       const spinsCount = 5 + Math.random() * 3; // 5-8 giri
       const finalRotation = rotation + (360 * spinsCount) + (360 - targetAngle);
       
+      // Salva il premio nel ref per mostrarlo dopo l'animazione
+      pendingPrizeRef.current = prize;
+      
       setRotation(finalRotation);
-
-      setTimeout(() => {
-        setWonPrize(prize);
-        setIsSpinning(false);
-      }, 4000);
     } catch (error) {
       console.error('Spin failed:', error);
       setIsSpinning(false);
@@ -177,6 +198,7 @@ export default function FortuneWheel({ spinTokens, onSpin }: FortuneWheelProps) 
 
             {/* Ruota rotante */}
             <div 
+              ref={wheelRef}
               className="relative w-72 h-72 rounded-full shadow-2xl"
               style={{
                 transform: `rotate(${rotation}deg)`,
