@@ -170,11 +170,13 @@ export default function NewProductPage() {
                 name="images"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Изображения (URL через запятую)</FormLabel>
+                    <FormLabel>Изображения продукта (макс. 5)</FormLabel>
                     <FormControl>
                       <ImageUploadField
                         value={field.value}
                         onChange={field.onChange}
+                        multiple={true}
+                        maxFiles={5}
                         data-testid="input-product-images"
                       />
                     </FormControl>
