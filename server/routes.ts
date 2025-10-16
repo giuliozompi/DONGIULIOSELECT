@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, PAID_ORDER_STATUSES } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, PAID_ORDER_STATUSES, type Product, type Prize } from "@shared/schema";
 import { z } from "zod";
 import { getDaDataService } from "./services/dadata";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -761,11 +761,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
           bonus,
         };
       } else {
-        // Prodotto da provare (implementazione futura)
+        // Prodotto da provare - seleziona 1-3 prodotti casuali
+        const allProducts = await storage.getAllProducts();
+        const availableProducts = allProducts.filter((p: Product) => p.inStock);
+        
+        if (availableProducts.length === 0) {
+          return res.status(500).json({ error: 'No products available for prize' });
+        }
+        
+        // Numero casuale di prodotti (1-3)
+        const numProducts = Math.floor(Math.random() * 3) + 1;
+        const shuffled = [...availableProducts].sort(() => 0.5 - Math.random());
+        const selectedProducts = shuffled.slice(0, Math.min(numProducts, availableProducts.length));
+        
+        // Crea prize di tipo 'gift'
+        const prize = await storage.createPrize({
+          userId: req.userId!,
+          name: numProducts === 1 ? `Образец продукта: ${selectedProducts[0].name}` : `${numProducts} образца продуктов`,
+          type: 'gift',
+          value: selectedProducts.map(p => p.name).join(', '),
+          productIds: selectedProducts.map(p => p.id),
+          claimed: false,
+        });
+        
         result = {
           type: 'product',
-          name: 'Образец продукта',
-          description: 'Вы получите образец нашего продукта!',
+          name: prize.name,
+          description: 'Свяжитесь с администратором для получения приза',
+          prize,
+          products: selectedProducts,
         };
       }
       
@@ -814,6 +838,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
       console.error('Error claiming prize:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET /api/prizes - Ottieni tutti i premi dell'utente con dettagli prodotti
+  app.get("/api/prizes", verifyTelegramInitData, async (req, res) => {
+    try {
+      const prizes = await storage.getPrizesByUserId(req.userId!);
+      
+      // Arricchisci i premi di tipo 'gift' con dettagli prodotti
+      const prizesWithProducts = await Promise.all(
+        prizes.map(async (prize) => {
+          if (prize.type === 'gift' && prize.productIds && prize.productIds.length > 0) {
+            const products = await Promise.all(
+              prize.productIds.map(id => storage.getProductById(id))
+            );
+            return {
+              ...prize,
+              products: products.filter((p): p is Product => p != null),
+            };
+          }
+          return { ...prize, products: [] };
+        })
+      );
+      
+      res.json(prizesWithProducts);
+    } catch (error) {
+      console.error('Error fetching prizes:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -2113,6 +2165,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .sort((a, b) => parseFloat(b.totalSpent) - parseFloat(a.totalSpent))
         .slice(0, 5);
       
+      // Ottieni premi del cliente con dettagli prodotti
+      const prizes = await storage.getPrizesByUserId(userId);
+      const prizesWithProducts = await Promise.all(
+        prizes.map(async (prize) => {
+          if (prize.type === 'gift' && prize.productIds && prize.productIds.length > 0) {
+            const products = await Promise.all(
+              prize.productIds.map(id => storage.getProductById(id))
+            );
+            return {
+              ...prize,
+              products: products.filter((p): p is Product => p != null),
+            };
+          }
+          return { ...prize, products: [] };
+        })
+      );
+      
       res.json({
         ...user,
         stats: {
@@ -2122,6 +2191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           topProducts,
         },
         orders: userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+        prizes: prizesWithProducts,
       });
     } catch (error) {
       console.error('Error fetching client detail:', error);
@@ -2171,6 +2241,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
       console.error('Error updating client:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/prizes/:prizeId/add-to-cart - Aggiungi premio prodotto al carrello cliente (ADMIN ONLY)
+  app.post("/api/admin/prizes/:prizeId/add-to-cart", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const prizeId = req.params.prizeId;
+      
+      // Ottieni il premio
+      const prizes = await storage.getAllPrizes();
+      const prize = prizes.find((p: Prize) => p.id === prizeId);
+      
+      if (!prize) {
+        return res.status(404).json({ error: 'Prize not found' });
+      }
+      
+      if (prize.type !== 'gift') {
+        return res.status(400).json({ error: 'Only gift prizes can be added to cart' });
+      }
+      
+      if (prize.claimed) {
+        return res.status(400).json({ error: 'Prize already claimed' });
+      }
+      
+      if (!prize.productIds || prize.productIds.length === 0) {
+        return res.status(400).json({ error: 'Prize has no products' });
+      }
+      
+      // Ottieni carrello del cliente
+      const cart = await storage.getCart(prize.userId);
+      const currentItems = cart?.items || [];
+      
+      // Aggiungi prodotti premio al carrello
+      const newItems = [...currentItems];
+      for (const productId of prize.productIds) {
+        const product = await storage.getProductById(productId);
+        if (!product) continue;
+        
+        // Cerca se il prodotto esiste già nel carrello
+        const existingItem = newItems.find(item => item.productId === productId);
+        if (existingItem) {
+          // Incrementa quantità
+          existingItem.quantity += 1;
+        } else {
+          // Aggiungi nuovo item
+          newItems.push({
+            productId: product.id,
+            quantity: 1,
+            priceAtAdd: product.price,
+          });
+        }
+      }
+      
+      // Aggiorna carrello
+      await storage.setCart(prize.userId, newItems);
+      
+      // Marca premio come claimed
+      await storage.updatePrize(prizeId, {
+        claimed: true,
+        claimedAt: new Date(),
+        adminUsedBy: req.userId!,
+      });
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'updated',
+        entityType: 'prize',
+        entityId: prizeId,
+        actionData: {
+          notes: `Added prize products to cart for user ${prize.userId}. Products: ${prize.value}`,
+        },
+      });
+      
+      res.json({ success: true, prize, addedProducts: prize.productIds.length });
+    } catch (error) {
+      console.error('Error adding prize to cart:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

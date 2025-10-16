@@ -208,9 +208,17 @@ export const prizes = pgTable("prizes", {
   name: text("name").notNull(),
   type: text("type").notNull(), // 'discount' | 'delivery_coupon' | 'gift'
   value: text("value").notNull(),
+  
+  // Per premi di tipo 'gift': array di productId
+  productIds: text("product_ids").array().default(sql`ARRAY[]::text[]`),
+  
   claimed: boolean("claimed").notNull().default(false),
   claimedAt: timestamp("claimed_at"),
   orderId: varchar("order_id").references(() => orders.id),
+  
+  // Admin che ha aggiunto il premio al carrello (per premi gift)
+  adminUsedBy: varchar("admin_used_by"),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

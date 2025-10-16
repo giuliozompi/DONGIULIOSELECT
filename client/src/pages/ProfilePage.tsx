@@ -2,7 +2,7 @@ import { useLocation } from 'wouter';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, User, Heart, Package } from 'lucide-react';
+import { ArrowLeft, User, Heart, Package, Gift } from 'lucide-react';
 
 export default function ProfilePage() {
   const [, setLocation] = useLocation();
@@ -25,6 +25,13 @@ export default function ProfilePage() {
       icon: Heart,
       path: '/favorites',
       testId: 'card-favorites'
+    },
+    {
+      title: 'История призов',
+      description: 'Призы от колеса фортуны',
+      icon: Gift,
+      path: '/prizes-history',
+      testId: 'card-prizes-history'
     },
     {
       title: 'Заказы',

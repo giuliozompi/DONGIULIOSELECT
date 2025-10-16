@@ -420,6 +420,13 @@ export class DbStorage implements IStorage {
       .orderBy(desc(prizes.createdAt));
   }
 
+  async getAllPrizes(): Promise<Prize[]> {
+    return await db
+      .select()
+      .from(prizes)
+      .orderBy(desc(prizes.createdAt));
+  }
+
   async updatePrize(id: string, updates: Partial<Prize>): Promise<Prize | undefined> {
     const result = await db
       .update(prizes)

@@ -2501,6 +2501,67 @@ function ClientsManager() {
                   </Card>
                 )}
 
+                {/* Prizes */}
+                {clientDetail.prizes && clientDetail.prizes.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Призы клиента</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {clientDetail.prizes.map((prize: any) => (
+                          <div key={prize.id} className="p-3 border rounded-md">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <p className="font-medium">{prize.name}</p>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {prize.type === 'gift' && 'Подарок'}
+                                  {prize.type === 'discount' && 'Скидка'}
+                                  {prize.type === 'delivery_coupon' && 'Купон на доставку'}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {format(new Date(prize.createdAt), 'dd.MM.yyyy HH:mm')}
+                                </p>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                {prize.claimed ? (
+                                  <Badge variant="secondary">Использован</Badge>
+                                ) : (
+                                  <Badge>Активен</Badge>
+                                )}
+                                {prize.type === 'gift' && !prize.claimed && (
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      try {
+                                        await apiRequest('POST', `/api/admin/prizes/${prize.id}/add-to-cart`, {});
+                                        toast({ title: 'Продукты добавлены в корзину клиента' });
+                                        queryClient.invalidateQueries({ queryKey: ['/api/admin/clients', selectedClient] });
+                                      } catch (error: any) {
+                                        toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+                                      }
+                                    }}
+                                    data-testid={`button-add-prize-to-cart-${prize.id}`}
+                                  >
+                                    Добавить в корзину
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            {prize.products && prize.products.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {prize.products.map((p: any) => (
+                                  <p key={p.id} className="text-sm text-muted-foreground">• {p.name}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Orders */}
                 <Card>
                   <CardHeader>

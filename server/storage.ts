@@ -162,6 +162,7 @@ export interface IStorage {
   createSpin(spin: InsertSpin): Promise<Spin>;
   createPrize(prize: InsertPrize): Promise<Prize>;
   getPrizesByUserId(userId: string): Promise<Prize[]>;
+  getAllPrizes(): Promise<Prize[]>;
   updatePrize(id: string, updates: Partial<Prize>): Promise<Prize | undefined>;
 
   // AI Assistant
@@ -663,9 +664,11 @@ export class MemStorage implements IStorage {
       name: insertPrize.name,
       type: insertPrize.type,
       value: insertPrize.value,
+      productIds: insertPrize.productIds ?? null,
       claimed: insertPrize.claimed ?? false,
       claimedAt: insertPrize.claimedAt ?? null,
       orderId: insertPrize.orderId ?? null,
+      adminUsedBy: insertPrize.adminUsedBy ?? null,
       createdAt: new Date(),
     };
     this.prizes.set(id, prize);
@@ -674,6 +677,10 @@ export class MemStorage implements IStorage {
 
   async getPrizesByUserId(userId: string): Promise<Prize[]> {
     return Array.from(this.prizes.values()).filter(p => p.userId === userId);
+  }
+
+  async getAllPrizes(): Promise<Prize[]> {
+    return Array.from(this.prizes.values());
   }
 
   async updatePrize(id: string, updates: Partial<Prize>): Promise<Prize | undefined> {
