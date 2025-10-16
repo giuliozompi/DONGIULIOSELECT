@@ -2248,11 +2248,6 @@ function ClientsManager() {
   // Fetch selected client detail
   const { data: clientDetail, isLoading: isLoadingDetail } = useQuery<ClientDetail>({
     queryKey: ['/api/admin/clients', selectedClient],
-    queryFn: async () => {
-      const res = await fetch(`/api/admin/clients/${selectedClient}`);
-      if (!res.ok) throw new Error('Failed to fetch client details');
-      return res.json();
-    },
     enabled: !!selectedClient,
   });
 
