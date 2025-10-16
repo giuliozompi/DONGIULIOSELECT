@@ -17,10 +17,17 @@ import type { SubmitHandler } from 'react-hook-form';
 
 type ProductFormData = z.infer<typeof insertProductSchema>;
 
-// Form type con stringhe invece di array
-type FormValues = Omit<ProductFormData, 'images' | 'tasteVariations'> & {
+// Form type con stringhe invece di array e oggetti
+type FormValues = Omit<ProductFormData, 'images' | 'tasteVariations' | 'nutrition'> & {
   images: string;
   tasteVariations: string;
+  // Campi БЖУ e состав come stringhe
+  nutritionProteins: string;
+  nutritionFats: string;
+  nutritionCarbs: string;
+  nutritionCalories: string;
+  nutritionComposition: string; // separato da virgole
+  nutritionAdditionalInfo: string; // separato da virgole
 };
 
 export default function NewProductPage() {
@@ -45,6 +52,12 @@ export default function NewProductPage() {
       tasteVariations: '',
       descriptionShort: null,
       descriptionFull: null,
+      nutritionProteins: '',
+      nutritionFats: '',
+      nutritionCarbs: '',
+      nutritionCalories: '',
+      nutritionComposition: '',
+      nutritionAdditionalInfo: '',
     },
   });
 
@@ -60,13 +73,43 @@ export default function NewProductPage() {
         .map(v => v.trim())
         .filter(v => v.length > 0);
 
+      // Costruisci oggetto nutrition solo se almeno un campo è compilato
+      let nutrition = undefined;
+      const hasNutrition = values.nutritionProteins || values.nutritionFats || 
+                           values.nutritionCarbs || values.nutritionCalories || 
+                           values.nutritionComposition || values.nutritionAdditionalInfo;
+      
+      if (hasNutrition) {
+        nutrition = {
+          proteins: values.nutritionProteins || '',
+          fats: values.nutritionFats || '',
+          carbs: values.nutritionCarbs || '',
+          calories: values.nutritionCalories || '',
+          composition: values.nutritionComposition
+            .split(',')
+            .map(c => c.trim())
+            .filter(c => c.length > 0),
+          additionalInfo: values.nutritionAdditionalInfo
+            .split(',')
+            .map(a => a.trim())
+            .filter(a => a.length > 0),
+        };
+      }
+
       const data: ProductFormData = {
-        ...values,
+        name: values.name,
+        slug: values.slug,
+        categoryId: values.categoryId,
         images: imagesArray,
-        tasteVariations: tasteVariationsArray,
+        price: values.price,
         priceOld: values.priceOld || null,
+        unit: values.unit,
+        inStock: values.inStock,
+        tasteVariations: tasteVariationsArray,
+        tasteRatingStats: values.tasteRatingStats,
         descriptionShort: values.descriptionShort || null,
         descriptionFull: values.descriptionFull || null,
+        nutrition,
       };
 
       return await apiRequest('POST', '/api/admin/products', data);
@@ -327,6 +370,123 @@ export default function NewProductPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Sezione БЖУ e Composizione */}
+              <div className="space-y-4 pt-6 border-t">
+                <h3 className="text-lg font-semibold">Пищевая ценность (БЖУ) и Состав</h3>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="nutritionProteins"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Белки (г)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="0"
+                            data-testid="input-nutrition-proteins"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="nutritionFats"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Жиры (г)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="0"
+                            data-testid="input-nutrition-fats"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="nutritionCarbs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Углеводы (г)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="0"
+                            data-testid="input-nutrition-carbs"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="nutritionCalories"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Калории (ккал)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="0"
+                            data-testid="input-nutrition-calories"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="nutritionComposition"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Состав (ингредиенты через запятую)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="например: молоко, соль, закваска, сычужный фермент"
+                          rows={3}
+                          data-testid="textarea-nutrition-composition"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="nutritionAdditionalInfo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Дополнительная информация (через запятую)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="например: Без лактозы, Без глютена, Подходит для вегетарианцев"
+                          rows={2}
+                          data-testid="textarea-nutrition-additional"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <div className="flex gap-3 pt-4 border-t">
                 <Button
