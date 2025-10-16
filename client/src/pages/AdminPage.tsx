@@ -2217,6 +2217,15 @@ interface ClientDetail extends ClientWithStats {
     }>;
   };
   orders: Order[];
+  prizes: Array<{
+    id: string;
+    type: string;
+    name: string;
+    value: string;
+    claimed: boolean;
+    createdAt: string;
+    products?: Product[];
+  }>;
 }
 
 function ClientsManager() {
@@ -2237,7 +2246,7 @@ function ClientsManager() {
   });
 
   // Fetch selected client detail
-  const { data: clientDetail } = useQuery<ClientDetail>({
+  const { data: clientDetail, isLoading: isLoadingDetail } = useQuery<ClientDetail>({
     queryKey: ['/api/admin/clients', selectedClient],
     enabled: !!selectedClient,
   });
@@ -2403,7 +2412,14 @@ function ClientsManager() {
       {/* Client Detail Dialog */}
       <Dialog open={!!selectedClient} onOpenChange={(open) => !open && setSelectedClient(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          {clientDetail && (
+          {isLoadingDetail ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center space-y-3">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p className="text-sm text-muted-foreground">Загрузка данных клиента...</p>
+              </div>
+            </div>
+          ) : clientDetail ? (
             <>
               <DialogHeader>
                 <DialogTitle>
@@ -2608,6 +2624,10 @@ function ClientsManager() {
                 </Card>
               </div>
             </>
+          ) : (
+            <div className="flex items-center justify-center py-12">
+              <p className="text-muted-foreground">Нет данных клиента</p>
+            </div>
           )}
         </DialogContent>
       </Dialog>
