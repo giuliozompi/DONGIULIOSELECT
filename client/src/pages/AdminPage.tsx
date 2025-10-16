@@ -605,13 +605,9 @@ function CategoriesManager() {
 
 // ========== PRODUCTS MANAGER ==========
 
-type ProductFormData = z.infer<typeof insertProductSchema>;
-
 function ProductsManager() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
 
   // Fetch products and categories
@@ -627,68 +623,6 @@ function ProductsManager() {
   const filteredProducts = selectedCategoryId === 'all' 
     ? products 
     : products.filter(p => p.categoryId === selectedCategoryId);
-
-  // Form - usa valori temporanei per input arrays
-  type FormValues = Omit<ProductFormData, 'images' | 'tasteVariations'> & {
-    images: string; // comma-separated
-    tasteVariations: string; // comma-separated
-  };
-
-  const form = useForm<FormValues>({
-    defaultValues: {
-      name: '',
-      slug: '',
-      categoryId: '',
-      images: '',
-      price: '',
-      priceOld: null,
-      unit: 'кг',
-      inStock: true,
-      tasteVariations: '',
-      descriptionShort: null,
-      descriptionFull: null,
-    },
-  });
-
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: async (data: ProductFormData) => {
-      const response = await apiRequest('POST', '/api/admin/products', data);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-      form.reset();
-      toast({ title: '✅ Продукт создан' });
-    },
-    onError: (error: any) => {
-      toast({ 
-        title: 'Ошибка', 
-        description: error.message || 'Не удалось создать продукт',
-        variant: 'destructive' 
-      });
-    },
-  });
-
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<ProductFormData> }) => {
-      const response = await apiRequest('PATCH', `/api/admin/products/${id}`, data);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-      // NON resettare il form dopo il salvataggio - mantieni modalità modifica
-      toast({ title: '✅ Продукт обновлен' });
-    },
-    onError: (error: any) => {
-      toast({ 
-        title: 'Ошибка', 
-        description: error.message || 'Не удалось обновить продукт',
-        variant: 'destructive' 
-      });
-    },
-  });
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -709,45 +643,6 @@ function ProductsManager() {
     },
   });
 
-  const onSubmit: SubmitHandler<FormValues> = (data) => {
-    // Converti stringhe separate da virgola in array
-    const processedData: ProductFormData = {
-      ...data,
-      images: data.images ? data.images.split(',').map((s: string) => s.trim()).filter(Boolean) : [],
-      tasteVariations: data.tasteVariations.split(',').map((s: string) => s.trim()).filter(Boolean),
-    };
-
-    if (editingId) {
-      updateMutation.mutate({ id: editingId, data: processedData });
-    } else {
-      createMutation.mutate(processedData);
-    }
-  };
-
-  const handleEdit = (product: Product) => {
-    setEditingId(product.id);
-    setShowForm(true);
-    form.reset({
-      name: product.name,
-      slug: product.slug,
-      categoryId: product.categoryId,
-      images: product.images.join(', '),
-      price: product.price,
-      priceOld: product.priceOld,
-      unit: product.unit,
-      inStock: product.inStock,
-      tasteVariations: product.tasteVariations.join(', '),
-      descriptionShort: product.descriptionShort,
-      descriptionFull: product.descriptionFull,
-    });
-  };
-
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setShowForm(false);
-    form.reset();
-  };
-
   if (isLoadingProducts) {
     return <div className="py-4">Загрузка продуктов...</div>;
   }
@@ -760,11 +655,7 @@ function ProductsManager() {
           <div className="flex items-center justify-between">
             <CardTitle>Продукты ({products.length})</CardTitle>
             <Button
-              onClick={() => {
-                setEditingId(null);
-                setShowForm(true);
-                form.reset();
-              }}
+              onClick={() => setLocation('/admin/products/new')}
               data-testid="button-new-product"
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -868,237 +759,6 @@ function ProductsManager() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Form - mostrato solo quando necessario */}
-      {showForm && (
-        <Card data-testid="product-form">
-          <CardHeader>
-            <CardTitle>{editingId ? 'Редактировать продукт' : 'Создать продукт'}</CardTitle>
-          </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Название</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-product-name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Slug (URL)</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-product-slug" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="categoryId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Категория</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-product-category">
-                          <SelectValue placeholder="Выберите категорию" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Цена (₽)</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-product-price" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="unit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Единица измерения</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-product-unit">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="кг">кг</SelectItem>
-                        <SelectItem value="г">г</SelectItem>
-                        <SelectItem value="л">л</SelectItem>
-                        <SelectItem value="мл">мл</SelectItem>
-                        <SelectItem value="шт">шт</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="images"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Изображения продукта (макс. 5)</FormLabel>
-                    <FormControl>
-                      <ImageUploadField
-                        value={field.value}
-                        onChange={field.onChange}
-                        multiple={true}
-                        maxFiles={5}
-                        onUploadComplete={(paths) => {
-                          const count = paths.split(',').length;
-                          toast({
-                            title: `Загружено ${count} ${count === 1 ? 'изображение' : 'изображений'}`,
-                            description: 'Нажмите "Обновить" чтобы сохранить изменения'
-                          });
-                        }}
-                        onUploadError={(error) => {
-                          toast({
-                            title: 'Ошибка загрузки',
-                            description: error,
-                            variant: 'destructive'
-                          });
-                        }}
-                        data-testid="product-images-upload"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="priceOld"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Старая цена (₽, опционально)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        {...field} 
-                        value={field.value || ''}
-                        data-testid="input-product-price-old"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="tasteVariations"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Вариации вкуса (через запятую)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        {...field} 
-                        placeholder="Классический, Острый, С трюфелем"
-                        data-testid="input-product-taste"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="descriptionShort"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Краткое описание (опционально)</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        {...field} 
-                        value={field.value || ''}
-                        data-testid="input-product-desc-short"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="descriptionFull"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Полное описание (опционально)</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        {...field} 
-                        value={field.value || ''}
-                        rows={6}
-                        data-testid="input-product-desc-full"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="flex gap-2">
-                <Button 
-                  type="submit" 
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  data-testid="button-submit-product"
-                >
-                  {editingId ? 'Обновить' : 'Создать'}
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={handleCancelEdit}
-                  data-testid="button-cancel-edit-product"
-                >
-                  Отменить
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

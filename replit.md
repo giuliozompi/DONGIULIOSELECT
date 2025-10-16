@@ -55,12 +55,12 @@ The panel includes sections for Catalog Management (Categories, Products, Recomm
 - **Default Section**: Admin panel opens directly to "Заказы" (Orders) section by default
 - **Cards Grid Layout**: Categories and Products display as responsive card grids (1 column mobile, 2 columns tablet/desktop max) with HomePage-style design (image background, dark gradient overlay, white text overlaid)
 - **Separate Edit Pages**: Dedicated edit pages at `/admin/categories/:id` and `/admin/products/:id` instead of inline forms
-- **Section Persistence**: Admin section state preserved via URL query params (`/admin?section=products`); back navigation from edit pages returns to exact previous section
+- **Separate Creation Pages**: Products use dedicated creation page at `/admin/products/new` for cleaner UX; Categories still use inline form
+- **Section Persistence**: Admin section state preserved via URL query params (`/admin?section=products`); back navigation from edit/create pages returns to exact previous section
 - **Category Filter for Products**: Products section includes a category dropdown filter ("Фильтр по категории") to display products by category for easier management
-- **Clean Navigation**: Click card or "Редактировать" button → navigate to edit page → save/back → return to same admin section
-- Categories and Products creation still uses inline forms that appear on "Nuovo" button click
-- Edit forms pre-populate with existing data and feature back/save buttons for navigation
-- Cleaner, less cluttered interface with better separation between list view and edit operations
+- **Clean Navigation**: Click card/button → navigate to dedicated page → save/back → return to same admin section
+- Edit and create forms pre-populate with existing data (edit) or defaults (create) and feature back/save buttons for navigation
+- Cleaner, less cluttered interface with better separation between list view and create/edit operations
 
 ### Image Management & Object Storage
 **Replit Object Storage** is used for product and category images. It features secure admin-only uploads with public accessibility. Uploads are handled via presigned URLs and an Uppy-based frontend component, with images served via a custom route. All uploads are restricted to 5MB, images only, and stored with normalized paths.
