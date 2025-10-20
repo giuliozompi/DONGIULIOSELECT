@@ -54,6 +54,7 @@ export const products = pgTable("products", {
   priceOld: decimal("price_old", { precision: 10, scale: 2 }),
   unit: text("unit").notNull().default('кг'),
   inStock: boolean("in_stock").notNull().default(true),
+  sortPriority: integer("sort_priority").notNull().default(0),
   
   // Вариации вкуса
   tasteVariations: text("taste_variations").array().notNull().default(sql`ARRAY[]::text[]`),

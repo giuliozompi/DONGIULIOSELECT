@@ -163,6 +163,9 @@ export class DbStorage implements IStorage {
       query = query.where(eq(products.inStock, filters.inStock)) as typeof query;
     }
     
+    // Ordina per priorità (alta prima) e poi per prezzo (basso prima)
+    query = query.orderBy(desc(products.sortPriority), asc(products.price)) as typeof query;
+    
     return await query;
   }
 
