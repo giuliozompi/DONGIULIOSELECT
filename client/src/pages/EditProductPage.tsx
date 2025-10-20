@@ -60,6 +60,7 @@ export default function EditProductPage() {
       priceOld: null,
       unit: 'кг',
       inStock: true,
+      sortPriority: 0,
       tasteVariations: '',
       descriptionShort: null,
       descriptionFull: null,
@@ -84,6 +85,7 @@ export default function EditProductPage() {
         priceOld: product.priceOld,
         unit: product.unit,
         inStock: product.inStock,
+        sortPriority: product.sortPriority,
         tasteVariations: product.tasteVariations.join(', '),
         descriptionShort: product.descriptionShort,
         descriptionFull: product.descriptionFull,
@@ -149,6 +151,7 @@ export default function EditProductPage() {
       priceOld: values.priceOld || null,
       unit: values.unit,
       inStock: values.inStock,
+      sortPriority: values.sortPriority,
       tasteVariations: values.tasteVariations.split(',').map((s: string) => s.trim()).filter(Boolean),
       tasteRatingStats: values.tasteRatingStats,
       descriptionShort: values.descriptionShort || null,
@@ -281,6 +284,27 @@ export default function EditProductPage() {
                           <SelectItem value="шт">шт</SelectItem>
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="sortPriority"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Приоритет сортировки</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number"
+                          {...field}
+                          value={field.value ?? 0}
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          placeholder="0 = обычный, >0 = высокий приоритет"
+                          data-testid="input-sort-priority"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
