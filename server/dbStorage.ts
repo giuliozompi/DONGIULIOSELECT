@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, sql } from 'drizzle-orm';
 import { db } from './db';
 import {
   users,
@@ -115,7 +115,7 @@ export class DbStorage implements IStorage {
 
   // Категории
   async getAllCategories(): Promise<Category[]> {
-    return await db.select().from(categories);
+    return await db.select().from(categories).orderBy(asc(categories.sortOrder));
   }
 
   async getCategoryById(id: string): Promise<Category | undefined> {
