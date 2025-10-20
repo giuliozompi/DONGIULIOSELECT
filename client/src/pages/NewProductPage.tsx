@@ -49,6 +49,7 @@ export default function NewProductPage() {
       priceOld: null,
       unit: 'кг',
       inStock: true,
+      sortPriority: 0,
       tasteVariations: '',
       descriptionShort: null,
       descriptionFull: null,
@@ -105,6 +106,7 @@ export default function NewProductPage() {
         priceOld: values.priceOld || null,
         unit: values.unit,
         inStock: values.inStock,
+        sortPriority: values.sortPriority,
         tasteVariations: tasteVariationsArray,
         tasteRatingStats: values.tasteRatingStats,
         descriptionShort: values.descriptionShort || null,
@@ -310,6 +312,27 @@ export default function NewProductPage() {
                         <SelectItem value="false">Нет в наличии</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="sortPriority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Приоритет сортировки</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number"
+                        {...field}
+                        value={field.value ?? 0}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        placeholder="0 = обычный, >0 = высокий приоритет"
+                        data-testid="input-sort-priority"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
