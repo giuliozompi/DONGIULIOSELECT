@@ -41,12 +41,32 @@ export interface YooKassaPayment {
   metadata?: Record<string, string>;
 }
 
+// Dati per scontrino fiscale (54-ФЗ)
+export interface YooKassaReceiptItem {
+  description: string; // Nome prodotto
+  quantity: string; // "1.000" | "0.500"
+  amount: YooKassaAmount; // Prezzo unitario
+  vat_code: number; // 1 = senza IVA, 2 = 0%, 3 = 10%, 4 = 20%, etc.
+  payment_mode?: string; // "full_payment" (default)
+  payment_subject?: string; // "commodity" (default per prodotti)
+}
+
+export interface YooKassaReceipt {
+  customer: {
+    email?: string;
+    phone?: string;
+  };
+  items: YooKassaReceiptItem[];
+  tax_system_code?: number; // 1 = УСН доход, 2 = УСН доход-расход, etc.
+}
+
 export interface CreatePaymentParams {
   amount: YooKassaAmount;
   description: string;
   return_url: string;
   metadata?: Record<string, string>;
   capture?: boolean; // true = pagamento immediato, false = autorizzazione
+  receipt?: YooKassaReceipt; // Dati per scontrino fiscale (obbligatorio per 54-ФЗ)
 }
 
 export interface YooKassaWebhookEvent {
@@ -79,7 +99,7 @@ export async function createYooKassaPayment(
 ): Promise<YooKassaPayment> {
   const key = idempotencyKey || randomUUID();
   
-  const payload = {
+  const payload: any = {
     amount: params.amount,
     description: params.description,
     capture: params.capture ?? true, // Default: pagamento immediato
@@ -89,6 +109,11 @@ export async function createYooKassaPayment(
     },
     metadata: params.metadata || {},
   };
+  
+  // Aggiungi dati per scontrino fiscale (54-ФЗ) se forniti
+  if (params.receipt) {
+    payload.receipt = params.receipt;
+  }
 
   try {
     const response = await fetch(`${YOOKASSA_API_URL}/payments`, {
@@ -374,4 +399,51 @@ export function formatYooKassaAmount(amount: number): string {
  */
 export function parseYooKassaAmount(amountStr: string): number {
   return parseFloat(amountStr);
+}
+
+/**
+ * Crea oggetto receipt per scontrino fiscale (54-ФЗ)
+ * 
+ * @param orderItems - Prodotti dell'ordine
+ * @param customerEmail - Email cliente (opzionale)
+ * @param customerPhone - Telefono cliente (opzionale)
+ * @param taxSystemCode - Codice sistema fiscale (default: 1 = УСН доход)
+ * @param vatCode - Codice IVA (default: 1 = senza IVA per УСН)
+ * @returns Oggetto receipt per YooKassa
+ */
+export function createReceipt(
+  orderItems: Array<{
+    productName: string;
+    quantity: number;
+    price: string;
+    unit: string;
+  }>,
+  customerEmail?: string | null,
+  customerPhone?: string | null,
+  taxSystemCode: number = 1, // 1 = УСН доход
+  vatCode: number = 1 // 1 = без НДС (senza IVA per УСН)
+): YooKassaReceipt {
+  // Almeno uno tra email e telefono è richiesto
+  const customer: { email?: string; phone?: string } = {};
+  if (customerEmail) customer.email = customerEmail;
+  if (customerPhone) customer.phone = customerPhone;
+  
+  // Converti items dell'ordine in formato YooKassa
+  const items: YooKassaReceiptItem[] = orderItems.map(item => ({
+    description: item.productName,
+    quantity: item.quantity.toFixed(3), // Formato: "1.000", "0.500"
+    amount: {
+      value: formatYooKassaAmount(parseFloat(item.price)),
+      currency: 'RUB',
+    },
+    vat_code: vatCode,
+    payment_mode: 'full_payment',
+    payment_subject: 'commodity', // товар
+  }));
+  
+  return {
+    customer,
+    items,
+    tax_system_code: taxSystemCode,
+  };
 }

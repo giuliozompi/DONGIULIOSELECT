@@ -1507,13 +1507,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           if (!paymentIntent || paymentIntent.status !== 'pending') {
             // Crea nuovo payment con YooKassa solo se non esiste o se è scaduto/completato
-            const { createYooKassaPayment, formatYooKassaAmount } = await import('./services/yookassa-payment');
+            const { createYooKassaPayment, formatYooKassaAmount, createReceipt } = await import('./services/yookassa-payment');
             
             const baseUrl = process.env.REPLIT_DOMAINS 
               ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
               : (process.env.APP_URL || 'http://localhost:5000');
             
             const returnUrl = `${baseUrl}/orders`;
+            
+            // Crea receipt per scontrino fiscale (54-ФЗ)
+            const receipt = createReceipt(
+              order.items,
+              order.customerEmail,
+              order.customerPhone,
+              1, // tax_system_code: 1 = УСН доход (sistema fiscale semplificato)
+              1  // vat_code: 1 = без НДС (senza IVA per УСН)
+            );
             
             const yookassaPayment = await createYooKassaPayment({
               amount: {
@@ -1527,6 +1536,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 userId: order.userId,
               },
               capture: true,
+              receipt, // Dati per scontrino fiscale
             });
             
             confirmationUrl = yookassaPayment.confirmation?.confirmation_url || '';
