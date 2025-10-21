@@ -244,6 +244,19 @@ export default function OrderDetailPage() {
             </p>
           </div>
         </Card>
+
+        {/* Pulsante HTML per pagamento (visibile in browser normale, non in Telegram) */}
+        {canPay && !isPaid && (
+          <Button
+            className="w-full"
+            size="lg"
+            onClick={() => createPaymentMutation.mutate()}
+            disabled={createPaymentMutation.isPending}
+            data-testid={`button-pay-${order.id}`}
+          >
+            {createPaymentMutation.isPending ? 'Создание платежа...' : mainButtonText}
+          </Button>
+        )}
       </div>
     </div>
   );

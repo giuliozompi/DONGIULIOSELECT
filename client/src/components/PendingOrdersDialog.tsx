@@ -123,7 +123,7 @@ export default function PendingOrdersDialog({ open, onOpenChange }: PendingOrder
                     <Button
                       className="w-full"
                       onClick={() => {
-                        setLocation(`/orders/${order.id}`);
+                        setLocation(`/order/${order.id}`);
                         onOpenChange(false);
                       }}
                       data-testid={`button-pay-${order.id}`}
@@ -141,7 +141,7 @@ export default function PendingOrdersDialog({ open, onOpenChange }: PendingOrder
                     variant="outline"
                     className="w-full"
                     onClick={() => {
-                      setLocation(`/orders/${order.id}`);
+                      setLocation(`/order/${order.id}`);
                       onOpenChange(false);
                     }}
                     data-testid={`button-view-${order.id}`}
