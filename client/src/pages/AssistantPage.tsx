@@ -5,6 +5,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { getSearchVariants } from '@/lib/keyboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -83,7 +84,10 @@ export default function AssistantPage() {
   const handleSend = async () => {
     if (!input.trim() || sendMessageMutation.isPending) return;
     
-    const messageContent = input;
+    // Apply keyboard layout conversion if needed
+    const searchVariants = getSearchVariants(input);
+    const messageContent = searchVariants.length > 1 ? searchVariants[1] : input;
+    
     const tempId = `temp-${nanoid()}`;
     setInput('');
     sendMessageMutation.mutate({ tempId, content: messageContent });
