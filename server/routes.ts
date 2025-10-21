@@ -996,8 +996,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ==================== PAGAMENTI ====================
   
-  // POST /api/payments/sbp/create-intent - Crea payment intent per СБП
-  app.post("/api/payments/sbp/create-intent", verifyTelegramInitData, async (req, res) => {
+  // POST /api/payments/yookassa/create - Crea payment con YooKassa
+  app.post("/api/payments/yookassa/create", verifyTelegramInitData, async (req, res) => {
     try {
       const schema = z.object({
         orderId: z.string(),
@@ -1015,21 +1015,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Forbidden' });
       }
       
-      // Crea payment intent СБП
-      const { createSBPPaymentIntent } = await import('./services/sbp-payment');
-      const sbpIntent = await createSBPPaymentIntent(orderId, order.amount, 'RUB');
+      // Crea payment con YooKassa
+      const { createYooKassaPayment, formatYooKassaAmount } = await import('./services/yookassa-payment');
+      
+      const baseUrl = process.env.REPLIT_DOMAINS 
+        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
+        : (process.env.APP_URL || 'http://localhost:5000');
+      
+      const returnUrl = `${baseUrl}/orders`;
+      
+      const yookassaPayment = await createYooKassaPayment({
+        amount: {
+          value: formatYooKassaAmount(parseFloat(order.amount)),
+          currency: 'RUB',
+        },
+        description: `Заказ №${orderId.slice(0, 8)}`,
+        return_url: returnUrl,
+        metadata: {
+          orderId,
+          userId: order.userId,
+        },
+        capture: true, // Pagamento immediato
+      });
       
       // Salva payment intent nel database
       const paymentIntent = await storage.createPaymentIntent({
         orderId,
-        provider: 'SBP',
+        provider: 'YooKassa',
         status: 'pending',
         amount: order.amount,
-        redirectUrl: sbpIntent.redirectUrl,
+        redirectUrl: yookassaPayment.confirmation?.confirmation_url || null,
         raw: {
-          sbpPaymentId: sbpIntent.id,
-          qrCodeData: sbpIntent.qrCodeData,
-          expiresAt: sbpIntent.expiresAt.toISOString(),
+          yookassaPaymentId: yookassaPayment.id,
+          yookassaStatus: yookassaPayment.status,
+          createdAt: yookassaPayment.created_at,
         },
       });
       
@@ -1040,82 +1059,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         ...paymentIntent,
-        qrCodeData: sbpIntent.qrCodeData,
-        expiresAt: sbpIntent.expiresAt,
+        confirmationUrl: yookassaPayment.confirmation?.confirmation_url,
+        yookassaPaymentId: yookassaPayment.id,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
-      console.error('Error creating payment intent:', error);
+      console.error('Error creating YooKassa payment:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
   
-  // POST /api/payments/sbp/webhook - Webhook per aggiornamenti pagamento
-  app.post("/api/payments/sbp/webhook", async (req, res) => {
+  // POST /api/payments/yookassa/webhook - Webhook per notifiche YooKassa
+  app.post("/api/payments/yookassa/webhook", async (req, res) => {
     try {
-      const schema = z.object({
-        paymentIntentId: z.string(),
-        status: z.enum(['completed', 'failed']),
-        transactionId: z.string().optional(),
-        errorCode: z.string().optional(),
-        errorMessage: z.string().optional(),
-        signature: z.string(),
-      });
+      const { verifyYooKassaWebhook } = await import('./services/yookassa-payment');
       
-      const webhookPayload = schema.parse(req.body);
+      // YooKassa invia webhook nel formato { type: 'notification', event: '...', object: {...} }
+      const webhookEvent = req.body;
       
-      // Verifica firma webhook
-      const { verifySBPWebhookSignature } = await import('./services/sbp-payment');
-      const { signature, ...payloadToVerify } = webhookPayload;
-      
-      const isValid = verifySBPWebhookSignature(payloadToVerify, signature);
+      // Verifica autenticità webhook
+      const isValid = await verifyYooKassaWebhook(webhookEvent);
       
       if (!isValid) {
-        console.error('Invalid webhook signature');
-        return res.status(403).json({ error: 'Invalid signature' });
+        console.error('[YooKassa Webhook] Invalid webhook signature or event');
+        return res.status(403).json({ error: 'Invalid webhook' });
+      }
+      
+      const payment = webhookEvent.object;
+      
+      // Trova payment intent tramite orderId nei metadata
+      const orderId = payment.metadata?.orderId;
+      if (!orderId) {
+        console.error('[YooKassa Webhook] Missing orderId in payment metadata');
+        return res.status(400).json({ error: 'Missing orderId in metadata' });
+      }
+      
+      const paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
+      
+      if (!paymentIntent) {
+        console.error(`[YooKassa Webhook] Payment intent not found for order ${orderId}`);
+        return res.status(404).json({ error: 'Payment intent not found' });
+      }
+      
+      // Verifica che il payment ID corrisponda
+      const storedYookassaId = (paymentIntent.raw as any)?.yookassaPaymentId;
+      if (storedYookassaId && storedYookassaId !== payment.id) {
+        console.error(`[YooKassa Webhook] Payment ID mismatch: expected ${storedYookassaId}, got ${payment.id}`);
+        return res.status(400).json({ error: 'Payment ID mismatch' });
+      }
+      
+      // Mappa status YooKassa → nostro status
+      let ourStatus: 'pending' | 'completed' | 'failed' = 'pending';
+      if (payment.status === 'succeeded') {
+        ourStatus = 'completed';
+      } else if (payment.status === 'canceled') {
+        ourStatus = 'failed';
       }
       
       // Aggiorna payment intent
-      const paymentIntent = await storage.updatePaymentIntentStatus(
-        webhookPayload.paymentIntentId,
-        webhookPayload.status,
+      await storage.updatePaymentIntentStatus(
+        paymentIntent.id,
+        ourStatus,
         {
-          transactionId: webhookPayload.transactionId,
-          errorCode: webhookPayload.errorCode,
-          errorMessage: webhookPayload.errorMessage,
+          yookassaStatus: payment.status,
+          yookassaPaid: payment.paid,
         }
       );
-      
-      if (!paymentIntent) {
-        return res.status(404).json({ error: 'Payment intent not found' });
-      }
       
       // Ottieni l'ordine
       const order = await storage.getOrderById(paymentIntent.orderId);
       if (!order) {
+        console.error(`[YooKassa Webhook] Order not found: ${paymentIntent.orderId}`);
         return res.status(404).json({ error: 'Order not found' });
       }
       
-      // Aggiorna stato ordine con nuovo stato russo
-      const orderStatus = webhookPayload.status === 'completed' ? 'ОПЛАЧЕН' : 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ';
-      await storage.updateOrderStatus(paymentIntent.orderId, orderStatus);
-      
-      // Se l'ordine è completato, prova ad assegnare 1 spin token (atomicamente)
-      if (webhookPayload.status === 'completed') {
+      // Aggiorna stato ordine
+      if (payment.status === 'succeeded') {
+        await storage.updateOrderStatus(paymentIntent.orderId, 'ОПЛАЧЕН');
+        
+        // Assegna 1 spin token (atomicamente)
         const awarded = await storage.awardSpinTokensForOrder(paymentIntent.orderId, order.userId);
         if (awarded) {
-          console.log(`✅ Assigned 1 spin token to user ${order.userId} for completed order ${order.id} (webhook)`);
+          console.log(`✅ [YooKassa] Assigned 1 spin token to user ${order.userId} for completed order ${order.id}`);
         }
       }
       
       res.json({ success: true });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
-      }
-      console.error('Error processing webhook:', error);
+      console.error('[YooKassa Webhook] Error processing webhook:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

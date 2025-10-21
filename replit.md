@@ -87,7 +87,7 @@ The fortune wheel system automatically rewards users with spin tokens when order
 
 1.  **Telegram WebApp Platform**: Provides native app hosting, authentication, and UI/UX integration.
 2.  **OpenRouter AI API**: Powers the AI product assistant (Anthropic Claude 3 Haiku). It features four professional roles (Cheese Sommelier, Meat Expert, Product Expert, Wine Sommelier), is multilingual, and prioritizes catalog products for recommendations.
-3.  **SBP (Sistema di Pagamenti Veloci) Payment Gateway**: Integrated for payment processing (mock service currently).
+3.  **YooKassa Payment Gateway**: Full production integration for payment processing. Supports bank cards, e-wallets (YooMoney, QIWI, WebMoney), SberPay, FPS, and other Russian payment methods. Uses OAuth 2.0 authentication with YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY environment variables. Webhook notifications at `/api/payments/yookassa/webhook` handle payment completion events. Payment flow: create payment → redirect to YooKassa → user pays → webhook notification → order marked as paid → spin token awarded.
 4.  **DaData.ru Address Autocomplete**: Used for Russian address validation, standardization, and autocomplete.
 5.  **Neon Database**: Serverless PostgreSQL hosting.
 6.  **NPM Dependencies**: Libraries for UI (Radix UI, Tailwind CSS), forms (react-hook-form, Zod), data persistence (Drizzle ORM), and various utilities.

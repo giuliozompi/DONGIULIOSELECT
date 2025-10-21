@@ -31,20 +31,21 @@ export default function OrderDetailPage() {
 
   const createPaymentMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest('POST', '/api/payments/sbp', {
+      const res = await apiRequest('POST', '/api/payments/yookassa/create', {
         orderId: id,
       });
       return await res.json();
     },
     onSuccess: (data) => {
       hapticFeedback('success');
-      if (data.paymentUrl) {
-        window.location.href = data.paymentUrl;
+      // YooKassa restituisce confirmationUrl invece di paymentUrl
+      if (data.confirmationUrl) {
+        window.location.href = data.confirmationUrl;
       }
       queryClient.invalidateQueries({ queryKey: ['/api/orders', id] });
       toast({
         title: 'Переход к оплате',
-        description: 'Сейчас откроется страница оплаты',
+        description: 'Сейчас откроется страница оплаты YooKassa',
       });
     },
     onError: (error: Error) => {
