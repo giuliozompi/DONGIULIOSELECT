@@ -1074,6 +1074,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/payments/yookassa/webhook - Webhook per notifiche YooKassa
   app.post("/api/payments/yookassa/webhook", async (req, res) => {
     try {
+      console.log('🔔 [YooKassa Webhook] Received webhook notification');
+      console.log('📦 [YooKassa Webhook] Event type:', req.body?.event);
+      console.log('💰 [YooKassa Webhook] Payment ID:', req.body?.object?.id);
+      console.log('📋 [YooKassa Webhook] Payment status:', req.body?.object?.status);
+      
       const { verifyYooKassaWebhook } = await import('./services/yookassa-payment');
       
       // YooKassa invia webhook nel formato { type: 'notification', event: '...', object: {...} }
@@ -1081,14 +1086,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Ottieni IP del client (supporta proxy)
       const clientIP = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || req.socket.remoteAddress;
+      console.log('🌐 [YooKassa Webhook] Client IP:', clientIP);
       
       // Verifica autenticità webhook (IP filtering + API verification)
       const isValid = await verifyYooKassaWebhook(webhookEvent, clientIP);
       
       if (!isValid) {
-        console.error('[YooKassa Webhook] Invalid webhook - failed verification');
+        console.error('❌ [YooKassa Webhook] Invalid webhook - failed verification');
         return res.status(403).json({ error: 'Invalid webhook' });
       }
+      
+      console.log('✅ [YooKassa Webhook] Webhook verified successfully');
       
       const payment = webhookEvent.object;
       
@@ -1140,15 +1148,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Aggiorna stato ordine
       if (payment.status === 'succeeded') {
+        console.log(`💳 [YooKassa Webhook] Payment succeeded for order ${paymentIntent.orderId}`);
+        console.log(`📝 [YooKassa Webhook] Updating order status to ОПЛАЧЕН...`);
+        
         await storage.updateOrderStatus(paymentIntent.orderId, 'ОПЛАЧЕН');
+        console.log(`✅ [YooKassa Webhook] Order status updated successfully`);
         
         // Assegna 1 spin token (atomicamente)
+        console.log(`🎁 [YooKassa Webhook] Awarding spin token to user ${order.userId}...`);
         const awarded = await storage.awardSpinTokensForOrder(paymentIntent.orderId, order.userId);
         if (awarded) {
-          console.log(`✅ [YooKassa] Assigned 1 spin token to user ${order.userId} for completed order ${order.id}`);
+          console.log(`✅ [YooKassa Webhook] Assigned 1 spin token to user ${order.userId} for completed order ${order.id}`);
+        } else {
+          console.log(`⚠️ [YooKassa Webhook] Spin token already awarded for order ${order.id}`);
         }
       }
       
+      console.log(`✅ [YooKassa Webhook] Webhook processed successfully`);
       res.json({ success: true });
     } catch (error) {
       console.error('[YooKassa Webhook] Error processing webhook:', error);
