@@ -1,11 +1,36 @@
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, User, Heart, Package, Gift } from 'lucide-react';
+import PendingOrdersDialog from '@/components/PendingOrdersDialog';
+import type { Order } from '@shared/schema';
 
 export default function ProfilePage() {
   const [, setLocation] = useLocation();
+  const [showPendingDialog, setShowPendingDialog] = useState(false);
+  
+  // Fetch orders to check for pending ones
+  const { data: orders = [] } = useQuery<Order[]>({
+    queryKey: ['/api/orders'],
+  });
+  
+  // Count pending orders
+  const pendingOrdersCount = orders.filter(order => 
+    order.status === 'ОФОРМЛЕН' || 
+    order.status === 'СОБРАН' || 
+    order.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ'
+  ).length;
+  
+  // Auto-open dialog if there are pending orders (once per visit)
+  useEffect(() => {
+    if (pendingOrdersCount > 0) {
+      setShowPendingDialog(true);
+    }
+  }, [pendingOrdersCount]);
   
   useTelegramBackButton(() => {
     setLocation('/');
@@ -61,26 +86,46 @@ export default function ProfilePage() {
       <div className="p-4 space-y-3">
         {menuItems.map((item) => {
           const Icon = item.icon;
+          const isOrders = item.path === '/orders';
+          
           return (
             <Card
               key={item.path}
               className="hover-elevate active-elevate-2 cursor-pointer"
-              onClick={() => setLocation(item.path)}
+              onClick={() => {
+                if (isOrders && pendingOrdersCount > 0) {
+                  setShowPendingDialog(true);
+                } else {
+                  setLocation(item.path);
+                }
+              }}
               data-testid={item.testId}
             >
               <CardHeader className="flex flex-row items-center gap-4 space-y-0">
                 <div className="p-3 rounded-lg bg-primary/10">
                   <Icon className="w-6 h-6 text-primary" />
                 </div>
-                <div className="flex-1">
-                  <CardTitle className="text-base">{item.title}</CardTitle>
-                  <CardDescription className="text-sm">{item.description}</CardDescription>
+                <div className="flex-1 flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">{item.title}</CardTitle>
+                    <CardDescription className="text-sm">{item.description}</CardDescription>
+                  </div>
+                  {isOrders && pendingOrdersCount > 0 && (
+                    <Badge variant="destructive" className="ml-2" data-testid="badge-pending-orders">
+                      {pendingOrdersCount}
+                    </Badge>
+                  )}
                 </div>
               </CardHeader>
             </Card>
           );
         })}
       </div>
+
+      <PendingOrdersDialog 
+        open={showPendingDialog} 
+        onOpenChange={setShowPendingDialog}
+      />
     </div>
   );
 }
