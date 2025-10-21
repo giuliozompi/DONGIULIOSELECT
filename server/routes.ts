@@ -1549,25 +1549,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
             confirmationUrl = paymentIntent.redirectUrl || '';
           }
           
-          // Invia link pagamento via Telegram
-          const { sendPaymentLink } = await import('./services/telegram-bot');
-          await sendPaymentLink(
-            order.userId,
-            orderId,
-            order.amount,
-            confirmationUrl
-          );
-          
-          // Invia link pagamento via email (se disponibile)
-          if (order.customerEmail) {
-            const { sendPaymentLinkEmail } = await import('./services/email');
-            await sendPaymentLinkEmail(
-              order.customerEmail,
+          // Invia link pagamento via Telegram (se configurato)
+          try {
+            const { sendPaymentLink } = await import('./services/telegram-bot');
+            const telegramSent = await sendPaymentLink(
+              order.userId,
               orderId,
-              order.customerName,
               order.amount,
               confirmationUrl
             );
+            if (!telegramSent) {
+              console.warn('⚠️ Telegram bot not configured - payment link not sent via Telegram');
+            } else {
+              console.log('✅ Payment link sent via Telegram');
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to send payment link via Telegram:', error);
+          }
+          
+          // Invia link pagamento via email (se disponibile)
+          if (order.customerEmail) {
+            try {
+              const { sendPaymentLinkEmail } = await import('./services/email');
+              await sendPaymentLinkEmail(
+                order.customerEmail,
+                orderId,
+                order.customerName,
+                order.amount,
+                confirmationUrl
+              );
+              console.log('✅ Payment link sent via email');
+            } catch (error) {
+              console.warn('⚠️ Failed to send payment link via email:', error);
+            }
           }
           
           // Aggiorna ordine con info pagamento e timestamp invio link
@@ -1577,16 +1591,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             paymentLinkSentAt: new Date(),
           });
           
+          console.log(`✅ Payment link created for order ${orderId}`);
+          console.log(`   Payment URL: ${confirmationUrl}`);
+          
           return res.json({
             ...updatedOrder,
             status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
             paymentLinkSent: true,
+            paymentUrl: confirmationUrl,
           });
         } catch (error) {
-          console.error('Error sending payment link:', error);
+          console.error('❌ Error creating payment link:', error);
+          // Non fallire completamente - mantieni lo stato СОБРАН
           return res.status(500).json({ 
-            error: 'Order status updated but payment link sending failed',
+            error: 'Failed to create payment link',
             details: error instanceof Error ? error.message : 'Unknown error',
+            hint: 'Check YooKassa credentials (YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY)',
           });
         }
       }
