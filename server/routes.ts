@@ -1503,32 +1503,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           // Verifica se esiste già un payment intent per questo ordine
           let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
-          let sbpIntent: any;
+          let confirmationUrl: string;
           
           if (!paymentIntent || paymentIntent.status !== 'pending') {
-            // Crea nuovo payment intent СБП solo se non esiste o se è scaduto/completato
-            const { createSBPPaymentIntent } = await import('./services/sbp-payment');
-            sbpIntent = await createSBPPaymentIntent(orderId, order.amount, 'RUB');
+            // Crea nuovo payment con YooKassa solo se non esiste o se è scaduto/completato
+            const { createYooKassaPayment, formatYooKassaAmount } = await import('./services/yookassa-payment');
+            
+            const baseUrl = process.env.REPLIT_DOMAINS 
+              ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
+              : (process.env.APP_URL || 'http://localhost:5000');
+            
+            const returnUrl = `${baseUrl}/orders`;
+            
+            const yookassaPayment = await createYooKassaPayment({
+              amount: {
+                value: formatYooKassaAmount(parseFloat(order.amount)),
+                currency: 'RUB',
+              },
+              description: `Заказ №${orderId.slice(0, 8)}`,
+              return_url: returnUrl,
+              metadata: {
+                orderId,
+                userId: order.userId,
+              },
+              capture: true,
+            });
+            
+            confirmationUrl = yookassaPayment.confirmation?.confirmation_url || '';
             
             // Salva payment intent nel database
             paymentIntent = await storage.createPaymentIntent({
               orderId,
-              provider: 'SBP',
+              provider: 'YooKassa',
               status: 'pending',
               amount: order.amount,
-              redirectUrl: sbpIntent.redirectUrl,
+              redirectUrl: confirmationUrl,
               raw: {
-                sbpPaymentId: sbpIntent.id,
-                qrCodeData: sbpIntent.qrCodeData,
-                expiresAt: sbpIntent.expiresAt.toISOString(),
+                yookassaPaymentId: yookassaPayment.id,
+                yookassaStatus: yookassaPayment.status,
+                createdAt: yookassaPayment.created_at,
               },
             });
           } else {
             // Riusa payment intent esistente
-            sbpIntent = {
-              redirectUrl: paymentIntent.redirectUrl,
-              ...(paymentIntent.raw as any),
-            };
+            confirmationUrl = paymentIntent.redirectUrl || '';
           }
           
           // Invia link pagamento via Telegram
@@ -1537,7 +1555,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             order.userId,
             orderId,
             order.amount,
-            sbpIntent.redirectUrl
+            confirmationUrl
           );
           
           // Invia link pagamento via email (se disponibile)
@@ -1548,7 +1566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               orderId,
               order.customerName,
               order.amount,
-              sbpIntent.redirectUrl
+              confirmationUrl
             );
           }
           
