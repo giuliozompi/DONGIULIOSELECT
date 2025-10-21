@@ -95,23 +95,47 @@ export function isLikelyRussianTypedAsEnglish(text: string): boolean {
  * - Original query
  * - English → Russian conversion (if applicable)
  * - Russian → English conversion (if applicable)
+ * - Double conversion (to handle cases like "зфкьф" → "parma" → "парма")
  */
 export function getSearchVariants(query: string): string[] {
   const variants = [query];
+  const processedVariants = new Set<string>([query]);
   
-  // Try English → Russian conversion
+  // First pass: try both conversions on original query
   if (isLikelyEnglishTypedAsRussian(query)) {
     const converted = convertEnToRu(query);
-    if (converted !== query && !variants.includes(converted)) {
+    if (converted !== query && !processedVariants.has(converted)) {
       variants.push(converted);
+      processedVariants.add(converted);
     }
   }
   
-  // Try Russian → English conversion
   if (isLikelyRussianTypedAsEnglish(query)) {
     const converted = convertRuToEn(query);
-    if (converted !== query && !variants.includes(converted)) {
+    if (converted !== query && !processedVariants.has(converted)) {
       variants.push(converted);
+      processedVariants.add(converted);
+    }
+  }
+  
+  // Second pass: try conversions on newly generated variants
+  // This handles cases like "зфкьф" → "parma" → "парма"
+  const newVariants = [...variants];
+  for (const variant of newVariants) {
+    if (isLikelyEnglishTypedAsRussian(variant)) {
+      const converted = convertEnToRu(variant);
+      if (converted !== variant && !processedVariants.has(converted)) {
+        variants.push(converted);
+        processedVariants.add(converted);
+      }
+    }
+    
+    if (isLikelyRussianTypedAsEnglish(variant)) {
+      const converted = convertRuToEn(variant);
+      if (converted !== variant && !processedVariants.has(converted)) {
+        variants.push(converted);
+        processedVariants.add(converted);
+      }
     }
   }
   
