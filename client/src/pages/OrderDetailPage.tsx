@@ -75,16 +75,20 @@ export default function OrderDetailPage() {
     return `${qty} ${unit}`;
   };
 
-  const canPay = order?.status === 'ОФОРМЛЕН' || order?.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ';
+  // Mostra pulsante pagamento solo se c'è link di pagamento e non è ancora pagato
+  const canPay = order?.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ';
+  const isPaid = order?.status === 'ОПЛАЧЕН' || order?.status === 'ВЫЗВАН КУРЬЕР' || order?.status === 'ПОЛУЧЕН';
+  const isInPreparation = order?.status === 'ОФОРМЛЕН' || order?.status === 'СОБРАН';
   const orderAmount = order ? parseFloat(order.amount) : 0;
-  const mainButtonText = order?.status === 'ОПЛАЧЕН' || order?.status === 'ВЫЗВАН КУРЬЕР' || order?.status === 'ПОЛУЧЕН'
+  
+  const mainButtonText = isPaid
     ? 'Заказ оплачен'
     : `Оплатить ${formatPrice(orderAmount)}`;
 
   useTelegramMainButton({
     text: mainButtonText,
     onClick: () => createPaymentMutation.mutate(),
-    show: !!order,
+    show: !!order && canPay,
     enabled: canPay && !createPaymentMutation.isPending,
   });
 
@@ -166,6 +170,23 @@ export default function OrderDetailPage() {
             )}
           </div>
         </Card>
+
+        {/* Messaggio per ordini in preparazione */}
+        {isInPreparation && (
+          <Card className="p-6 bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
+            <div className="text-center space-y-2">
+              <p className="text-lg font-semibold" data-testid="text-preparation-message">
+                Твой заказ в работе!
+              </p>
+              <p className="text-muted-foreground">
+                Мы создаём 50 оттенков твоего наслаждения
+              </p>
+              <p className="text-sm text-muted-foreground mt-4">
+                Ссылка на оплату будет отправлена, когда заказ будет готов к отправке
+              </p>
+            </div>
+          </Card>
+        )}
 
         <div>
           <h2 className="text-lg font-semibold mb-3">Состав заказа</h2>
