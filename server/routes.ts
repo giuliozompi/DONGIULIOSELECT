@@ -1022,7 +1022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
         : (process.env.APP_URL || 'http://localhost:5000');
       
-      const returnUrl = `${baseUrl}/orders`;
+      const returnUrl = `${baseUrl}/payment-return`;
       
       const yookassaPayment = await createYooKassaPayment({
         amount: {
@@ -1529,7 +1529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
               : (process.env.APP_URL || 'http://localhost:5000');
             
-            const returnUrl = `${baseUrl}/orders`;
+            const returnUrl = `${baseUrl}/payment-return`;
             
             // Crea receipt per scontrino fiscale (54-ФЗ)
             const receipt = createReceipt(

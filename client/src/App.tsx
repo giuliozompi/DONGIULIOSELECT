@@ -15,6 +15,7 @@ import CartPage from '@/pages/CartPage';
 import CheckoutPage from '@/pages/CheckoutPage';
 import OrderDetailPage from '@/pages/OrderDetailPage';
 import MyOrdersPage from '@/pages/MyOrdersPage';
+import PaymentReturnPage from '@/pages/PaymentReturnPage';
 import FavoritesPage from '@/pages/FavoritesPage';
 import ProfilePage from '@/pages/ProfilePage';
 import MyDataPage from '@/pages/MyDataPage';
@@ -40,6 +41,7 @@ function Router() {
         <Route path="/checkout" component={CheckoutPage} />
         <Route path="/order/:id" component={OrderDetailPage} />
         <Route path="/orders" component={MyOrdersPage} />
+        <Route path="/payment-return" component={PaymentReturnPage} />
         <Route path="/favorites" component={FavoritesPage} />
         <Route path="/lk" component={ProfilePage} />
         <Route path="/my-data" component={MyDataPage} />
