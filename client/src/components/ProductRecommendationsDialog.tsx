@@ -164,7 +164,7 @@ function RecommendationCard({ product, reason, onAddedToCart }: RecommendationCa
     <Card className="overflow-hidden hover-elevate" data-testid={`recommendation-card-${product.id}`}>
       <div className="flex gap-4 p-4">
         <div className="flex flex-col gap-2">
-          <div className="w-24 h-24 flex-shrink-0 bg-muted rounded-md overflow-hidden">
+          <div className="w-16 h-16 flex-shrink-0 bg-muted rounded-md overflow-hidden">
             <img
               src={product.images[0] || 'https://images.unsplash.com/photo-1452195100486-9cc805987862?w=200&h=200&fit=crop'}
               alt={product.name}
@@ -173,7 +173,7 @@ function RecommendationCard({ product, reason, onAddedToCart }: RecommendationCa
             />
           </div>
           
-          <div className="flex flex-col gap-2 w-24">
+          <div className="flex flex-col gap-2 w-16">
             <div className="flex items-center gap-1 bg-muted rounded-md p-1">
               <Button
                 size="icon"
