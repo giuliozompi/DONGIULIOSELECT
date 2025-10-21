@@ -257,31 +257,99 @@ export async function createYooKassaRefund(
 }
 
 /**
+ * Lista IP ufficiali YooKassa (CIDR notation)
+ * Fonte: https://yookassa.ru/developers/using-api/webhooks
+ */
+const YOOKASSA_IP_RANGES = [
+  '185.71.76.0/27',
+  '185.71.77.0/27',
+  '77.75.153.0/25',
+  '77.75.154.128/25',
+  '2a02:5180::/32',
+];
+
+/**
+ * Verifica se un IP è nella whitelist YooKassa
+ * 
+ * @param ip - IP address del client
+ * @returns true se l'IP è autorizzato
+ */
+function isYooKassaIP(ip: string): boolean {
+  // Helper per convertire IP in numero (supporta solo IPv4)
+  const ipToNumber = (ip: string): number => {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4) return -1;
+    return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
+  };
+  
+  // Helper per verificare se IP è in un range CIDR
+  const isInCIDR = (ip: string, cidr: string): boolean => {
+    // Salta IPv6 per ora
+    if (cidr.includes(':')) return false;
+    
+    const [range, bits] = cidr.split('/');
+    const mask = ~(2 ** (32 - parseInt(bits)) - 1);
+    
+    const ipNum = ipToNumber(ip);
+    const rangeNum = ipToNumber(range);
+    
+    if (ipNum === -1 || rangeNum === -1) return false;
+    
+    return (ipNum & mask) === (rangeNum & mask);
+  };
+  
+  return YOOKASSA_IP_RANGES.some(range => isInCIDR(ip, range));
+}
+
+/**
  * Verifica autenticità webhook YooKassa
  * 
- * YooKassa invia webhook con IP whitelist, non signature HMAC.
- * Verifica tramite chiamata API per confermare il payment.
+ * Implementa doppia verifica secondo best practices YooKassa:
+ * 1. IP filtering: verifica che il webhook provenga da IP autorizzati
+ * 2. API verification: conferma payment status chiamando l'API
  * 
  * @param event - Evento webhook ricevuto
+ * @param clientIP - IP address del client che ha inviato il webhook
  * @returns true se il webhook è autentico
  */
-export async function verifyYooKassaWebhook(event: YooKassaWebhookEvent): Promise<boolean> {
+export async function verifyYooKassaWebhook(
+  event: YooKassaWebhookEvent, 
+  clientIP?: string
+): Promise<boolean> {
   try {
-    // Verifica base: deve essere notification type
+    // 1. Verifica base: deve essere notification type
     if (event.type !== 'notification') {
+      console.error('[YooKassa] Invalid event type:', event.type);
       return false;
     }
 
-    // Verifica che il payment ID esista
+    // 2. Verifica IP whitelist (se disponibile)
+    if (clientIP) {
+      if (!isYooKassaIP(clientIP)) {
+        console.error('[YooKassa] Webhook from unauthorized IP:', clientIP);
+        return false;
+      }
+    } else {
+      console.warn('[YooKassa] Client IP not provided - skipping IP verification (development mode)');
+    }
+
+    // 3. Verifica che il payment ID esista
     if (!event.object?.id) {
+      console.error('[YooKassa] Missing payment ID in webhook event');
       return false;
     }
 
-    // Conferma chiamando API YooKassa per verificare il payment
+    // 4. Conferma chiamando API YooKassa per verificare il payment
     const payment = await getYooKassaPayment(event.object.id);
     
-    // Verifica che lo status corrisponda
-    return payment.status === event.object.status;
+    // 5. Verifica che lo status corrisponda
+    if (payment.status !== event.object.status) {
+      console.error(`[YooKassa] Status mismatch: API=${payment.status}, webhook=${event.object.status}`);
+      return false;
+    }
+    
+    console.log(`[YooKassa] Webhook verified successfully for payment ${event.object.id}`);
+    return true;
   } catch (error) {
     console.error('[YooKassa] Webhook verification failed:', error);
     return false;

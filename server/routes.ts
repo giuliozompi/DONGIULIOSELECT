@@ -1079,11 +1079,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // YooKassa invia webhook nel formato { type: 'notification', event: '...', object: {...} }
       const webhookEvent = req.body;
       
-      // Verifica autenticità webhook
-      const isValid = await verifyYooKassaWebhook(webhookEvent);
+      // Ottieni IP del client (supporta proxy)
+      const clientIP = (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || req.socket.remoteAddress;
+      
+      // Verifica autenticità webhook (IP filtering + API verification)
+      const isValid = await verifyYooKassaWebhook(webhookEvent, clientIP);
       
       if (!isValid) {
-        console.error('[YooKassa Webhook] Invalid webhook signature or event');
+        console.error('[YooKassa Webhook] Invalid webhook - failed verification');
         return res.status(403).json({ error: 'Invalid webhook' });
       }
       
