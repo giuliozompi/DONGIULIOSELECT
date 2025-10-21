@@ -24,6 +24,13 @@ A "Personal Cabinet" (ЛК) accessible from the bottom navigation (always the la
 - **Заказы** (`/orders`): Order history.
 All fields support null values for deletion, and updates use PUT `/api/user`.
 
+**Pending Orders Dialog**: When users visit the ЛК, a dialog automatically opens if they have pending orders (status: ОФОРМЛЕН, СОБРАН, or ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ). The dialog shows:
+- Order summary with ID, status badge, amount, and item count
+- For orders awaiting payment (ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ): "Перейти к оплате" button
+- For orders in preparation (ОФОРМЛЕН/СОБРАН): Message "Ссылка на оплату будет отправлена после подготовки заказа"
+- "Подробнее" button to view full order details
+- Pending order count badge on "Заказы" card in ЛК
+
 ### Admin Panel
 A sidebar-based admin interface (`/admin`) offers a two-tier administration model:
 - **Master Administrator**: Full privileges, including managing other administrators (defined by `MASTER_ADMIN_USER_ID`).
@@ -83,11 +90,23 @@ The fortune wheel system automatically rewards users with spin tokens when order
 - **Flag Tracking**: `spinTokensAwarded` boolean in orders table prevents duplicates
 - **Race-Safe**: Handles concurrent webhooks and multiple simultaneous orders correctly
 
+## Payment Flow (Updated October 2025)
+
+**New Customer Experience**:
+1. After checkout completion, NO payment button appears
+2. Order status: ОФОРМЛЕН (awaiting preparation)
+3. Motivational message shown: "Твой заказ в работе! Мы создаём 50 оттенков твоего наслаждения"
+4. Admin prepares order and changes status to СОБРАН
+5. Payment link automatically sent via Telegram bot
+6. Order status: ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
+7. Customer can pay via link in Telegram or from order detail page
+8. Payment button visible only for orders with status ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
+
 ## External Dependencies
 
 1.  **Telegram WebApp Platform**: Provides native app hosting, authentication, and UI/UX integration.
 2.  **OpenRouter AI API**: Powers the AI product assistant (Anthropic Claude 3 Haiku). It features four professional roles (Cheese Sommelier, Meat Expert, Product Expert, Wine Sommelier), is multilingual, and prioritizes catalog products for recommendations.
-3.  **YooKassa Payment Gateway**: Full production integration for payment processing. Supports bank cards, e-wallets (YooMoney, QIWI, WebMoney), SberPay, FPS, and other Russian payment methods. Uses OAuth 2.0 authentication with YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY environment variables. Webhook notifications at `/api/payments/yookassa/webhook` handle payment completion events. Payment flow: create payment → redirect to YooKassa → user pays → webhook notification → order marked as paid → spin token awarded.
+3.  **YooKassa Payment Gateway**: Full production integration for payment processing. Supports bank cards, e-wallets (YooMoney, QIWI, WebMoney), SberPay, FPS, and other Russian payment methods. Uses OAuth 2.0 authentication with YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY environment variables. Webhook notifications at `/api/payments/yookassa/webhook` handle payment completion events. Payment flow: order created → admin prepares → payment link sent via Telegram → user pays → webhook notification → order marked as paid → spin token awarded.
 4.  **DaData.ru Address Autocomplete**: Used for Russian address validation, standardization, and autocomplete.
 5.  **Neon Database**: Serverless PostgreSQL hosting.
 6.  **NPM Dependencies**: Libraries for UI (Radix UI, Tailwind CSS), forms (react-hook-form, Zod), data persistence (Drizzle ORM), and various utilities.
