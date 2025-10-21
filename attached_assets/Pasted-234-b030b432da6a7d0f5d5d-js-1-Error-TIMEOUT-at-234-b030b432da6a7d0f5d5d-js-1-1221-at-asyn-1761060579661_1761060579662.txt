@@ -1,0 +1,876 @@
+234.b030b432da6a7d0f5d5d.js:1 Error: TIMEOUT
+    at 234.b030b432da6a7d0f5d5d.js:1:1221
+    at async r (234.b030b432da6a7d0f5d5d.js:1:1163)
+    at async 234.b030b432da6a7d0f5d5d.js:1:8136
+r @ assetCache.ts:60
+client.ts:145 Qe: RPCError 401: AUTH_KEY_UNREGISTERED (caused by updates.GetState)
+    at https://web.telegram.org/a/8010.c2cf87c4a7de531d5434.js:1:296253
+    at hs._handleRPCResult (https://web.telegram.org/a/8010.c2cf87c4a7de531d5434.js:1:296290)
+    at hs._processMessage (https://web.telegram.org/a/8010.c2cf87c4a7de531d5434.js:1:295608)
+    at async hs._handleContainer (https://web.telegram.org/a/8010.c2cf87c4a7de531d5434.js:1:296886)
+    at async hs._processMessage (https://web.telegram.org/a/8010.c2cf87c4a7de531d5434.js:1:295602)
+    at async hs._recvLoop (https://web.telegram.org/a/8010.c2cf87c4a7de531d5434.js:1:294506)
+(анонимная) @ client.ts:145
+await in (анонимная)
+Ny @ init.ts:21
+(анонимная) @ worker.ts:57
+onmessage @ worker.ts:53
+Logger.ts:72 [2025-10-21T15:20:41.646Z] [ERROR] - [Error: Not connected]
+234.b030b432da6a7d0f5d5d.js:1 Error: TIMEOUT
+    at 234.b030b432da6a7d0f5d5d.js:1:1221
+    at async r (234.b030b432da6a7d0f5d5d.js:1:1163)
+    at async 234.b030b432da6a7d0f5d5d.js:1:8136
+r @ assetCache.ts:60
+await in r
+(анонимная) @ assetCache.ts:10
+(анонимная) @ index.ts:74
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.
+Logger.ts:72 [2025-10-21T15:20:47.513Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+connect @ TelegramClient.ts:327
+await in connect
+start @ TelegramClient.ts:1251
+(анонимная) @ client.ts:129
+Ny @ init.ts:21
+(анонимная) @ worker.ts:57
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-21T15:20:48.523Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:20:51.785Z] [ERROR] - [undefined]
+Logger.ts:72 [2025-10-21T15:20:51.785Z] [WARN] - [Connection closed while receiving data]
+useVideoAutoPause.ts:68 AbortError: The play() request was interrupted because the media was removed from the document. https://goo.gl/LdLk22
+(анонимная) @ useVideoAutoPause.ts:68
+Promise.catch
+(анонимная) @ useVideoAutoPause.ts:66
+(анонимная) @ useLastCallback.ts:10
+(анонимная) @ useVideoAutoPause.ts:42
+(анонимная) @ teact.ts:798
+i @ safeExec.ts:20
+(анонимная) @ teact.ts:788
+(анонимная) @ teact.ts:353
+(анонимная) @ teact.ts:353
+(анонимная) @ schedulers.ts:78
+i @ safeExec.ts:20
+(анонимная) @ fasterdom.ts:13
+u @ fasterdom.ts:12
+(анонимная) @ schedulers.ts:78
+(анонимная) @ schedulers.ts:117
+(анонимная) @ schedulers.ts:117
+requestAnimationFrame
+m @ schedulers.ts:106
+(анонимная) @ fasterdom.ts:81
+(анонимная) @ schedulers.ts:76
+f @ fasterdom.ts:65
+(анонимная) @ teact.ts:355
+(анонимная) @ schedulers.ts:78
+i @ safeExec.ts:20
+(анонимная) @ fasterdom.ts:13
+u @ fasterdom.ts:12
+(анонимная) @ schedulers.ts:78
+(анонимная) @ schedulers.ts:117
+(анонимная) @ schedulers.ts:117
+requestAnimationFrame
+m @ schedulers.ts:106
+(анонимная) @ fasterdom.ts:81
+(анонимная) @ schedulers.ts:76
+l @ fasterdom.ts:60
+(анонимная) @ schedulers.ts:76
+setter @ teact.ts:631
+(анонимная) @ useIntersectionObserver.ts:217
+(анонимная) @ useLastCallback.ts:10
+(анонимная) @ callbacks.ts:18
+runCallbacks @ callbacks.ts:17
+(анонимная) @ useIntersectionObserver.ts:115
+f @ useIntersectionObserver.ts:113
+(анонимная) @ schedulers.ts:56
+setInterval
+(анонимная) @ schedulers.ts:48
+m.current.IntersectionObserver.root @ useIntersectionObserver.ts:153
+Logger.ts:72 [2025-10-21T15:22:42.566Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+await in ba
+(анонимная) @ downloadFile.ts:113
+downloadFile @ TelegramClient.ts:788
+_downloadPhoto @ TelegramClient.ts:947
+downloadMedia @ TelegramClient.ts:813
+(анонимная) @ media.ts:148
+su @ media.ts:39
+bu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws4.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-21T15:22:42.960Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+await in ba
+(анонимная) @ downloadFile.ts:113
+downloadFile @ TelegramClient.ts:788
+_downloadPhoto @ TelegramClient.ts:947
+downloadMedia @ TelegramClient.ts:813
+(анонимная) @ media.ts:148
+su @ media.ts:39
+bu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+Logger.ts:72 [2025-10-21T15:22:42.962Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+await in ba
+(анонимная) @ downloadFile.ts:113
+downloadFile @ TelegramClient.ts:788
+downloadProfilePhoto @ TelegramClient.ts:835
+(анонимная) @ media.ts:180
+su @ media.ts:39
+bu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-21T15:22:43.573Z] [WARN] - [Using fallback connection]
+a/:1 The provided application server key is not a VAPID key. Only VAPID keys will be supported in the future. For more information check https://crbug.com/979235.
+Logger.ts:72 [2025-10-21T15:22:43.975Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:22:43.977Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:22:55.582Z] [WARN] - [Security error while unpacking a received message: Duplicate msgIds]
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+Logger.ts:72 [2025-10-21T15:23:05.033Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+Logger.ts:72 [2025-10-21T15:23:05.183Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+await in _connectSender
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+Logger.ts:72 [2025-10-21T15:23:05.197Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+await in _connectSender
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+Logger.ts:72 [2025-10-21T15:23:05.202Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+await in _connectSender
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+favicon-unread.ico:1  GET https://web.telegram.org/a/favicon-unread.ico 404 (Not Found)
+Logger.ts:72 [2025-10-21T15:23:06.187Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:23:06.230Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:23:06.245Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:23:06.251Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:23:38.195Z] [ERROR] - [TimeoutError: signal timed out]
+Logger.ts:72 [2025-10-21T15:23:38.196Z] [ERROR] - [undefined]
+Logger.ts:72 [2025-10-21T15:23:38.198Z] [WARN] - [Connection closed while receiving data]
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_header_color {color_key: 'bg_color'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_background_color {color: '#ffffff'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_bottom_bar_color {color: '#f4f4f5'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_theme 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_viewport 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_safe_area 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_content_safe_area 
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent theme_changed {theme_params: {…}}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_secondary_button {is_visible: false}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_ready 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_expand 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_closing_behavior {need_confirmation: true}
+index-bQ4kyJvb.js:48 [Telegram] Init data saved to localStorage
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/bd6f7318-88bb-4195-8a83-952be9d469c7/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/aa5d9670-bbf5-4941-8867-3414cfa86217/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/1/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/ac44c718-0527-4108-a60b-e9c94c6e1834/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/4e623b51-a337-4817-ba01-8658ce37facf/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/6eeac7f3-3ca0-4a33-9301-a95185435f23/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/760ec31f-77eb-4526-8e1b-a0ab458733db/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/9c6875c3-866d-4a4a-ab19-eddd372b49cc/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/0b487fa5-5d75-4f5e-9c52-fa80f9c89576/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/2/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:332  GET https://don-giulio-catalog.replit.app/api/favorites/1153ff83-0964-406a-a3e7-e683798bf488/check 401 (Unauthorized)
+queryFn @ index-bQ4kyJvb.js:332
+i @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+fetch @ index-bQ4kyJvb.js:48
+xl @ index-bQ4kyJvb.js:48
+onSubscribe @ index-bQ4kyJvb.js:48
+subscribe @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+BN @ index-bQ4kyJvb.js:38
+qd @ index-bQ4kyJvb.js:40
+Qa @ index-bQ4kyJvb.js:40
+LR @ index-bQ4kyJvb.js:40
+Pi @ index-bQ4kyJvb.js:40
+Vy @ index-bQ4kyJvb.js:40
+bi @ index-bQ4kyJvb.js:38
+(анонимная) @ index-bQ4kyJvb.js:40
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_trigger_haptic_feedback {type: 'notification', notification_type: 'success'}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:332 [ProductCard] Checking recommendations for product: aa5d9670-bbf5-4941-8867-3414cfa86217
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:332 [ProductCard] Recommendations received: []
+index-bQ4kyJvb.js:332 [ProductCard] No recommendations found, not opening dialog
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_trigger_haptic_feedback {type: 'notification', notification_type: 'success'}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:332 [ProductCard] Checking recommendations for product: bd6f7318-88bb-4195-8a83-952be9d469c7
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:332 [ProductCard] Recommendations received: []
+index-bQ4kyJvb.js:332 [ProductCard] No recommendations found, not opening dialog
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: true, is_progress_visible: false, text: 'Продолжить (500 ₽)', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: true, is_progress_visible: false, text: 'Продолжить (1000 ₽)', color: '#3390ec', …}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 626, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: true, is_progress_visible: false, text: 'Продолжить (1000 ₽)', color: '#3390ec', …}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent main_button_pressed undefined
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_trigger_haptic_feedback {type: 'impact', impact_style: 'light'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: true, is_progress_visible: false, text: 'Оформить заказ', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: false, is_progress_visible: false, text: 'Оформить заказ', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: false, is_progress_visible: false, text: 'Оформить заказ', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: false, is_progress_visible: false, text: 'Оформить заказ', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_trigger_haptic_feedback {type: 'impact', impact_style: 'light'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: false, is_progress_visible: false, text: 'Оформить заказ', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: false, is_progress_visible: false, text: 'Оформить заказ', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: false, is_progress_visible: false, text: 'Оформить заказ', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: true, is_progress_visible: false, text: 'Оформить заказ', color: '#3390ec', …}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent main_button_pressed undefined
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: true, is_progress_visible: false, text: 'Обработка...', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: true, is_active: false, is_progress_visible: false, text: 'Обработка...', color: '#3390ec', …}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_trigger_haptic_feedback {type: 'notification', notification_type: 'success'}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: false}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-bQ4kyJvb.js:48  PATCH https://don-giulio-catalog.replit.app/api/admin/orders/1e573327-4e9d-4c1c-8143-f3efc399f3b2/status 500 (Internal Server Error)
+Be @ index-bQ4kyJvb.js:48
+mutationFn @ index-bQ4kyJvb.js:362
+fn @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+execute @ index-bQ4kyJvb.js:48
+await in execute
+mutate @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+onValueChange @ index-bQ4kyJvb.js:362
+(анонимная) @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+g @ index-bQ4kyJvb.js:338
+(анонимная) @ index-bQ4kyJvb.js:338
+(анонимная) @ index-bQ4kyJvb.js:48
+r4 @ index-bQ4kyJvb.js:37
+i4 @ index-bQ4kyJvb.js:37
+a4 @ index-bQ4kyJvb.js:37
+dy @ index-bQ4kyJvb.js:37
+kN @ index-bQ4kyJvb.js:37
+(анонимная) @ index-bQ4kyJvb.js:37
+ag @ index-bQ4kyJvb.js:40
+Zj @ index-bQ4kyJvb.js:37
+nh @ index-bQ4kyJvb.js:37
+Op @ index-bQ4kyJvb.js:37
+j4 @ index-bQ4kyJvb.js:37
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_back_button {is_visible: true}
+Logger.ts:72 [2025-10-21T15:26:49.016Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+await in ba
+(анонимная) @ downloadFile.ts:113
+downloadFile @ TelegramClient.ts:788
+downloadProfilePhoto @ TelegramClient.ts:835
+(анонимная) @ media.ts:180
+su @ media.ts:39
+bu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-21T15:26:49.064Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+await in ba
+(анонимная) @ downloadFile.ts:113
+downloadFile @ TelegramClient.ts:788
+downloadProfilePhoto @ TelegramClient.ts:835
+(анонимная) @ media.ts:180
+su @ media.ts:39
+bu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-21T15:26:49.067Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+await in ba
+(анонимная) @ downloadFile.ts:113
+downloadFile @ TelegramClient.ts:788
+downloadProfilePhoto @ TelegramClient.ts:835
+(анонимная) @ media.ts:180
+su @ media.ts:39
+bu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-21T15:26:49.073Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+await in ba
+(анонимная) @ downloadFile.ts:113
+downloadFile @ TelegramClient.ts:788
+downloadProfilePhoto @ TelegramClient.ts:835
+(анонимная) @ media.ts:180
+su @ media.ts:39
+bu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-21T15:26:49.100Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+await in connect
+_connectSender @ TelegramClient.ts:599
+_borrowExportedSender @ TelegramClient.ts:700
+getSender @ TelegramClient.ts:766
+(анонимная) @ downloadFile.ts:241
+ba @ downloadFile.ts:230
+await in ba
+(анонимная) @ downloadFile.ts:113
+downloadFile @ TelegramClient.ts:788
+_downloadDocument @ TelegramClient.ts:986
+downloadMedia @ TelegramClient.ts:815
+(анонимная) @ media.ts:148
+su @ media.ts:39
+bu @ client.ts:349
+(анонимная) @ init.ts:27
+(анонимная) @ worker.ts:89
+onmessage @ worker.ts:53
+PromisedWebSockets.ts:107 WebSocket error Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws2-1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-21T15:26:50.021Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:26:50.065Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:26:50.084Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:26:50.100Z] [WARN] - [Using fallback connection]
+Logger.ts:72 [2025-10-21T15:26:50.105Z] [WARN] - [Using fallback connection]
+useVideoAutoPause.ts:68 AbortError: The play() request was interrupted because the media was removed from the document. https://goo.gl/LdLk22
+(анонимная) @ useVideoAutoPause.ts:68
+Promise.catch
+(анонимная) @ useVideoAutoPause.ts:66
+(анонимная) @ useLastCallback.ts:10
+(анонимная) @ useVideoAutoPause.ts:42
+(анонимная) @ teact.ts:798
+i @ safeExec.ts:20
+(анонимная) @ teact.ts:788
+(анонимная) @ teact.ts:353
+(анонимная) @ teact.ts:353
+(анонимная) @ schedulers.ts:78
+i @ safeExec.ts:20
+(анонимная) @ fasterdom.ts:13
+u @ fasterdom.ts:12
+(анонимная) @ schedulers.ts:78
+(анонимная) @ schedulers.ts:145
+(анонимная) @ schedulers.ts:145
+setTimeout
+m @ schedulers.ts:131
+(анонимная) @ fasterdom.ts:81
+(анонимная) @ schedulers.ts:76
+f @ fasterdom.ts:65
+(анонимная) @ teact.ts:355
+(анонимная) @ schedulers.ts:78
+i @ safeExec.ts:20
+(анонимная) @ fasterdom.ts:13
+u @ fasterdom.ts:12
+(анонимная) @ schedulers.ts:78
+(анонимная) @ schedulers.ts:117
+(анонимная) @ schedulers.ts:117
+requestAnimationFrame
+m @ schedulers.ts:106
+(анонимная) @ fasterdom.ts:81
+(анонимная) @ schedulers.ts:76
+f @ fasterdom.ts:65
+(анонимная) @ teact.ts:355
+(анонимная) @ schedulers.ts:78
+i @ safeExec.ts:20
+(анонимная) @ fasterdom.ts:13
+u @ fasterdom.ts:12
+(анонимная) @ schedulers.ts:78
+(анонимная) @ schedulers.ts:117
+(анонимная) @ schedulers.ts:117
+requestAnimationFrame
+m @ schedulers.ts:106
+(анонимная) @ fasterdom.ts:81
+(анонимная) @ schedulers.ts:76
+f @ fasterdom.ts:65
+(анонимная) @ teact.ts:355
+(анонимная) @ schedulers.ts:78
+i @ safeExec.ts:20
+(анонимная) @ fasterdom.ts:13
+u @ fasterdom.ts:12
+(анонимная) @ schedulers.ts:78
+(анонимная) @ schedulers.ts:117
+(анонимная) @ schedulers.ts:117
+requestAnimationFrame
+m @ schedulers.ts:106
+(анонимная) @ fasterdom.ts:81
+(анонимная) @ schedulers.ts:76
+l @ fasterdom.ts:60
+(анонимная) @ schedulers.ts:76
+setter @ teact.ts:631
+(анонимная) @ useScrollHooks.ts:79
+(анонимная) @ useLastCallback.ts:10
+(анонимная) @ useScrollHooks.ts:137
+(анонимная) @ teact.ts:798
+i @ safeExec.ts:20
+(анонимная) @ teact.ts:788
+(анонимная) @ teact.ts:353
+(анонимная) @ teact.ts:353
+(анонимная) @ schedulers.ts:78
+i @ safeExec.ts:20
+(анонимная) @ fasterdom.ts:13
+u @ fasterdom.ts:12
+(анонимная) @ schedulers.ts:78
+(анонимная) @ schedulers.ts:117
+(анонимная) @ schedulers.ts:117
+requestAnimationFrame
+m @ schedulers.ts:106
+(анонимная) @ fasterdom.ts:81
+(анонимная) @ schedulers.ts:76
+f @ fasterdom.ts:65
+(анонимная) @ teact.ts:355
+(анонимная) @ schedulers.ts:78
+i @ safeExec.ts:20
+(анонимная) @ fasterdom.ts:13
+u @ fasterdom.ts:12
+(анонимная) @ schedulers.ts:78
+(анонимная) @ schedulers.ts:117
+(анонимная) @ schedulers.ts:117
+requestAnimationFrame
+m @ schedulers.ts:106
+(анонимная) @ fasterdom.ts:81
+(анонимная) @ schedulers.ts:76
+l @ fasterdom.ts:60
+(анонимная) @ schedulers.ts:76
+setter @ teact.ts:631
+(анонимная) @ EmojiStatusAccessModal.tsx:86
+(анонимная) @ useLastCallback.ts:10
+(анонимная) @ useInterval.ts:13
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_header_color {color_key: 'bg_color'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_background_color {color: '#ffffff'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_bottom_bar_color {color: '#f4f4f5'}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_theme 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_viewport 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_safe_area 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_content_safe_area 
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent theme_changed {theme_params: {…}}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button {is_visible: false}
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_secondary_button {is_visible: false}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: query_id=AAEeFQAMAAAAAB4VAAxXLVmc&user=%7B%22id%22...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: query_id=AAEeFQAMAAAAAB4VAAxXLVmc&user=%7B%22id%22...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: query_id=AAEeFQAMAAAAAB4VAAxXLVmc&user=%7B%22id%22...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: query_id=AAEeFQAMAAAAAB4VAAxXLVmc&user=%7B%22id%22...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: query_id=AAEeFQAMAAAAAB4VAAxXLVmc&user=%7B%22id%22...
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_ready 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_expand 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_closing_behavior {need_confirmation: true}
+index-bQ4kyJvb.js:48 [Telegram] Init data saved to localStorage
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent visibility_changed {is_visible: true}
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: query_id=AAEeFQAMAAAAAB4VAAxXLVmc&user=%7B%22id%22...
+index-bQ4kyJvb.js:48 [Auth Headers] InitData presente: query_id=AAEeFQAMAAAAAB4VAAxXLVmc&user=%7B%22id%22...
+index-bQ4kyJvb.js:48  PATCH https://don-giulio-catalog.replit.app/api/admin/orders/a5b5b076-4062-4a13-b91f-41278fa31440/status 500 (Internal Server Error)
+Be @ index-bQ4kyJvb.js:48
+mutationFn @ index-bQ4kyJvb.js:362
+fn @ index-bQ4kyJvb.js:48
+v @ index-bQ4kyJvb.js:48
+start @ index-bQ4kyJvb.js:48
+execute @ index-bQ4kyJvb.js:48
+await in execute
+mutate @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+onValueChange @ index-bQ4kyJvb.js:362
+(анонимная) @ index-bQ4kyJvb.js:48
+(анонимная) @ index-bQ4kyJvb.js:48
+g @ index-bQ4kyJvb.js:338
+(анонимная) @ index-bQ4kyJvb.js:338
+(анонимная) @ index-bQ4kyJvb.js:48
+r4 @ index-bQ4kyJvb.js:37
+i4 @ index-bQ4kyJvb.js:37
+a4 @ index-bQ4kyJvb.js:37
+dy @ index-bQ4kyJvb.js:37
+kN @ index-bQ4kyJvb.js:37
+(анонимная) @ index-bQ4kyJvb.js:37
+ag @ index-bQ4kyJvb.js:40
+Zj @ index-bQ4kyJvb.js:37
+nh @ index-bQ4kyJvb.js:37
+Op @ index-bQ4kyJvb.js:37
+j4 @ index-bQ4kyJvb.js:37
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed {left: 0, right: 0, top: 0, bottom: 0}
