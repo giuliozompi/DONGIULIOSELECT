@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ProductCard from '@/components/ProductCard';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { getSearchVariants } from '@/lib/keyboardLayout';
 import type { Product, Message } from '@shared/schema';
 
 export default function SearchPage() {
@@ -50,13 +51,18 @@ export default function SearchPage() {
       return;
     }
 
-    const searchLower = query.toLowerCase();
-    const filtered = products.filter(p =>
-      p.name.toLowerCase().includes(searchLower) ||
-      p.descriptionShort?.toLowerCase().includes(searchLower) ||
-      p.descriptionFull?.toLowerCase().includes(searchLower) ||
-      p.tasteVariations?.some(taste => taste.toLowerCase().includes(searchLower))
-    );
+    // Get search variants (original + keyboard layout corrected)
+    const searchVariants = getSearchVariants(query).map(v => v.toLowerCase());
+    
+    const filtered = products.filter(p => {
+      // Check if any variant matches
+      return searchVariants.some(searchLower => 
+        p.name.toLowerCase().includes(searchLower) ||
+        p.descriptionShort?.toLowerCase().includes(searchLower) ||
+        p.descriptionFull?.toLowerCase().includes(searchLower) ||
+        p.tasteVariations?.some(taste => taste.toLowerCase().includes(searchLower))
+      );
+    });
     setFilteredProducts(filtered);
   }, [query, products]);
 
@@ -68,7 +74,13 @@ export default function SearchPage() {
 
   const handleSend = () => {
     if (!query.trim()) return;
-    sendMessageMutation.mutate(query);
+    
+    // Use keyboard layout corrected version for AI search
+    const searchVariants = getSearchVariants(query);
+    // Use the corrected variant if available, otherwise use original
+    const searchQuery = searchVariants.length > 1 ? searchVariants[1] : query;
+    
+    sendMessageMutation.mutate(searchQuery);
   };
 
   const aiSuggestions = messages
