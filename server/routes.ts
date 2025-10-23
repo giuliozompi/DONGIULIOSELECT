@@ -2269,6 +2269,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // DELETE /api/admin/marking-logs/:logId - Elimina un marking log (ADMIN ONLY)
+  app.delete("/api/admin/marking-logs/:logId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const logId = req.params.logId;
+      await storage.deleteMarkingLog(logId);
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'deleted',
+        entityType: 'marking_log',
+        entityId: logId,
+        actionData: { logId },
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting marking log:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // POST /api/admin/marking-logs/validate - Valida un marking code (ADMIN ONLY)
   app.post("/api/admin/marking-logs/validate", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {

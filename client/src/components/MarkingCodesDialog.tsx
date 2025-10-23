@@ -29,6 +29,7 @@ interface MarkingCodeUnit {
   code: string;
   validated: boolean; // Validato localmente (verificato come corretto)
   saved: boolean; // Già salvato nel database
+  logId: string | null; // ID del log nel database (se esiste)
   error: string | null;
 }
 
@@ -168,6 +169,7 @@ export function MarkingCodesDialog({
             code: existingLog?.markingCode || '',
             validated: !!existingLog, // Già salvati = già validati
             saved: !!existingLog, // Marca come già salvato se esiste nel DB
+            logId: existingLog?.id || null, // Traccia l'ID del log per eventuali modifiche
             error: null,
           });
         }
@@ -253,7 +255,15 @@ export function MarkingCodesDialog({
               ...p,
               units: p.units.map((u, idx) =>
                 idx === unitIndex
-                  ? { ...u, code, error: null }
+                  ? { 
+                      ...u, 
+                      code, 
+                      error: null,
+                      // Se modifichiamo un codice già salvato, dobbiamo ri-validarlo
+                      validated: false,
+                      saved: false,
+                      // Manteniamo il logId per poterlo cancellare dopo
+                    }
                   : u
               ),
             }
@@ -487,7 +497,28 @@ export function MarkingCodesDialog({
     setIsSaving(true);
     
     try {
-      // Salva SOLO i codici nuovi (validated ma NON saved)
+      // Prima fase: identifica e cancella i vecchi log che sono stati modificati
+      const deletePromises: Promise<any>[] = [];
+      const logsToDelete: string[] = [];
+      
+      for (const product of productsWithMarking) {
+        for (const unit of product.units) {
+          // Se ha un logId ma NON è più saved, significa che è stato modificato
+          if (unit.logId && !unit.saved) {
+            logsToDelete.push(unit.logId);
+            deletePromises.push(
+              apiRequest('DELETE', `/api/admin/marking-logs/${unit.logId}`, {})
+            );
+          }
+        }
+      }
+      
+      // Esegui le cancellazioni se necessarie
+      if (deletePromises.length > 0) {
+        await Promise.all(deletePromises);
+      }
+      
+      // Seconda fase: salva i codici nuovi o modificati (validated ma NON saved)
       const savePromises: Promise<any>[] = [];
       let newCodeCount = 0;
       
@@ -510,7 +541,7 @@ export function MarkingCodesDialog({
       // Se non ci sono nuovi codici da salvare, chiudi semplicemente
       if (savePromises.length === 0) {
         toast({
-          title: 'Nessun nuovo codice',
+          title: 'Nessuna modifica',
           description: 'Tutti i codici sono già stati salvati',
         });
         onComplete();
@@ -631,9 +662,13 @@ export function MarkingCodesDialog({
                                 value={unit.code}
                                 onChange={(e) => handleCodeChange(item.product.id, unit.unitIndex, e.target.value)}
                                 onKeyDown={(e) => handleKeyDown(e, item.product.id, unit.unitIndex, unit.code)}
-                                placeholder={isActive ? "Отсканируйте код и нажмите Enter" : "..."}
-                                disabled={unit.validated || !isActive}
-                                className={unit.validated ? 'bg-green-50 dark:bg-green-950' : ''}
+                                onClick={() => {
+                                  // Permetti di cliccare su qualsiasi campo per renderlo attivo
+                                  setCurrentFocusIndex({ productId: item.product.id, unitIndex: unit.unitIndex });
+                                }}
+                                placeholder={isActive ? "Отсканируйте код и нажмите Enter" : "Клик для редактирования"}
+                                disabled={!isActive}
+                                className={unit.validated ? 'bg-green-50 dark:bg-green-950 cursor-pointer' : 'cursor-pointer'}
                                 data-testid={`input-marking-code-${item.product.id}-${unit.unitIndex}`}
                               />
                               {unit.validated && (

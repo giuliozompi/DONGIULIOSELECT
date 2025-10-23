@@ -764,4 +764,10 @@ export class DbStorage implements IStorage {
       .where(eq(productMarkingLogs.markingCode, markingCode));
     return result[0];
   }
+
+  async deleteMarkingLog(logId: string): Promise<void> {
+    await db
+      .delete(productMarkingLogs)
+      .where(eq(productMarkingLogs.id, logId));
+  }
 }

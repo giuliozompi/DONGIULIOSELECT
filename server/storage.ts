@@ -217,6 +217,7 @@ export interface IStorage {
   getMarkingLogsByProduct(productId: string): Promise<ProductMarkingLog[]>;
   isMarkingCodeUsed(markingCode: string): Promise<boolean>;
   getMarkingLogByCode(markingCode: string): Promise<ProductMarkingLog | undefined>;
+  deleteMarkingLog(logId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -869,6 +870,10 @@ export class MemStorage implements IStorage {
 
   async getMarkingLogByCode(markingCode: string): Promise<ProductMarkingLog | undefined> {
     return Array.from(this.markingLogs.values()).find(log => log.markingCode === markingCode);
+  }
+
+  async deleteMarkingLog(logId: string): Promise<void> {
+    this.markingLogs.delete(logId);
   }
 }
 
