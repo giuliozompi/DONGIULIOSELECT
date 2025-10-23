@@ -1299,12 +1299,49 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
     });
   };
 
+  // Helper function to check if marking codes are already complete
+  const checkMarkingComplete = async (orderId: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/admin/marking-logs/${orderId}`);
+      if (!res.ok) return false;
+      
+      const logs = await res.json();
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return false;
+
+      // Conta quanti codici sono richiesti
+      let totalRequired = 0;
+      order.items.forEach(item => {
+        const product = allProducts.find(p => p.id === item.productId);
+        const isUnitProduct = item.unit === 'шт';
+        if (product?.requiresMarking && isUnitProduct) {
+          totalRequired += Math.ceil(item.quantity);
+        }
+      });
+
+      // Verifica se tutti i codici sono già stati acquisiti
+      return logs.length >= totalRequired;
+    } catch (error) {
+      console.error('Error checking marking completion:', error);
+      return false;
+    }
+  };
+
   // Handle status change with marking check
-  const handleStatusChange = (order: Order, newStatus: string) => {
-    // If changing to СОБРАН and order has products requiring marking, show dialog
+  const handleStatusChange = async (order: Order, newStatus: string) => {
+    // If changing to СОБРАН and order has products requiring marking
     if (newStatus === 'СОБРАН' && orderRequiresMarking(order)) {
-      setMarkingDialogOrder(order);
-      setPendingStatusChange({ orderId: order.id, status: newStatus });
+      // Check if marking codes are already complete
+      const markingComplete = await checkMarkingComplete(order.id);
+      
+      if (markingComplete) {
+        // Codes already acquired, proceed with status change without opening dialog
+        updateStatusMutation.mutate({ orderId: order.id, status: newStatus });
+      } else {
+        // Codes not complete, open dialog for acquisition
+        setMarkingDialogOrder(order);
+        setPendingStatusChange({ orderId: order.id, status: newStatus });
+      }
     } else {
       // Otherwise proceed with status change
       updateStatusMutation.mutate({ orderId: order.id, status: newStatus });
@@ -1479,6 +1516,23 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       >
                         <Truck className="w-4 h-4 mr-2" />
                         Вызвать курьера
+                      </Button>
+                    )}
+                    
+                    {/* Button to view/acquire marking codes */}
+                    {orderRequiresMarking(order) && (
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setMarkingDialogOrder(order);
+                          // Non impostiamo pendingStatusChange perché questo è un'apertura manuale
+                          setPendingStatusChange(null);
+                        }}
+                        data-testid={`button-view-marking-${order.id}`}
+                      >
+                        <ClipboardList className="w-4 h-4 mr-2" />
+                        Маркировка
                       </Button>
                     )}
                   </div>
