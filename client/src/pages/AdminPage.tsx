@@ -191,7 +191,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           {activeSection === 'products' && <ProductsManager />}
           {activeSection === 'associations' && <ProductAssociationsManager />}
           {activeSection === 'orders' && <OrdersManager isMasterAdmin={isMasterAdmin} />}
-          {activeSection === 'clients' && <ClientsManager />}
+          {activeSection === 'clients' && <ClientsManager isMasterAdmin={isMasterAdmin} />}
           {activeSection === 'logs' && <LogsManager />}
           {activeSection === 'admins' && isMasterAdmin && <AdminsManager />}
         </main>
@@ -770,9 +770,10 @@ interface OrderEditDialogProps {
   order: Order;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isMasterAdmin?: boolean;
 }
 
-function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
+function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: OrderEditDialogProps) {
   const { toast } = useToast();
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [newQuantity, setNewQuantity] = useState<number>(0);
@@ -781,6 +782,7 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [discountValue, setDiscountValue] = useState<string>('');
   const [newAddress, setNewAddress] = useState<string>(order.deliveryAddress || '');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   
   // Determina se l'ordine è modificabile
   const editable = isOrderEditable(order.status);
@@ -898,6 +900,33 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
     },
     onError: (error: any) => {
       toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Delete order mutation (MASTER ADMIN ONLY)
+  const deleteOrderMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('DELETE', `/api/admin/orders/${order.id}`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to delete order');
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({ 
+        title: '✅ Заказ удален', 
+        description: 'Заказ и все связанные данные успешно удалены из базы данных.',
+      });
+      onOpenChange(false); // Chiudi il dialog dopo la cancellazione
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка удаления', 
+        description: error.message || 'Не удалось удалить заказ',
+        variant: 'destructive' 
+      });
     },
   });
 
@@ -1130,6 +1159,55 @@ function OrderEditDialog({ order, open, onOpenChange }: OrderEditDialogProps) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Delete Order (Master Admin Only) */}
+          {isMasterAdmin && (
+            <div className="border-t pt-4">
+              {!showDeleteConfirm ? (
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full"
+                  data-testid="button-show-delete-confirm"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Удалить заказ из базы данных
+                </Button>
+              ) : (
+                <div className="space-y-3 bg-destructive/10 p-4 rounded-md">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">Подтвердите удаление</p>
+                      <p className="text-sm text-muted-foreground">
+                        Это действие необратимо. Заказ и все связанные данные (коды маркировки, логи изменений) будут удалены из базы данных навсегда.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="destructive"
+                      onClick={() => deleteOrderMutation.mutate()}
+                      disabled={deleteOrderMutation.isPending}
+                      className="flex-1"
+                      data-testid="button-confirm-delete"
+                    >
+                      {deleteOrderMutation.isPending ? 'Удаление...' : 'Да, удалить'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={deleteOrderMutation.isPending}
+                      className="flex-1"
+                      data-testid="button-cancel-delete"
+                    >
+                      Отмена
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1417,6 +1495,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           order={editingOrder}
           open={!!editingOrder}
           onOpenChange={(open) => !open && setEditingOrder(null)}
+          isMasterAdmin={isMasterAdmin}
         />
       )}
 
@@ -1948,7 +2027,7 @@ interface ClientDetail extends ClientWithStats {
   }>;
 }
 
-function ClientsManager() {
+function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { toast } = useToast();
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -2424,6 +2503,7 @@ function ClientsManager() {
           onOpenChange={(open) => {
             if (!open) setEditingOrder(null);
           }}
+          isMasterAdmin={isMasterAdmin}
         />
       )}
     </div>
