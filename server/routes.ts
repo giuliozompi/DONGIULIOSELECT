@@ -2122,6 +2122,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // ==================== PRODUCT MARKING (ADMIN) ====================
+  
+  // POST /api/admin/marking-logs - Salva nuovo marking code (ADMIN ONLY)
+  app.post("/api/admin/marking-logs", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        orderId: z.string(),
+        productId: z.string(),
+        markingCode: z.string().min(1, 'Marking code is required'),
+      });
+      
+      const { orderId, productId, markingCode } = schema.parse(req.body);
+      
+      // Verifica che l'ordine esista
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verifica che il prodotto esista nell'ordine
+      const productInOrder = order.items.find(item => item.productId === productId);
+      if (!productInOrder) {
+        return res.status(400).json({ error: 'Product not found in order' });
+      }
+      
+      // Verifica che il codice non sia già stato usato
+      const isUsed = await storage.isMarkingCodeUsed(markingCode);
+      if (isUsed) {
+        return res.status(400).json({ error: 'Marking code already used' });
+      }
+      
+      // Salva il marking log
+      const log = await storage.createMarkingLog({
+        orderId,
+        productId,
+        orderDate: order.createdAt,
+        markingCode,
+        operatorId: req.userId!,
+      });
+      
+      res.json(log);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error saving marking log:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET /api/admin/marking-logs/:orderId - Ottieni marking logs per ordine (ADMIN ONLY)
+  app.get("/api/admin/marking-logs/:orderId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.orderId;
+      const logs = await storage.getMarkingLogsByOrder(orderId);
+      res.json(logs);
+    } catch (error) {
+      console.error('Error fetching marking logs:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/marking-logs/validate - Valida un marking code (ADMIN ONLY)
+  app.post("/api/admin/marking-logs/validate", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        markingCode: z.string().min(1, 'Marking code is required'),
+      });
+      
+      const { markingCode } = schema.parse(req.body);
+      
+      const isUsed = await storage.isMarkingCodeUsed(markingCode);
+      const existingLog = isUsed ? await storage.getMarkingLogByCode(markingCode) : undefined;
+      
+      res.json({ 
+        isUsed, 
+        existingLog: existingLog || null,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error validating marking code:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // ==================== ADMIN MANAGEMENT ====================
   
   // GET /api/admin/admins - Ottieni lista amministratori (MASTER ADMIN ONLY)
