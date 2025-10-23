@@ -30,6 +30,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
+import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -1161,10 +1162,17 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [markingDialogOrder, setMarkingDialogOrder] = useState<Order | null>(null);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: string; status: string } | null>(null);
   
   // Fetch orders with filter
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/admin/orders', statusFilter !== 'all' ? statusFilter : undefined],
+  });
+
+  // Fetch all products to check marking requirements
+  const { data: allProducts = [] } = useQuery<Product[]>({
+    queryKey: ['/api/products'],
   });
 
   // Update status mutation
@@ -1202,6 +1210,35 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       });
     },
   });
+
+  // Helper function to check if order has products requiring marking
+  const orderRequiresMarking = (order: Order): boolean => {
+    return order.items.some(item => {
+      const product = allProducts.find(p => p.id === item.productId);
+      return product?.requiresMarking === true;
+    });
+  };
+
+  // Handle status change with marking check
+  const handleStatusChange = (order: Order, newStatus: string) => {
+    // If changing to СОБРАН and order has products requiring marking, show dialog
+    if (newStatus === 'СОБРАН' && orderRequiresMarking(order)) {
+      setMarkingDialogOrder(order);
+      setPendingStatusChange({ orderId: order.id, status: newStatus });
+    } else {
+      // Otherwise proceed with status change
+      updateStatusMutation.mutate({ orderId: order.id, status: newStatus });
+    }
+  };
+
+  // Handle marking dialog completion
+  const handleMarkingComplete = () => {
+    if (pendingStatusChange) {
+      updateStatusMutation.mutate(pendingStatusChange);
+      setPendingStatusChange(null);
+    }
+    setMarkingDialogOrder(null);
+  };
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -1317,7 +1354,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                     <Label className="text-sm font-medium">Изменить статус:</Label>
                     <Select 
                       value={order.status}
-                      onValueChange={(newStatus) => updateStatusMutation.mutate({ orderId: order.id, status: newStatus })}
+                      onValueChange={(newStatus) => handleStatusChange(order, newStatus)}
                       disabled={updateStatusMutation.isPending || !canChangeOrderStatus(order.status, isMasterAdmin)}
                     >
                       <SelectTrigger className="w-[280px]" data-testid={`select-status-${order.id}`}>
@@ -1378,6 +1415,21 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           order={editingOrder}
           open={!!editingOrder}
           onOpenChange={(open) => !open && setEditingOrder(null)}
+        />
+      )}
+
+      {/* Marking Codes Dialog */}
+      {markingDialogOrder && (
+        <MarkingCodesDialog
+          order={markingDialogOrder}
+          open={!!markingDialogOrder}
+          onOpenChange={(open) => {
+            if (!open) {
+              setMarkingDialogOrder(null);
+              setPendingStatusChange(null);
+            }
+          }}
+          onComplete={handleMarkingComplete}
         />
       )}
     </div>
