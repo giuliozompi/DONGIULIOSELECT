@@ -44,6 +44,7 @@ export function MarkingCodesDialog({
 }: MarkingCodesDialogProps) {
   const { toast } = useToast();
   const [productsWithMarking, setProductsWithMarking] = useState<ProductWithMarkingStatus[]>([]);
+  const [initialized, setInitialized] = useState(false);
 
   // Fetch all products to check which ones require marking
   const { data: allProducts = [], isLoading: productsLoading } = useQuery<Product[]>({
@@ -62,9 +63,17 @@ export function MarkingCodesDialog({
     },
   });
 
-  // Initialize products with marking when data loads
+  // Reset initialized flag when dialog closes
   useEffect(() => {
-    if (!allProducts.length || !order) return;
+    if (!open) {
+      setInitialized(false);
+      setProductsWithMarking([]);
+    }
+  }, [open]);
+
+  // Initialize products with marking ONLY ONCE when data loads
+  useEffect(() => {
+    if (!allProducts.length || !order || initialized) return;
 
     const productsNeedingMarking: ProductWithMarkingStatus[] = [];
 
@@ -101,7 +110,8 @@ export function MarkingCodesDialog({
     }
 
     setProductsWithMarking(productsNeedingMarking);
-  }, [allProducts, order, existingLogs]);
+    setInitialized(true);
+  }, [allProducts, order, existingLogs, initialized]);
 
   // Save marking code mutation
   const saveMarkingMutation = useMutation({
