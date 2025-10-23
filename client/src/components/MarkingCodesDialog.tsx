@@ -156,10 +156,10 @@ export function MarkingCodesDialog({
   // Validate marking code in real-time
   const validateCodeMutation = useMutation({
     mutationFn: async (code: string) => {
-      const response = await apiRequest('POST', '/api/admin/marking-logs/validate', {
+      const res = await apiRequest('POST', '/api/admin/marking-logs/validate', {
         markingCode: code,
       });
-      return response;
+      return await res.json();
     },
   });
 

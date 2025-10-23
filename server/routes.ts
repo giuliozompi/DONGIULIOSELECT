@@ -1569,11 +1569,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             const returnUrl = `${baseUrl}/payment-return`;
             
-            // Crea receipt per scontrino fiscale (54-ФЗ)
+            // Recupera informazioni sui prodotti per маркировка
+            const allProducts = await storage.getAllProducts();
+            const productsMap = new Map(allProducts.map(p => [p.id, p]));
+            
+            // Recupera codici маркировка per questo ordine
+            const markingLogs = await storage.getMarkingLogsByOrder(orderId);
+            const markingCodesMap = new Map<string, string[]>();
+            
+            // Organizza codici per productId
+            for (const log of markingLogs) {
+              const codes = markingCodesMap.get(log.productId) || [];
+              codes.push(log.markingCode);
+              markingCodesMap.set(log.productId, codes);
+            }
+            
+            // Aggiungi requiresMarking agli order items
+            const enrichedOrderItems = order.items.map(item => {
+              const product = productsMap.get(item.productId);
+              return {
+                ...item,
+                requiresMarking: product?.requiresMarking || false,
+              };
+            });
+            
+            // Crea receipt per scontrino fiscale (54-ФЗ) con маркировка
             const receipt = createReceipt(
-              order.items,
+              enrichedOrderItems,
               order.customerEmail,
               order.customerPhone,
+              markingCodesMap, // Codici маркировка
               1, // tax_system_code: 1 = УСН доход (sistema fiscale semplificato)
               1  // vat_code: 1 = без НДС (senza IVA per УСН)
             );

@@ -48,7 +48,20 @@ export interface YooKassaReceiptItem {
   amount: YooKassaAmount; // Prezzo unitario
   vat_code: number; // 1 = senza IVA, 2 = 0%, 3 = 10%, 4 = 20%, etc.
   payment_mode?: string; // "full_payment" (default)
-  payment_subject?: string; // "commodity" (default per prodotti)
+  payment_subject?: string; // "commodity" (default) | "marked" (per маркировка)
+  mark_mode?: number; // 0 = маркировка обязательна (per prodotti маркировati)
+  mark_code_info?: {
+    gs_1m?: string; // Codice GS1 DataMatrix in base64 (più comune)
+    ean_8?: string;
+    ean_13?: string;
+    itf_14?: string;
+    gs_10?: string;
+    unknown?: string;
+    short?: string;
+    fur?: string; // Меховые изделия
+    egails_20?: string; // ЕГАИС-2.0
+    egails_30?: string; // ЕГАИС-3.0
+  };
 }
 
 export interface YooKassaReceipt {
@@ -402,24 +415,28 @@ export function parseYooKassaAmount(amountStr: string): number {
 }
 
 /**
- * Crea oggetto receipt per scontrino fiscale (54-ФЗ)
+ * Crea oggetto receipt per scontrino fiscale (54-ФЗ) con supporto маркировка
  * 
  * @param orderItems - Prodotti dell'ordine
  * @param customerEmail - Email cliente (opzionale)
  * @param customerPhone - Telefono cliente (opzionale)
+ * @param markingCodes - Codici маркировка per productId (opzionale)
  * @param taxSystemCode - Codice sistema fiscale (default: 1 = УСН доход)
  * @param vatCode - Codice IVA (default: 1 = senza IVA per УСН)
  * @returns Oggetto receipt per YooKassa
  */
 export function createReceipt(
   orderItems: Array<{
+    productId: string;
     productName: string;
     quantity: number;
     price: string;
     unit: string;
+    requiresMarking?: boolean; // Prodotto richiede маркировка
   }>,
   customerEmail?: string | null,
   customerPhone?: string | null,
+  markingCodes?: Map<string, string[]>, // productId -> array di codici маркировка
   taxSystemCode: number = 1, // 1 = УСН доход
   vatCode: number = 1 // 1 = без НДС (senza IVA per УСН)
 ): YooKassaReceipt {
@@ -429,17 +446,66 @@ export function createReceipt(
   if (customerPhone) customer.phone = customerPhone;
   
   // Converti items dell'ordine in formato YooKassa
-  const items: YooKassaReceiptItem[] = orderItems.map(item => ({
-    description: item.productName,
-    quantity: item.quantity.toFixed(3), // Formato: "1.000", "0.500"
-    amount: {
-      value: formatYooKassaAmount(parseFloat(item.price)),
-      currency: 'RUB',
-    },
-    vat_code: vatCode,
-    payment_mode: 'full_payment',
-    payment_subject: 'commodity', // товар
-  }));
+  const items: YooKassaReceiptItem[] = [];
+  
+  for (const item of orderItems) {
+    const isMarked = item.requiresMarking && item.unit === 'шт';
+    const codes = markingCodes?.get(item.productId) || [];
+    
+    if (isMarked && codes.length > 0) {
+      // PRODOTTO МАРКИРОВATO: splittare in item separati (1 unità = 1 item)
+      const quantity = Math.ceil(item.quantity);
+      
+      for (let i = 0; i < quantity; i++) {
+        const code = codes[i];
+        
+        if (code) {
+          items.push({
+            description: `${item.productName} - Единица ${i + 1}`,
+            quantity: '1.000', // Sempre 1 per маркировка
+            amount: {
+              value: formatYooKassaAmount(parseFloat(item.price)),
+              currency: 'RUB',
+            },
+            vat_code: vatCode,
+            payment_mode: 'full_payment',
+            payment_subject: 'marked', // ⚠️ IMPORTANTE per маркировка
+            mark_mode: 0, // 0 = маркировка обязательна
+            mark_code_info: {
+              gs_1m: Buffer.from(code).toString('base64'), // Codice in base64
+            },
+          });
+        } else {
+          // Fallback se il codice manca (non dovrebbe succedere)
+          console.warn(`[YooKassa Receipt] Missing marking code for ${item.productName} unit ${i + 1}`);
+          items.push({
+            description: `${item.productName} - Единица ${i + 1}`,
+            quantity: '1.000',
+            amount: {
+              value: formatYooKassaAmount(parseFloat(item.price)),
+              currency: 'RUB',
+            },
+            vat_code: vatCode,
+            payment_mode: 'full_payment',
+            payment_subject: 'commodity',
+          });
+        }
+      }
+    } else {
+      // PRODOTTO NORMALE: aggregato
+      items.push({
+        description: item.productName,
+        quantity: item.quantity.toFixed(3), // Formato: "1.000", "0.500"
+        amount: {
+          value: formatYooKassaAmount(parseFloat(item.price)),
+          currency: 'RUB',
+        },
+        vat_code: vatCode,
+        payment_mode: 'full_payment',
+        payment_subject: 'commodity', // товар
+      });
+    }
+  }
   
   return {
     customer,
