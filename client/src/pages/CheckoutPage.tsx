@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { FallbackMainButton } from '@/components/FallbackMainButton';
 import { ShoppingBag, Gift, MapPin, X, Truck, Wallet } from 'lucide-react';
 import type { Cart, Product, Bonus, UserAddress } from '@shared/schema';
 import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@shared/schema';
@@ -670,6 +671,13 @@ export default function CheckoutPage() {
           Нажмите кнопку внизу экрана для оформления заказа
         </p>
       </div>
+
+      {/* Fallback Main Button per preview (visibile solo fuori da Telegram) */}
+      <FallbackMainButton
+        text={isSubmitting ? 'Обработка...' : 'Оформить заказ'}
+        onClick={() => form.handleSubmit(onSubmit)()}
+        enabled={!isSubmitting && form.formState.isValid}
+      />
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
