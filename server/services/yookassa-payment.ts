@@ -51,16 +51,16 @@ export interface YooKassaReceiptItem {
   payment_subject?: string; // "commodity" (default) | "marked" (per маркировка)
   mark_mode?: number; // 0 = маркировка обязательна (per prodotti маркировati)
   mark_code_info?: {
-    gs_1m?: string; // Codice GS1 DataMatrix in base64 (più comune)
+    gs1m?: string; // Codice GS1 DataMatrix in base64 (più comune) - NOTA: gs1m NON gs_1m!
     ean_8?: string;
     ean_13?: string;
     itf_14?: string;
-    gs_10?: string;
+    gs10?: string; // NOTA: gs10 NON gs_10!
     unknown?: string;
     short?: string;
     fur?: string; // Меховые изделия
-    egails_20?: string; // ЕГАИС-2.0
-    egails_30?: string; // ЕГАИС-3.0
+    egais_20?: string; // ЕГАИС-2.0 - NOTA: egais NON egails!
+    egais_30?: string; // ЕГАИС-3.0 - NOTA: egais NON egails!
   };
 }
 
@@ -472,7 +472,7 @@ export function createReceipt(
             payment_subject: 'marked', // ⚠️ IMPORTANTE per маркировка
             mark_mode: 0, // 0 = маркировка обязательна
             mark_code_info: {
-              gs_1m: Buffer.from(code).toString('base64'), // Codice in base64
+              gs1m: Buffer.from(code).toString('base64'), // ⚠️ IMPORTANTE: gs1m NON gs_1m!
             },
           });
         } else {
