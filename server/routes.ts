@@ -1552,7 +1552,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Se lo stato è СОБРАН, genera e invia link pagamento automaticamente
-      if (status === 'СОБРАН') {
+      // SOLO per ordini con pagamento online (non per pagamento in contanti)
+      if (status === 'СОБРАН' && order.paymentMethod !== 'cash_on_delivery') {
         try {
           // Verifica se esiste già un payment intent per questo ordine
           let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
