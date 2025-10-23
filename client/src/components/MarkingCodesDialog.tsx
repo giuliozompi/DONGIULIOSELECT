@@ -89,7 +89,7 @@ export function MarkingCodesDialog({
     }
   }, [open]);
 
-  // Funzione per sintesi vocale in russo
+  // Funzione per sintesi vocale in russo con voce maschile caratteristica
   const speakInRussian = (text: string) => {
     if (!window.speechSynthesis) return;
     
@@ -98,8 +98,20 @@ export function MarkingCodesDialog({
     
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ru-RU';
-    utterance.rate = 0.9; // Velocità leggermente ridotta per chiarezza
-    utterance.pitch = 1.0;
+    
+    // Cerca una voce maschile russa disponibile
+    const voices = window.speechSynthesis.getVoices();
+    const russianVoice = voices.find(voice => 
+      voice.lang.startsWith('ru') && voice.name.toLowerCase().includes('male')
+    ) || voices.find(voice => voice.lang.startsWith('ru'));
+    
+    if (russianVoice) {
+      utterance.voice = russianVoice;
+    }
+    
+    // Parametri per voce più caratteristica e profonda
+    utterance.rate = 0.85; // Velocità più lenta per enfasi
+    utterance.pitch = 0.8; // Tono più basso per voce maschile profonda
     utterance.volume = 1.0;
     
     window.speechSynthesis.speak(utterance);
