@@ -19,9 +19,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
-import { ShoppingBag, Gift, MapPin, X, Truck } from 'lucide-react';
+import { ShoppingBag, Gift, MapPin, X, Truck, Wallet } from 'lucide-react';
 import type { Cart, Product, Bonus, UserAddress } from '@shared/schema';
-import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS } from '@shared/schema';
+import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@shared/schema';
 
 const checkoutFormSchema = z.object({
   customerName: z.string().min(2, 'Введите имя (минимум 2 символа)'),
@@ -37,6 +37,12 @@ const checkoutFormSchema = z.object({
     DELIVERY_METHODS.PICKUP,
   ] as [string, ...string[]], {
     required_error: 'Выберите способ доставки',
+  }),
+  paymentMethod: z.enum([
+    PAYMENT_METHODS.YOOKASSA,
+    PAYMENT_METHODS.CASH_ON_DELIVERY,
+  ] as [string, ...string[]], {
+    required_error: 'Выберите способ оплаты',
   }),
   saveAddress: z.boolean().default(false),
   addressLabel: z.string().optional(),
@@ -112,6 +118,7 @@ export default function CheckoutPage() {
       deliveryFlat: '',
       deliveryNotes: '',
       deliveryMethod: DELIVERY_METHODS.YANDEX_GO,
+      paymentMethod: PAYMENT_METHODS.YOOKASSA,
       saveAddress: false,
       addressLabel: '',
     },
@@ -580,6 +587,47 @@ export default function CheckoutPage() {
                               value={value}
                               id={value}
                               data-testid={`radio-delivery-${value}`}
+                            />
+                            <label
+                              htmlFor={value}
+                              className="text-sm font-normal leading-tight cursor-pointer flex-1"
+                            >
+                              {label}
+                            </label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Payment method selection */}
+              <FormField
+                control={form.control}
+                name="paymentMethod"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel className="flex items-center gap-2">
+                      <Wallet className="w-4 h-4" />
+                      Способ оплаты *
+                    </FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="space-y-2"
+                      >
+                        {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                          <div
+                            key={value}
+                            className="flex items-center space-x-3 space-y-0 rounded-md border p-3"
+                          >
+                            <RadioGroupItem
+                              value={value}
+                              id={value}
+                              data-testid={`radio-payment-${value}`}
                             />
                             <label
                               htmlFor={value}
