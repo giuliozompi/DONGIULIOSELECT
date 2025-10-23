@@ -73,27 +73,28 @@ The panel includes sections for Catalog Management (Categories, Products, Recomm
 **Replit Object Storage** is used for product and category images. It features secure admin-only uploads with public accessibility. Uploads are handled via presigned URLs and an Uppy-based frontend component, with images served via a custom route. All uploads are restricted to 5MB, images only, and stored with normalized paths.
 
 ### Product Marking System (Маркировка)
-The product marking system ensures regulatory compliance by capturing and tracking unique marking codes during order preparation. This system handles multi-unit orders correctly, requiring one marking code per unit of product.
+The product marking system ensures regulatory compliance by capturing and tracking unique marking codes during order preparation. **IMPORTANT: Marking is active ONLY for products sold by unit (шт), not for weight-based products (кг, г).**
 
 **Database Schema**:
 - `products.requiresMarking`: Boolean field indicating products requiring regulatory tracking
 - `productMarkingLogs`: Audit table storing productId, orderId, markingCode, operatorId, timestamps
 
 **Workflow**:
-1. Admin flags products requiring marking via checkbox in product form
-2. When changing order status to СОБРАН, system checks for products requiring marking
+1. Admin flags products requiring marking via checkbox in product form (applies only to шт products)
+2. When changing order status to СОБРАН, system checks for products requiring marking (unit === 'шт')
 3. If required, MarkingCodesDialog appears automatically before status change
-4. Dialog creates N input fields based on Math.ceil(quantity) for each marked product
-5. Operator scans/enters unique codes for each unit (e.g., 2.5kg → 3 codes)
+4. Dialog creates N input fields based on quantity for each marked product (always integer for шт)
+5. Operator scans/enters unique codes for each unit (e.g., 5 шт → 5 codes)
 6. System validates: no duplicates within product, no reuse globally, quantity limits enforced
 7. Status change blocked until all required codes saved (progress: X/N codes)
 8. Backend validates quantity limits and duplicate checks on save
 
 **Features**:
-- **Per-unit tracking**: Handles fractional quantities by rounding up (2.5 units → 3 codes required)
+- **Unit-based only**: Active exclusively for products sold by piece (шт), skipped for weight-based (кг/г)
+- **Per-unit tracking**: Requires one code per piece ordered (5 шт → 5 codes)
 - **Real-time validation**: Frontend checks duplicates within product, backend enforces global uniqueness
 - **Progress feedback**: "Сохранено: 5 / 8 кодов" with visual indicators per product
-- **Quantity enforcement**: Backend rejects excess codes beyond Math.ceil(quantity)
+- **Quantity enforcement**: Backend rejects excess codes beyond ordered quantity
 - **Audit trail**: Full tracking of which operator scanned which code, when
 - **Atomic operations**: Status change and code validation occur transactionally
 

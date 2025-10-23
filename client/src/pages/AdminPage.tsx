@@ -1215,7 +1215,9 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const orderRequiresMarking = (order: Order): boolean => {
     return order.items.some(item => {
       const product = allProducts.find(p => p.id === item.productId);
-      return product?.requiresMarking === true;
+      // IMPORTANTE: Маркировка attiva SOLO per prodotti a pezzo (шт)
+      const isUnitProduct = item.unit === 'шт';
+      return product?.requiresMarking === true && isUnitProduct;
     });
   };
 

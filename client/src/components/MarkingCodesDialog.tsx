@@ -70,12 +70,16 @@ export function MarkingCodesDialog({
 
     for (const item of order.items) {
       const product = allProducts.find(p => p.id === item.productId);
-      if (product?.requiresMarking) {
+      
+      // IMPORTANTE: Маркировка attiva SOLO per prodotti a pezzo (шт)
+      const isUnitProduct = item.unit === 'шт';
+      
+      if (product?.requiresMarking && isUnitProduct) {
         // Get all existing logs for this product
         const productLogs = existingLogs.filter((log: any) => log.productId === item.productId);
         
-        // Create units array based on quantity
-        const quantity = Math.ceil(item.quantity); // Round up for fractional quantities
+        // Create units array based on quantity (for шт, quantity is always integer)
+        const quantity = Math.ceil(item.quantity);
         const units: MarkingCodeUnit[] = [];
         
         for (let i = 0; i < quantity; i++) {
