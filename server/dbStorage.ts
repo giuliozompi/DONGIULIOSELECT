@@ -19,6 +19,7 @@ import {
   productAssociations,
   adminActionLogs,
   favoriteProducts,
+  productMarkingLogs,
   type User,
   type InsertUser,
   type Admin,
@@ -50,6 +51,8 @@ import {
   type InsertProductAssociation,
   type AdminActionLog,
   type InsertAdminActionLog,
+  type ProductMarkingLog,
+  type InsertProductMarkingLog,
 } from '@shared/schema';
 import type { IStorage } from './storage';
 
@@ -699,5 +702,46 @@ export class DbStorage implements IStorage {
     
     const results = await query.orderBy(desc(adminActionLogs.createdAt)).limit(filters?.limit || 100);
     return results;
+  }
+
+  // ==================== PRODUCT MARKING LOGS ====================
+
+  async createMarkingLog(log: InsertProductMarkingLog): Promise<ProductMarkingLog> {
+    const result = await db.insert(productMarkingLogs).values(log).returning();
+    return result[0];
+  }
+
+  async getMarkingLogsByOrder(orderId: string): Promise<ProductMarkingLog[]> {
+    const results = await db
+      .select()
+      .from(productMarkingLogs)
+      .where(eq(productMarkingLogs.orderId, orderId))
+      .orderBy(asc(productMarkingLogs.scannedAt));
+    return results;
+  }
+
+  async getMarkingLogsByProduct(productId: string): Promise<ProductMarkingLog[]> {
+    const results = await db
+      .select()
+      .from(productMarkingLogs)
+      .where(eq(productMarkingLogs.productId, productId))
+      .orderBy(desc(productMarkingLogs.scannedAt));
+    return results;
+  }
+
+  async isMarkingCodeUsed(markingCode: string): Promise<boolean> {
+    const result = await db
+      .select()
+      .from(productMarkingLogs)
+      .where(eq(productMarkingLogs.markingCode, markingCode));
+    return result.length > 0;
+  }
+
+  async getMarkingLogByCode(markingCode: string): Promise<ProductMarkingLog | undefined> {
+    const result = await db
+      .select()
+      .from(productMarkingLogs)
+      .where(eq(productMarkingLogs.markingCode, markingCode));
+    return result[0];
   }
 }

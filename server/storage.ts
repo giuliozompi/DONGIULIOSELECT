@@ -29,6 +29,8 @@ import {
   type InsertProductAssociation,
   type AdminActionLog,
   type InsertAdminActionLog,
+  type ProductMarkingLog,
+  type InsertProductMarkingLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -44,6 +46,7 @@ function normalizeProductInsert(input: InsertProduct, id: string): Product {
     priceOld: input.priceOld ?? null,
     unit: input.unit ?? 'кг',
     inStock: input.inStock ?? true,
+    sortPriority: input.sortPriority ?? 0,
     tasteVariations: input.tasteVariations ? Array.from(input.tasteVariations) : [],
     tasteRatingStats: input.tasteRatingStats ?? { tasty: 0, veryTasty: 0, superTasty: 0 },
     descriptionShort: input.descriptionShort ?? null,
@@ -56,6 +59,7 @@ function normalizeProductInsert(input: InsertProduct, id: string): Product {
       composition: Array.from<string>(input.nutrition.composition),
       additionalInfo: Array.from<string>(input.nutrition.additionalInfo),
     } : null,
+    requiresMarking: input.requiresMarking ?? false,
   };
 }
 
@@ -205,6 +209,13 @@ export interface IStorage {
   isMasterAdmin(userId: string): Promise<boolean>;
   createAdminActionLog(log: InsertAdminActionLog): Promise<AdminActionLog>;
   getAdminActionLogs(filters?: { entityType?: string; entityId?: string; limit?: number }): Promise<AdminActionLog[]>;
+  
+  // Log маркировки продуктов
+  createMarkingLog(log: InsertProductMarkingLog): Promise<ProductMarkingLog>;
+  getMarkingLogsByOrder(orderId: string): Promise<ProductMarkingLog[]>;
+  getMarkingLogsByProduct(productId: string): Promise<ProductMarkingLog[]>;
+  isMarkingCodeUsed(markingCode: string): Promise<boolean>;
+  getMarkingLogByCode(markingCode: string): Promise<ProductMarkingLog | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -818,6 +829,45 @@ export class MemStorage implements IStorage {
 
   async isFavoriteProduct(_userId: string, _productId: string): Promise<boolean> {
     return false;
+  }
+
+  // Log маркировки продуктов (stub - non implementato in MemStorage)
+  private markingLogs: Map<string, ProductMarkingLog> = new Map();
+
+  async createMarkingLog(log: InsertProductMarkingLog): Promise<ProductMarkingLog> {
+    const id = randomUUID();
+    const markingLog: ProductMarkingLog = {
+      id,
+      productId: log.productId,
+      orderId: log.orderId,
+      markingCode: log.markingCode,
+      operatorId: log.operatorId,
+      operatorUsername: log.operatorUsername ?? null,
+      scannedAt: new Date(),
+      orderDate: log.orderDate,
+    };
+    this.markingLogs.set(id, markingLog);
+    return markingLog;
+  }
+
+  async getMarkingLogsByOrder(orderId: string): Promise<ProductMarkingLog[]> {
+    return Array.from(this.markingLogs.values())
+      .filter(log => log.orderId === orderId)
+      .sort((a, b) => a.scannedAt.getTime() - b.scannedAt.getTime());
+  }
+
+  async getMarkingLogsByProduct(productId: string): Promise<ProductMarkingLog[]> {
+    return Array.from(this.markingLogs.values())
+      .filter(log => log.productId === productId)
+      .sort((a, b) => b.scannedAt.getTime() - a.scannedAt.getTime());
+  }
+
+  async isMarkingCodeUsed(markingCode: string): Promise<boolean> {
+    return Array.from(this.markingLogs.values()).some(log => log.markingCode === markingCode);
+  }
+
+  async getMarkingLogByCode(markingCode: string): Promise<ProductMarkingLog | undefined> {
+    return Array.from(this.markingLogs.values()).find(log => log.markingCode === markingCode);
   }
 }
 

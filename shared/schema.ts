@@ -79,6 +79,9 @@ export const products = pgTable("products", {
     composition: string[];
     additionalInfo: string[];
   }>(),
+  
+  // Маркировка (требование регулирования РФ)
+  requiresMarking: boolean("requires_marking").notNull().default(false),
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
@@ -443,6 +446,30 @@ export const adminActionLogs = pgTable("admin_action_logs", {
 export const insertAdminActionLogSchema = createInsertSchema(adminActionLogs).omit({ id: true, createdAt: true });
 export type InsertAdminActionLog = z.infer<typeof insertAdminActionLogSchema>;
 export type AdminActionLog = typeof adminActionLogs.$inferSelect;
+
+// Log маркировки продуктов (Product marking codes for regulatory compliance)
+export const productMarkingLogs = pgTable("product_marking_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  productId: varchar("product_id").notNull().references(() => products.id),
+  orderId: varchar("order_id").notNull().references(() => orders.id),
+  
+  // Codice di marcatura acquisito
+  markingCode: text("marking_code").notNull().unique(), // Codice univoco scansionato
+  
+  // Info operatore che ha acquisito il codice
+  operatorId: varchar("operator_id").notNull(), // ID dell'admin/operatore
+  operatorUsername: text("operator_username"), // Username Telegram dell'operatore
+  
+  // Timestamp acquisizione
+  scannedAt: timestamp("scanned_at").notNull().defaultNow(),
+  
+  // Data ordine (duplicato per query veloci)
+  orderDate: timestamp("order_date").notNull(),
+});
+
+export const insertProductMarkingLogSchema = createInsertSchema(productMarkingLogs).omit({ id: true, scannedAt: true });
+export type InsertProductMarkingLog = z.infer<typeof insertProductMarkingLogSchema>;
+export type ProductMarkingLog = typeof productMarkingLogs.$inferSelect;
 
 // Prodotti preferiti (favorites)
 export const favoriteProducts = pgTable("favorite_products", {
