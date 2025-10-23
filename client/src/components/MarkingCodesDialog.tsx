@@ -27,7 +27,8 @@ interface MarkingCodesDialogProps {
 interface MarkingCodeUnit {
   unitIndex: number;
   code: string;
-  validated: boolean; // Validato (non salvato ancora)
+  validated: boolean; // Validato localmente (verificato come corretto)
+  saved: boolean; // Già salvato nel database
   error: string | null;
 }
 
@@ -166,6 +167,7 @@ export function MarkingCodesDialog({
             unitIndex: i,
             code: existingLog?.markingCode || '',
             validated: !!existingLog, // Già salvati = già validati
+            saved: !!existingLog, // Marca come già salvato se esiste nel DB
             error: null,
           });
         }
@@ -330,7 +332,7 @@ export function MarkingCodesDialog({
           existingLog: result.existingLog,
         });
       } else {
-        // Codice valido - marca come validated e passa al prossimo
+        // Codice valido - marca come validated ma NON saved (sarà salvato con handleSaveAll)
         setProductsWithMarking(prev =>
           prev.map(p =>
             p.product.id === productId
@@ -338,7 +340,7 @@ export function MarkingCodesDialog({
                   ...p,
                   units: p.units.map((u, idx) =>
                     idx === unitIndex
-                      ? { ...u, validated: true, error: null }
+                      ? { ...u, validated: true, saved: false, error: null }
                       : u
                   ),
                 }
@@ -420,7 +422,7 @@ export function MarkingCodesDialog({
               ...p,
               units: p.units.map((u, idx) =>
                 idx === duplicateDialog.unitIndex
-                  ? { ...u, code: '', error: 'Отсканируйте новый код для замены', validated: false }
+                  ? { ...u, code: '', error: 'Отсканируйте новый код для замены', validated: false, saved: false }
                   : u
               ),
             }
@@ -447,7 +449,7 @@ export function MarkingCodesDialog({
               ...p,
               units: p.units.map((u, idx) =>
                 idx === duplicateDialog.unitIndex
-                  ? { ...u, code: '', error: null, validated: false }
+                  ? { ...u, code: '', error: null, validated: false, saved: false }
                   : u
               ),
             }
@@ -485,12 +487,14 @@ export function MarkingCodesDialog({
     setIsSaving(true);
     
     try {
-      // Salva tutti i codici in batch
+      // Salva SOLO i codici nuovi (validated ma NON saved)
       const savePromises: Promise<any>[] = [];
+      let newCodeCount = 0;
       
       for (const product of productsWithMarking) {
         for (const unit of product.units) {
-          if (unit.validated && unit.code.trim()) {
+          // Salva SOLO se è validato E NON ancora salvato nel DB
+          if (unit.validated && !unit.saved && unit.code.trim()) {
             savePromises.push(
               apiRequest('POST', '/api/admin/marking-logs', {
                 orderId: order.id,
@@ -498,8 +502,20 @@ export function MarkingCodesDialog({
                 markingCode: unit.code.trim(),
               })
             );
+            newCodeCount++;
           }
         }
+      }
+      
+      // Se non ci sono nuovi codici da salvare, chiudi semplicemente
+      if (savePromises.length === 0) {
+        toast({
+          title: 'Nessun nuovo codice',
+          description: 'Tutti i codici sono già stati salvati',
+        });
+        onComplete();
+        onOpenChange(false);
+        return;
       }
       
       await Promise.all(savePromises);
@@ -509,7 +525,7 @@ export function MarkingCodesDialog({
       
       toast({
         title: 'Коды сохранены',
-        description: `Все ${getTotalUnits()} кодов маркировки успешно сохранены`,
+        description: `${newCodeCount} ${newCodeCount === 1 ? 'новый код' : newCodeCount < 5 ? 'новых кода' : 'новых кодов'} успешно сохранено`,
       });
       
       onComplete();
