@@ -9,8 +9,11 @@ interface FallbackMainButtonProps {
 }
 
 export function FallbackMainButton({ text, onClick, enabled = true, show = true }: FallbackMainButtonProps) {
-  // Se siamo in Telegram WebApp, non mostrare il pulsante fallback
-  if (tg?.MainButton) {
+  // Se siamo in Telegram WebApp con initData valido, non mostrare il pulsante fallback
+  // Il pulsante fallback serve per preview/sviluppo quando NON siamo in Telegram reale
+  const hasValidTelegramData = tg?.initData && tg.initData.length > 0;
+  
+  if (hasValidTelegramData) {
     return null;
   }
 
