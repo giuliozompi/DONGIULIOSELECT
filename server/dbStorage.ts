@@ -326,6 +326,26 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async deleteOrder(id: string): Promise<boolean> {
+    try {
+      // Cancella tutti i dati correlati in ordine (cascade delete manuale)
+      
+      // 1. Cancella productMarkingLogs per questo ordine
+      await db.delete(productMarkingLogs).where(eq(productMarkingLogs.orderId, id));
+      
+      // 2. Cancella orderChangeLogs per questo ordine
+      await db.delete(orderChangeLogs).where(eq(orderChangeLogs.orderId, id));
+      
+      // 3. Cancella l'ordine stesso
+      const result = await db.delete(orders).where(eq(orders.id, id)).returning();
+      
+      return result.length > 0;
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      return false;
+    }
+  }
+
   // Fortune Wheel
   async getSpinTokens(userId: string): Promise<FortuneSpinTokens> {
     const result = await db

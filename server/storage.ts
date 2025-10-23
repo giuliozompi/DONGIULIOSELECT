@@ -157,6 +157,7 @@ export interface IStorage {
   getAllOrders(filters?: { status?: string; limit?: number }): Promise<Order[]>;
   updateOrderStatus(id: string, status: string, paymentId?: string): Promise<Order | undefined>;
   updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined>;
+  deleteOrder(id: string): Promise<boolean>; // Solo Master Admin - cancella ordine con cascade
 
   // Fortune Wheel
   getSpinTokens(userId: string): Promise<FortuneSpinTokens>;
