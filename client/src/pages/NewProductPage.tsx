@@ -49,6 +49,7 @@ export default function NewProductPage() {
       priceOld: null,
       unit: 'кг',
       inStock: true,
+      requiresMarking: false,
       sortPriority: 0,
       tasteVariations: '',
       descriptionShort: null,
@@ -106,6 +107,7 @@ export default function NewProductPage() {
         priceOld: values.priceOld || null,
         unit: values.unit,
         inStock: values.inStock,
+        requiresMarking: values.requiresMarking,
         sortPriority: values.sortPriority,
         tasteVariations: tasteVariationsArray,
         tasteRatingStats: values.tasteRatingStats,
@@ -333,6 +335,31 @@ export default function NewProductPage() {
                         data-testid="input-sort-priority"
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="requiresMarking"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Маркировка</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === 'true')} 
+                      value={field.value ? 'true' : 'false'}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-requires-marking">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="false">Не требует маркировку</SelectItem>
+                        <SelectItem value="true">Требует маркировку</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
