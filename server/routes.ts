@@ -1110,18 +1110,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Missing orderId in metadata' });
       }
       
-      const paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
+      console.log(`🔍 [YooKassa Webhook] Looking for payment intent for order ${orderId}...`);
       
+      let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
+      
+      // Se il payment intent non esiste, crealo al volo
+      // Questo gestisce i casi in cui il pagamento è stato creato manualmente su YooKassa
+      // o il payment intent non è stato creato correttamente nel nostro sistema
       if (!paymentIntent) {
-        console.error(`[YooKassa Webhook] Payment intent not found for order ${orderId}`);
-        return res.status(404).json({ error: 'Payment intent not found' });
-      }
-      
-      // Verifica che il payment ID corrisponda
-      const storedYookassaId = (paymentIntent.raw as any)?.yookassaPaymentId;
-      if (storedYookassaId && storedYookassaId !== payment.id) {
-        console.error(`[YooKassa Webhook] Payment ID mismatch: expected ${storedYookassaId}, got ${payment.id}`);
-        return res.status(400).json({ error: 'Payment ID mismatch' });
+        console.warn(`⚠️ [YooKassa Webhook] Payment intent not found for order ${orderId}, creating new one...`);
+        
+        // Verifica che l'ordine esista
+        const order = await storage.getOrderById(orderId);
+        if (!order) {
+          console.error(`[YooKassa Webhook] Order not found: ${orderId}`);
+          return res.status(404).json({ error: 'Order not found' });
+        }
+        
+        // Crea payment intent con i dati dal webhook
+        paymentIntent = await storage.createPaymentIntent({
+          orderId,
+          provider: 'YooKassa',
+          status: 'pending', // Sarà aggiornato subito dopo
+          amount: payment.amount?.value || order.amount,
+          redirectUrl: null, // Non disponibile dal webhook
+          raw: {
+            yookassaPaymentId: payment.id,
+            yookassaStatus: payment.status,
+            createdAt: payment.created_at,
+            createdViaWebhook: true, // Flag per indicare che è stato creato dal webhook
+          },
+        });
+        
+        console.log(`✅ [YooKassa Webhook] Created payment intent ${paymentIntent.id} for order ${orderId}`);
+      } else {
+        console.log(`✅ [YooKassa Webhook] Found existing payment intent ${paymentIntent.id}`);
+        
+        // Verifica che il payment ID corrisponda (solo se esiste già)
+        const storedYookassaId = (paymentIntent.raw as any)?.yookassaPaymentId;
+        if (storedYookassaId && storedYookassaId !== payment.id) {
+          console.error(`[YooKassa Webhook] Payment ID mismatch: expected ${storedYookassaId}, got ${payment.id}`);
+          return res.status(400).json({ error: 'Payment ID mismatch' });
+        }
       }
       
       // Mappa status YooKassa → nostro status
@@ -1132,6 +1162,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ourStatus = 'failed';
       }
       
+      console.log(`📝 [YooKassa Webhook] Updating payment intent status to ${ourStatus}...`);
+      
       // Aggiorna payment intent
       await storage.updatePaymentIntentStatus(
         paymentIntent.id,
@@ -1141,6 +1173,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           yookassaPaid: payment.paid,
         }
       );
+      
+      console.log(`✅ [YooKassa Webhook] Payment intent updated successfully`);
       
       // Ottieni l'ordine
       const order = await storage.getOrderById(paymentIntent.orderId);
