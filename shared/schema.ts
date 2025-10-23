@@ -175,6 +175,7 @@ export const ORDER_STATUSES = {
   PAID: 'ОПЛАЧЕН',
   COURIER_CALLED: 'ВЫЗВАН КУРЬЕР',
   RECEIVED: 'ПОЛУЧЕН',
+  DELETED: 'УДАЛЕНО', // Solo Master Admin può cancellare ordini
 } as const;
 
 // Stati che indicano che l'ordine è stato pagato (include stati post-pagamento)
