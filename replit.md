@@ -92,7 +92,12 @@ The fortune wheel system automatically rewards users with spin tokens when order
 
 ## Payment Flow (Updated October 2025)
 
-**New Customer Experience**:
+**Payment Methods**:
+The system supports two payment methods:
+1. **YooKassa Online Payment**: Bank cards, e-wallets, SberPay, FPS, and other Russian payment methods with fiscal receipts (54-ФЗ compliance)
+2. **Cash on Delivery**: Customer pays in cash when receiving the order from the courier
+
+**YooKassa Online Payment Flow**:
 1. After checkout completion, NO payment button appears
 2. Order status: ОФОРМЛЕН (awaiting preparation)
 3. Motivational message shown: "Твой заказ в работе! Мы создаём 50 оттенков твоего наслаждения"
@@ -101,6 +106,15 @@ The fortune wheel system automatically rewards users with spin tokens when order
 6. Order status: ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
 7. Customer can pay via link in Telegram or from order detail page
 8. Payment button visible only for orders with status ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
+
+**Cash on Delivery Flow**:
+1. Customer selects "Контакты курьера Don Giulio" as payment method during checkout
+2. Order created with paymentMethod = 'cash_on_delivery'
+3. Order status: ОФОРМЛЕН (awaiting preparation)
+4. NO payment link sent or payment button shown
+5. Message displayed: "Оплата наличными при получении заказа"
+6. Customer pays cash directly to courier upon delivery
+7. Admin manually updates order status after cash payment confirmation
 
 ## External Dependencies
 
