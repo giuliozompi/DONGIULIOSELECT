@@ -191,10 +191,10 @@ export function MarkingCodesDialog({
           unitIndex: firstUnvalidated,
         });
         
-        // Annuncio vocale in russo: nome prodotto + quantità
-        const quantity = Math.ceil(firstProduct.orderItem.quantity);
+        // Annuncio vocale in russo: nome prodotto (fino a "-") + numero кодов
+        const productNameShort = firstProduct.product.name.split('-')[0].trim();
         const unitsRemaining = firstProduct.units.filter(u => !u.validated).length;
-        const announcement = `${firstProduct.product.name}. Необходимо отсканировать ${unitsRemaining} ${unitsRemaining === 1 ? 'код' : unitsRemaining < 5 ? 'кода' : 'кодов'}.`;
+        const announcement = `${productNameShort}. ${unitsRemaining} ${unitsRemaining === 1 ? 'код' : unitsRemaining < 5 ? 'кода' : 'кодов'}.`;
         
         // Ritarda leggermente per dare tempo al dialog di aprirsi
         setTimeout(() => speakInRussian(announcement), 500);
@@ -219,8 +219,9 @@ export function MarkingCodesDialog({
         // Siamo passati a un nuovo prodotto - annuncio vocale
         const product = productsWithMarking.find(p => p.product.id === currentProductId);
         if (product) {
+          const productNameShort = product.product.name.split('-')[0].trim();
           const unitsRemaining = product.units.filter(u => !u.validated).length;
-          const announcement = `${product.product.name}. Необходимо отсканировать ${unitsRemaining} ${unitsRemaining === 1 ? 'код' : unitsRemaining < 5 ? 'кода' : 'кодов'}.`;
+          const announcement = `${productNameShort}. ${unitsRemaining} ${unitsRemaining === 1 ? 'код' : unitsRemaining < 5 ? 'кода' : 'кодов'}.`;
           
           // Breve ritardo per evitare sovrapposizioni vocali
           setTimeout(() => speakInRussian(announcement), 300);
