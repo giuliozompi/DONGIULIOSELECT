@@ -8,8 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Clock, XCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, XCircle, AlertCircle, Wallet } from 'lucide-react';
 import type { Order } from '@shared/schema';
+import { PAYMENT_METHOD_LABELS } from '@shared/schema';
 
 const statusConfig = {
   'ОФОРМЛЕН': { label: 'Оформлен', icon: Clock, variant: 'secondary' as const },
@@ -76,9 +77,10 @@ export default function OrderDetailPage() {
   };
 
   // Mostra pulsante pagamento solo se c'è link di pagamento e non è ancora pagato
-  const canPay = order?.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ';
+  const canPay = order?.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ' && order?.paymentMethod !== 'cash_on_delivery';
   const isPaid = order?.status === 'ОПЛАЧЕН' || order?.status === 'ВЫЗВАН КУРЬЕР' || order?.status === 'ПОЛУЧЕН';
   const isInPreparation = order?.status === 'ОФОРМЛЕН' || order?.status === 'СОБРАН';
+  const isCashOnDelivery = order?.paymentMethod === 'cash_on_delivery';
   const orderAmount = order ? parseFloat(order.amount) : 0;
   
   const mainButtonText = isPaid
@@ -160,6 +162,15 @@ export default function OrderDetailPage() {
                 })}
               </span>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Wallet className="w-4 h-4" />
+                Способ оплаты:
+              </span>
+              <span className="font-medium" data-testid="text-payment-method">
+                {PAYMENT_METHOD_LABELS[order.paymentMethod as keyof typeof PAYMENT_METHOD_LABELS] || order.paymentMethod}
+              </span>
+            </div>
             {order.paymentId && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">ID платежа:</span>
@@ -181,9 +192,15 @@ export default function OrderDetailPage() {
               <p className="text-muted-foreground">
                 Мы создаём 50 оттенков твоего наслаждения
               </p>
-              <p className="text-sm text-muted-foreground mt-4">
-                Ссылка на оплату будет отправлена, когда заказ будет готов к отправке
-              </p>
+              {isCashOnDelivery ? (
+                <p className="text-sm text-muted-foreground mt-4">
+                  Оплата наличными при получении заказа
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-4">
+                  Ссылка на оплату будет отправлена, когда заказ будет готов к отправке
+                </p>
+              )}
             </div>
           </Card>
         )}
