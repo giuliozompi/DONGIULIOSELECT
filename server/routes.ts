@@ -428,6 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dadataFiasId: z.string().optional(),
         deliveryNotes: z.string().optional(),
         deliveryMethod: z.enum(['yandex_go', 'cdek', 'don_giulio_courier', 'pickup']).optional(),
+        paymentMethod: z.enum(['yookassa', 'cash_on_delivery']).default('yookassa'),
         saveAddress: z.boolean().optional(),
         addressLabel: z.string().optional(),
       });
@@ -524,6 +525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: finalAmount,
         customerName: customerData.customerName,
         customerPhone: customerData.customerPhone,
+        customerEmail: customerData.customerEmail,
         deliveryAddress: customerData.deliveryAddress,
         deliveryCity: customerData.deliveryCity,
         deliveryStreet: customerData.deliveryStreet,
@@ -533,6 +535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dadataFiasId: customerData.dadataFiasId,
         deliveryNotes: customerData.deliveryNotes,
         deliveryMethod: customerData.deliveryMethod,
+        paymentMethod: customerData.paymentMethod,
       });
       
       // Salva dati utente (nome, phone, email) per riproporli nel prossimo ordine
