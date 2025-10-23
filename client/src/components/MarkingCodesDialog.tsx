@@ -23,12 +23,17 @@ interface MarkingCodesDialogProps {
   onComplete: () => void;
 }
 
+interface MarkingCodeUnit {
+  unitIndex: number;
+  code: string;
+  saved: boolean;
+  error: string | null;
+}
+
 interface ProductWithMarkingStatus {
   product: Product;
   orderItem: Order['items'][0];
-  markingCode: string;
-  saved: boolean;
-  error: string | null;
+  units: MarkingCodeUnit[];
 }
 
 export function MarkingCodesDialog({
@@ -66,15 +71,27 @@ export function MarkingCodesDialog({
     for (const item of order.items) {
       const product = allProducts.find(p => p.id === item.productId);
       if (product?.requiresMarking) {
-        // Check if code already exists
-        const existingLog = existingLogs.find((log: any) => log.productId === item.productId);
+        // Get all existing logs for this product
+        const productLogs = existingLogs.filter((log: any) => log.productId === item.productId);
+        
+        // Create units array based on quantity
+        const quantity = Math.ceil(item.quantity); // Round up for fractional quantities
+        const units: MarkingCodeUnit[] = [];
+        
+        for (let i = 0; i < quantity; i++) {
+          const existingLog = productLogs[i];
+          units.push({
+            unitIndex: i,
+            code: existingLog?.markingCode || '',
+            saved: !!existingLog,
+            error: null,
+          });
+        }
         
         productsNeedingMarking.push({
           product,
           orderItem: item,
-          markingCode: existingLog?.markingCode || '',
-          saved: !!existingLog,
-          error: null,
+          units,
         });
       }
     }
@@ -93,67 +110,138 @@ export function MarkingCodesDialog({
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/marking-logs', order.id] });
-      
-      // Update local state to mark as saved
-      setProductsWithMarking(prev =>
-        prev.map(p =>
-          p.product.id === variables.productId
-            ? { ...p, saved: true, error: null }
-            : p
-        )
-      );
     },
-    onError: (error: any, variables) => {
-      const errorMessage = error.message || 'Failed to save marking code';
-      
-      // Update local state with error
-      setProductsWithMarking(prev =>
-        prev.map(p =>
-          p.product.id === variables.productId
-            ? { ...p, error: errorMessage }
-            : p
-        )
-      );
-      
+    onError: (error: any) => {
       toast({
         title: 'Ошибка сохранения кода',
-        description: errorMessage,
+        description: error.message || 'Failed to save marking code',
         variant: 'destructive',
       });
     },
   });
 
-  const handleCodeChange = (productId: string, code: string) => {
+  const handleCodeChange = (productId: string, unitIndex: number, code: string) => {
     setProductsWithMarking(prev =>
       prev.map(p =>
         p.product.id === productId
-          ? { ...p, markingCode: code, error: null }
+          ? {
+              ...p,
+              units: p.units.map((u, idx) =>
+                idx === unitIndex
+                  ? { ...u, code, error: null }
+                  : u
+              ),
+            }
           : p
       )
     );
   };
 
-  const handleSaveCode = (productId: string, code: string) => {
+  const handleSaveCode = async (productId: string, unitIndex: number, code: string) => {
     if (!code.trim()) {
-      toast({
-        title: 'Ошибка',
-        description: 'Код маркировки не может быть пустым',
-        variant: 'destructive',
-      });
+      setProductsWithMarking(prev =>
+        prev.map(p =>
+          p.product.id === productId
+            ? {
+                ...p,
+                units: p.units.map((u, idx) =>
+                  idx === unitIndex
+                    ? { ...u, error: 'Код маркировки не может быть пустым' }
+                    : u
+                ),
+              }
+            : p
+        )
+      );
       return;
     }
 
-    saveMarkingMutation.mutate({ productId, markingCode: code.trim() });
+    // Check for duplicates within this product
+    const product = productsWithMarking.find(p => p.product.id === productId);
+    if (product) {
+      const isDuplicate = product.units.some(
+        (u, idx) => idx !== unitIndex && u.code.trim() === code.trim() && u.code.trim() !== ''
+      );
+      
+      if (isDuplicate) {
+        setProductsWithMarking(prev =>
+          prev.map(p =>
+            p.product.id === productId
+              ? {
+                  ...p,
+                  units: p.units.map((u, idx) =>
+                    idx === unitIndex
+                      ? { ...u, error: 'Этот код уже используется для другой единицы' }
+                      : u
+                  ),
+                }
+              : p
+          )
+        );
+        return;
+      }
+    }
+
+    try {
+      await saveMarkingMutation.mutateAsync({ productId, markingCode: code.trim() });
+      
+      // Mark as saved on success
+      setProductsWithMarking(prev =>
+        prev.map(p =>
+          p.product.id === productId
+            ? {
+                ...p,
+                units: p.units.map((u, idx) =>
+                  idx === unitIndex
+                    ? { ...u, saved: true, error: null }
+                    : u
+                ),
+              }
+            : p
+        )
+      );
+      
+      toast({
+        title: 'Код сохранён',
+        description: `Код маркировки для единицы ${unitIndex + 1} сохранён успешно`,
+      });
+    } catch (error: any) {
+      setProductsWithMarking(prev =>
+        prev.map(p =>
+          p.product.id === productId
+            ? {
+                ...p,
+                units: p.units.map((u, idx) =>
+                  idx === unitIndex
+                    ? { ...u, error: error.message || 'Ошибка сохранения' }
+                    : u
+                ),
+              }
+            : p
+        )
+      );
+    }
   };
 
   const allCodesSaved = productsWithMarking.length > 0 && 
-    productsWithMarking.every(p => p.saved);
+    productsWithMarking.every(p => p.units.every(u => u.saved));
+
+  const getTotalUnits = () => {
+    return productsWithMarking.reduce((sum, p) => sum + p.units.length, 0);
+  };
+
+  const getSavedUnits = () => {
+    return productsWithMarking.reduce(
+      (sum, p) => sum + p.units.filter(u => u.saved).length,
+      0
+    );
+  };
 
   const handleComplete = () => {
     if (!allCodesSaved) {
       toast({
         title: 'Не все коды сохранены',
-        description: 'Сохраните все коды маркировки перед продолжением',
+        description: `Сохранено ${getSavedUnits()} из ${getTotalUnits()} кодов. Сохраните все коды маркировки перед продолжением.`,
         variant: 'destructive',
       });
       return;
@@ -183,7 +271,12 @@ export function MarkingCodesDialog({
           <DialogTitle>Маркировка товаров</DialogTitle>
           <DialogDescription>
             Заказ #{order.id.slice(0, 8)} содержит товары, требующие маркировки.
-            Отсканируйте или введите коды для каждого товара.
+            Отсканируйте или введите коды для каждой единицы товара.
+            {!allCodesSaved && (
+              <span className="block mt-2 font-medium text-foreground">
+                Прогресс: {getSavedUnits()} / {getTotalUnits()} кодов сохранено
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -203,47 +296,57 @@ export function MarkingCodesDialog({
                   <div>
                     <p className="font-medium">{item.product.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      Количество: {item.orderItem.quantity} {item.orderItem.unit}
+                      Количество: {item.orderItem.quantity} {item.orderItem.unit} ({item.units.length} {item.units.length === 1 ? 'единица' : 'единиц'})
+                    </p>
+                    <p className="text-sm font-medium mt-1">
+                      Сохранено: {item.units.filter(u => u.saved).length} / {item.units.length}
                     </p>
                   </div>
-                  {item.saved && (
-                    <CheckCircle2 className="w-5 h-5 text-green-600" data-testid={`icon-saved-${item.product.id}`} />
+                  {item.units.every(u => u.saved) && (
+                    <CheckCircle2 className="w-5 h-5 text-green-600" data-testid={`icon-all-saved-${item.product.id}`} />
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor={`code-${item.product.id}`}>
-                    Код маркировки
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id={`code-${item.product.id}`}
-                      value={item.markingCode}
-                      onChange={(e) => handleCodeChange(item.product.id, e.target.value)}
-                      placeholder="Отсканируйте или введите код"
-                      disabled={item.saved}
-                      data-testid={`input-marking-code-${item.product.id}`}
-                    />
-                    <Button
-                      onClick={() => handleSaveCode(item.product.id, item.markingCode)}
-                      disabled={item.saved || saveMarkingMutation.isPending || !item.markingCode.trim()}
-                      data-testid={`button-save-code-${item.product.id}`}
-                    >
-                      {saveMarkingMutation.isPending ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : item.saved ? (
-                        'Сохранено'
-                      ) : (
-                        'Сохранить'
+                <div className="space-y-3">
+                  {item.units.map((unit) => (
+                    <div key={unit.unitIndex} className="space-y-2">
+                      <Label htmlFor={`code-${item.product.id}-${unit.unitIndex}`}>
+                        Единица {unit.unitIndex + 1}
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id={`code-${item.product.id}-${unit.unitIndex}`}
+                          value={unit.code}
+                          onChange={(e) => handleCodeChange(item.product.id, unit.unitIndex, e.target.value)}
+                          placeholder="Отсканируйте или введите код"
+                          disabled={unit.saved}
+                          data-testid={`input-marking-code-${item.product.id}-${unit.unitIndex}`}
+                        />
+                        <Button
+                          onClick={() => handleSaveCode(item.product.id, unit.unitIndex, unit.code)}
+                          disabled={unit.saved || saveMarkingMutation.isPending || !unit.code.trim()}
+                          data-testid={`button-save-code-${item.product.id}-${unit.unitIndex}`}
+                        >
+                          {saveMarkingMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : unit.saved ? (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                              Сохранено
+                            </>
+                          ) : (
+                            'Сохранить'
+                          )}
+                        </Button>
+                      </div>
+                      {unit.error && (
+                        <div className="flex items-center gap-2 text-sm text-destructive">
+                          <AlertCircle className="w-4 h-4" />
+                          <span>{unit.error}</span>
+                        </div>
                       )}
-                    </Button>
-                  </div>
-                  {item.error && (
-                    <div className="flex items-center gap-2 text-sm text-destructive">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>{item.error}</span>
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             ))
@@ -263,7 +366,7 @@ export function MarkingCodesDialog({
             disabled={!allCodesSaved}
             data-testid="button-complete-marking"
           >
-            Готово
+            {allCodesSaved ? 'Готово' : `Готово (${getSavedUnits()}/${getTotalUnits()})`}
           </Button>
         </DialogFooter>
       </DialogContent>

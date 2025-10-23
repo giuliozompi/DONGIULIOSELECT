@@ -2153,6 +2153,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Marking code already used' });
       }
       
+      // Verifica che il numero di codici salvati non superi la quantità ordinata
+      const existingLogs = await storage.getMarkingLogsByOrder(orderId);
+      const productLogs = existingLogs.filter(log => log.productId === productId);
+      const requiredQuantity = Math.ceil(productInOrder.quantity); // Round up for fractional quantities
+      
+      if (productLogs.length >= requiredQuantity) {
+        return res.status(400).json({ 
+          error: `Maximum number of marking codes (${requiredQuantity}) already saved for this product` 
+        });
+      }
+      
       // Salva il marking log
       const log = await storage.createMarkingLog({
         orderId,
