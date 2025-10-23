@@ -141,6 +141,10 @@ export const orders = pgTable("orders", {
   
   // Stati ordine: ОФОРМЛЕН (confermato) | СОБРАН (preparato) | ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ (link inviato) | ОПЛАЧЕН (pagato) | ВЫЗВАН КУРЬЕР (corriere chiamato) | ПОЛУЧЕН (ricevuto)
   status: text("status").notNull().default('ОФОРМЛЕН'),
+  
+  // Metodo di pagamento: 'yookassa' | 'cash_on_delivery'
+  paymentMethod: text("payment_method").notNull().default('yookassa'),
+  
   paymentId: varchar("payment_id"),
   paymentLinkSentAt: timestamp("payment_link_sent_at"),
   
@@ -190,6 +194,17 @@ export const DELIVERY_METHOD_LABELS = {
   [DELIVERY_METHODS.CDEK]: 'Сдек (оплата доставку по России при получением)',
   [DELIVERY_METHODS.DON_GIULIO_COURIER]: 'Дон Джулио курьер (договариваетесь с менеджером)',
   [DELIVERY_METHODS.PICKUP]: 'Самовывоз (бесплатно)',
+} as const;
+
+// Payment method constants
+export const PAYMENT_METHODS = {
+  YOOKASSA: 'yookassa',
+  CASH_ON_DELIVERY: 'cash_on_delivery',
+} as const;
+
+export const PAYMENT_METHOD_LABELS = {
+  [PAYMENT_METHODS.YOOKASSA]: 'Онлайн оплата (ЮКасса)',
+  [PAYMENT_METHODS.CASH_ON_DELIVERY]: 'Наличными при получении',
 } as const;
 
 // Токены вращений колеса фортуны
