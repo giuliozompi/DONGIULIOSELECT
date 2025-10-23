@@ -96,25 +96,48 @@ export function MarkingCodesDialog({
     // Cancella qualsiasi messaggio in corso
     window.speechSynthesis.cancel();
     
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ru-RU';
+    const speak = () => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ru-RU';
+      
+      // Cerca una voce maschile russa disponibile
+      const voices = window.speechSynthesis.getVoices();
+      console.log('🎤 Available voices:', voices.map(v => `${v.name} (${v.lang})`));
+      
+      // Prova a trovare una voce maschile russa
+      const russianVoice = 
+        // Cerca esplicitamente voci maschili russe
+        voices.find(v => v.lang.startsWith('ru') && (
+          v.name.toLowerCase().includes('yuri') ||
+          v.name.toLowerCase().includes('dmitri') ||
+          v.name.toLowerCase().includes('male')
+        )) ||
+        // Fallback: qualsiasi voce russa
+        voices.find(v => v.lang.startsWith('ru')) ||
+        // Ultimo fallback: voce di default
+        voices[0];
+      
+      if (russianVoice) {
+        console.log('🎤 Selected voice:', russianVoice.name, russianVoice.lang);
+        utterance.voice = russianVoice;
+      }
+      
+      // Parametri per voce più caratteristica e profonda
+      utterance.rate = 0.85; // Velocità più lenta per enfasi
+      utterance.pitch = 0.75; // Tono ancora più basso per voce maschile profonda
+      utterance.volume = 1.0;
+      
+      window.speechSynthesis.speak(utterance);
+    };
     
-    // Cerca una voce maschile russa disponibile
+    // Se le voci non sono ancora caricate, aspetta
     const voices = window.speechSynthesis.getVoices();
-    const russianVoice = voices.find(voice => 
-      voice.lang.startsWith('ru') && voice.name.toLowerCase().includes('male')
-    ) || voices.find(voice => voice.lang.startsWith('ru'));
-    
-    if (russianVoice) {
-      utterance.voice = russianVoice;
+    if (voices.length === 0) {
+      // Aspetta che le voci siano caricate
+      window.speechSynthesis.addEventListener('voiceschanged', speak, { once: true });
+    } else {
+      speak();
     }
-    
-    // Parametri per voce più caratteristica e profonda
-    utterance.rate = 0.85; // Velocità più lenta per enfasi
-    utterance.pitch = 0.8; // Tono più basso per voce maschile profonda
-    utterance.volume = 1.0;
-    
-    window.speechSynthesis.speak(utterance);
   };
 
   // Initialize products with marking ONLY ONCE when data loads
