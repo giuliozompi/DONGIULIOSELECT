@@ -1215,8 +1215,14 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
     }
   };
 
-  // Filter orders based on search query
+  // Filter orders based on search query and status
   const filteredOrders = orders.filter(order => {
+    // Filter by status
+    if (statusFilter !== 'all' && order.status !== statusFilter) {
+      return false;
+    }
+    
+    // Filter by search query
     if (!searchQuery.trim()) return true;
     
     const query = searchQuery.toLowerCase().trim();
@@ -1264,7 +1270,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       {/* Orders list */}
       <Card>
         <CardHeader>
-          <CardTitle>Заказы ({orders.length})</CardTitle>
+          <CardTitle>Заказы ({filteredOrders.length}{statusFilter !== 'all' || searchQuery ? ` из ${orders.length}` : ''})</CardTitle>
         </CardHeader>
         <CardContent>
           {/* Search field */}
