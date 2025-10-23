@@ -57,8 +57,9 @@ export function MarkingCodesDialog({
   const [duplicateDialog, setDuplicateDialog] = useState<DuplicateCodeState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
-  // Refs per gestire focus automatico
+  // Refs per gestire focus automatico e tracking prodotto
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  const previousProductIdRef = useRef<string | null>(null);
 
   // Fetch all products to check which ones require marking
   const { data: allProducts = [], isLoading: productsLoading } = useQuery<Product[]>({
@@ -87,6 +88,22 @@ export function MarkingCodesDialog({
       inputRefs.current.clear();
     }
   }, [open]);
+
+  // Funzione per sintesi vocale in russo
+  const speakInRussian = (text: string) => {
+    if (!window.speechSynthesis) return;
+    
+    // Cancella qualsiasi messaggio in corso
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ru-RU';
+    utterance.rate = 0.9; // Velocità leggermente ridotta per chiarezza
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    window.speechSynthesis.speak(utterance);
+  };
 
   // Initialize products with marking ONLY ONCE when data loads
   useEffect(() => {
@@ -138,11 +155,19 @@ export function MarkingCodesDialog({
           productId: firstProduct.product.id,
           unitIndex: firstUnvalidated,
         });
+        
+        // Annuncio vocale in russo: nome prodotto + quantità
+        const quantity = Math.ceil(firstProduct.orderItem.quantity);
+        const unitsRemaining = firstProduct.units.filter(u => !u.validated).length;
+        const announcement = `${firstProduct.product.name}. Необходимо отсканировать ${unitsRemaining} ${unitsRemaining === 1 ? 'код' : unitsRemaining < 5 ? 'кода' : 'кодов'}.`;
+        
+        // Ritarda leggermente per dare tempo al dialog di aprirsi
+        setTimeout(() => speakInRussian(announcement), 500);
       }
     }
   }, [allProducts, order, existingLogs, initialized]);
 
-  // Auto-focus sul campo attivo
+  // Auto-focus sul campo attivo + annuncio vocale quando si passa a nuovo prodotto
   useEffect(() => {
     if (currentFocusIndex) {
       const key = `${currentFocusIndex.productId}-${currentFocusIndex.unitIndex}`;
@@ -150,8 +175,27 @@ export function MarkingCodesDialog({
       if (input) {
         setTimeout(() => input.focus(), 100);
       }
+      
+      // Controlla se siamo passati a un nuovo prodotto
+      const currentProductId = currentFocusIndex.productId;
+      const previousProductId = previousProductIdRef.current;
+      
+      if (previousProductId !== null && previousProductId !== currentProductId) {
+        // Siamo passati a un nuovo prodotto - annuncio vocale
+        const product = productsWithMarking.find(p => p.product.id === currentProductId);
+        if (product) {
+          const unitsRemaining = product.units.filter(u => !u.validated).length;
+          const announcement = `${product.product.name}. Необходимо отсканировать ${unitsRemaining} ${unitsRemaining === 1 ? 'код' : unitsRemaining < 5 ? 'кода' : 'кодов'}.`;
+          
+          // Breve ritardo per evitare sovrapposizioni vocali
+          setTimeout(() => speakInRussian(announcement), 300);
+        }
+      }
+      
+      // Aggiorna il tracking del prodotto corrente
+      previousProductIdRef.current = currentProductId;
     }
-  }, [currentFocusIndex]);
+  }, [currentFocusIndex, productsWithMarking]);
 
   // Validate marking code in real-time
   const validateCodeMutation = useMutation({
