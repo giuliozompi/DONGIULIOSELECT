@@ -2146,6 +2146,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  // DELETE /api/admin/orders/:id - Cancella ordine (MASTER ADMIN ONLY)
+  // Cancella ordine con cascade: marking logs, change logs, e ordine stesso
+  app.delete("/api/admin/orders/:id", verifyTelegramInitData, requireAdmin, requireMasterAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      
+      // Verifica che l'ordine esista prima di cancellarlo
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Salva info ordine per audit log
+      const orderInfo = {
+        orderId: order.id,
+        userId: order.userId,
+        customerName: order.customerName,
+        amount: order.amount,
+        status: order.status,
+        itemCount: order.items.length,
+      };
+      
+      // Cancella l'ordine (con cascade per marking logs e change logs)
+      const deleted = await storage.deleteOrder(orderId);
+      
+      if (!deleted) {
+        return res.status(500).json({ error: 'Failed to delete order' });
+      }
+      
+      // Log azione per audit trail
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'deleted',
+        entityType: 'order',
+        entityId: orderId,
+        actionData: {
+          deletedOrder: orderInfo,
+          reason: 'Master Admin deletion',
+        },
+      });
+      
+      res.json({ success: true, message: 'Order deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
   
   // ==================== PRODUCT MARKING (ADMIN) ====================
   
