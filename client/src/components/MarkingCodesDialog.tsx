@@ -55,7 +55,6 @@ export function MarkingCodesDialog({
 }: MarkingCodesDialogProps) {
   const { toast } = useToast();
   const [productsWithMarking, setProductsWithMarking] = useState<ProductWithMarkingStatus[]>([]);
-  const [initialized, setInitialized] = useState(false);
   const [currentFocusIndex, setCurrentFocusIndex] = useState<{ productId: string; unitIndex: number } | null>(null);
   const [duplicateDialog, setDuplicateDialog] = useState<DuplicateCodeState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -84,7 +83,6 @@ export function MarkingCodesDialog({
   // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
-      setInitialized(false);
       setProductsWithMarking([]);
       setCurrentFocusIndex(null);
       setDuplicateDialog(null);
@@ -143,9 +141,9 @@ export function MarkingCodesDialog({
     }
   };
 
-  // Initialize products with marking ONLY ONCE when data loads
+  // Initialize products with marking when dialog opens and data is available
   useEffect(() => {
-    if (!allProducts.length || !order || initialized) return;
+    if (!open || !allProducts.length || !order) return;
 
     console.log('🔄 Initializing marking codes dialog', {
       allProductsCount: allProducts.length,
@@ -214,7 +212,6 @@ export function MarkingCodesDialog({
     console.log('📊 Final productsNeedingMarking:', productsNeedingMarking);
 
     setProductsWithMarking(productsNeedingMarking);
-    setInitialized(true);
     
     // Auto-focus sul primo campo non validato, oppure sul primo campo se tutti sono validati
     if (productsNeedingMarking.length > 0) {
@@ -237,7 +234,7 @@ export function MarkingCodesDialog({
         setTimeout(() => speakInRussian(announcement), 500);
       }
     }
-  }, [allProducts, order, existingLogs, initialized]);
+  }, [open, allProducts, order, existingLogs]);
 
   // Auto-focus sul campo attivo + annuncio vocale quando si passa a nuovo prodotto
   useEffect(() => {
