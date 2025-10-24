@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { CheckCircle2, AlertCircle, Loader2, Scan } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, Scan, Pencil } from 'lucide-react';
 import type { Order, Product } from '@shared/schema';
 import { DuplicateCodeDialog } from './DuplicateCodeDialog';
 
@@ -31,6 +31,7 @@ interface MarkingCodeUnit {
   saved: boolean; // Già salvato nel database
   logId: string | null; // ID del log nel database (se esiste)
   error: string | null;
+  editMode: boolean; // Se true, il campo salvato è in modalità modifica
 }
 
 interface ProductWithMarkingStatus {
@@ -171,6 +172,7 @@ export function MarkingCodesDialog({
             saved: !!existingLog, // Marca come già salvato se esiste nel DB
             logId: existingLog?.id || null, // Traccia l'ID del log per eventuali modifiche
             error: null,
+            editMode: false, // Di default i codici salvati sono protetti
           });
         }
         
@@ -252,6 +254,26 @@ export function MarkingCodesDialog({
       return await res.json();
     },
   });
+
+  // Abilita la modalità modifica per un campo già salvato
+  const enableEditMode = (productId: string, unitIndex: number) => {
+    setProductsWithMarking(prev =>
+      prev.map(p =>
+        p.product.id === productId
+          ? {
+              ...p,
+              units: p.units.map((u, idx) =>
+                idx === unitIndex
+                  ? { ...u, editMode: true }
+                  : u
+              ),
+            }
+          : p
+      )
+    );
+    // Attiva questo campo
+    setCurrentFocusIndex({ productId, unitIndex });
+  };
 
   const handleCodeChange = (productId: string, unitIndex: number, code: string) => {
     setProductsWithMarking(prev =>
@@ -669,16 +691,26 @@ export function MarkingCodesDialog({
                                 onChange={(e) => handleCodeChange(item.product.id, unit.unitIndex, e.target.value)}
                                 onKeyDown={(e) => handleKeyDown(e, item.product.id, unit.unitIndex, unit.code)}
                                 onClick={() => {
-                                  // Permetti di cliccare su qualsiasi campo per renderlo attivo
+                                  // Se il campo è salvato e non in modalità modifica, non permettere attivazione
+                                  if (unit.saved && !unit.editMode) {
+                                    return;
+                                  }
+                                  // Altrimenti permetti di attivare il campo
                                   setCurrentFocusIndex({ productId: item.product.id, unitIndex: unit.unitIndex });
                                 }}
-                                placeholder={isActive ? "Отсканируйте код и нажмите Enter" : "Клик для редактирования"}
-                                readOnly={!isActive}
+                                placeholder={
+                                  unit.saved && !unit.editMode 
+                                    ? "Код сохранён" 
+                                    : isActive 
+                                      ? "Отсканируйте код и нажмите Enter" 
+                                      : "Клик для редактирования"
+                                }
+                                readOnly={!isActive || (unit.saved && !unit.editMode)}
                                 maxLength={24}
-                                className={`text-xs cursor-pointer ${unit.validated ? 'bg-green-50 dark:bg-green-950' : ''} ${!isActive ? 'opacity-60' : ''}`}
+                                className={`text-xs ${unit.saved && !unit.editMode ? 'cursor-default' : 'cursor-pointer'} ${unit.validated ? 'bg-green-50 dark:bg-green-950' : ''} ${!isActive ? 'opacity-60' : ''}`}
                                 data-testid={`input-marking-code-${item.product.id}-${unit.unitIndex}`}
                               />
-                              {unit.validated && (
+                              {unit.validated && !unit.editMode && (
                                 <CheckCircle2 className="w-4 h-4 text-green-600 absolute right-2 top-1/2 -translate-y-1/2" />
                               )}
                             </div>
@@ -689,6 +721,19 @@ export function MarkingCodesDialog({
                               </div>
                             )}
                           </div>
+                          
+                          {/* Pulsante Modifica - visibile solo per codici già salvati non in modalità modifica */}
+                          {unit.saved && !unit.editMode && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => enableEditMode(item.product.id, unit.unitIndex)}
+                              data-testid={`button-edit-marking-${item.product.id}-${unit.unitIndex}`}
+                              className="shrink-0"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                          )}
                         </div>
                       );
                     })}
