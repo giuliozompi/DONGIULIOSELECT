@@ -2129,6 +2129,253 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== YANDEX GO DELIVERY ====================
+  
+  // POST /api/admin/orders/:id/yandex-delivery-price - Calcola prezzo delivery Yandex (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/yandex-delivery-price", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { yandexGoService } = await import("./services/yandex-go");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const schema = z.object({
+        pickupCoordinates: z.tuple([z.number(), z.number()]), // [longitude, latitude]
+        deliveryCoordinates: z.tuple([z.number(), z.number()]),
+        requirements: z.object({
+          cargo_loaders: z.number().optional(),
+          cargo_options: z.array(z.string()).optional(),
+          cargo_type: z.string().optional(),
+          pro_courier: z.boolean().optional(),
+          taxi_class: z.string().optional(),
+        }).optional(),
+      });
+      
+      const { pickupCoordinates, deliveryCoordinates, requirements } = schema.parse(req.body);
+      
+      // Calcola peso e dimensioni totali dall'ordine
+      const items = [{
+        quantity: order.items.length,
+        size: {
+          height: 0.3, // 30cm
+          length: 0.4, // 40cm
+          width: 0.3,  // 30cm
+        },
+        weight: order.items.reduce((sum, item) => sum + (item.quantity * 0.5), 0), // Stima 0.5kg per item
+      }];
+      
+      const priceInfo = await yandexGoService.checkPrice(
+        pickupCoordinates,
+        deliveryCoordinates,
+        items,
+        requirements
+      );
+      
+      res.json(priceInfo);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error calculating Yandex delivery price:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/yandex-delivery - Crea ordine delivery Yandex (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/yandex-delivery", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { yandexGoService } = await import("./services/yandex-go");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const schema = z.object({
+        pickupCoordinates: z.tuple([z.number(), z.number()]),
+        deliveryCoordinates: z.tuple([z.number(), z.number()]),
+        pickupAddress: z.string(),
+        pickupContact: z.object({
+          name: z.string(),
+          phone: z.string(),
+        }),
+        deliveryContact: z.object({
+          name: z.string(),
+          phone: z.string(),
+        }),
+        requirements: z.object({
+          cargo_options: z.array(z.string()).optional(),
+          taxi_class: z.string().optional(),
+        }).optional(),
+        comment: z.string().optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      
+      // Prepara items per Yandex
+      const items = [{
+        quantity: order.items.length,
+        size: {
+          height: 0.3,
+          length: 0.4,
+          width: 0.3,
+        },
+        weight: order.items.reduce((sum, item) => sum + (item.quantity * 0.5), 0),
+      }];
+      
+      // Crea ordine Yandex
+      const yandexOrder = await yandexGoService.createOrder({
+        items,
+        route_points: [
+          {
+            address: {
+              fullname: data.pickupAddress,
+              coordinates: data.pickupCoordinates,
+            },
+            contact: data.pickupContact,
+            type: 'source',
+            visit_order: 1,
+          },
+          {
+            address: {
+              fullname: order.deliveryAddress,
+              coordinates: data.deliveryCoordinates,
+            },
+            contact: data.deliveryContact,
+            type: 'destination',
+            visit_order: 2,
+          },
+        ],
+        requirements: data.requirements,
+        comment: data.comment || `Заказ ${order.id.slice(0, 8)}`,
+      });
+      
+      // Salva info Yandex nell'ordine
+      await storage.updateOrder(orderId, {
+        yandexClaimId: yandexOrder.id,
+        yandexDeliveryStatus: yandexOrder.status,
+        yandexDeliveryPrice: yandexOrder.pricing?.offer?.price || null,
+        pickupCoordinates: data.pickupCoordinates.map(String),
+        deliveryCoordinates: data.deliveryCoordinates.map(String),
+        courierService: 'yandex_go',
+        courierCalledAt: new Date(),
+        status: 'ВЫЗВАН КУРЬЕР',
+      });
+      
+      // Log dell'azione
+      await storage.createOrderChangeLog({
+        orderId,
+        changedBy: req.userId!,
+        changeType: 'yandex_delivery_created',
+        oldValue: null,
+        newValue: JSON.stringify({
+          claimId: yandexOrder.id,
+          status: yandexOrder.status,
+          price: yandexOrder.pricing?.offer?.price,
+        }),
+      });
+      
+      res.json(yandexOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error creating Yandex delivery:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // GET /api/admin/orders/:id/yandex-delivery-status - Ottieni status delivery Yandex (ADMIN ONLY)
+  app.get("/api/admin/orders/:id/yandex-delivery-status", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { yandexGoService } = await import("./services/yandex-go");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      if (!order.yandexClaimId) {
+        return res.status(400).json({ error: 'No Yandex delivery associated with this order' });
+      }
+      
+      const status = await yandexGoService.getOrderStatus(order.yandexClaimId);
+      
+      // Aggiorna lo status nell'ordine
+      const updates: any = {
+        yandexDeliveryStatus: status.status,
+      };
+      
+      if (status.performer_info) {
+        updates.yandexPerformerInfo = {
+          courierName: status.performer_info.courier_name,
+          legalName: status.performer_info.legal_name,
+          carModel: status.performer_info.car_model,
+          carNumber: status.performer_info.car_number,
+        };
+      }
+      
+      // Se consegnato, aggiorna status ordine
+      if (status.status === 'delivered' || status.status === 'delivered_finish') {
+        updates.status = 'ПОЛУЧЕН';
+      }
+      
+      await storage.updateOrder(orderId, updates);
+      
+      res.json(status);
+    } catch (error) {
+      console.error('Error fetching Yandex delivery status:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/yandex-delivery-cancel - Cancella delivery Yandex (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/yandex-delivery-cancel", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { yandexGoService } = await import("./services/yandex-go");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      if (!order.yandexClaimId) {
+        return res.status(400).json({ error: 'No Yandex delivery associated with this order' });
+      }
+      
+      const result = await yandexGoService.cancelOrder(order.yandexClaimId);
+      
+      // Aggiorna ordine
+      await storage.updateOrder(orderId, {
+        yandexDeliveryStatus: result.status,
+      });
+      
+      // Log dell'azione
+      await storage.createOrderChangeLog({
+        orderId,
+        changedBy: req.userId!,
+        changeType: 'yandex_delivery_cancelled',
+        oldValue: order.yandexDeliveryStatus || null,
+        newValue: result.status,
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error cancelling Yandex delivery:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   // GET /api/admin/orders/:id - Ottieni singolo ordine (ADMIN ONLY)
   // NOTA: Questa route deve essere DOPO tutte le route più specifiche (es. /:id/logs)
   app.get("/api/admin/orders/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
