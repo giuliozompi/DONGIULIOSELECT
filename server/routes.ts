@@ -2271,14 +2271,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log dell'azione
       await storage.createOrderChangeLog({
         orderId,
-        changedBy: req.userId!,
+        adminUserId: req.userId!,
         changeType: 'yandex_delivery_created',
-        oldValue: null,
-        newValue: JSON.stringify({
+        changeData: {
           claimId: yandexOrder.id,
           status: yandexOrder.status,
           price: yandexOrder.pricing?.offer?.price,
-        }),
+        },
       });
       
       res.json(yandexOrder);
@@ -2363,10 +2362,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log dell'azione
       await storage.createOrderChangeLog({
         orderId,
-        changedBy: req.userId!,
+        adminUserId: req.userId!,
         changeType: 'yandex_delivery_cancelled',
-        oldValue: order.yandexDeliveryStatus || null,
-        newValue: result.status,
+        changeData: {
+          oldStatus: order.yandexDeliveryStatus || null,
+          newStatus: result.status,
+        },
       });
       
       res.json(result);

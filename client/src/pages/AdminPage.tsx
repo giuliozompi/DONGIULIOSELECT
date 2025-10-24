@@ -31,6 +31,7 @@ import { insertCategorySchema, insertProductSchema, type Category, type Product,
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
+import { YandexDeliveryDialog } from '@/components/YandexDeliveryDialog';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -1241,6 +1242,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [markingDialogOrder, setMarkingDialogOrder] = useState<Order | null>(null);
+  const [yandexDeliveryDialogOrder, setYandexDeliveryDialogOrder] = useState<Order | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: string; status: string } | null>(null);
   
   // Fetch orders with filter
@@ -1532,16 +1534,36 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       </p>
                     )}
                     
-                    {order.status === 'ОПЛАЧЕН' && (
-                      <Button 
-                        size="sm"
-                        onClick={() => callCourierMutation.mutate(order.id)}
-                        disabled={callCourierMutation.isPending}
-                        data-testid={`button-call-courier-${order.id}`}
-                      >
-                        <Truck className="w-4 h-4 mr-2" />
-                        Вызвать курьера
-                      </Button>
+                    {order.status === 'ОПЛАЧЕН' && !order.yandexClaimId && (
+                      <>
+                        <Button 
+                          size="sm"
+                          onClick={() => setYandexDeliveryDialogOrder(order)}
+                          data-testid={`button-yandex-delivery-${order.id}`}
+                        >
+                          <Truck className="w-4 h-4 mr-2" />
+                          Вызвать Яндекс Go
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={() => callCourierMutation.mutate(order.id)}
+                          disabled={callCourierMutation.isPending}
+                          data-testid={`button-call-courier-${order.id}`}
+                        >
+                          <Truck className="w-4 h-4 mr-2" />
+                          Вызвать курьера (вручную)
+                        </Button>
+                      </>
+                    )}
+                    
+                    {/* Show Yandex delivery status if exists */}
+                    {order.yandexClaimId && (
+                      <Badge variant="default" className="flex items-center gap-1" data-testid={`badge-yandex-status-${order.id}`}>
+                        <Truck className="w-3 h-3" />
+                        Яндекс Go: {order.yandexDeliveryStatus || 'в обработке'}
+                        {order.yandexDeliveryPrice && ` (${order.yandexDeliveryPrice} ₽)`}
+                      </Badge>
                     )}
                     
                     {/* Button to view/acquire marking codes */}
@@ -1590,6 +1612,15 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
             }
           }}
           onComplete={handleMarkingComplete}
+        />
+      )}
+
+      {/* Yandex Go Delivery Dialog */}
+      {yandexDeliveryDialogOrder && (
+        <YandexDeliveryDialog
+          order={yandexDeliveryDialogOrder}
+          open={!!yandexDeliveryDialogOrder}
+          onOpenChange={(open) => !open && setYandexDeliveryDialogOrder(null)}
         />
       )}
     </div>

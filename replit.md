@@ -20,6 +20,7 @@ The backend is an Express.js application in TypeScript, providing a RESTful API 
 - **Product Marking System**: Ensures regulatory compliance by tracking unique marking codes for unit-based products, integrated with a sequential acquisition workflow optimized for scanner operators. Features real-time validation, duplicate handling, and an audit trail. Smart auto-open logic: маркировка dialog opens automatically only when codes are incomplete; manual "Маркировка" button always available for viewing/acquiring codes. Saved codes are protected from accidental modification: a dedicated "Edit" button (pencil icon) must be clicked to enable editing mode. Compact text display (text-xs) with 24-character limit for optimal readability. All fields are always visible, with saved codes locked by default.
 - **Gamification**: A fortune wheel system that automatically rewards users with spin tokens upon order completion, with idempotent and race-safe token assignment.
 - **Payment Flow**: Supports YooKassa Online Payment (with 54-ФЗ compliance and marking code transmission) and Cash on Delivery. Online payment links are sent after order preparation.
+- **Yandex Go Delivery**: Integrated courier service enabling admins to calculate delivery costs, create delivery orders, track couriers in real-time, and view delivery status. Supports coordinate-based routing, customizable delivery requirements (thermobag, cargo options), and automatic status synchronization with order management.
 
 ### System Design Choices
 - **Database**: PostgreSQL with Drizzle ORM for storing all application data, including users, products, orders, and gamification data.
@@ -31,6 +32,7 @@ The backend is an Express.js application in TypeScript, providing a RESTful API 
 1.  **Telegram WebApp Platform**: For native app hosting, authentication, and UI/UX integration.
 2.  **OpenRouter AI API**: Powers the AI product assistant (Anthropic Claude 3 Haiku) for recommendations.
 3.  **YooKassa Payment Gateway**: For online payment processing, supporting various Russian payment methods and 54-ФЗ compliance.
-4.  **DaData.ru Address Autocomplete**: For Russian address validation and standardization.
-5.  **Neon Database**: Serverless PostgreSQL hosting.
-6.  **NPM Dependencies**: Libraries for UI (Radix UI, Tailwind CSS), forms (react-hook-form, Zod), and data persistence (Drizzle ORM).
+4.  **Yandex Go Delivery API**: Express courier delivery service with real-time tracking, pricing estimates, and automated order management.
+5.  **DaData.ru Address Autocomplete**: For Russian address validation and standardization.
+6.  **Neon Database**: Serverless PostgreSQL hosting.
+7.  **NPM Dependencies**: Libraries for UI (Radix UI, Tailwind CSS), forms (react-hook-form, Zod), and data persistence (Drizzle ORM).
