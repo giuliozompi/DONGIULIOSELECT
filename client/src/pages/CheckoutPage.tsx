@@ -154,6 +154,28 @@ export default function CheckoutPage() {
     }
   }, [userData, form]);
 
+  // Pre-compila automaticamente l'indirizzo di default se presente
+  useEffect(() => {
+    if (savedAddresses && savedAddresses.length > 0 && !form.getValues('deliveryAddress')) {
+      const defaultAddress = savedAddresses.find(addr => addr.isDefault);
+      if (defaultAddress) {
+        // Pre-compila automaticamente il form con l'indirizzo di default
+        form.setValue('deliveryAddress', defaultAddress.fullAddress);
+        if (defaultAddress.flat) {
+          form.setValue('deliveryFlat', defaultAddress.flat);
+        }
+        setStructuredAddress({
+          deliveryCity: defaultAddress.city || undefined,
+          deliveryStreet: defaultAddress.street || undefined,
+          deliveryBuilding: defaultAddress.building || undefined,
+          deliveryFlat: defaultAddress.flat || undefined,
+          deliveryPostalCode: defaultAddress.postalCode || undefined,
+          dadataFiasId: defaultAddress.dadataFiasId || undefined,
+        });
+      }
+    }
+  }, [savedAddresses, form]);
+
   const deleteAddressMutation = useMutation({
     mutationFn: async (addressId: string) => {
       await apiRequest('DELETE', `/api/user/addresses/${addressId}`);
