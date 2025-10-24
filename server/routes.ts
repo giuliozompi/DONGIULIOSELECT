@@ -408,6 +408,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  // ========== PICKUP ADDRESSES API ==========
+
+  // GET /api/admin/pickup-addresses - Ottieni tutti gli indirizzi di pick-up
+  app.get("/api/admin/pickup-addresses", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const addresses = await storage.getPickupAddresses();
+      res.json(addresses);
+    } catch (error) {
+      console.error('Error fetching pickup addresses:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/pickup-addresses - Crea nuovo indirizzo di pick-up
+  app.post("/api/admin/pickup-addresses", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const addressSchema = z.object({
+        label: z.string().min(1),
+        fullAddress: z.string().min(10),
+        city: z.string().optional(),
+        street: z.string().optional(),
+        building: z.string().optional(),
+        flat: z.string().optional(),
+        postalCode: z.string().optional(),
+        dadataFiasId: z.string().optional(),
+        latitude: z.string().optional(),
+        longitude: z.string().optional(),
+        contactName: z.string().optional(),
+        contactPhone: z.string().optional(),
+        isDefault: z.boolean().optional(),
+      });
+      
+      const addressData = addressSchema.parse(req.body);
+      
+      const address = await storage.createPickupAddress(addressData as any);
+      
+      res.json(address);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error creating pickup address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/admin/pickup-addresses/:id - Elimina indirizzo di pick-up
+  app.delete("/api/admin/pickup-addresses/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const addressId = req.params.id;
+      const success = await storage.deletePickupAddress(addressId);
+      
+      if (!success) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting pickup address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /api/admin/pickup-addresses/:id/set-default - Imposta indirizzo di pick-up come default
+  app.post("/api/admin/pickup-addresses/:id/set-default", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const addressId = req.params.id;
+      await storage.setDefaultPickupAddress(addressId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error setting default pickup address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
   
   // ==================== ORDINI ====================
   

@@ -15,6 +15,7 @@ import {
   messages,
   paymentIntents,
   userAddresses,
+  pickupAddresses,
   orderChangeLogs,
   productAssociations,
   adminActionLogs,
@@ -45,6 +46,8 @@ import {
   type InsertPaymentIntent,
   type UserAddress,
   type InsertUserAddress,
+  type PickupAddress,
+  type InsertPickupAddress,
   type OrderChangeLog,
   type InsertOrderChangeLog,
   type ProductAssociation,
@@ -593,6 +596,56 @@ export class DbStorage implements IStorage {
       .update(userAddresses)
       .set({ isDefault: true })
       .where(eq(userAddresses.id, addressId));
+  }
+
+  // Indirizzi di pick-up
+  async getPickupAddresses(): Promise<PickupAddress[]> {
+    return await db
+      .select()
+      .from(pickupAddresses)
+      .orderBy(desc(pickupAddresses.isDefault), desc(pickupAddresses.createdAt));
+  }
+
+  async createPickupAddress(address: InsertPickupAddress): Promise<PickupAddress> {
+    // Se è il primo indirizzo o se isDefault è true, imposta come default
+    const existingAddresses = await this.getPickupAddresses();
+    const shouldBeDefault = existingAddresses.length === 0 || address.isDefault === true;
+    
+    if (shouldBeDefault) {
+      // Reset all addresses to non-default
+      await db.update(pickupAddresses).set({ isDefault: false });
+    }
+    
+    const result = await db.insert(pickupAddresses).values({
+      ...address,
+      isDefault: shouldBeDefault,
+    }).returning();
+    return result[0];
+  }
+
+  async updatePickupAddress(id: string, updates: Partial<PickupAddress>): Promise<PickupAddress | undefined> {
+    const result = await db
+      .update(pickupAddresses)
+      .set(updates)
+      .where(eq(pickupAddresses.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deletePickupAddress(id: string): Promise<boolean> {
+    const result = await db.delete(pickupAddresses).where(eq(pickupAddresses.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async setDefaultPickupAddress(addressId: string): Promise<void> {
+    // Reset all addresses to non-default
+    await db.update(pickupAddresses).set({ isDefault: false });
+    
+    // Set the selected address as default
+    await db
+      .update(pickupAddresses)
+      .set({ isDefault: true })
+      .where(eq(pickupAddresses.id, addressId));
   }
 
   // Log modifiche ordini

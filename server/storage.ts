@@ -23,6 +23,8 @@ import {
   type InsertPaymentIntent,
   type UserAddress,
   type InsertUserAddress,
+  type PickupAddress,
+  type InsertPickupAddress,
   type OrderChangeLog,
   type InsertOrderChangeLog,
   type ProductAssociation,
@@ -195,6 +197,13 @@ export interface IStorage {
   updateUserAddress(id: string, updates: Partial<UserAddress>): Promise<UserAddress | undefined>;
   deleteUserAddress(id: string): Promise<boolean>;
   setDefaultAddress(userId: string, addressId: string): Promise<void>;
+
+  // Indirizzi di pick-up
+  getPickupAddresses(): Promise<PickupAddress[]>;
+  createPickupAddress(address: InsertPickupAddress): Promise<PickupAddress>;
+  updatePickupAddress(id: string, updates: Partial<PickupAddress>): Promise<PickupAddress | undefined>;
+  deletePickupAddress(id: string): Promise<boolean>;
+  setDefaultPickupAddress(addressId: string): Promise<void>;
 
   // Log modifiche ordini
   createOrderChangeLog(log: InsertOrderChangeLog): Promise<OrderChangeLog>;

@@ -354,6 +354,38 @@ export const insertUserAddressSchema = createInsertSchema(userAddresses).omit({ 
 export type InsertUserAddress = z.infer<typeof insertUserAddressSchema>;
 export type UserAddress = typeof userAddresses.$inferSelect;
 
+// Indirizzi di pick-up (ritiro) per consegne
+export const pickupAddresses = pgTable("pickup_addresses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  label: text("label").notNull(), // es: "Magazzino principale", "Sede Don Giulio"
+  
+  // Indirizzo completo
+  fullAddress: text("full_address").notNull(),
+  
+  // Indirizzo strutturato
+  city: text("city"),
+  street: text("street"),
+  building: text("building"),
+  flat: text("flat"),
+  postalCode: text("postal_code"),
+  dadataFiasId: text("dadata_fias_id"),
+  
+  // Coordinate geografiche (richieste da Yandex Go)
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  
+  // Contatto per il pick-up
+  contactName: text("contact_name"),
+  contactPhone: text("contact_phone"),
+  
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertPickupAddressSchema = createInsertSchema(pickupAddresses).omit({ id: true, createdAt: true });
+export type InsertPickupAddress = z.infer<typeof insertPickupAddressSchema>;
+export type PickupAddress = typeof pickupAddresses.$inferSelect;
+
 // Log delle modifiche agli ordini (per contestazioni)
 export const orderChangeLogs = pgTable("order_change_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
