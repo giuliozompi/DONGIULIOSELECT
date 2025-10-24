@@ -185,17 +185,19 @@ export function MarkingCodesDialog({
     setProductsWithMarking(productsNeedingMarking);
     setInitialized(true);
     
-    // Auto-focus sul primo campo non validato
+    // Auto-focus sul primo campo non validato, oppure sul primo campo se tutti sono validati
     if (productsNeedingMarking.length > 0) {
       const firstProduct = productsNeedingMarking[0];
       const firstUnvalidated = firstProduct.units.findIndex(u => !u.validated);
+      const focusIndex = firstUnvalidated !== -1 ? firstUnvalidated : 0; // Se tutti validati, focus sul primo
+      
+      setCurrentFocusIndex({
+        productId: firstProduct.product.id,
+        unitIndex: focusIndex,
+      });
+      
+      // Annuncio vocale solo se ci sono campi da validare
       if (firstUnvalidated !== -1) {
-        setCurrentFocusIndex({
-          productId: firstProduct.product.id,
-          unitIndex: firstUnvalidated,
-        });
-        
-        // Annuncio vocale in russo: nome prodotto (fino a "-") + numero кодов
         const productNameShort = firstProduct.product.name.split('-')[0].trim();
         const unitsRemaining = firstProduct.units.filter(u => !u.validated).length;
         const announcement = `${productNameShort}. ${unitsRemaining} ${unitsRemaining === 1 ? 'код' : unitsRemaining < 5 ? 'кода' : 'кодов'}.`;
@@ -667,9 +669,9 @@ export function MarkingCodesDialog({
                                   setCurrentFocusIndex({ productId: item.product.id, unitIndex: unit.unitIndex });
                                 }}
                                 placeholder={isActive ? "Отсканируйте код и нажмите Enter" : "Клик для редактирования"}
-                                disabled={!isActive}
+                                readOnly={!isActive}
                                 maxLength={24}
-                                className={`text-xs ${unit.validated ? 'bg-green-50 dark:bg-green-950 cursor-pointer' : 'cursor-pointer'}`}
+                                className={`text-xs cursor-pointer ${unit.validated ? 'bg-green-50 dark:bg-green-950' : ''} ${!isActive ? 'opacity-60' : ''}`}
                                 data-testid={`input-marking-code-${item.product.id}-${unit.unitIndex}`}
                               />
                               {unit.validated && (
