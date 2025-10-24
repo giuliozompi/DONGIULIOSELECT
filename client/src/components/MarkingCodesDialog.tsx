@@ -147,6 +147,13 @@ export function MarkingCodesDialog({
   useEffect(() => {
     if (!allProducts.length || !order || initialized) return;
 
+    console.log('🔄 Initializing marking codes dialog', {
+      allProductsCount: allProducts.length,
+      orderItemsCount: order.items.length,
+      existingLogsCount: existingLogs.length,
+      existingLogs
+    });
+
     const productsNeedingMarking: ProductWithMarkingStatus[] = [];
 
     for (const item of order.items) {
@@ -155,9 +162,23 @@ export function MarkingCodesDialog({
       // IMPORTANTE: Маркировка attiva SOLO per prodotti a pezzo (шт)
       const isUnitProduct = item.unit === 'шт';
       
+      console.log(`📦 Product ${item.productId}:`, {
+        productName: product?.name,
+        requiresMarking: product?.requiresMarking,
+        unit: item.unit,
+        isUnitProduct,
+        shouldInclude: product?.requiresMarking && isUnitProduct
+      });
+      
       if (product?.requiresMarking && isUnitProduct) {
         // Get all existing logs for this product
         const productLogs = existingLogs.filter((log: any) => log.productId === item.productId);
+        
+        console.log(`✅ Including product ${product.name}:`, {
+          quantity: item.quantity,
+          existingLogsForProduct: productLogs.length,
+          productLogs
+        });
         
         // Create units array based on quantity (for шт, quantity is always integer)
         const quantity = Math.ceil(item.quantity);
@@ -165,6 +186,12 @@ export function MarkingCodesDialog({
         
         for (let i = 0; i < quantity; i++) {
           const existingLog = productLogs[i];
+          console.log(`  Unit ${i}:`, {
+            hasLog: !!existingLog,
+            code: existingLog?.markingCode,
+            logId: existingLog?.id
+          });
+          
           units.push({
             unitIndex: i,
             code: existingLog?.markingCode || '',
@@ -183,6 +210,8 @@ export function MarkingCodesDialog({
         });
       }
     }
+
+    console.log('📊 Final productsNeedingMarking:', productsNeedingMarking);
 
     setProductsWithMarking(productsNeedingMarking);
     setInitialized(true);
