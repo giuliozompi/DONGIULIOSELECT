@@ -668,7 +668,8 @@ export function MarkingCodesDialog({
                                 }}
                                 placeholder={isActive ? "Отсканируйте код и нажмите Enter" : "Клик для редактирования"}
                                 disabled={!isActive}
-                                className={unit.validated ? 'bg-green-50 dark:bg-green-950 cursor-pointer' : 'cursor-pointer'}
+                                maxLength={24}
+                                className={`text-xs ${unit.validated ? 'bg-green-50 dark:bg-green-950 cursor-pointer' : 'cursor-pointer'}`}
                                 data-testid={`input-marking-code-${item.product.id}-${unit.unitIndex}`}
                               />
                               {unit.validated && (
