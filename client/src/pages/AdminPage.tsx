@@ -1291,12 +1291,16 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
 
   // Helper function to check if order has products requiring marking
   const orderRequiresMarking = (order: Order): boolean => {
-    return order.items.some(item => {
+    const result = order.items.some(item => {
       const product = allProducts.find(p => p.id === item.productId);
       // IMPORTANTE: Маркировка attiva SOLO per prodotti a pezzo (шт)
       const isUnitProduct = item.unit === 'шт';
-      return product?.requiresMarking === true && isUnitProduct;
+      const requires = product?.requiresMarking === true && isUnitProduct;
+      console.log(`  Product ${item.productId}: requiresMarking=${product?.requiresMarking}, isUnit=${isUnitProduct}, requires=${requires}`);
+      return requires;
     });
+    console.log(`📋 Order ${order.id} requires marking: ${result}`);
+    return result;
   };
 
   // Helper function to check if marking codes are already complete
@@ -1329,21 +1333,42 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
 
   // Handle status change with marking check
   const handleStatusChange = async (order: Order, newStatus: string) => {
+    console.log('🔄 handleStatusChange called', { orderId: order.id, newStatus, allProductsLength: allProducts.length });
+    
+    // CRITICAL: Verify allProducts is loaded
+    if (allProducts.length === 0) {
+      console.error('❌ allProducts not loaded yet! Cannot check marking requirements.');
+      toast({
+        title: 'Ошибка',
+        description: 'Данные продуктов еще загружаются. Попробуйте снова через несколько секунд.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     // If changing to СОБРАН and order has products requiring marking
-    if (newStatus === 'СОБРАН' && orderRequiresMarking(order)) {
+    const requiresMarking = orderRequiresMarking(order);
+    console.log('📦 Order requires marking:', requiresMarking);
+    
+    if (newStatus === 'СОБРАН' && requiresMarking) {
+      console.log('✅ Checking marking completion...');
       // Check if marking codes are already complete
       const markingComplete = await checkMarkingComplete(order.id);
+      console.log('📊 Marking complete:', markingComplete);
       
       if (markingComplete) {
         // Codes already acquired, proceed with status change without opening dialog
+        console.log('✅ Marking complete - proceeding with status change');
         updateStatusMutation.mutate({ orderId: order.id, status: newStatus });
       } else {
-        // Codes not complete, open dialog for acquisition
+        // Codes not complete, opening dialog
+        console.log('❌ Marking incomplete - opening dialog');
         setMarkingDialogOrder(order);
         setPendingStatusChange({ orderId: order.id, status: newStatus });
       }
     } else {
       // Otherwise proceed with status change
+      console.log('➡️ No marking required - proceeding with status change');
       updateStatusMutation.mutate({ orderId: order.id, status: newStatus });
     }
   };
