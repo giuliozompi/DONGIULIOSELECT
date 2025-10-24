@@ -160,6 +160,21 @@ export const orders = pgTable("orders", {
   courierTrackingUrl: text("courier_tracking_url"),
   courierCalledAt: timestamp("courier_called_at"),
   
+  // Yandex Go Delivery specifics
+  yandexClaimId: text("yandex_claim_id"), // ID della richiesta Yandex Go
+  yandexDeliveryPrice: decimal("yandex_delivery_price", { precision: 10, scale: 2 }), // Prezzo delivery Yandex
+  yandexDeliveryStatus: text("yandex_delivery_status"), // Status del delivery Yandex
+  yandexPerformerInfo: jsonb("yandex_performer_info").$type<{
+    courierName?: string;
+    legalName?: string;
+    carModel?: string;
+    carNumber?: string;
+  }>(), // Info sul corriere Yandex
+  
+  // Coordinate per Yandex Go (pickup e delivery)
+  pickupCoordinates: text("pickup_coordinates").array(), // [longitude, latitude]
+  deliveryCoordinates: text("delivery_coordinates").array(), // [longitude, latitude]
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
