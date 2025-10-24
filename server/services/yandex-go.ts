@@ -155,8 +155,22 @@ class YandexGoService {
 
   private getHeaders(): Record<string, string> {
     if (!this.token || !this.clientId) {
+      console.error('Yandex Go credentials missing:', {
+        hasToken: !!this.token,
+        tokenLength: this.token?.length || 0,
+        hasClientId: !!this.clientId,
+        clientIdLength: this.clientId?.length || 0,
+      });
       throw new Error('Yandex Go credentials not configured');
     }
+
+    console.log('Yandex Go credentials check:', {
+      hasToken: !!this.token,
+      tokenLength: this.token?.length,
+      hasClientId: !!this.clientId,
+      clientIdLength: this.clientId?.length,
+      tokenPrefix: this.token?.substring(0, 10) + '...',
+    });
 
     return {
       'Authorization': `Bearer ${this.token}`,
@@ -187,6 +201,11 @@ class YandexGoService {
       payload.requirements = requirements;
     }
 
+    console.log('Yandex Go checkPrice request:', {
+      url,
+      payload: JSON.stringify(payload, null, 2),
+    });
+
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -194,8 +213,14 @@ class YandexGoService {
         body: JSON.stringify(payload),
       });
 
+      console.log('Yandex Go checkPrice response:', {
+        status: response.status,
+        statusText: response.statusText,
+      });
+
       if (!response.ok) {
         const error = await response.text();
+        console.error('Yandex Go checkPrice error response:', error);
         throw new Error(`Yandex Go API error: ${response.status} - ${error}`);
       }
 
