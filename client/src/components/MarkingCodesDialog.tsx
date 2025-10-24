@@ -224,13 +224,18 @@ export function MarkingCodesDialog({
         unitIndex: focusIndex,
       });
       
-      // Annuncio vocale solo se ci sono campi da validare
+      // Annuncio vocale
       if (firstUnvalidated !== -1) {
+        // Ci sono codici da acquisire
         const productNameShort = firstProduct.product.name.split('-')[0].trim();
         const unitsRemaining = firstProduct.units.filter(u => !u.validated).length;
         const announcement = `${productNameShort}. ${unitsRemaining} ${unitsRemaining === 1 ? 'код' : unitsRemaining < 5 ? 'кода' : 'кодов'}.`;
         
         // Ritarda leggermente per dare tempo al dialog di aprirsi
+        setTimeout(() => speakInRussian(announcement), 500);
+      } else {
+        // Tutti i codici sono già stati acquisiti
+        const announcement = 'Коды уже получены.';
         setTimeout(() => speakInRussian(announcement), 500);
       }
     }
