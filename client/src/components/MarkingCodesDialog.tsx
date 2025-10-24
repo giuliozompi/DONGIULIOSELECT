@@ -214,7 +214,11 @@ export function MarkingCodesDialog({
       const key = `${currentFocusIndex.productId}-${currentFocusIndex.unitIndex}`;
       const input = inputRefs.current.get(key);
       if (input) {
-        setTimeout(() => input.focus(), 100);
+        // Timeout più lungo per assicurare che il dialog sia completamente renderizzato
+        setTimeout(() => {
+          input.focus();
+          input.select(); // Seleziona tutto il testo se presente
+        }, 300);
       }
       
       // Controlla se siamo passati a un nuovo prodotto
