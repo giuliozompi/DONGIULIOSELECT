@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { MapPin } from 'lucide-react';
 
-interface AddressSuggestion {
+export interface AddressSuggestion {
   fullAddress: string;
   city: string | null;
   street: string | null;
@@ -11,6 +11,8 @@ interface AddressSuggestion {
   flat: string | null;
   postalCode: string | null;
   fiasId: string;
+  geoLat: string | null;
+  geoLon: string | null;
 }
 
 interface AddressAutocompleteProps {

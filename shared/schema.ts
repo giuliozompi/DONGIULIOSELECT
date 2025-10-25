@@ -350,6 +350,10 @@ export const userAddresses = pgTable("user_addresses", {
   postalCode: text("postal_code"),
   dadataFiasId: text("dadata_fias_id"),
   
+  // Coordinate geografiche (da DaData)
+  latitude: decimal("latitude", { precision: 10, scale: 7 }),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }),
+  
   isDefault: boolean("is_default").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

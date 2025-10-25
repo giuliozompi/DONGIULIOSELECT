@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -13,8 +13,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { Loader2, Truck, DollarSign, MapPin, Phone, User } from 'lucide-react';
-import type { Order } from '@shared/schema';
+import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save } from 'lucide-react';
+import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
+import type { Order, PickupAddress } from '@shared/schema';
 
 interface YandexDeliveryDialogProps {
   open: boolean;
@@ -39,19 +40,122 @@ export function YandexDeliveryDialog({
 }: YandexDeliveryDialogProps) {
   const { toast } = useToast();
   
-  // Form state
-  const [pickupAddress, setPickupAddress] = useState('Москва, ул. Примерная, д. 1');
-  const [pickupCoords, setPickupCoords] = useState<[number, number]>([37.6173, 55.7558]);
-  const [deliveryCoords, setDeliveryCoords] = useState<[number, number]>([37.5879, 55.7344]);
-  const [pickupContactName, setPickupContactName] = useState('Don Giulio Select');
-  const [pickupContactPhone, setPickupContactPhone] = useState('+79001234567');
+  // Pickup address state
+  const [pickupAddress, setPickupAddress] = useState('');
+  const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
+  const [pickupContactName, setPickupContactName] = useState('');
+  const [pickupContactPhone, setPickupContactPhone] = useState('');
+  const [pickupLabel, setPickupLabel] = useState('');
+  const [showPickupForm, setShowPickupForm] = useState(false);
+  
+  // Structured address data for saving
+  const [pickupStructured, setPickupStructured] = useState<{
+    city?: string;
+    street?: string;
+    building?: string;
+    postalCode?: string;
+    dadataFiasId?: string;
+  }>({});
   
   const [priceInfo, setPriceInfo] = useState<PriceInfo | null>(null);
-  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
+  
+  // Load pickup addresses
+  const { data: pickupAddresses = [], isLoading: isLoadingPickup } = useQuery<PickupAddress[]>({
+    queryKey: ['/api/admin/pickup-addresses'],
+    enabled: open,
+  });
+  
+  // Initialize with default pickup address or show form
+  useEffect(() => {
+    if (pickupAddresses.length > 0) {
+      const defaultAddr = pickupAddresses.find(addr => addr.isDefault) || pickupAddresses[0];
+      setPickupAddress(defaultAddr.fullAddress);
+      setPickupContactName(defaultAddr.contactName || '');
+      setPickupContactPhone(defaultAddr.contactPhone || '');
+      setPickupLabel(defaultAddr.label);
+      
+      if (defaultAddr.latitude && defaultAddr.longitude) {
+        setPickupCoords([
+          parseFloat(defaultAddr.longitude),
+          parseFloat(defaultAddr.latitude)
+        ]);
+      }
+      setShowPickupForm(false);
+    } else {
+      // No pickup addresses exist - show form to create one
+      setShowPickupForm(true);
+      setPickupLabel('Магазин Don Giulio');
+      setPickupContactName('Don Giulio Select');
+    }
+  }, [pickupAddresses]);
+  
+  // Extract delivery coordinates from order
+  const deliveryCoords: [number, number] | null = order.deliveryLongitude && order.deliveryLatitude
+    ? [parseFloat(order.deliveryLongitude), parseFloat(order.deliveryLatitude)]
+    : null;
+  
+  // Handle address selection from DaData
+  const handlePickupAddressSelect = (suggestion: AddressSuggestion) => {
+    setPickupAddress(suggestion.fullAddress);
+    setPickupStructured({
+      city: suggestion.city || undefined,
+      street: suggestion.street || undefined,
+      building: suggestion.building || undefined,
+      postalCode: suggestion.postalCode || undefined,
+      dadataFiasId: suggestion.fiasId,
+    });
+    
+    if (suggestion.geoLat && suggestion.geoLon) {
+      setPickupCoords([
+        parseFloat(suggestion.geoLon),
+        parseFloat(suggestion.geoLat)
+      ]);
+    }
+  };
+  
+  // Save new pickup address mutation
+  const savePickupMutation = useMutation({
+    mutationFn: async () => {
+      if (!pickupCoords) {
+        throw new Error('Координаты pick-up не найдены');
+      }
+      
+      const res = await apiRequest('POST', '/api/admin/pickup-addresses', {
+        label: pickupLabel,
+        fullAddress: pickupAddress,
+        ...pickupStructured,
+        latitude: pickupCoords[1].toString(),
+        longitude: pickupCoords[0].toString(),
+        contactName: pickupContactName,
+        contactPhone: pickupContactPhone,
+        isDefault: pickupAddresses.length === 0, // First one becomes default
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/pickup-addresses'] });
+      setShowPickupForm(false);
+      toast({
+        title: 'Адрес сохранён',
+        description: 'Адрес pick-up успешно сохранён',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось сохранить адрес',
+        variant: 'destructive',
+      });
+    },
+  });
   
   // Calculate price mutation
   const calculatePriceMutation = useMutation({
     mutationFn: async () => {
+      if (!pickupCoords || !deliveryCoords) {
+        throw new Error('Координаты не найдены');
+      }
+      
       const res = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-delivery-price`, {
         pickupCoordinates: pickupCoords,
         deliveryCoordinates: deliveryCoords,
@@ -81,6 +185,10 @@ export function YandexDeliveryDialog({
   // Create delivery mutation
   const createDeliveryMutation = useMutation({
     mutationFn: async () => {
+      if (!pickupCoords || !deliveryCoords) {
+        throw new Error('Координаты не найдены');
+      }
+      
       const res = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-delivery`, {
         pickupCoordinates: pickupCoords,
         deliveryCoordinates: deliveryCoords,
@@ -118,27 +226,8 @@ export function YandexDeliveryDialog({
     },
   });
   
-  const handleCalculatePrice = async () => {
-    setIsCalculatingPrice(true);
-    try {
-      await calculatePriceMutation.mutateAsync();
-    } finally {
-      setIsCalculatingPrice(false);
-    }
-  };
-  
-  const handleCreateDelivery = async () => {
-    if (!priceInfo) {
-      toast({
-        title: 'Ошибка',
-        description: 'Сначала рассчитайте цену доставки',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    await createDeliveryMutation.mutateAsync();
-  };
+  const canCalculate = pickupCoords && deliveryCoords && !showPickupForm;
+  const canCreateDelivery = priceInfo && pickupCoords && deliveryCoords && !showPickupForm;
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -153,172 +242,237 @@ export function YandexDeliveryDialog({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-6 py-4">
-          {/* Pickup Info */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              Точка отправления (Pick-up)
-            </h3>
-            
-            <div className="space-y-2">
-              <Label htmlFor="pickup-address" data-testid="label-pickup-address">Адрес</Label>
-              <Input
-                id="pickup-address"
-                data-testid="input-pickup-address"
-                value={pickupAddress}
-                onChange={(e) => setPickupAddress(e.target.value)}
-                placeholder="Москва, ул. Примерная, д. 1"
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="pickup-lon" data-testid="label-pickup-lon">Долгота (Longitude)</Label>
-                <Input
-                  id="pickup-lon"
-                  data-testid="input-pickup-lon"
-                  type="number"
-                  step="0.0001"
-                  value={pickupCoords[0]}
-                  onChange={(e) => setPickupCoords([parseFloat(e.target.value), pickupCoords[1]])}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pickup-lat" data-testid="label-pickup-lat">Широта (Latitude)</Label>
-                <Input
-                  id="pickup-lat"
-                  data-testid="input-pickup-lat"
-                  type="number"
-                  step="0.0001"
-                  value={pickupCoords[1]}
-                  onChange={(e) => setPickupCoords([pickupCoords[0], parseFloat(e.target.value)])}
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="pickup-name" data-testid="label-pickup-name">
-                  <User className="w-3 h-3 inline mr-1" />
-                  Контакт
-                </Label>
-                <Input
-                  id="pickup-name"
-                  data-testid="input-pickup-name"
-                  value={pickupContactName}
-                  onChange={(e) => setPickupContactName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pickup-phone" data-testid="label-pickup-phone">
-                  <Phone className="w-3 h-3 inline mr-1" />
-                  Телефон
-                </Label>
-                <Input
-                  id="pickup-phone"
-                  data-testid="input-pickup-phone"
-                  value={pickupContactPhone}
-                  onChange={(e) => setPickupContactPhone(e.target.value)}
-                />
-              </div>
-            </div>
+        {isLoadingPickup ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin" />
           </div>
-          
-          {/* Delivery Info */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-sm flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              Точка доставки (Delivery)
-            </h3>
-            
-            <div className="space-y-2">
-              <Label data-testid="label-delivery-address">Адрес</Label>
-              <Input
-                data-testid="input-delivery-address"
-                value={order.deliveryAddress}
-                disabled
-                className="bg-muted"
-              />
+        ) : (
+          <div className="space-y-6 py-4">
+            {/* Pickup Info */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Точка отправления (Pick-up)
+                </h3>
+                {!showPickupForm && pickupAddresses.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowPickupForm(true)}
+                    data-testid="button-add-pickup"
+                  >
+                    Новый адрес
+                  </Button>
+                )}
+              </div>
+              
+              {showPickupForm ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-label" data-testid="label-pickup-label">
+                      Название адреса
+                    </Label>
+                    <Input
+                      id="pickup-label"
+                      data-testid="input-pickup-label"
+                      value={pickupLabel}
+                      onChange={(e) => setPickupLabel(e.target.value)}
+                      placeholder="Магазин Don Giulio"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-address" data-testid="label-pickup-address">
+                      Адрес (с DaData автозаполнением)
+                    </Label>
+                    <AddressAutocomplete
+                      value={pickupAddress}
+                      onChange={(value) => setPickupAddress(value)}
+                      onSelect={handlePickupAddressSelect}
+                      placeholder="Москва, ул. Примерная, д. 1"
+                      testId="input-pickup-address"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="pickup-name" data-testid="label-pickup-name">
+                        <User className="w-3 h-3 inline mr-1" />
+                        Контакт
+                      </Label>
+                      <Input
+                        id="pickup-name"
+                        data-testid="input-pickup-name"
+                        value={pickupContactName}
+                        onChange={(e) => setPickupContactName(e.target.value)}
+                        placeholder="Don Giulio Select"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="pickup-phone" data-testid="label-pickup-phone">
+                        <Phone className="w-3 h-3 inline mr-1" />
+                        Телефон
+                      </Label>
+                      <Input
+                        id="pickup-phone"
+                        data-testid="input-pickup-phone"
+                        value={pickupContactPhone}
+                        onChange={(e) => setPickupContactPhone(e.target.value)}
+                        placeholder="+7 (900) 123-45-67"
+                      />
+                    </div>
+                  </div>
+                  
+                  {pickupCoords && (
+                    <div className="text-sm text-muted-foreground">
+                      Координаты: {pickupCoords[1].toFixed(6)}, {pickupCoords[0].toFixed(6)}
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => savePickupMutation.mutate()}
+                      disabled={!pickupAddress || !pickupCoords || savePickupMutation.isPending}
+                      data-testid="button-save-pickup"
+                    >
+                      {savePickupMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      <Save className="w-4 h-4 mr-2" />
+                      Сохранить адрес
+                    </Button>
+                    {pickupAddresses.length > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowPickupForm(false)}
+                        data-testid="button-cancel-pickup"
+                      >
+                        Отмена
+                      </Button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label data-testid="label-pickup-current">Адрес</Label>
+                    <Input
+                      data-testid="input-pickup-current"
+                      value={pickupAddress}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label data-testid="label-pickup-current-name">Контакт</Label>
+                      <Input
+                        data-testid="input-pickup-current-name"
+                        value={pickupContactName}
+                        disabled
+                        className="bg-muted"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label data-testid="label-pickup-current-phone">Телефон</Label>
+                      <Input
+                        data-testid="input-pickup-current-phone"
+                        value={pickupContactPhone}
+                        disabled
+                        className="bg-muted"
+                      />
+                    </div>
+                  </div>
+                  
+                  {pickupCoords && (
+                    <div className="text-sm text-muted-foreground">
+                      Координаты: {pickupCoords[1].toFixed(6)}, {pickupCoords[0].toFixed(6)}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="delivery-lon" data-testid="label-delivery-lon">Долгота (Longitude)</Label>
-                <Input
-                  id="delivery-lon"
-                  data-testid="input-delivery-lon"
-                  type="number"
-                  step="0.0001"
-                  value={deliveryCoords[0]}
-                  onChange={(e) => setDeliveryCoords([parseFloat(e.target.value), deliveryCoords[1]])}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="delivery-lat" data-testid="label-delivery-lat">Широта (Latitude)</Label>
-                <Input
-                  id="delivery-lat"
-                  data-testid="input-delivery-lat"
-                  type="number"
-                  step="0.0001"
-                  value={deliveryCoords[1]}
-                  onChange={(e) => setDeliveryCoords([deliveryCoords[0], parseFloat(e.target.value)])}
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label data-testid="label-delivery-name">Контакт</Label>
-                <Input
-                  data-testid="input-delivery-name"
-                  value={order.customerName}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label data-testid="label-delivery-phone">Телефон</Label>
-                <Input
-                  data-testid="input-delivery-phone"
-                  value={order.customerPhone}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-            </div>
-          </div>
-          
-          {/* Price Info */}
-          {priceInfo && (
-            <div className="bg-muted p-4 rounded-lg space-y-2">
+            {/* Delivery Info */}
+            <div className="space-y-4">
               <h3 className="font-semibold text-sm flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
-                Информация о доставке
+                <MapPin className="w-4 h-4" />
+                Точка доставки (Delivery)
               </h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Стоимость:</span>
-                  <span className="ml-2 font-semibold" data-testid="text-delivery-price">
-                    {priceInfo.price} {priceInfo.currency_rules.sign}
-                  </span>
+              
+              <div className="space-y-2">
+                <Label data-testid="label-delivery-address">Адрес</Label>
+                <Input
+                  data-testid="input-delivery-address"
+                  value={order.deliveryAddress}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+              
+              {deliveryCoords ? (
+                <div className="text-sm text-muted-foreground">
+                  Координаты: {deliveryCoords[1].toFixed(6)}, {deliveryCoords[0].toFixed(6)}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Время:</span>
-                  <span className="ml-2 font-semibold" data-testid="text-delivery-eta">
-                    ~{Math.round(priceInfo.eta / 60)} мин
-                  </span>
+              ) : (
+                <div className="text-sm text-destructive">
+                  ⚠️ Координаты доставки не найдены. Клиент должен был выбрать адрес через DaData при оформлении заказа.
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Расстояние:</span>
-                  <span className="ml-2 font-semibold" data-testid="text-delivery-distance">
-                    {(priceInfo.distance_meters / 1000).toFixed(1)} км
-                  </span>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label data-testid="label-delivery-name">Контакт</Label>
+                  <Input
+                    data-testid="input-delivery-name"
+                    value={order.customerName}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label data-testid="label-delivery-phone">Телефон</Label>
+                  <Input
+                    data-testid="input-delivery-phone"
+                    value={order.customerPhone}
+                    disabled
+                    className="bg-muted"
+                  />
                 </div>
               </div>
             </div>
-          )}
-        </div>
+            
+            {/* Price Info */}
+            {priceInfo && (
+              <div className="bg-muted p-4 rounded-lg space-y-2">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Информация о доставке
+                </h3>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Стоимость:</span>
+                    <span className="ml-2 font-semibold" data-testid="text-delivery-price">
+                      {priceInfo.price} {priceInfo.currency_rules.sign}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Время:</span>
+                    <span className="ml-2 font-semibold" data-testid="text-delivery-eta">
+                      ~{Math.round(priceInfo.eta / 60)} мин
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Расстояние:</span>
+                    <span className="ml-2 font-semibold" data-testid="text-delivery-distance">
+                      {(priceInfo.distance_meters / 1000).toFixed(1)} км
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         
         <DialogFooter className="gap-2">
           <Button
@@ -330,18 +484,18 @@ export function YandexDeliveryDialog({
           </Button>
           <Button
             variant="secondary"
-            onClick={handleCalculatePrice}
-            disabled={isCalculatingPrice || calculatePriceMutation.isPending}
+            onClick={() => calculatePriceMutation.mutate()}
+            disabled={!canCalculate || calculatePriceMutation.isPending}
             data-testid="button-calculate-price"
           >
-            {(isCalculatingPrice || calculatePriceMutation.isPending) && (
+            {calculatePriceMutation.isPending && (
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
             )}
             Рассчитать цену
           </Button>
           <Button
-            onClick={handleCreateDelivery}
-            disabled={!priceInfo || createDeliveryMutation.isPending}
+            onClick={() => createDeliveryMutation.mutate()}
+            disabled={!canCreateDelivery || createDeliveryMutation.isPending}
             data-testid="button-create-delivery"
           >
             {createDeliveryMutation.isPending && (

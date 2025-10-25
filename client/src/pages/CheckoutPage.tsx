@@ -66,6 +66,8 @@ interface StructuredAddress {
   deliveryFlat?: string;
   deliveryPostalCode?: string;
   dadataFiasId?: string;
+  deliveryLatitude?: string;
+  deliveryLongitude?: string;
 }
 
 export default function CheckoutPage() {
@@ -171,6 +173,8 @@ export default function CheckoutPage() {
           deliveryFlat: defaultAddress.flat || undefined,
           deliveryPostalCode: defaultAddress.postalCode || undefined,
           dadataFiasId: defaultAddress.dadataFiasId || undefined,
+          deliveryLatitude: defaultAddress.latitude || undefined,
+          deliveryLongitude: defaultAddress.longitude || undefined,
         });
       }
     }
@@ -249,6 +253,8 @@ export default function CheckoutPage() {
       deliveryFlat: address.flat || undefined,
       deliveryPostalCode: address.postalCode || undefined,
       dadataFiasId: address.dadataFiasId || undefined,
+      deliveryLatitude: address.latitude || undefined,
+      deliveryLongitude: address.longitude || undefined,
     });
   };
 
@@ -504,6 +510,8 @@ export default function CheckoutPage() {
                               deliveryBuilding: suggestion.building || undefined,
                               deliveryPostalCode: suggestion.postalCode || undefined,
                               dadataFiasId: suggestion.fiasId,
+                              deliveryLatitude: suggestion.geoLat || undefined,
+                              deliveryLongitude: suggestion.geoLon || undefined,
                             });
                             if (suggestion.flat) {
                               form.setValue('deliveryFlat', suggestion.flat);

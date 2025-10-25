@@ -323,6 +323,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         flat: z.string().optional(),
         postalCode: z.string().optional(),
         dadataFiasId: z.string().optional(),
+        latitude: z.string().optional(),
+        longitude: z.string().optional(),
         isDefault: z.boolean().optional(),
       });
       
@@ -501,6 +503,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryFlat: z.string().optional(),
         deliveryPostalCode: z.string().optional(),
         dadataFiasId: z.string().optional(),
+        deliveryLatitude: z.string().optional(),
+        deliveryLongitude: z.string().optional(),
         deliveryNotes: z.string().optional(),
         deliveryMethod: z.enum(['yandex_go', 'cdek', 'don_giulio_courier', 'pickup']).optional(),
         paymentMethod: z.enum(['yookassa', 'cash_on_delivery']).default('yookassa'),
@@ -588,6 +592,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             flat: customerData.deliveryFlat,
             postalCode: customerData.deliveryPostalCode,
             dadataFiasId: customerData.dadataFiasId,
+            latitude: customerData.deliveryLatitude,
+            longitude: customerData.deliveryLongitude,
             isDefault: existingAddresses.length === 0, // Primo indirizzo diventa default
           });
         }
@@ -608,6 +614,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryFlat: customerData.deliveryFlat,
         deliveryPostalCode: customerData.deliveryPostalCode,
         dadataFiasId: customerData.dadataFiasId,
+        deliveryLatitude: customerData.deliveryLatitude,
+        deliveryLongitude: customerData.deliveryLongitude,
         deliveryNotes: customerData.deliveryNotes,
         deliveryMethod: customerData.deliveryMethod,
         paymentMethod: customerData.paymentMethod,
