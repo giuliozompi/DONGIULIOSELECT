@@ -1,171 +1,279 @@
 
-// Yandex Go Taxi API (not Cargo!)
-const YANDEX_TAXI_BASE_URL = 'https://taxi-routeinfo.taxi.yandex.net';
-const YANDEX_GO_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID; // clid
-const YANDEX_GO_API_KEY = process.env.YANDEX_GO_TOKEN; // apikey
+// Yandex Delivery API - Express/Courier service for small packages
+// Docs: https://yandex.com/support/delivery-profile/en/api/express/overview
+const YANDEX_DELIVERY_BASE_URL = 'https://b2b.taxi.yandex.net/b2b/cargo/integration/v2';
+const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_GO_TOKEN; // OAuth Bearer token
 
-export interface YandexTaxiOption {
-  price: number;
-  min_price?: number;
-  waiting_time: number;
-  class_name: string;
-  class_text: string;
-  class_level: number;
-  price_text: string;
-}
-
-export interface YandexTaxiPriceResponse {
-  options: YandexTaxiOption[];
-  currency: string;
-  distance: number;
-  time: number;
-}
-
-export interface YandexGoItem {
-  quantity: number;
-  size: {
-    height: number;
-    length: number;
-    width: number;
+export interface YandexDeliveryItem {
+  weight: number;  // kg
+  dimensions: {
+    length: number;  // cm
+    width: number;   // cm
+    height: number;  // cm
   };
-  weight: number;
 }
 
-export interface YandexGoRequirements {
-  cargo_loaders?: number;
-  cargo_options?: string[];
-  cargo_type?: string;
-  pro_courier?: boolean;
-  taxi_class?: string;
+export interface YandexDeliveryRoutePoint {
+  coordinates: [number, number]; // [longitude, latitude]
+  type: 'source' | 'destination';
+  fullname?: string;
+  contact?: {
+    name: string;
+    phone: string;
+    email?: string;
+  };
+}
+
+export interface YandexDeliveryOffer {
+  offer_id: string;
+  price: string;
+  price_raw: number;
+  currency: string;
+  currency_rules: {
+    code: string;
+    sign: string;
+    template: string;
+    text: string;
+  };
+  eta: number; // seconds
+  distance: number; // meters
+}
+
+export interface YandexDeliveryCalculateResponse {
+  offers: YandexDeliveryOffer[];
+}
+
+export interface YandexDeliveryClaimResponse {
+  id: string;
+  status: string;
+  version: number;
+  items: YandexDeliveryItem[];
+  route_points: YandexDeliveryRoutePoint[];
+  pricing?: {
+    currency: string;
+    currency_rules: {
+      code: string;
+      sign: string;
+      template: string;
+      text: string;
+    };
+    offer?: {
+      offer_id: string;
+      price: string;
+    };
+  };
+  performer_info?: {
+    courier_name: string;
+    car_model?: string;
+    car_number?: string;
+  };
+  created_ts: string;
+  updated_ts: string;
 }
 
 class YandexGoService {
-  private baseUrl = YANDEX_TAXI_BASE_URL;
-  private clid = YANDEX_GO_CLIENT_ID;
-  private apikey = YANDEX_GO_API_KEY;
+  private baseUrl = YANDEX_DELIVERY_BASE_URL;
+  private token = YANDEX_DELIVERY_TOKEN;
 
   private getHeaders(): Record<string, string> {
-    if (!this.apikey || !this.clid) {
-      console.error('Yandex Taxi credentials missing:', {
-        hasApiKey: !!this.apikey,
-        apiKeyLength: this.apikey?.length || 0,
-        hasClid: !!this.clid,
-        clidLength: this.clid?.length || 0,
+    if (!this.token) {
+      console.error('Yandex Delivery token missing:', {
+        hasToken: !!this.token,
+        tokenLength: this.token?.length || 0,
       });
-      throw new Error('Yandex Taxi credentials not configured');
+      throw new Error('Yandex Delivery OAuth token not configured');
     }
 
-    console.log('Yandex Taxi credentials check:', {
-      hasApiKey: !!this.apikey,
-      apiKeyLength: this.apikey?.length,
-      hasClid: !!this.clid,
-      clidLength: this.clid?.length,
-      apiKeyPrefix: this.apikey?.substring(0, 10) + '...',
+    console.log('Yandex Delivery credentials check:', {
+      hasToken: !!this.token,
+      tokenLength: this.token?.length,
+      tokenPrefix: this.token?.substring(0, 10) + '...',
     });
 
     return {
-      'YaTaxi-Api-Key': this.apikey,
+      'Authorization': `Bearer ${this.token}`,
+      'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
     };
   }
 
   /**
-   * Check price for taxi delivery
-   * Uses Yandex Taxi API (not Cargo)
+   * Calculate delivery price and options
+   * Yandex Delivery API - for small packages/express courier
    */
   async checkPrice(
     pickupCoords: [number, number],
     deliveryCoords: [number, number],
-    items?: YandexGoItem[],
-    requirements?: YandexGoRequirements
-  ): Promise<YandexTaxiPriceResponse> {
-    const url = `${this.baseUrl}/taxi_info`;
+    items?: any[],
+    requirements?: any
+  ): Promise<any> {
+    const url = `${this.baseUrl}/offers/calculate`;
     
-    // Format coordinates as: lon1,lat1~lon2,lat2
-    const rll = `${pickupCoords[0]},${pickupCoords[1]}~${deliveryCoords[0]},${deliveryCoords[1]}`;
+    // Prepara items per Yandex Delivery
+    const deliveryItems: YandexDeliveryItem[] = [{
+      weight: 2, // Default 2kg per piccoli ordini food
+      dimensions: {
+        length: 30,  // 30cm
+        width: 20,   // 20cm
+        height: 15,  // 15cm
+      }
+    }];
     
-    // Use express class for fast delivery
-    const taxiClass = 'express,courier';
-    
-    const params = new URLSearchParams({
-      clid: this.clid!,
-      rll: rll,
-      class: taxiClass,
-    });
+    const payload = {
+      items: deliveryItems,
+      route_points: [
+        {
+          coordinates: pickupCoords,
+          type: 'source' as const,
+        },
+        {
+          coordinates: deliveryCoords,
+          type: 'destination' as const,
+        },
+      ],
+    };
 
-    const fullUrl = `${url}?${params.toString()}`;
-
-    console.log('Yandex Taxi checkPrice request:', {
-      url: fullUrl,
-      clid: this.clid,
-      rll,
-      class: taxiClass,
+    console.log('Yandex Delivery checkPrice request:', {
+      url,
+      payload: JSON.stringify(payload, null, 2),
     });
 
     try {
-      const response = await fetch(fullUrl, {
-        method: 'GET',
+      const response = await fetch(url, {
+        method: 'POST',
         headers: this.getHeaders(),
+        body: JSON.stringify(payload),
       });
 
-      console.log('Yandex Taxi checkPrice response:', {
+      console.log('Yandex Delivery checkPrice response:', {
         status: response.status,
         statusText: response.statusText,
       });
 
       if (!response.ok) {
         const error = await response.text();
-        console.error('Yandex Taxi checkPrice error response:', error);
-        throw new Error(`Yandex Taxi API error: ${response.status} - ${error}`);
+        console.error('Yandex Delivery checkPrice error response:', error);
+        throw new Error(`Yandex Delivery API error: ${response.status} - ${error}`);
       }
 
-      const data = await response.json() as YandexTaxiPriceResponse;
+      const data = await response.json() as YandexDeliveryCalculateResponse;
       
-      console.log('Yandex Taxi price data:', {
-        options: data.options?.length || 0,
-        currency: data.currency,
-        distance: data.distance,
-        time: data.time,
+      console.log('Yandex Delivery price data:', {
+        offersCount: data.offers?.length || 0,
+        firstOffer: data.offers?.[0],
       });
 
-      return data;
+      // Converti formato per compatibilità con frontend
+      const bestOffer = data.offers?.[0];
+      if (!bestOffer) {
+        throw new Error('No delivery offers available');
+      }
+
+      return {
+        price: bestOffer.price,
+        currency_rules: bestOffer.currency_rules,
+        distance_meters: bestOffer.distance,
+        eta: bestOffer.eta,
+        offer_id: bestOffer.offer_id,
+        all_offers: data.offers,
+      };
     } catch (error) {
-      console.error('Yandex Taxi checkPrice error:', error);
+      console.error('Yandex Delivery checkPrice error:', error);
       throw error;
     }
   }
 
   /**
-   * Check available taxi classes in a region
+   * Create delivery order (claim)
    */
-  async checkZone(coordinates: [number, number]): Promise<any> {
-    const url = `${this.baseUrl}/zone_info`;
+  async createOrder(orderData: {
+    items: YandexDeliveryItem[];
+    route_points: YandexDeliveryRoutePoint[];
+    comment?: string;
+    offer_id?: string;
+  }): Promise<YandexDeliveryClaimResponse> {
+    const url = `${this.baseUrl}/claims/create`;
     
-    const params = new URLSearchParams({
-      clid: this.clid!,
-      ll: `${coordinates[0]},${coordinates[1]}`,
+    console.log('Yandex Delivery createOrder request:', {
+      url,
+      payload: JSON.stringify(orderData, null, 2),
     });
 
-    const fullUrl = `${url}?${params.toString()}`;
-
-    console.log('Yandex Taxi zone check:', fullUrl);
-
     try {
-      const response = await fetch(fullUrl, {
-        method: 'GET',
+      const response = await fetch(url, {
+        method: 'POST',
         headers: this.getHeaders(),
+        body: JSON.stringify(orderData),
+      });
+
+      console.log('Yandex Delivery createOrder response:', {
+        status: response.status,
+        statusText: response.statusText,
       });
 
       if (!response.ok) {
         const error = await response.text();
-        console.error('Yandex Taxi zone error:', error);
-        throw new Error(`Yandex Taxi zone API error: ${response.status} - ${error}`);
+        console.error('Yandex Delivery createOrder error:', error);
+        throw new Error(`Yandex Delivery API error: ${response.status} - ${error}`);
       }
 
-      return await response.json();
+      return await response.json() as YandexDeliveryClaimResponse;
     } catch (error) {
-      console.error('Yandex Taxi zone error:', error);
+      console.error('Yandex Delivery createOrder error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get order status
+   */
+  async getOrderStatus(claimId: string): Promise<YandexDeliveryClaimResponse> {
+    const url = `${this.baseUrl}/claims/info`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ claim_id: claimId }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Yandex Delivery API error: ${response.status} - ${error}`);
+      }
+
+      return await response.json() as YandexDeliveryClaimResponse;
+    } catch (error) {
+      console.error('Yandex Delivery getOrderStatus error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel order
+   */
+  async cancelOrder(claimId: string): Promise<YandexDeliveryClaimResponse> {
+    const url = `${this.baseUrl}/claims/cancel`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ 
+          claim_id: claimId,
+          version: 1,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Yandex Delivery API error: ${response.status} - ${error}`);
+      }
+
+      return await response.json() as YandexDeliveryClaimResponse;
+    } catch (error) {
+      console.error('Yandex Delivery cancelOrder error:', error);
       throw error;
     }
   }
