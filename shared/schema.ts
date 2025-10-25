@@ -175,6 +175,10 @@ export const orders = pgTable("orders", {
   pickupCoordinates: text("pickup_coordinates").array(), // [longitude, latitude]
   deliveryCoordinates: text("delivery_coordinates").array(), // [longitude, latitude]
   
+  // Coordinate delivery in formato decimale (per facilità di utilizzo)
+  deliveryLatitude: decimal("delivery_latitude", { precision: 10, scale: 7 }),
+  deliveryLongitude: decimal("delivery_longitude", { precision: 10, scale: 7 }),
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

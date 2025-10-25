@@ -27,6 +27,8 @@ interface AddressSuggestion {
   flat: string | null;
   postalCode: string | null;
   fiasId: string;
+  geoLat: string | null;
+  geoLon: string | null;
 }
 
 export class DaDataService {
@@ -71,6 +73,8 @@ export class DaDataService {
         flat: s.data.flat,
         postalCode: s.data.postal_code,
         fiasId: s.data.fias_id,
+        geoLat: s.data.geo_lat,
+        geoLon: s.data.geo_lon,
       }));
     } catch (error) {
       console.error('DaData API error:', error);
