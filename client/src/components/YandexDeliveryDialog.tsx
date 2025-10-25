@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw } from 'lucide-react';
+import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit } from 'lucide-react';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { Order, PickupAddress } from '@shared/schema';
 
@@ -48,8 +48,10 @@ export function YandexDeliveryDialog({
   const [pickupLabel, setPickupLabel] = useState('');
   const [showPickupForm, setShowPickupForm] = useState(false);
   
-  // Delivery coordinates state
+  // Delivery address state
+  const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryCoords, setDeliveryCoords] = useState<[number, number] | null>(null);
+  const [isEditingDelivery, setIsEditingDelivery] = useState(false);
   const [isRecalculatingDelivery, setIsRecalculatingDelivery] = useState(false);
   
   // Structured address data for saving
@@ -93,8 +95,10 @@ export function YandexDeliveryDialog({
     }
   }, [pickupAddresses]);
   
-  // Initialize delivery coordinates from order
+  // Initialize delivery address and coordinates from order
   useEffect(() => {
+    setDeliveryAddress(order.deliveryAddress);
+    
     if (order.deliveryLongitude && order.deliveryLatitude) {
       setDeliveryCoords([
         parseFloat(order.deliveryLongitude),
@@ -103,6 +107,8 @@ export function YandexDeliveryDialog({
     } else {
       setDeliveryCoords(null);
     }
+    
+    setIsEditingDelivery(false);
   }, [order]);
   
   // Handle address selection from DaData (for pickup)
@@ -124,11 +130,24 @@ export function YandexDeliveryDialog({
     }
   };
   
-  // Recalculate delivery coordinates from address using DaData
+  // Handle delivery address selection from DaData
+  const handleDeliveryAddressSelect = (suggestion: AddressSuggestion) => {
+    setDeliveryAddress(suggestion.fullAddress);
+    
+    if (suggestion.geoLat && suggestion.geoLon) {
+      const coords: [number, number] = [
+        parseFloat(suggestion.geoLon),
+        parseFloat(suggestion.geoLat)
+      ];
+      setDeliveryCoords(coords);
+    }
+  };
+  
+  // Recalculate delivery coordinates from current address using DaData
   const recalculateDeliveryCoords = async () => {
     setIsRecalculatingDelivery(true);
     try {
-      const response = await fetch(`/api/address/suggest?query=${encodeURIComponent(order.deliveryAddress)}`);
+      const response = await fetch(`/api/address/suggest?query=${encodeURIComponent(deliveryAddress)}`);
       const data = await response.json();
       
       if (data.suggestions && data.suggestions.length > 0) {
@@ -452,20 +471,57 @@ export function YandexDeliveryDialog({
             
             {/* Delivery Info */}
             <div className="space-y-4">
-              <h3 className="font-semibold text-sm flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                Точка доставки (Delivery)
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Точка доставки (Delivery)
+                </h3>
+                {!isEditingDelivery && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsEditingDelivery(true)}
+                    data-testid="button-edit-delivery"
+                  >
+                    <Edit className="w-3 h-3 mr-1" />
+                    Изменить
+                  </Button>
+                )}
+              </div>
               
               <div className="space-y-2">
                 <Label data-testid="label-delivery-address">Адрес</Label>
-                <Input
-                  data-testid="input-delivery-address"
-                  value={order.deliveryAddress}
-                  disabled
-                  className="bg-muted"
-                />
+                {isEditingDelivery ? (
+                  <AddressAutocomplete
+                    value={deliveryAddress}
+                    onChange={(value) => setDeliveryAddress(value)}
+                    onSelect={handleDeliveryAddressSelect}
+                    placeholder="Москва, ул. Примерная, д. 1"
+                    testId="input-delivery-address-edit"
+                  />
+                ) : (
+                  <Input
+                    data-testid="input-delivery-address"
+                    value={deliveryAddress}
+                    disabled
+                    className="bg-muted"
+                  />
+                )}
               </div>
+              
+              {isEditingDelivery && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDeliveryAddress(order.deliveryAddress);
+                    setIsEditingDelivery(false);
+                  }}
+                  data-testid="button-cancel-delivery-edit"
+                >
+                  Отмена
+                </Button>
+              )}
               
               {deliveryCoords ? (
                 <div className="text-sm text-muted-foreground">
