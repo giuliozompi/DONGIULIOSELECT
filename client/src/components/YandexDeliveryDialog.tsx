@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save } from 'lucide-react';
+import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw } from 'lucide-react';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { Order, PickupAddress } from '@shared/schema';
 
@@ -47,6 +47,10 @@ export function YandexDeliveryDialog({
   const [pickupContactPhone, setPickupContactPhone] = useState('');
   const [pickupLabel, setPickupLabel] = useState('');
   const [showPickupForm, setShowPickupForm] = useState(false);
+  
+  // Delivery coordinates state
+  const [deliveryCoords, setDeliveryCoords] = useState<[number, number] | null>(null);
+  const [isRecalculatingDelivery, setIsRecalculatingDelivery] = useState(false);
   
   // Structured address data for saving
   const [pickupStructured, setPickupStructured] = useState<{
@@ -89,12 +93,19 @@ export function YandexDeliveryDialog({
     }
   }, [pickupAddresses]);
   
-  // Extract delivery coordinates from order
-  const deliveryCoords: [number, number] | null = order.deliveryLongitude && order.deliveryLatitude
-    ? [parseFloat(order.deliveryLongitude), parseFloat(order.deliveryLatitude)]
-    : null;
+  // Initialize delivery coordinates from order
+  useEffect(() => {
+    if (order.deliveryLongitude && order.deliveryLatitude) {
+      setDeliveryCoords([
+        parseFloat(order.deliveryLongitude),
+        parseFloat(order.deliveryLatitude)
+      ]);
+    } else {
+      setDeliveryCoords(null);
+    }
+  }, [order]);
   
-  // Handle address selection from DaData
+  // Handle address selection from DaData (for pickup)
   const handlePickupAddressSelect = (suggestion: AddressSuggestion) => {
     setPickupAddress(suggestion.fullAddress);
     setPickupStructured({
@@ -110,6 +121,52 @@ export function YandexDeliveryDialog({
         parseFloat(suggestion.geoLon),
         parseFloat(suggestion.geoLat)
       ]);
+    }
+  };
+  
+  // Recalculate delivery coordinates from address using DaData
+  const recalculateDeliveryCoords = async () => {
+    setIsRecalculatingDelivery(true);
+    try {
+      const response = await fetch(`/api/address/suggest?query=${encodeURIComponent(order.deliveryAddress)}`);
+      const data = await response.json();
+      
+      if (data.suggestions && data.suggestions.length > 0) {
+        const suggestion = data.suggestions[0];
+        
+        if (suggestion.geoLat && suggestion.geoLon) {
+          const coords: [number, number] = [
+            parseFloat(suggestion.geoLon),
+            parseFloat(suggestion.geoLat)
+          ];
+          setDeliveryCoords(coords);
+          
+          // Save coordinates to order
+          await apiRequest('PATCH', `/api/admin/orders/${order.id}`, {
+            deliveryLatitude: coords[1].toString(),
+            deliveryLongitude: coords[0].toString(),
+          });
+          
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+          
+          toast({
+            title: 'Координаты найдены',
+            description: 'Координаты доставки успешно рассчитаны и сохранены',
+          });
+        } else {
+          throw new Error('DaData не вернул координаты для этого адреса');
+        }
+      } else {
+        throw new Error('Адрес не найден в DaData');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось рассчитать координаты',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRecalculatingDelivery(false);
     }
   };
   
@@ -415,8 +472,21 @@ export function YandexDeliveryDialog({
                   Координаты: {deliveryCoords[1].toFixed(6)}, {deliveryCoords[0].toFixed(6)}
                 </div>
               ) : (
-                <div className="text-sm text-destructive">
-                  ⚠️ Координаты доставки не найдены. Клиент должен был выбрать адрес через DaData при оформлении заказа.
+                <div className="space-y-2">
+                  <div className="text-sm text-destructive">
+                    ⚠️ Координаты доставки не найдены
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={recalculateDeliveryCoords}
+                    disabled={isRecalculatingDelivery}
+                    data-testid="button-recalculate-delivery-coords"
+                  >
+                    {isRecalculatingDelivery && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Рассчитать координаты из адреса
+                  </Button>
                 </div>
               )}
               

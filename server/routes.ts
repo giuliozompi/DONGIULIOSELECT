@@ -1608,6 +1608,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // PATCH /api/admin/orders/:id - Aggiorna campi ordine (ADMIN ONLY)
+  app.patch("/api/admin/orders/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        deliveryLatitude: z.string().optional(),
+        deliveryLongitude: z.string().optional(),
+      });
+      
+      const updateData = schema.parse(req.body);
+      const orderId = req.params.id;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const updatedOrder = await storage.updateOrder(orderId, updateData);
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating order:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // PATCH /api/admin/orders/:id/status - Aggiorna stato ordine (ADMIN ONLY)
   app.patch("/api/admin/orders/:id/status", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
