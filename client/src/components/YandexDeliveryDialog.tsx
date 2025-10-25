@@ -258,9 +258,47 @@ export function YandexDeliveryDialog({
     },
   });
   
-  // NOTE: createDelivery not available with Yandex Taxi API (only Cargo API)
+  // Create delivery mutation (will show message that manual call is needed)
+  const createDeliveryMutation = useMutation({
+    mutationFn: async () => {
+      if (!pickupCoords || !deliveryCoords) {
+        throw new Error('Координаты не найдены');
+      }
+      
+      const res = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-delivery`, {
+        pickupCoordinates: pickupCoords,
+        deliveryCoordinates: deliveryCoords,
+        pickupAddress,
+        pickupContact: {
+          name: pickupContactName,
+          phone: pickupContactPhone,
+        },
+        deliveryContact: {
+          name: order.customerName,
+          phone: order.customerPhone,
+        },
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Курьер вызван',
+        description: 'Заказ на доставку Яндекс Go создан успешно',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось создать заказ на доставку',
+        variant: 'destructive',
+      });
+    },
+  });
   
   const canCalculate = pickupCoords && deliveryCoords && !showPickupForm;
+  const canCreateDelivery = priceInfo && pickupCoords && deliveryCoords && !showPickupForm;
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -576,12 +614,16 @@ export function YandexDeliveryDialog({
             )}
             Рассчитать цену
           </Button>
-          {/* Вызов автоматico курьера non disponibile con API Taxi */}
-          {priceInfo && (
-            <div className="text-xs text-muted-foreground text-center">
-              ℹ️ Для вызова курьера используйте приложение Яндекс Такси
-            </div>
-          )}
+          <Button
+            onClick={() => createDeliveryMutation.mutate()}
+            disabled={!canCreateDelivery || createDeliveryMutation.isPending}
+            data-testid="button-create-delivery"
+          >
+            {createDeliveryMutation.isPending && (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            )}
+            Вызвать курьера
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
