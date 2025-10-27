@@ -2345,6 +2345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         route_points: [
           {
             point_id: 1,
+            visit_order: 1,
             coordinates: data.pickupCoordinates,
             type: 'source',
             fullname: data.pickupAddress,
@@ -2352,6 +2353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
           {
             point_id: 2,
+            visit_order: 2,
             coordinates: data.deliveryCoordinates,
             type: 'destination',
             fullname: order.deliveryAddress,
