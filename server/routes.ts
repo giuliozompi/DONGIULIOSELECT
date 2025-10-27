@@ -2324,13 +2324,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const data = schema.parse(req.body);
       
-      // Prepara items per Yandex Delivery
+      // Prepara items per Yandex Delivery (dimensioni in METRI, non cm!)
       const items = [{
+        quantity: 1,
         weight: 2, // Default 2kg for food orders
-        dimensions: {
-          length: 30,
-          width: 20,
-          height: 15,
+        size: {
+          length: 0.30,  // 30cm = 0.30 metri
+          width: 0.20,   // 20cm = 0.20 metri
+          height: 0.15,  // 15cm = 0.15 metri
         },
       }];
       

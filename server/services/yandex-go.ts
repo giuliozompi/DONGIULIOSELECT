@@ -247,10 +247,13 @@ class YandexGoService {
     comment?: string;
     offer_id?: string;
   }): Promise<YandexDeliveryClaimResponse> {
-    const url = `${this.baseUrl}/claims/create`;
+    // Genera request_id univoco (richiesto da Yandex API)
+    const requestId = `don-giulio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const url = `${this.baseUrl}/claims/create?request_id=${encodeURIComponent(requestId)}`;
     
     console.log('Yandex Delivery createOrder request:', {
       url,
+      requestId,
       payload: JSON.stringify(orderData, null, 2),
     });
 
