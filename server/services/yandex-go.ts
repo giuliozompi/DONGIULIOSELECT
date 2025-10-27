@@ -26,18 +26,24 @@ export interface YandexDeliveryRoutePoint {
 }
 
 export interface YandexDeliveryOffer {
-  offer_id: string;
-  price: string;
-  price_raw: number;
-  currency: string;
-  currency_rules: {
-    code: string;
-    sign: string;
-    template: string;
-    text: string;
+  price: {
+    total_price: string;
+    total_price_with_vat: string;
+    surge_ratio: number;
+    currency: string;
   };
-  eta: number; // seconds
-  distance: number; // meters
+  taxi_class: string;
+  pickup_interval: {
+    from: string;
+    to: string;
+  };
+  delivery_interval: {
+    from: string;
+    to: string;
+  };
+  description: string;
+  payload: string; // Questo è l'offer_id di Yandex
+  offer_ttl: string;
 }
 
 export interface YandexDeliveryCalculateResponse {
@@ -99,6 +105,30 @@ class YandexGoService {
       'Accept': 'application/json',
       'Accept-Language': 'ru',
     };
+  }
+
+  /**
+   * Calcola distanza tra due coordinate GPS usando la formula Haversine
+   * @param coord1 [longitude, latitude]
+   * @param coord2 [longitude, latitude]
+   * @returns distanza in metri
+   */
+  private calculateDistance(coord1: [number, number], coord2: [number, number]): number {
+    const [lon1, lat1] = coord1;
+    const [lon2, lat2] = coord2;
+    
+    const R = 6371e3; // Raggio Terra in metri
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return Math.round(R * c); // distanza in metri
   }
 
   /**
@@ -176,7 +206,18 @@ class YandexGoService {
 
       // Estrai prezzo e valuta dal campo price
       const currency = bestOffer.price?.currency || 'RUB';
-      const totalPrice = bestOffer.price?.total_price || bestOffer.price?.price || '0';
+      const totalPrice = bestOffer.price?.total_price || '0';
+
+      // Calcola ETA in secondi dalla differenza tra delivery e pickup
+      let etaSeconds = 0;
+      if (bestOffer.delivery_interval?.to && bestOffer.pickup_interval?.from) {
+        const deliveryTime = new Date(bestOffer.delivery_interval.to).getTime();
+        const pickupTime = new Date(bestOffer.pickup_interval.from).getTime();
+        etaSeconds = Math.round((deliveryTime - pickupTime) / 1000);
+      }
+
+      // Calcola distanza approssimativa dalle coordinate (formula Haversine)
+      const distanceMeters = this.calculateDistance(pickupCoords, deliveryCoords);
 
       return {
         price: totalPrice,
@@ -186,9 +227,9 @@ class YandexGoService {
           template: '$VALUE$ $SIGN$$CURRENCY$',
           text: currency,
         },
-        distance_meters: bestOffer.distance || 0,
-        eta: bestOffer.eta || 0,
-        offer_id: bestOffer.offer_id || '',
+        distance_meters: distanceMeters,
+        eta: etaSeconds,
+        offer_id: bestOffer.payload || '', // payload è l'offer_id di Yandex
         all_offers: data.offers,
       };
     } catch (error) {
