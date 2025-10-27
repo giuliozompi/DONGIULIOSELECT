@@ -664,7 +664,10 @@ export function YandexDeliveryDialog({
                   <div>
                     <span className="text-muted-foreground">Расстояние:</span>
                     <span className="ml-2 font-semibold" data-testid="text-delivery-distance">
-                      {(priceInfo.distance_meters / 1000).toFixed(1)} км
+                      {priceInfo.distance_meters < 1000 
+                        ? `${priceInfo.distance_meters} м`
+                        : `${(priceInfo.distance_meters / 1000).toFixed(1)} км`
+                      }
                     </span>
                   </div>
                 </div>
