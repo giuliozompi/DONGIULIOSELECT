@@ -439,7 +439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         latitude: z.string().optional(),
         longitude: z.string().optional(),
         contactName: z.string().optional(),
-        contactPhone: z.string().optional(),
+        contactPhone: z.string().regex(/^[0-9 \(\)\-\+]*$/, 'Invalid phone format').optional().or(z.literal('')),
         isDefault: z.boolean().optional(),
       });
       
@@ -474,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         latitude: z.string().optional(),
         longitude: z.string().optional(),
         contactName: z.string().optional(),
-        contactPhone: z.string().optional(),
+        contactPhone: z.string().regex(/^[0-9 \(\)\-\+]*$/, 'Invalid phone format').optional().or(z.literal('')),
         isDefault: z.boolean().optional(),
       });
       
