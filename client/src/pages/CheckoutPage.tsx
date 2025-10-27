@@ -445,6 +445,7 @@ export default function CheckoutPage() {
                     <FormControl>
                       <Input 
                         {...field} 
+                        dir="ltr"
                         placeholder="Иван Иванов"
                         data-testid="input-customer-name"
                       />
@@ -463,6 +464,7 @@ export default function CheckoutPage() {
                     <FormControl>
                       <Input 
                         {...field} 
+                        dir="ltr"
                         type="tel"
                         placeholder="+79991234567"
                         data-testid="input-customer-phone"
@@ -482,6 +484,7 @@ export default function CheckoutPage() {
                     <FormControl>
                       <Input 
                         {...field} 
+                        dir="ltr"
                         type="email"
                         placeholder="ivanov@example.com"
                         data-testid="input-customer-email"
@@ -538,6 +541,7 @@ export default function CheckoutPage() {
                     <FormControl>
                       <Input 
                         {...field} 
+                        dir="ltr"
                         placeholder="45"
                         data-testid="input-delivery-flat"
                       />
@@ -583,6 +587,7 @@ export default function CheckoutPage() {
                       <FormControl>
                         <Input 
                           {...field} 
+                          dir="ltr"
                           placeholder='Например: "Дом", "Офис", "Дача"'
                           data-testid="input-address-label"
                         />
@@ -682,7 +687,8 @@ export default function CheckoutPage() {
                   <FormItem>
                     <FormLabel>Комментарий к заказу (опционально)</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <Textarea
+                        dir="ltr" 
                         {...field} 
                         placeholder="Домофон не работает, позвоните за 5 минут..."
                         rows={2}

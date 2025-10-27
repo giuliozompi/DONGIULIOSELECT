@@ -99,6 +99,7 @@ export function AddressAutocomplete({
     <div className="relative">
       <Input
         ref={inputRef}
+        dir="ltr"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
