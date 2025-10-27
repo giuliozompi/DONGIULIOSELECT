@@ -118,17 +118,10 @@ export class YandexGoService {
 
   private getHeaders(): Record<string, string> {
     if (!this.token) {
-      console.error('Yandex Go token missing');
       throw new Error('Yandex Go OAuth token not configured');
     }
 
     const cleanToken = this.token.trim();
-
-    console.log('Yandex Go credentials check:', {
-      hasToken: !!cleanToken,
-      tokenLength: cleanToken.length,
-      tokenPrefix: cleanToken.substring(0, 10) + '...',
-    });
 
     return {
       'Authorization': `Bearer ${cleanToken}`,
@@ -144,16 +137,7 @@ export class YandexGoService {
   async checkPrice(request: YandexGoCheckPriceRequest): Promise<YandexGoCheckPriceResponse> {
     const url = `${this.baseUrl}/b2b/cargo/integration/v1/check-price`;
     
-    console.log('Yandex Go checkPrice request:', {
-      url,
-      payload: JSON.stringify(request, null, 2)
-    });
-
-    console.log('Yandex Go credentials check:', {
-      hasToken: !!this.token,
-      tokenLength: this.token?.length || 0,
-      tokenPrefix: this.token?.substring(0, 10) + '...'
-    });
+    console.log('Yandex Go checkPrice request to:', url);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -184,17 +168,7 @@ export class YandexGoService {
   async createClaim(request: YandexGoClaimRequest, requestId: string): Promise<YandexGoClaimResponse> {
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/create?request_id=${requestId}`;
     
-    console.log('Yandex Go createClaim request:', {
-      url,
-      requestId,
-      payload: JSON.stringify(request, null, 2)
-    });
-
-    console.log('Yandex Go credentials check:', {
-      hasToken: !!this.token,
-      tokenLength: this.token?.length || 0,
-      tokenPrefix: this.token?.substring(0, 10) + '...'
-    });
+    console.log('Yandex Go createClaim request to:', url, 'with requestId:', requestId);
 
     const response = await fetch(url, {
       method: 'POST',
