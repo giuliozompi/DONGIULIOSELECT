@@ -457,6 +457,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/admin/pickup-addresses/:id - Aggiorna indirizzo di pick-up
+  app.patch("/api/admin/pickup-addresses/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const addressId = req.params.id;
+      
+      const addressSchema = z.object({
+        label: z.string().min(1).optional(),
+        fullAddress: z.string().min(10).optional(),
+        city: z.string().optional(),
+        street: z.string().optional(),
+        building: z.string().optional(),
+        flat: z.string().optional(),
+        postalCode: z.string().optional(),
+        dadataFiasId: z.string().optional(),
+        latitude: z.string().optional(),
+        longitude: z.string().optional(),
+        contactName: z.string().optional(),
+        contactPhone: z.string().optional(),
+        isDefault: z.boolean().optional(),
+      });
+      
+      const addressData = addressSchema.parse(req.body);
+      
+      const address = await storage.updatePickupAddress(addressId, addressData as any);
+      
+      if (!address) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      
+      res.json(address);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating pickup address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // DELETE /api/admin/pickup-addresses/:id - Elimina indirizzo di pick-up
   app.delete("/api/admin/pickup-addresses/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
