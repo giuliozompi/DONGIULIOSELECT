@@ -146,21 +146,22 @@ export class YandexGoService {
 
   /**
    * Calculate delivery price (step 1)
-   * API V2 usa /offers/calculate (come Yandex Dostavka)
+   * API V1 usa /v1/check-price (formato diverso da Yandex Dostavka)
    */
   async checkPrice(request: YandexGoCheckPriceRequest): Promise<YandexGoCheckPriceResponse> {
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/offers/calculate`;
+    const url = `${this.baseUrl}/b2b/cargo/integration/v1/check-price`;
     
-    const headers = this.getHeaders('v2'); // V2 = solo Bearer token
+    const headers = this.getHeaders('v1'); // V1 = Client-Id + Bearer token
     
-    console.log('Yandex Go V2 checkPrice request to:', url);
-    console.log('Yandex Go V2 checkPrice headers:', {
+    console.log('Yandex Go V1 checkPrice request to:', url);
+    console.log('Yandex Go V1 checkPrice headers:', {
       'Content-Type': headers['Content-Type'],
       'Accept': headers['Accept'],
       'Accept-Language': headers['Accept-Language'],
+      'X-B2B-Client-Id': headers['X-B2B-Client-Id'] ? `${headers['X-B2B-Client-Id'].substring(0, 8)}...` : 'MISSING',
       'Authorization': headers['Authorization'] ? `Bearer ${headers['Authorization'].substring(7, 15)}...` : 'MISSING'
     });
-    console.log('Yandex Go V2 checkPrice request body:', JSON.stringify(request, null, 2));
+    console.log('Yandex Go V1 checkPrice request body:', JSON.stringify(request, null, 2));
 
     const response = await fetch(url, {
       method: 'POST',
