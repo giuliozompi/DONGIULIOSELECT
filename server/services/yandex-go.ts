@@ -146,21 +146,21 @@ export class YandexGoService {
 
   /**
    * Calculate delivery price (step 1)
-   * V1 API usa SOLO Bearer token (come V2)
+   * API V2 usa solo Bearer token (come Yandex Dostavka)
    */
   async checkPrice(request: YandexGoCheckPriceRequest): Promise<YandexGoCheckPriceResponse> {
-    const url = `${this.baseUrl}/b2b/cargo/integration/v1/check-price`;
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/check-price`;
     
-    const headers = this.getHeaders('v2'); // V2 = solo Bearer token (come Dostavka)
+    const headers = this.getHeaders('v2'); // V2 = solo Bearer token
     
-    console.log('Yandex Go checkPrice request to:', url);
-    console.log('Yandex Go checkPrice headers:', {
+    console.log('Yandex Go V2 checkPrice request to:', url);
+    console.log('Yandex Go V2 checkPrice headers:', {
       'Content-Type': headers['Content-Type'],
       'Accept': headers['Accept'],
       'Accept-Language': headers['Accept-Language'],
       'Authorization': headers['Authorization'] ? `Bearer ${headers['Authorization'].substring(7, 15)}...` : 'MISSING'
     });
-    console.log('Yandex Go checkPrice request body:', JSON.stringify(request, null, 2));
+    console.log('Yandex Go V2 checkPrice request body:', JSON.stringify(request, null, 2));
 
     const response = await fetch(url, {
       method: 'POST',
