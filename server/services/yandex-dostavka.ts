@@ -1,7 +1,8 @@
 
 // Yandex Dostavka API - Express/Courier service for small packages
 // Docs: https://yandex.com/support/delivery-profile/en/api/express/overview
-const YANDEX_DELIVERY_BASE_URL = 'https://b2b.taxi.yandex.net/b2b/cargo/integration/v2';
+// Production endpoint: https://b2b-authproxy.taxi.yandex.net
+const YANDEX_DELIVERY_BASE_URL = 'https://b2b-authproxy.taxi.yandex.net/b2b/cargo/integration/v2';
 const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_DOSTAVKA_TOKEN;
 const YANDEX_DELIVERY_CLIENT_ID = process.env.YANDEX_DOSTAVKA_CLIENT_ID;
 
@@ -99,15 +100,19 @@ class YandexDostavkaService {
       throw new Error('Yandex Dostavka OAuth token not configured');
     }
 
+    // Trim token per rimuovere spazi accidentali
+    const cleanToken = this.token.trim();
+
     console.log('Yandex Dostavka credentials check:', {
-      hasToken: !!this.token,
-      tokenLength: this.token?.length,
-      tokenPrefix: this.token?.substring(0, 10) + '...',
+      hasToken: !!cleanToken,
+      tokenLength: cleanToken.length,
+      tokenPrefix: cleanToken.substring(0, 10) + '...',
     });
 
-    // Formato Bearer token (ufficiale Yandex Dostavka)
+    // Formato Bearer token ufficiale Yandex Dostavka
+    // Endpoint: https://b2b-authproxy.taxi.yandex.net
     return {
-      'Authorization': `Bearer ${this.token}`,
+      'Authorization': `Bearer ${cleanToken}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
