@@ -169,7 +169,18 @@ export const orders = pgTable("orders", {
     legalName?: string;
     carModel?: string;
     carNumber?: string;
-  }>(), // Info sul corriere Yandex
+  }>(), // Info sul corriere Yandex Dostavka
+  
+  // Yandex Go specifics (general delivery service)
+  yandexGoClaimId: text("yandex_go_claim_id"), // ID della richiesta Yandex Go
+  yandexGoPrice: decimal("yandex_go_price", { precision: 10, scale: 2 }), // Prezzo delivery Yandex Go
+  yandexGoStatus: text("yandex_go_status"), // Status del delivery Yandex Go
+  yandexGoPerformerInfo: jsonb("yandex_go_performer_info").$type<{
+    courierName?: string;
+    legalName?: string;
+    carModel?: string;
+    carNumber?: string;
+  }>(), // Info sul corriere Yandex Go
   
   // Coordinate per Yandex Dostavka (pickup e delivery)
   pickupCoordinates: text("pickup_coordinates").array(), // [longitude, latitude]

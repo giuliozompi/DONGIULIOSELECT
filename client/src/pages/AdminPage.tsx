@@ -32,6 +32,7 @@ import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, Cl
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { YandexDeliveryDialog } from '@/components/YandexDeliveryDialog';
+import { YandexGoDialog } from '@/components/YandexGoDialog';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { Badge } from '@/components/ui/badge';
@@ -1255,6 +1256,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [markingDialogOrder, setMarkingDialogOrder] = useState<Order | null>(null);
   const [yandexDeliveryDialogOrder, setYandexDeliveryDialogOrder] = useState<Order | null>(null);
+  const [yandexGoDialogOrder, setYandexGoDialogOrder] = useState<Order | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: string; status: string } | null>(null);
   
   // Fetch orders with filter
@@ -1546,35 +1548,43 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       </p>
                     )}
                     
-                    {order.status === 'ОПЛАЧЕН' && !order.yandexClaimId && (
+                    {order.status === 'ОПЛАЧЕН' && !order.yandexClaimId && !order.yandexGoClaimId && (
                       <>
                         <Button 
                           size="sm"
                           onClick={() => setYandexDeliveryDialogOrder(order)}
-                          data-testid={`button-yandex-delivery-${order.id}`}
+                          data-testid={`button-yandex-dostavka-${order.id}`}
                         >
                           <Truck className="w-4 h-4 mr-2" />
-                          Вызвать Яндекс Go
+                          Yandex Dostavka
                         </Button>
                         <Button 
                           size="sm"
-                          variant="outline"
-                          onClick={() => callCourierMutation.mutate(order.id)}
-                          disabled={callCourierMutation.isPending}
-                          data-testid={`button-call-courier-${order.id}`}
+                          variant="secondary"
+                          onClick={() => setYandexGoDialogOrder(order)}
+                          data-testid={`button-yandex-go-${order.id}`}
                         >
                           <Truck className="w-4 h-4 mr-2" />
-                          Вызвать курьера (вручную)
+                          Yandex Go
                         </Button>
                       </>
                     )}
                     
-                    {/* Show Yandex delivery status if exists */}
+                    {/* Show Yandex Dostavka status if exists */}
                     {order.yandexClaimId && (
-                      <Badge variant="default" className="flex items-center gap-1" data-testid={`badge-yandex-status-${order.id}`}>
+                      <Badge variant="default" className="flex items-center gap-1" data-testid={`badge-yandex-dostavka-status-${order.id}`}>
                         <Truck className="w-3 h-3" />
-                        Яндекс Go: {order.yandexDeliveryStatus || 'в обработке'}
+                        Yandex Dostavka: {order.yandexDeliveryStatus || 'в обработке'}
                         {order.yandexDeliveryPrice && ` (${order.yandexDeliveryPrice} ₽)`}
+                      </Badge>
+                    )}
+                    
+                    {/* Show Yandex Go status if exists */}
+                    {order.yandexGoClaimId && (
+                      <Badge variant="secondary" className="flex items-center gap-1" data-testid={`badge-yandex-go-status-${order.id}`}>
+                        <Truck className="w-3 h-3" />
+                        Yandex Go: {order.yandexGoStatus || 'в обработке'}
+                        {order.yandexGoPrice && ` (${order.yandexGoPrice} ₽)`}
                       </Badge>
                     )}
                     
@@ -1633,6 +1643,15 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           order={yandexDeliveryDialogOrder}
           open={!!yandexDeliveryDialogOrder}
           onOpenChange={(open) => !open && setYandexDeliveryDialogOrder(null)}
+        />
+      )}
+      
+      {/* Yandex Go Delivery Dialog */}
+      {yandexGoDialogOrder && (
+        <YandexGoDialog
+          order={yandexGoDialogOrder}
+          open={!!yandexGoDialogOrder}
+          onOpenChange={(open) => !open && setYandexGoDialogOrder(null)}
         />
       )}
     </div>

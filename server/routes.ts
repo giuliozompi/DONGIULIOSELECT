@@ -2486,6 +2486,267 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== YANDEX GO DELIVERY ====================
+  
+  // POST /api/admin/orders/:id/yandex-go-price - Calcola prezzo delivery Yandex Go (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/yandex-go-price", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { yandexGoService } = await import("./services/yandex-go");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const { pickupAddress, pickupCoords } = req.body;
+      
+      // Usa coordinate di consegna dall'ordine
+      const deliveryCoords: [number, number] = order.deliveryLongitude && order.deliveryLatitude
+        ? [parseFloat(order.deliveryLongitude), parseFloat(order.deliveryLatitude)]
+        : [0, 0]; // fallback se coordinate non disponibili
+      
+      // Calcola prezzo con check-price
+      const priceRequest = {
+        items: [{
+          quantity: 1,
+          weight: 2, // kg stimato
+          size: {
+            length: 0.3, // m
+            width: 0.2,  // m
+            height: 0.15 // m
+          }
+        }],
+        route_points: [
+          {
+            coordinates: pickupCoords,
+            fullname: pickupAddress
+          },
+          {
+            coordinates: deliveryCoords,
+            fullname: order.deliveryAddress
+          }
+        ]
+      };
+      
+      const priceInfo = await yandexGoService.checkPrice(priceRequest);
+      
+      res.json({
+        price: priceInfo.price,
+        currency: priceInfo.currency,
+        distance: priceInfo.distance,
+        time: priceInfo.time
+      });
+    } catch (error) {
+      console.error('Error checking Yandex Go price:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/yandex-go - Crea ordine delivery Yandex Go (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/yandex-go", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { yandexGoService } = await import("./services/yandex-go");
+      const { nanoid } = await import("nanoid");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const { 
+        pickupAddress, 
+        pickupCoords, 
+        pickupContactName, 
+        pickupContactPhone,
+        deliveryAddress,
+        deliveryCoords,
+        deliveryContactName,
+        deliveryContactPhone
+      } = req.body;
+      
+      // Crea request_id univoco per idempotenza
+      const requestId = `don-giulio-go-${Date.now()}-${nanoid(8)}`;
+      
+      // Crea ordine Yandex Go
+      const claimRequest = {
+        items: [{
+          quantity: 1,
+          weight: 2,
+          size: {
+            length: 0.3,
+            width: 0.2,
+            height: 0.15
+          },
+          cost_value: order.amount,
+          cost_currency: 'RUB',
+          title: 'Don Giulio Select - Food Order'
+        }],
+        route_points: [
+          {
+            coordinates: pickupCoords,
+            fullname: pickupAddress,
+            contact: {
+              phone: pickupContactPhone,
+              name: pickupContactName
+            },
+            type: 'source' as const,
+            visit_order: 1
+          },
+          {
+            coordinates: deliveryCoords,
+            fullname: deliveryAddress,
+            contact: {
+              phone: deliveryContactPhone,
+              name: deliveryContactName
+            },
+            type: 'destination' as const,
+            visit_order: 2
+          }
+        ],
+        comment: `Заказ ${orderId.substring(0, 8)} - Don Giulio Select`
+      };
+      
+      // Crea claim
+      const claim = await yandexGoService.createClaim(claimRequest, requestId);
+      
+      // Ottieni info aggiornate
+      const claimInfo = await yandexGoService.getClaimInfo(claim.id);
+      
+      // Accetta il claim
+      const acceptedClaim = await yandexGoService.acceptClaim(claim.id, claimInfo.version);
+      
+      // Aggiorna ordine con info Yandex Go
+      await storage.updateOrder(orderId, {
+        yandexGoClaimId: acceptedClaim.id,
+        yandexGoStatus: acceptedClaim.status,
+        yandexGoPrice: acceptedClaim.pricing?.offer?.price || acceptedClaim.pricing?.final_price || null,
+        courierService: 'yandex_go',
+        courierCalledAt: new Date(),
+        status: 'ВЫЗВАН КУРЬЕР',
+      });
+      
+      // Log dell'azione
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId: req.userId!,
+        changeType: 'yandex_go_created',
+        changeData: {
+          claimId: acceptedClaim.id,
+          status: acceptedClaim.status,
+          price: acceptedClaim.pricing?.offer?.price || acceptedClaim.pricing?.final_price
+        },
+      });
+      
+      res.json({
+        success: true,
+        claimId: acceptedClaim.id,
+        status: acceptedClaim.status,
+        pricing: acceptedClaim.pricing
+      });
+    } catch (error) {
+      console.error('Error creating Yandex Go delivery:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // GET /api/admin/orders/:id/yandex-go-status - Ottieni status delivery Yandex Go (ADMIN ONLY)
+  app.get("/api/admin/orders/:id/yandex-go-status", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { yandexGoService } = await import("./services/yandex-go");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      if (!order.yandexGoClaimId) {
+        return res.status(400).json({ error: 'No Yandex Go delivery associated with this order' });
+      }
+      
+      const status = await yandexGoService.getClaimInfo(order.yandexGoClaimId);
+      
+      // Aggiorna lo status nell'ordine
+      const updates: any = {
+        yandexGoStatus: status.status,
+      };
+      
+      if (status.performer_info) {
+        updates.yandexGoPerformerInfo = {
+          courierName: status.performer_info.courier_name,
+          legalName: status.performer_info.legal_name,
+          carModel: status.performer_info.car_model,
+          carNumber: status.performer_info.car_number,
+        };
+      }
+      
+      await storage.updateOrder(orderId, updates);
+      
+      res.json(status);
+    } catch (error) {
+      console.error('Error fetching Yandex Go delivery status:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/yandex-go-cancel - Cancella delivery Yandex Go (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/yandex-go-cancel", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { yandexGoService } = await import("./services/yandex-go");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      if (!order.yandexGoClaimId) {
+        return res.status(400).json({ error: 'No Yandex Go delivery associated with this order' });
+      }
+      
+      // Ottieni info su cancellazione
+      const cancelInfo = await yandexGoService.getCancelInfo(order.yandexGoClaimId);
+      
+      // Ottieni claim info per version
+      const claimInfo = await yandexGoService.getClaimInfo(order.yandexGoClaimId);
+      
+      // Cancella il claim
+      const result = await yandexGoService.cancelClaim(
+        order.yandexGoClaimId, 
+        claimInfo.version,
+        cancelInfo.cancel_state
+      );
+      
+      // Aggiorna ordine
+      await storage.updateOrder(orderId, {
+        yandexGoStatus: result.status,
+      });
+      
+      // Log dell'azione
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId: req.userId!,
+        changeType: 'yandex_go_cancelled',
+        changeData: {
+          oldStatus: order.yandexGoStatus || null,
+          newStatus: result.status,
+          cancelInfo: cancelInfo
+        },
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error cancelling Yandex Go delivery:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   // GET /api/admin/orders/:id - Ottieni singolo ordine (ADMIN ONLY)
   // NOTA: Questa route deve essere DOPO tutte le route più specifiche (es. /:id/logs)
   app.get("/api/admin/orders/:id", verifyTelegramInitData, requireAdmin, async (req, res) => {
