@@ -2564,7 +2564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? [parseFloat(order.deliveryLongitude), parseFloat(order.deliveryLatitude)]
         : [0, 0]; // fallback se coordinate non disponibili
       
-      // API V2 offers/calculate - Stesso formato di Yandex Dostavka (stesso servizio!)
+      // API V2 offers/calculate - Usa fullname (formato ufficiale Yandex Go)
       // Docs: https://yandex.ru/support/taxi-for-business/api/
       const priceRequest = {
         items: [{
@@ -2579,11 +2579,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         route_points: [
           {
             coordinates: pickupCoords,
-            type: 'source' as const
+            fullname: pickupAddress
           },
           {
             coordinates: deliveryCoords,
-            type: 'destination' as const
+            fullname: order.deliveryAddress
           }
         ]
       };

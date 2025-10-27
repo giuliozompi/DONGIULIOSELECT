@@ -18,12 +18,22 @@ export interface YandexGoCheckPriceRequest {
   }>;
   route_points: Array<{
     coordinates: [number, number]; // [longitude, latitude]
-    type: 'source' | 'destination'; // API V2 format (same as Yandex Dostavka)
+    fullname: string; // Full address (official docs format)
+    city?: string;
+    street?: string;
+    building?: string;
+    porch?: string;
+    sflat?: string;
+    sfloor?: string;
+    id?: number;
   }>;
   requirements?: {
-    taxi_class?: string;
+    taxi_classes?: string[];
     cargo_type?: string;
     cargo_options?: string[];
+    cargo_loaders?: number;
+    pro_courier?: boolean;
+    skip_door_to_door?: boolean;
   };
 }
 
