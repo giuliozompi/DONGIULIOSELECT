@@ -27,11 +27,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { insertCategorySchema, insertProductSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search } from 'lucide-react';
+import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress } from '@shared/schema';
+import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2 } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { YandexDeliveryDialog } from '@/components/YandexDeliveryDialog';
+import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -149,6 +150,16 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                   <span>Клиенты</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => handleNavClick('pickup-addresses')}
+                  className={activeSection === 'pickup-addresses' ? 'bg-sidebar-accent' : ''}
+                  data-testid="button-nav-pickup-addresses"
+                >
+                  <MapPin className="w-4 h-4" />
+                  <span>Адреса забора</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
 
@@ -193,6 +204,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           {activeSection === 'associations' && <ProductAssociationsManager />}
           {activeSection === 'orders' && <OrdersManager isMasterAdmin={isMasterAdmin} />}
           {activeSection === 'clients' && <ClientsManager isMasterAdmin={isMasterAdmin} />}
+          {activeSection === 'pickup-addresses' && <PickupAddressesManager />}
           {activeSection === 'logs' && <LogsManager />}
           {activeSection === 'admins' && isMasterAdmin && <AdminsManager />}
         </main>
@@ -1623,6 +1635,388 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           onOpenChange={(open) => !open && setYandexDeliveryDialogOrder(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ========== PICKUP ADDRESSES MANAGER ==========
+
+type PickupAddressFormData = z.infer<typeof insertPickupAddressSchema>;
+
+function PickupAddressesManager() {
+  const { toast } = useToast();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<AddressSuggestion | null>(null);
+
+  // Fetch pickup addresses
+  const { data: addresses = [], isLoading } = useQuery<PickupAddress[]>({
+    queryKey: ['/api/admin/pickup-addresses'],
+  });
+
+  // Form
+  const form = useForm<PickupAddressFormData>({
+    resolver: zodResolver(insertPickupAddressSchema),
+    defaultValues: {
+      label: '',
+      fullAddress: '',
+      city: null,
+      street: null,
+      building: null,
+      flat: null,
+      postalCode: null,
+      dadataFiasId: null,
+      latitude: null,
+      longitude: null,
+      contactName: null,
+      contactPhone: '',
+      isDefault: false,
+    },
+  });
+
+  // Create mutation
+  const createMutation = useMutation({
+    mutationFn: async (data: PickupAddressFormData) => {
+      const response = await apiRequest('POST', '/api/admin/pickup-addresses', data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/pickup-addresses'] });
+      form.reset();
+      setSelectedAddress(null);
+      setShowForm(false);
+      toast({ title: '✅ Адрес сохранен' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось сохранить адрес',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Update mutation
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<PickupAddressFormData> }) => {
+      const response = await apiRequest('PATCH', `/api/admin/pickup-addresses/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/pickup-addresses'] });
+      toast({ title: '✅ Адрес обновлен' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось обновить адрес',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('DELETE', `/api/admin/pickup-addresses/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/pickup-addresses'] });
+      toast({ title: '✅ Адрес удален' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось удалить адрес',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Set default mutation
+  const setDefaultMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('PATCH', `/api/admin/pickup-addresses/${id}`, { isDefault: true });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/pickup-addresses'] });
+      toast({ title: '✅ Адрес по умолчанию установлен' });
+    },
+  });
+
+  const onSubmit: SubmitHandler<PickupAddressFormData> = (data) => {
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, data });
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  const handleEdit = (address: PickupAddress) => {
+    setEditingId(address.id);
+    setShowForm(true);
+    form.reset({
+      label: address.label,
+      fullAddress: address.fullAddress,
+      city: address.city,
+      street: address.street,
+      building: address.building,
+      flat: address.flat,
+      postalCode: address.postalCode,
+      dadataFiasId: address.dadataFiasId,
+      latitude: address.latitude,
+      longitude: address.longitude,
+      contactName: address.contactName,
+      contactPhone: address.contactPhone || '',
+      isDefault: address.isDefault,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setShowForm(false);
+    setSelectedAddress(null);
+    form.reset();
+  };
+
+  const handleAddressSelect = (suggestion: AddressSuggestion) => {
+    setSelectedAddress(suggestion);
+    form.setValue('fullAddress', suggestion.fullAddress);
+    form.setValue('city', suggestion.city || null);
+    form.setValue('street', suggestion.street || null);
+    form.setValue('building', suggestion.building || null);
+    form.setValue('flat', suggestion.flat || null);
+    form.setValue('postalCode', suggestion.postalCode || null);
+    form.setValue('dadataFiasId', suggestion.fiasId || null);
+    form.setValue('latitude', suggestion.geoLat || null);
+    form.setValue('longitude', suggestion.geoLon || null);
+  };
+
+  if (isLoading) {
+    return <div className="py-4">Загрузка адресов...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Lista indirizzi */}
+      <Card data-testid="pickup-addresses-list">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Адреса забора ({addresses.length})</CardTitle>
+            <Button
+              onClick={() => {
+                setEditingId(null);
+                setShowForm(true);
+                setSelectedAddress(null);
+                form.reset();
+              }}
+              data-testid="button-new-pickup-address"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Новый адрес
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {addresses.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <MapPin className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>Нет сохраненных адресов забора</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {addresses.map((address) => (
+                <Card
+                  key={address.id}
+                  className="hover-elevate active-elevate-2"
+                  data-testid={`pickup-address-item-${address.id}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold">{address.label}</h3>
+                          {address.isDefault && (
+                            <Badge variant="default" className="gap-1">
+                              <Star className="w-3 h-3" />
+                              По умолчанию
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground flex items-start gap-2">
+                          <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          {address.fullAddress}
+                        </p>
+                        {address.contactName && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            {address.contactName}
+                          </p>
+                        )}
+                        {address.contactPhone && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-2">
+                            <Phone className="w-4 h-4" />
+                            {address.contactPhone}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {!address.isDefault && (
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={() => setDefaultMutation.mutate(address.id)}
+                            data-testid={`button-set-default-${address.id}`}
+                          >
+                            <Star className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => handleEdit(address)}
+                          data-testid={`button-edit-pickup-address-${address.id}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          onClick={() => {
+                            if (confirm('Вы уверены, что хотите удалить этот адрес?')) {
+                              deleteMutation.mutate(address.id);
+                            }
+                          }}
+                          data-testid={`button-delete-pickup-address-${address.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Form Dialog */}
+      <Dialog open={showForm} onOpenChange={(open) => !open && handleCancelEdit()}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingId ? 'Редактировать адрес' : 'Новый адрес забора'}
+            </DialogTitle>
+            <DialogDescription>
+              Укажите адрес, откуда будут забирать заказы
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="label"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Название</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Например: Магазин Don Giulio"
+                        data-testid="input-pickup-label"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="fullAddress"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Адрес</FormLabel>
+                    <FormControl>
+                      <AddressAutocomplete
+                        value={field.value}
+                        onChange={field.onChange}
+                        onSelect={handleAddressSelect}
+                        placeholder="Начните вводить адрес..."
+                        data-testid="input-pickup-address"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="contactName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Контактное лицо</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          value={field.value || ''}
+                          placeholder="Имя"
+                          data-testid="input-pickup-contact-name"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="contactPhone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Телефон</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          placeholder="+7 XXX XXX XX XX"
+                          data-testid="input-pickup-contact-phone"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex gap-4 justify-end pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCancelEdit}
+                  data-testid="button-cancel-pickup-address"
+                >
+                  Отмена
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                  data-testid="button-save-pickup-address"
+                >
+                  {(createMutation.isPending || updateMutation.isPending) && (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  )}
+                  {editingId ? 'Сохранить' : 'Создать'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
