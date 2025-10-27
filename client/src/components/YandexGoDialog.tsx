@@ -389,20 +389,78 @@ export function YandexGoDialog({
             </h3>
             
             {!showPickupForm && pickupAddresses.length > 0 ? (
-              <div className="space-y-2">
-                <Label>Выберите адрес</Label>
-                <Select value={selectedPickupId} onValueChange={handlePickupChange}>
-                  <SelectTrigger data-testid="select-pickup-address">
-                    <SelectValue placeholder="Выберите адрес" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pickupAddresses.map((addr) => (
-                      <SelectItem key={addr.id} value={addr.id}>
-                        {addr.label} - {addr.fullAddress}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <>
+                <div className="space-y-2">
+                  <Label>Выберите адрес</Label>
+                  <Select value={selectedPickupId} onValueChange={handlePickupChange}>
+                    <SelectTrigger data-testid="select-pickup-address">
+                      <SelectValue placeholder="Выберите адрес" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pickupAddresses.map((addr) => (
+                        <SelectItem key={addr.id} value={addr.id} data-testid={`select-option-pickup-${addr.id}`}>
+                          {addr.label} {addr.contactPhone ? `- ${addr.contactPhone}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label data-testid="label-pickup-current-address">
+                    <MapPin className="w-3 h-3 inline mr-1" />
+                    Адрес
+                  </Label>
+                  <Input
+                    id="pickup-current-address"
+                    data-testid="input-pickup-current-address"
+                    value={pickupAddress}
+                    readOnly
+                    className="bg-muted"
+                  />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="pickup-current-name" data-testid="label-pickup-current-name">
+                        <User className="w-3 h-3 inline mr-1" />
+                        Контактное лицо
+                      </Label>
+                      <Input
+                        id="pickup-current-name"
+                        data-testid="input-pickup-current-name"
+                        value={pickupContactName}
+                        onChange={(e) => setPickupContactName(e.target.value)}
+                        placeholder="Don Giulio Select"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="pickup-current-phone" data-testid="label-pickup-current-phone">
+                        <Phone className="w-3 h-3 inline mr-1" />
+                        Телефон (обязательно)
+                      </Label>
+                      <Input
+                        id="pickup-current-phone"
+                        data-testid="input-pickup-current-phone"
+                        value={pickupContactPhone}
+                        onChange={(e) => setPickupContactPhone(e.target.value)}
+                        placeholder="+7 (900) 123-45-67"
+                        className={!pickupContactPhone ? 'border-destructive' : ''}
+                      />
+                      {!pickupContactPhone && (
+                        <p className="text-xs text-destructive">
+                          Укажите телефон для связи с курьером
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {pickupCoords && (
+                    <div className="text-sm text-muted-foreground">
+                      Координаты: {pickupCoords[1].toFixed(6)}, {pickupCoords[0].toFixed(6)}
+                    </div>
+                  )}
+                </div>
+                
                 <Button
                   variant="outline"
                   size="sm"
@@ -411,7 +469,7 @@ export function YandexGoDialog({
                 >
                   + Добавить новый адрес
                 </Button>
-              </div>
+              </>
             ) : (
               <div className="space-y-4 p-4 border rounded-md">
                 <div className="space-y-2">
