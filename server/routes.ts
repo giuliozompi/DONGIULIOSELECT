@@ -2327,6 +2327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Prepara items per Yandex Delivery (dimensioni in METRI, non cm!)
       const items = [{
+        extra_id: order.id, // Nostro numero d'ordine per riferimento
         title: 'Don Giulio Select - Food Order',
         quantity: 1,
         weight: 2, // Default 2kg for food orders

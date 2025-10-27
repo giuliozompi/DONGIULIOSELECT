@@ -7,6 +7,7 @@ const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_DOSTAVKA_TOKEN;
 const YANDEX_DELIVERY_CLIENT_ID = process.env.YANDEX_DOSTAVKA_CLIENT_ID;
 
 export interface YandexDeliveryItem {
+  extra_id?: string; // ID ordine cliente per riferimento
   title: string; // Descrizione dell'item
   quantity: number;
   weight: number;  // kg
