@@ -1,9 +1,9 @@
 
-// Yandex Delivery API - Express/Courier service for small packages
+// Yandex Dostavka API - Express/Courier service for small packages
 // Docs: https://yandex.com/support/delivery-profile/en/api/express/overview
 const YANDEX_DELIVERY_BASE_URL = 'https://b2b.taxi.yandex.net/b2b/cargo/integration/v2';
-const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_GO_TOKEN;
-const YANDEX_DELIVERY_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
+const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_DOSTAVKA_TOKEN;
+const YANDEX_DELIVERY_CLIENT_ID = process.env.YANDEX_DOSTAVKA_CLIENT_ID;
 
 export interface YandexDeliveryItem {
   title: string; // Descrizione dell'item
@@ -85,27 +85,27 @@ export interface YandexDeliveryClaimResponse {
   updated_ts: string;
 }
 
-class YandexGoService {
+class YandexDostavkaService {
   private baseUrl = YANDEX_DELIVERY_BASE_URL;
   private token = YANDEX_DELIVERY_TOKEN;
   private clientId = YANDEX_DELIVERY_CLIENT_ID;
 
   private getHeaders(): Record<string, string> {
     if (!this.token) {
-      console.error('Yandex Delivery token missing:', {
+      console.error('Yandex Dostavka token missing:', {
         hasToken: !!this.token,
         tokenLength: this.token?.length || 0,
       });
-      throw new Error('Yandex Delivery OAuth token not configured');
+      throw new Error('Yandex Dostavka OAuth token not configured');
     }
 
-    console.log('Yandex Delivery credentials check:', {
+    console.log('Yandex Dostavka credentials check:', {
       hasToken: !!this.token,
       tokenLength: this.token?.length,
       tokenPrefix: this.token?.substring(0, 10) + '...',
     });
 
-    // Formato Bearer token (ufficiale Yandex Delivery)
+    // Formato Bearer token (ufficiale Yandex Dostavka)
     return {
       'Authorization': `Bearer ${this.token}`,
       'Content-Type': 'application/json',
@@ -140,7 +140,7 @@ class YandexGoService {
 
   /**
    * Calculate delivery price and options
-   * Yandex Delivery API - for small packages/express courier
+   * Yandex Dostavka API - for small packages/express courier
    */
   async checkPrice(
     pickupCoords: [number, number],
@@ -150,7 +150,7 @@ class YandexGoService {
   ): Promise<any> {
     const url = `${this.baseUrl}/offers/calculate`;
     
-    // Prepara items per Yandex Delivery (dimensioni in METRI)
+    // Prepara items per Yandex Dostavka (dimensioni in METRI)
     const deliveryItems = [{
       quantity: 1,
       weight: 2, // Default 2kg per piccoli ordini food
@@ -175,7 +175,7 @@ class YandexGoService {
       ],
     };
 
-    console.log('Yandex Delivery checkPrice request:', {
+    console.log('Yandex Dostavka checkPrice request:', {
       url,
       payload: JSON.stringify(payload, null, 2),
     });
@@ -187,20 +187,20 @@ class YandexGoService {
         body: JSON.stringify(payload),
       });
 
-      console.log('Yandex Delivery checkPrice response:', {
+      console.log('Yandex Dostavka checkPrice response:', {
         status: response.status,
         statusText: response.statusText,
       });
 
       if (!response.ok) {
         const error = await response.text();
-        console.error('Yandex Delivery checkPrice error response:', error);
-        throw new Error(`Yandex Delivery API error: ${response.status} - ${error}`);
+        console.error('Yandex Dostavka checkPrice error response:', error);
+        throw new Error(`Yandex Dostavka API error: ${response.status} - ${error}`);
       }
 
       const data = await response.json() as YandexDeliveryCalculateResponse;
       
-      console.log('Yandex Delivery price data:', {
+      console.log('Yandex Dostavka price data:', {
         offersCount: data.offers?.length || 0,
         firstOffer: data.offers?.[0],
       });
@@ -240,7 +240,7 @@ class YandexGoService {
         all_offers: data.offers,
       };
     } catch (error) {
-      console.error('Yandex Delivery checkPrice error:', error);
+      console.error('Yandex Dostavka checkPrice error:', error);
       throw error;
     }
   }
@@ -258,7 +258,7 @@ class YandexGoService {
     const requestId = `don-giulio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const url = `${this.baseUrl}/claims/create?request_id=${encodeURIComponent(requestId)}`;
     
-    console.log('Yandex Delivery createOrder request:', {
+    console.log('Yandex Dostavka createOrder request:', {
       url,
       requestId,
       payload: JSON.stringify(orderData, null, 2),
@@ -271,20 +271,20 @@ class YandexGoService {
         body: JSON.stringify(orderData),
       });
 
-      console.log('Yandex Delivery createOrder response:', {
+      console.log('Yandex Dostavka createOrder response:', {
         status: response.status,
         statusText: response.statusText,
       });
 
       if (!response.ok) {
         const error = await response.text();
-        console.error('Yandex Delivery createOrder error:', error);
-        throw new Error(`Yandex Delivery API error: ${response.status} - ${error}`);
+        console.error('Yandex Dostavka createOrder error:', error);
+        throw new Error(`Yandex Dostavka API error: ${response.status} - ${error}`);
       }
 
       return await response.json() as YandexDeliveryClaimResponse;
     } catch (error) {
-      console.error('Yandex Delivery createOrder error:', error);
+      console.error('Yandex Dostavka createOrder error:', error);
       throw error;
     }
   }
@@ -304,12 +304,12 @@ class YandexGoService {
 
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`Yandex Delivery API error: ${response.status} - ${error}`);
+        throw new Error(`Yandex Dostavka API error: ${response.status} - ${error}`);
       }
 
       return await response.json() as YandexDeliveryClaimResponse;
     } catch (error) {
-      console.error('Yandex Delivery getOrderStatus error:', error);
+      console.error('Yandex Dostavka getOrderStatus error:', error);
       throw error;
     }
   }
@@ -332,15 +332,15 @@ class YandexGoService {
 
       if (!response.ok) {
         const error = await response.text();
-        throw new Error(`Yandex Delivery API error: ${response.status} - ${error}`);
+        throw new Error(`Yandex Dostavka API error: ${response.status} - ${error}`);
       }
 
       return await response.json() as YandexDeliveryClaimResponse;
     } catch (error) {
-      console.error('Yandex Delivery cancelOrder error:', error);
+      console.error('Yandex Dostavka cancelOrder error:', error);
       throw error;
     }
   }
 }
 
-export const yandexGoService = new YandexGoService();
+export const yandexDostavkaService = new YandexDostavkaService();

@@ -2244,7 +2244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/admin/orders/:id/yandex-delivery-price - Calcola prezzo delivery Yandex Taxi (ADMIN ONLY)
   app.post("/api/admin/orders/:id/yandex-delivery-price", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
-      const { yandexGoService } = await import("./services/yandex-go");
+      const { yandexDostavkaService } = await import("./services/yandex-dostavka");
       
       const orderId = req.params.id;
       const order = await storage.getOrderById(orderId);
@@ -2268,7 +2268,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { pickupCoordinates, deliveryCoordinates } = schema.parse(req.body);
       
       // Chiama Yandex Delivery API
-      const priceData = await yandexGoService.checkPrice(
+      const priceData = await yandexDostavkaService.checkPrice(
         pickupCoordinates,
         deliveryCoordinates
       );
@@ -2297,7 +2297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/admin/orders/:id/yandex-delivery - Crea ordine delivery Yandex (ADMIN ONLY)
   app.post("/api/admin/orders/:id/yandex-delivery", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
-      const { yandexGoService } = await import("./services/yandex-go");
+      const { yandexDostavkaService } = await import("./services/yandex-dostavka");
       
       const orderId = req.params.id;
       const order = await storage.getOrderById(orderId);
@@ -2340,7 +2340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }];
       
       // Crea ordine Yandex Delivery
-      const yandexOrder = await yandexGoService.createOrder({
+      const yandexOrder = await yandexDostavkaService.createOrder({
         items,
         route_points: [
           {
@@ -2399,7 +2399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/admin/orders/:id/yandex-delivery-status - Ottieni status delivery Yandex (ADMIN ONLY)
   app.get("/api/admin/orders/:id/yandex-delivery-status", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
-      const { yandexGoService } = await import("./services/yandex-go");
+      const { yandexDostavkaService } = await import("./services/yandex-dostavka");
       
       const orderId = req.params.id;
       const order = await storage.getOrderById(orderId);
@@ -2412,7 +2412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No Yandex delivery associated with this order' });
       }
       
-      const status = await yandexGoService.getOrderStatus(order.yandexClaimId);
+      const status = await yandexDostavkaService.getOrderStatus(order.yandexClaimId);
       
       // Aggiorna lo status nell'ordine
       const updates: any = {
@@ -2439,7 +2439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/admin/orders/:id/yandex-delivery-cancel - Cancella delivery Yandex (ADMIN ONLY)
   app.post("/api/admin/orders/:id/yandex-delivery-cancel", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
-      const { yandexGoService } = await import("./services/yandex-go");
+      const { yandexDostavkaService } = await import("./services/yandex-dostavka");
       
       const orderId = req.params.id;
       const order = await storage.getOrderById(orderId);
@@ -2452,7 +2452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No Yandex delivery associated with this order' });
       }
       
-      const result = await yandexGoService.cancelOrder(order.yandexClaimId);
+      const result = await yandexDostavkaService.cancelOrder(order.yandexClaimId);
       
       // Aggiorna ordine
       await storage.updateOrder(orderId, {

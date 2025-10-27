@@ -1615,7 +1615,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
         />
       )}
 
-      {/* Yandex Go Delivery Dialog */}
+      {/* Yandex Dostavka Delivery Dialog */}
       {yandexDeliveryDialogOrder && (
         <YandexDeliveryDialog
           order={yandexDeliveryDialogOrder}

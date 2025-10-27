@@ -160,8 +160,8 @@ export const orders = pgTable("orders", {
   courierTrackingUrl: text("courier_tracking_url"),
   courierCalledAt: timestamp("courier_called_at"),
   
-  // Yandex Go Delivery specifics
-  yandexClaimId: text("yandex_claim_id"), // ID della richiesta Yandex Go
+  // Yandex Dostavka Delivery specifics
+  yandexClaimId: text("yandex_claim_id"), // ID della richiesta Yandex Dostavka
   yandexDeliveryPrice: decimal("yandex_delivery_price", { precision: 10, scale: 2 }), // Prezzo delivery Yandex
   yandexDeliveryStatus: text("yandex_delivery_status"), // Status del delivery Yandex
   yandexPerformerInfo: jsonb("yandex_performer_info").$type<{
@@ -171,7 +171,7 @@ export const orders = pgTable("orders", {
     carNumber?: string;
   }>(), // Info sul corriere Yandex
   
-  // Coordinate per Yandex Go (pickup e delivery)
+  // Coordinate per Yandex Dostavka (pickup e delivery)
   pickupCoordinates: text("pickup_coordinates").array(), // [longitude, latitude]
   deliveryCoordinates: text("delivery_coordinates").array(), // [longitude, latitude]
   
@@ -378,7 +378,7 @@ export const pickupAddresses = pgTable("pickup_addresses", {
   postalCode: text("postal_code"),
   dadataFiasId: text("dadata_fias_id"),
   
-  // Coordinate geografiche (richieste da Yandex Go)
+  // Coordinate geografiche (richieste da Yandex Dostavka)
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   
