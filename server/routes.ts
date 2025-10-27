@@ -2267,39 +2267,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { pickupCoordinates, deliveryCoordinates } = schema.parse(req.body);
       
-      // Chiama Yandex Taxi API
+      // Chiama Yandex Delivery API
       const priceData = await yandexGoService.checkPrice(
         pickupCoordinates,
         deliveryCoordinates
       );
       
-      // Trova l'opzione migliore (express o courier)
-      const bestOption = priceData.options?.find(opt => 
-        opt.class_name === 'express' || opt.class_name === 'courier'
-      ) || priceData.options?.[0];
+      // La risposta contiene già i dati formattati dal servizio
+      // priceData = { price, currency_rules, distance_meters, eta, offer_id, all_offers }
       
-      if (!bestOption) {
+      if (!priceData || !priceData.price) {
         return res.status(404).json({ 
-          error: 'No taxi options available',
-          message: 'Nessun taxi disponibile per questo percorso' 
+          error: 'No delivery options available',
+          message: 'Nessuna opzione di consegna disponibile per questo percorso' 
         });
       }
       
-      // Converti formato risposta per compatibilità con frontend
-      const response = {
-        price: bestOption.price.toString(),
-        currency_rules: {
-          code: priceData.currency || 'RUB',
-          sign: priceData.currency === 'RUB' ? '₽' : priceData.currency,
-        },
-        distance_meters: priceData.distance || 0,
-        eta: priceData.time || 0,
-        taxi_class: bestOption.class_name,
-        waiting_time: bestOption.waiting_time || 0,
-        all_options: priceData.options, // Include tutte le opzioni disponibili
-      };
-      
-      res.json(response);
+      res.json(priceData);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
