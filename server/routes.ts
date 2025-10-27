@@ -2283,6 +2283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      console.log('Yandex Delivery response to frontend:', JSON.stringify(priceData, null, 2));
       res.json(priceData);
     } catch (error) {
       if (error instanceof z.ZodError) {
