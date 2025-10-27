@@ -116,21 +116,25 @@ export class YandexGoService {
   private token = YANDEX_GO_TOKEN;
   private clientId = YANDEX_GO_CLIENT_ID;
 
-  private getHeaders(useClientId: boolean = false): Record<string, string> {
+  private getHeaders(apiVersion: 'v1' | 'v2' = 'v2'): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
     };
 
-    if (useClientId) {
-      // V1 API (check-price) usa X-B2B-Client-Id header
+    if (apiVersion === 'v1') {
+      // V1 API (check-price) usa ENTRAMBI Client-Id e Bearer token
       if (!this.clientId) {
         throw new Error('Yandex Go Client ID not configured (YANDEX_GO_CLIENT_ID)');
       }
+      if (!this.token) {
+        throw new Error('Yandex Go OAuth token not configured (YANDEX_GO_TOKEN)');
+      }
       headers['X-B2B-Client-Id'] = this.clientId.trim();
+      headers['Authorization'] = `Bearer ${this.token.trim()}`;
     } else {
-      // V2 API (claims/create, claims/accept, etc.) usa Bearer token
+      // V2 API (claims/create, claims/accept, etc.) usa solo Bearer token
       if (!this.token) {
         throw new Error('Yandex Go OAuth token not configured (YANDEX_GO_TOKEN)');
       }
@@ -142,16 +146,17 @@ export class YandexGoService {
 
   /**
    * Calculate delivery price (step 1)
-   * V1 API usa Bearer token come V2
+   * V1 API usa ENTRAMBI Client-Id e Bearer token
    */
   async checkPrice(request: YandexGoCheckPriceRequest): Promise<YandexGoCheckPriceResponse> {
     const url = `${this.baseUrl}/b2b/cargo/integration/v1/check-price`;
     
     console.log('Yandex Go checkPrice request to:', url);
+    console.log('Yandex Go checkPrice request body:', JSON.stringify(request, null, 2));
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: this.getHeaders(false), // false = usa Bearer token
+      headers: this.getHeaders('v1'), // v1 = usa Client-Id + Bearer token
       body: JSON.stringify(request),
     });
 
