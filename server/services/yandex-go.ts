@@ -6,12 +6,14 @@ const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_GO_TOKEN;
 const YANDEX_DELIVERY_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
 export interface YandexDeliveryItem {
+  quantity: number;
   weight: number;  // kg
   size: {
     length: number;  // meters
     width: number;   // meters
     height: number;  // meters
   };
+  pickup_point: number; // Indice del punto di prelievo nella route_points
 }
 
 export interface YandexDeliveryRoutePoint {

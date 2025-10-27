@@ -2333,6 +2333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           width: 0.20,   // 20cm = 0.20 metri
           height: 0.15,  // 15cm = 0.15 metri
         },
+        pickup_point: 0, // Prelievo dal primo punto della rotta (source)
       }];
       
       // Crea ordine Yandex Delivery
