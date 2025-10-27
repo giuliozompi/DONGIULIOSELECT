@@ -2348,7 +2348,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             visit_order: 1,
             coordinates: data.pickupCoordinates,
             type: 'source',
-            fullname: data.pickupAddress,
+            address: {
+              fullname: data.pickupAddress,
+              coordinates: data.pickupCoordinates,
+            },
             contact: data.pickupContact,
           },
           {
@@ -2356,7 +2359,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             visit_order: 2,
             coordinates: data.deliveryCoordinates,
             type: 'destination',
-            fullname: order.deliveryAddress,
+            address: {
+              fullname: order.deliveryAddress,
+              coordinates: data.deliveryCoordinates,
+            },
             contact: data.deliveryContact,
           },
         ],

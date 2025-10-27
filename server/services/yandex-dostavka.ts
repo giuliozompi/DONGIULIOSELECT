@@ -25,8 +25,11 @@ export interface YandexDeliveryRoutePoint {
   visit_order: number; // Ordine di visita (1, 2, 3, ...)
   coordinates: [number, number]; // [longitude, latitude]
   type: 'source' | 'destination';
-  fullname?: string;
-  contact?: {
+  address: {
+    fullname: string;
+    coordinates: [number, number];
+  };
+  contact: {
     name: string;
     phone: string;
     email?: string;
