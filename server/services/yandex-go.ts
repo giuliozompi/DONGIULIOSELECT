@@ -142,7 +142,7 @@ export class YandexGoService {
 
   /**
    * Calculate delivery price (step 1)
-   * Usa Bearer token come Yandex Dostavka
+   * V1 API usa X-B2B-Client-Id header
    */
   async checkPrice(request: YandexGoCheckPriceRequest): Promise<YandexGoCheckPriceResponse> {
     const url = `${this.baseUrl}/b2b/cargo/integration/v1/check-price`;
@@ -151,7 +151,7 @@ export class YandexGoService {
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: this.getHeaders(false), // false = usa Bearer token (come Yandex Dostavka)
+      headers: this.getHeaders(true), // true = usa X-B2B-Client-Id header per V1 API
       body: JSON.stringify(request),
     });
 
