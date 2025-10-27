@@ -2335,6 +2335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           height: 0.15,  // 15cm = 0.15 metri
         },
         pickup_point: 1, // point_id del punto di prelievo (source)
+        droppof_point: 2, // point_id del punto di consegna (destination) - typo ufficiale Yandex!
         cost_value: order.amount.toString(), // Valore dichiarato per assicurazione
         cost_currency: 'RUB',
       }];

@@ -15,7 +15,8 @@ export interface YandexDeliveryItem {
     width: number;   // meters
     height: number;  // meters
   };
-  pickup_point: number; // Indice del punto di prelievo nella route_points
+  pickup_point: number; // point_id del punto di prelievo (source)
+  droppof_point: number; // point_id del punto di consegna (destination) - nota: typo ufficiale Yandex
   cost_value: string; // Valore dichiarato per l'assicurazione
   cost_currency: string; // Valuta (es. RUB)
 }
