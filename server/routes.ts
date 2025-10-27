@@ -2585,7 +2585,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             coordinates: deliveryCoords,
             fullname: order.deliveryAddress
           }
-        ]
+        ],
+        requirements: {
+          taxi_classes: ['express'] // Campo obbligatorio secondo docs
+        }
       };
       
       const priceInfo = await yandexGoService.checkPrice(priceRequest);
