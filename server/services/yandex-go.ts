@@ -118,11 +118,14 @@ export class YandexGoService {
 
   private getHeaders(): Record<string, string> {
     if (!this.token) {
-      throw new Error('Yandex Go OAuth token not configured');
+      throw new Error('Yandex Go OAuth token not configured. Get token from Yandex Go B2B Corporate Dashboard (separate from Yandex Dostavka).');
     }
 
     const cleanToken = this.token.trim();
 
+    // Yandex Go usa endpoint: https://b2b.taxi.yandex.net
+    // Il token deve essere ottenuto dal dashboard Yandex Go B2B (NON Yandex Dostavka)
+    // Formato: y2_... (diverso dal token Dostavka)
     return {
       'Authorization': `Bearer ${cleanToken}`,
       'Content-Type': 'application/json',
@@ -153,6 +156,11 @@ export class YandexGoService {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Yandex Go checkPrice error:', errorText);
+      
+      if (response.status === 403) {
+        throw new Error(`Yandex Go API: Access denied (403). Verify that YANDEX_GO_TOKEN is valid and obtained from Yandex Go B2B Corporate Dashboard (not Yandex Dostavka). Token format should be: y2_...`);
+      }
+      
       throw new Error(`Yandex Go API error: ${response.status} - ${errorText}`);
     }
 

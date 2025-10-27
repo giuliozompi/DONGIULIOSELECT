@@ -98,21 +98,11 @@ class YandexDostavkaService {
 
   private getHeaders(): Record<string, string> {
     if (!this.token) {
-      console.error('Yandex Dostavka token missing:', {
-        hasToken: !!this.token,
-        tokenLength: this.token?.length || 0,
-      });
       throw new Error('Yandex Dostavka OAuth token not configured');
     }
 
     // Trim token per rimuovere spazi accidentali
     const cleanToken = this.token.trim();
-
-    console.log('Yandex Dostavka credentials check:', {
-      hasToken: !!cleanToken,
-      tokenLength: cleanToken.length,
-      tokenPrefix: cleanToken.substring(0, 10) + '...',
-    });
 
     // Formato Bearer token ufficiale Yandex Dostavka
     // Endpoint: https://b2b-authproxy.taxi.yandex.net
