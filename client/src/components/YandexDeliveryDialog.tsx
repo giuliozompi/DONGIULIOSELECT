@@ -265,6 +265,14 @@ export function YandexDeliveryDialog({
         throw new Error('Координаты не найдены');
       }
       
+      if (!pickupContactPhone || !pickupContactPhone.trim()) {
+        throw new Error('Укажите телефон контакта для pick-up адреса');
+      }
+      
+      if (!deliveryContactPhone || !deliveryContactPhone.trim()) {
+        throw new Error('Укажите телефон контакта для адреса доставки');
+      }
+      
       const res = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-delivery`, {
         pickupCoordinates: pickupCoords,
         deliveryCoordinates: deliveryCoords,

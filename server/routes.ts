@@ -2312,11 +2312,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pickupAddress: z.string(),
         pickupContact: z.object({
           name: z.string(),
-          phone: z.string(),
+          phone: z.string().min(1, 'Phone number is required').regex(/^[0-9 \(\)\-\+]+$/, 'Invalid phone format'),
         }),
         deliveryContact: z.object({
           name: z.string(),
-          phone: z.string(),
+          phone: z.string().min(1, 'Phone number is required').regex(/^[0-9 \(\)\-\+]+$/, 'Invalid phone format'),
         }),
         comment: z.string().optional(),
         offerId: z.string().optional(),

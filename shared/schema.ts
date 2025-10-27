@@ -390,7 +390,9 @@ export const pickupAddresses = pgTable("pickup_addresses", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertPickupAddressSchema = createInsertSchema(pickupAddresses).omit({ id: true, createdAt: true });
+export const insertPickupAddressSchema = createInsertSchema(pickupAddresses).omit({ id: true, createdAt: true }).extend({
+  contactPhone: z.string().min(1, 'Phone number is required').regex(/^[0-9 \(\)\-\+]+$/, 'Invalid phone format'),
+});
 export type InsertPickupAddress = z.infer<typeof insertPickupAddressSchema>;
 export type PickupAddress = typeof pickupAddresses.$inferSelect;
 
