@@ -20,6 +20,7 @@ export interface YandexDeliveryItem {
 }
 
 export interface YandexDeliveryRoutePoint {
+  point_id: number; // ID univoco del punto (1, 2, 3, ...)
   coordinates: [number, number]; // [longitude, latitude]
   type: 'source' | 'destination';
   fullname?: string;

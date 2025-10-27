@@ -2344,12 +2344,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items,
         route_points: [
           {
+            point_id: 1,
             coordinates: data.pickupCoordinates,
             type: 'source',
             fullname: data.pickupAddress,
             contact: data.pickupContact,
           },
           {
+            point_id: 2,
             coordinates: data.deliveryCoordinates,
             type: 'destination',
             fullname: order.deliveryAddress,
