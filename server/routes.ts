@@ -3085,7 +3085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orders = await storage.getAllOrders({});
       
       // Calcola statistiche per ogni cliente
-      const clientsWithStats = users.map(user => {
+      const clientsWithStats = await Promise.all(users.map(async user => {
         const userOrders = orders.filter(o => o.userId === user.id);
         const totalSpent = userOrders.reduce((sum, order) => sum + parseFloat(order.amount), 0);
         const totalOrders = userOrders.length;
@@ -3093,8 +3093,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0]
           : null;
         
+        // Ottieni indirizzi salvati del cliente
+        const userAddresses = await storage.getUserAddresses(user.id);
+        const primaryAddress = userAddresses.find(addr => addr.isDefault) || userAddresses[0] || null;
+        
         return {
           ...user,
+          primaryAddress: primaryAddress ? primaryAddress.fullAddress : null,
+          totalAddresses: userAddresses.length,
           stats: {
             totalOrders,
             totalSpent: totalSpent.toFixed(2),
@@ -3102,7 +3108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastOrderId: lastOrder?.id || null,
           }
         };
-      });
+      }));
       
       // Ordina per totale speso (decrescente)
       clientsWithStats.sort((a, b) => parseFloat(b.stats.totalSpent) - parseFloat(a.stats.totalSpent));

@@ -2516,6 +2516,8 @@ interface ClientWithStats {
   phone: string | null;
   email: string | null;
   customerName: string | null;
+  primaryAddress: string | null;
+  totalAddresses: number;
   stats: {
     totalOrders: number;
     totalSpent: string;
@@ -2678,6 +2680,7 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                 <TableRow>
                   <TableHead>Клиент</TableHead>
                   <TableHead>Контакты</TableHead>
+                  <TableHead>Адрес</TableHead>
                   <TableHead>Заказов</TableHead>
                   <TableHead>Всего потрачено</TableHead>
                   <TableHead>Последний заказ</TableHead>
@@ -2706,6 +2709,24 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       <div className="text-sm">
                         {client.phone && <p>{client.phone}</p>}
                         {client.email && <p className="text-muted-foreground">{client.email}</p>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm max-w-xs">
+                        {client.primaryAddress ? (
+                          <>
+                            <p className="truncate" title={client.primaryAddress}>
+                              {client.primaryAddress}
+                            </p>
+                            {client.totalAddresses > 1 && (
+                              <p className="text-muted-foreground text-xs">
+                                +{client.totalAddresses - 1} адрес
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-muted-foreground">—</p>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>{client.stats.totalOrders}</TableCell>
