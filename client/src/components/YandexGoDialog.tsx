@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save } from 'lucide-react';
+import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit } from 'lucide-react';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { Order, PickupAddress } from '@shared/schema';
 
@@ -58,6 +58,8 @@ export function YandexGoDialog({
   const [deliveryCoords, setDeliveryCoords] = useState<[number, number] | null>(null);
   const [deliveryContactName, setDeliveryContactName] = useState('');
   const [deliveryContactPhone, setDeliveryContactPhone] = useState('');
+  const [isEditingDelivery, setIsEditingDelivery] = useState(false);
+  const [isRecalculatingDelivery, setIsRecalculatingDelivery] = useState(false);
   
   // Structured address data for saving
   const [pickupStructured, setPickupStructured] = useState<{
@@ -114,6 +116,8 @@ export function YandexGoDialog({
     } else {
       setDeliveryCoords(null);
     }
+    
+    setIsEditingDelivery(false);
   }, [order]);
   
   // Handle pickup address change from dropdown
@@ -151,6 +155,65 @@ export function YandexGoDialog({
         parseFloat(suggestion.geoLon),
         parseFloat(suggestion.geoLat)
       ]);
+    }
+  };
+  
+  // Handle delivery address selection from DaData
+  const handleDeliveryAddressSelect = (suggestion: AddressSuggestion) => {
+    setDeliveryAddress(suggestion.fullAddress);
+    
+    if (suggestion.geoLat && suggestion.geoLon) {
+      const coords: [number, number] = [
+        parseFloat(suggestion.geoLon),
+        parseFloat(suggestion.geoLat)
+      ];
+      setDeliveryCoords(coords);
+    }
+  };
+  
+  // Recalculate delivery coordinates from current address using DaData
+  const recalculateDeliveryCoords = async () => {
+    setIsRecalculatingDelivery(true);
+    try {
+      const response = await fetch(`/api/address/suggest?query=${encodeURIComponent(deliveryAddress)}`);
+      const data = await response.json();
+      
+      if (data.suggestions && data.suggestions.length > 0) {
+        const suggestion = data.suggestions[0];
+        
+        if (suggestion.geoLat && suggestion.geoLon) {
+          const coords: [number, number] = [
+            parseFloat(suggestion.geoLon),
+            parseFloat(suggestion.geoLat)
+          ];
+          setDeliveryCoords(coords);
+          
+          // Save coordinates to order
+          await apiRequest('PATCH', `/api/admin/orders/${order.id}`, {
+            deliveryLatitude: coords[1].toString(),
+            deliveryLongitude: coords[0].toString(),
+          });
+          
+          queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+          
+          toast({
+            title: 'Координаты найдены',
+            description: 'Координаты доставки успешно рассчитаны и сохранены',
+          });
+        } else {
+          throw new Error('DaData не вернул координаты для этого адреса');
+        }
+      } else {
+        throw new Error('Адрес не найден в DaData');
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось рассчитать координаты',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRecalculatingDelivery(false);
     }
   };
   
@@ -419,20 +482,57 @@ export function YandexGoDialog({
           
           {/* Delivery Address Section */}
           <div className="space-y-4">
-            <h3 className="font-semibold flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              Адрес доставки
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                Адрес доставки
+              </h3>
+              {!isEditingDelivery && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsEditingDelivery(true)}
+                  data-testid="button-edit-delivery"
+                >
+                  <Edit className="w-3 h-3 mr-1" />
+                  Изменить
+                </Button>
+              )}
+            </div>
             
             <div className="space-y-2">
-              <Label>Адрес</Label>
-              <Input
-                value={deliveryAddress}
-                readOnly
-                className="bg-muted"
-                data-testid="input-delivery-address"
-              />
+              <Label data-testid="label-delivery-address">Адрес</Label>
+              {isEditingDelivery ? (
+                <AddressAutocomplete
+                  value={deliveryAddress}
+                  onChange={setDeliveryAddress}
+                  onSelect={handleDeliveryAddressSelect}
+                  placeholder="Начните вводить адрес..."
+                  testId="input-delivery-address-autocomplete"
+                />
+              ) : (
+                <Input
+                  value={deliveryAddress}
+                  readOnly
+                  className="bg-muted"
+                  data-testid="input-delivery-address"
+                />
+              )}
             </div>
+            
+            {isEditingDelivery && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setDeliveryAddress(order.deliveryAddress);
+                  setIsEditingDelivery(false);
+                }}
+                data-testid="button-cancel-delivery-edit"
+              >
+                Отмена
+              </Button>
+            )}
             
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -455,6 +555,25 @@ export function YandexGoDialog({
                 />
               </div>
             </div>
+            
+            {!deliveryCoords && (
+              <div className="p-3 border border-amber-500/50 rounded-md bg-amber-500/10">
+                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
+                  ⚠️ Координаты доставки отсутствуют. Нажмите кнопку ниже, чтобы рассчитать их из адреса.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={recalculateDeliveryCoords}
+                  disabled={isRecalculatingDelivery}
+                  data-testid="button-recalculate-delivery-coords"
+                >
+                  {isRecalculatingDelivery && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Рассчитать координаты из адреса
+                </Button>
+              </div>
+            )}
           </div>
           
           {/* Price Info */}
