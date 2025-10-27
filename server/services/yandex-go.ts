@@ -116,26 +116,33 @@ export class YandexGoService {
   private token = YANDEX_GO_TOKEN;
   private clientId = YANDEX_GO_CLIENT_ID;
 
-  private getHeaders(): Record<string, string> {
-    if (!this.token) {
-      throw new Error('Yandex Go OAuth token not configured. Get token from Yandex Go B2B Corporate Dashboard (separate from Yandex Dostavka).');
-    }
-
-    const cleanToken = this.token.trim();
-
-    // Yandex Go usa endpoint: https://b2b.taxi.yandex.net
-    // Il token deve essere ottenuto dal dashboard Yandex Go B2B (NON Yandex Dostavka)
-    // Formato: y2_... (diverso dal token Dostavka)
-    return {
-      'Authorization': `Bearer ${cleanToken}`,
+  private getHeaders(useClientId: boolean = false): Record<string, string> {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
     };
+
+    if (useClientId) {
+      // V1 API (check-price) usa X-B2B-Client-Id header
+      if (!this.clientId) {
+        throw new Error('Yandex Go Client ID not configured (YANDEX_GO_CLIENT_ID)');
+      }
+      headers['X-B2B-Client-Id'] = this.clientId.trim();
+    } else {
+      // V2 API (claims/create, claims/accept, etc.) usa Bearer token
+      if (!this.token) {
+        throw new Error('Yandex Go OAuth token not configured (YANDEX_GO_TOKEN)');
+      }
+      headers['Authorization'] = `Bearer ${this.token.trim()}`;
+    }
+
+    return headers;
   }
 
   /**
    * Calculate delivery price (step 1)
+   * V1 API usa X-B2B-Client-Id invece di Bearer token
    */
   async checkPrice(request: YandexGoCheckPriceRequest): Promise<YandexGoCheckPriceResponse> {
     const url = `${this.baseUrl}/b2b/cargo/integration/v1/check-price`;
@@ -144,7 +151,7 @@ export class YandexGoService {
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(true), // true = usa Client ID invece di Bearer token
       body: JSON.stringify(request),
     });
 
@@ -158,7 +165,7 @@ export class YandexGoService {
       console.error('Yandex Go checkPrice error:', errorText);
       
       if (response.status === 403) {
-        throw new Error(`Yandex Go API: Access denied (403). Verify that YANDEX_GO_TOKEN is valid and obtained from Yandex Go B2B Corporate Dashboard (not Yandex Dostavka). Token format should be: y2_...`);
+        throw new Error(`Yandex Go API: Access denied (403). Verify that YANDEX_GO_CLIENT_ID is configured correctly. Get Client ID from Yandex Go B2B Corporate Dashboard.`);
       }
       
       throw new Error(`Yandex Go API error: ${response.status} - ${errorText}`);
