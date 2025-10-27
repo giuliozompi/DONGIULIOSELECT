@@ -2564,7 +2564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? [parseFloat(order.deliveryLongitude), parseFloat(order.deliveryLatitude)]
         : [0, 0]; // fallback se coordinate non disponibili
       
-      // Calcola prezzo con check-price
+      // Calcola prezzo con API V2 /offers/calculate (stesso formato di Yandex Dostavka)
       const priceRequest = {
         items: [{
           quantity: 1,
@@ -2578,11 +2578,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         route_points: [
           {
             coordinates: pickupCoords,
-            fullname: pickupAddress
+            type: 'source' as const
           },
           {
             coordinates: deliveryCoords,
-            fullname: order.deliveryAddress
+            type: 'destination' as const
           }
         ]
       };
