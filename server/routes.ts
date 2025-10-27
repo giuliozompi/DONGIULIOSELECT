@@ -462,19 +462,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const addressId = req.params.id;
       
+      console.log('PATCH pickup address - body:', JSON.stringify(req.body, null, 2));
+      
       const addressSchema = z.object({
         label: z.string().min(1).optional(),
         fullAddress: z.string().min(10).optional(),
-        city: z.string().optional(),
-        street: z.string().optional(),
-        building: z.string().optional(),
-        flat: z.string().optional(),
-        postalCode: z.string().optional(),
-        dadataFiasId: z.string().optional(),
-        latitude: z.string().optional(),
-        longitude: z.string().optional(),
-        contactName: z.string().optional(),
-        contactPhone: z.string().regex(/^[0-9 \(\)\-\+]*$/, 'Invalid phone format').optional().or(z.literal('')),
+        city: z.string().optional().nullable(),
+        street: z.string().optional().nullable(),
+        building: z.string().optional().nullable(),
+        flat: z.string().optional().nullable(),
+        postalCode: z.string().optional().nullable(),
+        dadataFiasId: z.string().optional().nullable(),
+        latitude: z.string().optional().nullable(),
+        longitude: z.string().optional().nullable(),
+        contactName: z.string().optional().nullable(),
+        contactPhone: z.string().optional().nullable(),
         isDefault: z.boolean().optional(),
       });
       
@@ -489,6 +491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(address);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error('Validation error:', JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
       console.error('Error updating pickup address:', error);
