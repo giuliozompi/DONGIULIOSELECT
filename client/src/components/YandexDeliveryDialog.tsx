@@ -11,6 +11,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit } from 'lucide-react';
@@ -41,6 +48,7 @@ export function YandexDeliveryDialog({
   const { toast } = useToast();
   
   // Pickup address state
+  const [selectedPickupId, setSelectedPickupId] = useState<string>('');
   const [pickupAddress, setPickupAddress] = useState('');
   const [pickupCoords, setPickupCoords] = useState<[number, number] | null>(null);
   const [pickupContactName, setPickupContactName] = useState('');
@@ -75,9 +83,10 @@ export function YandexDeliveryDialog({
   
   // Initialize with default pickup address or show form
   useEffect(() => {
-    if (pickupAddresses.length > 0 && !pickupAddress) {
+    if (pickupAddresses.length > 0 && !selectedPickupId) {
       // Solo inizializza se non c'è già un indirizzo selezionato
       const defaultAddr = pickupAddresses.find(addr => addr.isDefault) || pickupAddresses[0];
+      setSelectedPickupId(defaultAddr.id);
       setPickupAddress(defaultAddr.fullAddress);
       setPickupContactName(defaultAddr.contactName || '');
       setPickupContactPhone(defaultAddr.contactPhone || '');
@@ -90,13 +99,13 @@ export function YandexDeliveryDialog({
         ]);
       }
       setShowPickupForm(false);
-    } else if (pickupAddresses.length === 0 && !pickupAddress) {
+    } else if (pickupAddresses.length === 0 && !selectedPickupId) {
       // No pickup addresses exist - show form to create one
       setShowPickupForm(true);
       setPickupLabel('Магазин Don Giulio');
       setPickupContactName('Don Giulio Select');
     }
-  }, [pickupAddresses, pickupAddress]);
+  }, [pickupAddresses, selectedPickupId]);
   
   // Initialize delivery address and coordinates from order
   useEffect(() => {
@@ -115,6 +124,25 @@ export function YandexDeliveryDialog({
     
     setIsEditingDelivery(false);
   }, [order]);
+  
+  // Handle pickup address change from dropdown
+  const handlePickupChange = (addressId: string) => {
+    const selectedAddr = pickupAddresses.find(addr => addr.id === addressId);
+    if (!selectedAddr) return;
+    
+    setSelectedPickupId(selectedAddr.id);
+    setPickupAddress(selectedAddr.fullAddress);
+    setPickupContactName(selectedAddr.contactName || '');
+    setPickupContactPhone(selectedAddr.contactPhone || '');
+    setPickupLabel(selectedAddr.label);
+    
+    if (selectedAddr.latitude && selectedAddr.longitude) {
+      setPickupCoords([
+        parseFloat(selectedAddr.longitude),
+        parseFloat(selectedAddr.latitude)
+      ]);
+    }
+  };
   
   // Handle address selection from DaData (for pickup)
   const handlePickupAddressSelect = (suggestion: AddressSuggestion) => {
@@ -439,6 +467,27 @@ export function YandexDeliveryDialog({
                 </>
               ) : (
                 <>
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup-select" data-testid="label-pickup-select">
+                      Выберите адрес pick-up
+                    </Label>
+                    <Select
+                      value={selectedPickupId}
+                      onValueChange={handlePickupChange}
+                    >
+                      <SelectTrigger id="pickup-select" data-testid="select-pickup">
+                        <SelectValue placeholder="Выберите адрес" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pickupAddresses.map((addr) => (
+                          <SelectItem key={addr.id} value={addr.id} data-testid={`select-option-pickup-${addr.id}`}>
+                            {addr.label} {addr.contactPhone ? `- ${addr.contactPhone}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
                   <div className="space-y-2">
                     <Label data-testid="label-pickup-current">Адрес</Label>
                     <Input
