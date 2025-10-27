@@ -78,28 +78,23 @@ class YandexGoService {
   private clientId = YANDEX_DELIVERY_CLIENT_ID;
 
   private getHeaders(): Record<string, string> {
-    if (!this.token || !this.clientId) {
-      console.error('Yandex Delivery credentials missing:', {
+    if (!this.token) {
+      console.error('Yandex Delivery token missing:', {
         hasToken: !!this.token,
-        hasClientId: !!this.clientId,
         tokenLength: this.token?.length || 0,
-        clientIdLength: this.clientId?.length || 0,
       });
-      throw new Error('Yandex Delivery OAuth token or client_id not configured');
+      throw new Error('Yandex Delivery OAuth token not configured');
     }
 
     console.log('Yandex Delivery credentials check:', {
       hasToken: !!this.token,
-      hasClientId: !!this.clientId,
       tokenLength: this.token?.length,
-      clientIdLength: this.clientId?.length,
       tokenPrefix: this.token?.substring(0, 10) + '...',
-      clientIdPrefix: this.clientId?.substring(0, 10) + '...',
     });
 
-    // Formato OAuth ufficiale Yandex Delivery
+    // Formato Bearer token (ufficiale Yandex Delivery)
     return {
-      'Authorization': `OAuth oauth_token="${this.token}", oauth_client_id="${this.clientId}"`,
+      'Authorization': `Bearer ${this.token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
