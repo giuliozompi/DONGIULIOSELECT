@@ -13,6 +13,21 @@ import { randomUUID } from "crypto";
 import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ==================== NO-CACHE MIDDLEWARE FOR ADMIN ROUTES ====================
+  // Previene caching HTTP 304 per dati admin mutabili
+  app.use('/api/admin', (_req, res, next) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
+    next();
+  });
+  
+  // Disabilita ETags per route admin (opzionale ma raccomandato)
+  app.set('etag', false);
+  
   // ==================== CATEGORIE ====================
   
   // GET /api/categories - Ottieni tutte le categorie

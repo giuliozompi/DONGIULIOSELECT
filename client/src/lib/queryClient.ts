@@ -66,9 +66,15 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const url = queryKey.join("/") as string;
+    
+    // Disabilita cache del browser per route admin mutabili
+    const isAdminRoute = url.includes('/api/admin');
+    
+    const res = await fetch(url, {
       headers: getAuthHeaders(),
       credentials: "include",
+      cache: isAdminRoute ? 'no-store' : 'default',
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
