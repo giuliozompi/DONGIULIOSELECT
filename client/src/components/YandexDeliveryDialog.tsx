@@ -51,6 +51,8 @@ export function YandexDeliveryDialog({
   // Delivery address state
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryCoords, setDeliveryCoords] = useState<[number, number] | null>(null);
+  const [deliveryContactName, setDeliveryContactName] = useState('');
+  const [deliveryContactPhone, setDeliveryContactPhone] = useState('');
   const [isEditingDelivery, setIsEditingDelivery] = useState(false);
   const [isRecalculatingDelivery, setIsRecalculatingDelivery] = useState(false);
   
@@ -98,6 +100,8 @@ export function YandexDeliveryDialog({
   // Initialize delivery address and coordinates from order
   useEffect(() => {
     setDeliveryAddress(order.deliveryAddress);
+    setDeliveryContactName(order.customerName);
+    setDeliveryContactPhone(order.customerPhone);
     
     if (order.deliveryLongitude && order.deliveryLatitude) {
       setDeliveryCoords([
@@ -444,22 +448,36 @@ export function YandexDeliveryDialog({
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label data-testid="label-pickup-current-name">Контакт</Label>
+                      <Label htmlFor="pickup-current-name" data-testid="label-pickup-current-name">
+                        <User className="w-3 h-3 inline mr-1" />
+                        Контакт
+                      </Label>
                       <Input
+                        id="pickup-current-name"
                         data-testid="input-pickup-current-name"
                         value={pickupContactName}
-                        disabled
-                        className="bg-muted"
+                        onChange={(e) => setPickupContactName(e.target.value)}
+                        placeholder="Don Giulio Select"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label data-testid="label-pickup-current-phone">Телефон</Label>
+                      <Label htmlFor="pickup-current-phone" data-testid="label-pickup-current-phone">
+                        <Phone className="w-3 h-3 inline mr-1" />
+                        Телефон (обязательно)
+                      </Label>
                       <Input
+                        id="pickup-current-phone"
                         data-testid="input-pickup-current-phone"
                         value={pickupContactPhone}
-                        disabled
-                        className="bg-muted"
+                        onChange={(e) => setPickupContactPhone(e.target.value)}
+                        placeholder="+7 (900) 123-45-67"
+                        className={!pickupContactPhone ? 'border-destructive' : ''}
                       />
+                      {!pickupContactPhone && (
+                        <p className="text-xs text-destructive">
+                          Укажите телефон для связи с курьером
+                        </p>
+                      )}
                     </div>
                   </div>
                   
