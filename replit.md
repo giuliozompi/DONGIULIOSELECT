@@ -20,13 +20,23 @@ The backend is an Express.js application in TypeScript, providing a RESTful API 
 - **Product Marking System**: Ensures regulatory compliance by tracking unique marking codes for unit-based products, integrated with a sequential acquisition workflow optimized for scanner operators. Features real-time validation, duplicate handling, and an audit trail. Smart auto-open logic: маркировка dialog opens automatically only when codes are incomplete; manual "Маркировка" button always available for viewing/acquiring codes. Saved codes are protected from accidental modification: a dedicated "Edit" button (pencil icon) must be clicked to enable editing mode. Compact text display (text-xs) with 24-character limit for optimal readability. All fields are always visible, with saved codes locked by default.
 - **Gamification**: A fortune wheel system that automatically rewards users with spin tokens upon order completion, with idempotent and race-safe token assignment.
 - **Payment Flow**: Supports YooKassa Online Payment (with 54-ФЗ compliance and marking code transmission) and Cash on Delivery. Online payment links are sent after order preparation.
-- **Yandex Dostavka Delivery**: Integrated courier service enabling admins to calculate delivery costs, create delivery orders, track couriers in real-time, and view delivery status. Features include:
-  - **Pick-up Address Management**: Admins can save multiple pick-up addresses with full DaData integration for address validation and GPS coordinate extraction
-  - **Automatic Coordinate Calculation**: GPS coordinates for both pickup and delivery locations are automatically extracted from DaData API responses
-  - **Real-time Price Calculation**: Uses Yandex Dostavka API v2 to fetch dynamic pricing with multiple delivery options (express, 30min longer, 60min longer, 4-hour delivery)
-  - **Distance & ETA Display**: Calculates delivery distance using Haversine formula and estimated time from API intervals
-  - **Smart Offer Selection**: Automatically uses the best available offer (payload) when creating delivery orders
-  - **Delivery Creation**: One-click courier dispatch with automatic order status tracking and claim ID storage
+- **Dual Delivery System**: Two independent courier services with separate tracking and management:
+  - **Yandex Dostavka**: Express courier delivery service (API v2 via https://b2b-authproxy.taxi.yandex.net) with features:
+    - Real-time price calculation with multiple delivery options (express, 30min longer, 60min longer, 4-hour delivery)
+    - Distance & ETA display using Haversine formula and API time intervals
+    - Smart offer selection - automatically uses the best available offer (payload)
+    - Automatic order status tracking with claim ID storage
+    - Dedicated admin button and status badge
+  - **Yandex Go**: General taxi-based delivery service (API v2 via https://b2b.taxi.yandex.net) with features:
+    - Real-time price calculation with cargo specifications (size, weight)
+    - Flexible delivery options with customizable requirements (taxi class, cargo type)
+    - Independent tracking system with separate claim IDs and status fields
+    - Courier acceptance workflow with real-time status updates
+    - Dedicated admin button and status badge
+  - **Shared Infrastructure**:
+    - Pick-up Address Management: Admins can save multiple pick-up addresses with full DaData integration for address validation and GPS coordinate extraction
+    - Automatic Coordinate Calculation: GPS coordinates for both pickup and delivery locations are automatically extracted from DaData API responses
+    - Both services support claim cancellation, info retrieval, and real-time performer tracking
 
 ### System Design Choices
 - **Database**: PostgreSQL with Drizzle ORM for storing all application data, including users, products, orders, and gamification data.
@@ -38,7 +48,8 @@ The backend is an Express.js application in TypeScript, providing a RESTful API 
 1.  **Telegram WebApp Platform**: For native app hosting, authentication, and UI/UX integration.
 2.  **OpenRouter AI API**: Powers the AI product assistant (Anthropic Claude 3 Haiku) for recommendations.
 3.  **YooKassa Payment Gateway**: For online payment processing, supporting various Russian payment methods and 54-ФЗ compliance.
-4.  **Yandex Dostavka Delivery API**: Express courier delivery service with real-time tracking, pricing estimates, and automated order management.
-5.  **DaData.ru Address Autocomplete**: For Russian address validation and standardization.
-6.  **Neon Database**: Serverless PostgreSQL hosting.
-7.  **NPM Dependencies**: Libraries for UI (Radix UI, Tailwind CSS), forms (react-hook-form, Zod), and data persistence (Drizzle ORM).
+4.  **Yandex Dostavka API v2**: Express courier delivery service (https://b2b-authproxy.taxi.yandex.net) with real-time tracking, pricing estimates, and automated order management.
+5.  **Yandex Go API v2**: General taxi-based delivery service (https://b2b.taxi.yandex.net) with cargo delivery, flexible requirements, and real-time courier tracking.
+6.  **DaData.ru Address Autocomplete**: For Russian address validation and standardization.
+7.  **Neon Database**: Serverless PostgreSQL hosting.
+8.  **NPM Dependencies**: Libraries for UI (Radix UI, Tailwind CSS), forms (react-hook-form, Zod), and data persistence (Drizzle ORM).
