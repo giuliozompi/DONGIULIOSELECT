@@ -146,10 +146,10 @@ export class YandexGoService {
 
   /**
    * Calculate delivery price (step 1)
-   * API V2 usa solo Bearer token (come Yandex Dostavka)
+   * API V2 usa /offers/calculate (come Yandex Dostavka)
    */
   async checkPrice(request: YandexGoCheckPriceRequest): Promise<YandexGoCheckPriceResponse> {
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/check-price`;
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/offers/calculate`;
     
     const headers = this.getHeaders('v2'); // V2 = solo Bearer token
     
