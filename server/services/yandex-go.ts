@@ -114,7 +114,8 @@ class YandexGoService {
     const url = `${this.baseUrl}/offers/calculate`;
     
     // Prepara items per Yandex Delivery (dimensioni in METRI)
-    const deliveryItems: YandexDeliveryItem[] = [{
+    const deliveryItems = [{
+      quantity: 1,
       weight: 2, // Default 2kg per piccoli ordini food
       size: {
         length: 0.30,  // 30cm = 0.30 metri
