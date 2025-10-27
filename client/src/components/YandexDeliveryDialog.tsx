@@ -312,13 +312,14 @@ export function YandexDeliveryDialog({
         pickupCoordinates: pickupCoords,
         deliveryCoordinates: deliveryCoords,
         pickupAddress,
+        deliveryAddress, // Invia l'indirizzo di consegna digitato dall'utente
         pickupContact: {
           name: pickupContactName,
           phone: pickupContactPhone,
         },
         deliveryContact: {
           name: order.customerName,
-          phone: order.customerPhone,
+          phone: deliveryContactPhone, // Usa il telefono del campo delivery contact
         },
       });
       return await res.json();

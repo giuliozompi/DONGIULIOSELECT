@@ -2310,6 +2310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pickupCoordinates: z.tuple([z.number(), z.number()]),
         deliveryCoordinates: z.tuple([z.number(), z.number()]),
         pickupAddress: z.string(),
+        deliveryAddress: z.string(), // Indirizzo di consegna digitato dall'admin
         pickupContact: z.object({
           name: z.string(),
           phone: z.string().min(1, 'Phone number is required').regex(/^[0-9 \(\)\-\+]+$/, 'Invalid phone format'),
@@ -2361,7 +2362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             coordinates: data.deliveryCoordinates,
             type: 'destination',
             address: {
-              fullname: order.deliveryAddress,
+              fullname: data.deliveryAddress, // Usa l'indirizzo digitato dall'admin, non quello vecchio del DB
               coordinates: data.deliveryCoordinates,
             },
             contact: data.deliveryContact,
