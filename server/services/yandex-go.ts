@@ -174,12 +174,21 @@ class YandexGoService {
         throw new Error('No delivery offers available');
       }
 
+      // Estrai prezzo e valuta dal campo price
+      const currency = bestOffer.price?.currency || 'RUB';
+      const totalPrice = bestOffer.price?.total_price || bestOffer.price?.price || '0';
+
       return {
-        price: bestOffer.price,
-        currency_rules: bestOffer.currency_rules,
-        distance_meters: bestOffer.distance,
-        eta: bestOffer.eta,
-        offer_id: bestOffer.offer_id,
+        price: totalPrice,
+        currency_rules: {
+          code: currency,
+          sign: currency === 'RUB' ? '₽' : currency,
+          template: '$VALUE$ $SIGN$$CURRENCY$',
+          text: currency,
+        },
+        distance_meters: bestOffer.distance || 0,
+        eta: bestOffer.eta || 0,
+        offer_id: bestOffer.offer_id || '',
         all_offers: data.offers,
       };
     } catch (error) {
