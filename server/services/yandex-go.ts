@@ -2,14 +2,15 @@
 // Yandex Delivery API - Express/Courier service for small packages
 // Docs: https://yandex.com/support/delivery-profile/en/api/express/overview
 const YANDEX_DELIVERY_BASE_URL = 'https://b2b.taxi.yandex.net/b2b/cargo/integration/v2';
-const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_GO_TOKEN; // OAuth Bearer token
+const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_GO_TOKEN;
+const YANDEX_DELIVERY_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
 export interface YandexDeliveryItem {
   weight: number;  // kg
-  dimensions: {
-    length: number;  // cm
-    width: number;   // cm
-    height: number;  // cm
+  size: {
+    length: number;  // meters
+    width: number;   // meters
+    height: number;  // meters
   };
 }
 
@@ -74,24 +75,31 @@ export interface YandexDeliveryClaimResponse {
 class YandexGoService {
   private baseUrl = YANDEX_DELIVERY_BASE_URL;
   private token = YANDEX_DELIVERY_TOKEN;
+  private clientId = YANDEX_DELIVERY_CLIENT_ID;
 
   private getHeaders(): Record<string, string> {
-    if (!this.token) {
-      console.error('Yandex Delivery token missing:', {
+    if (!this.token || !this.clientId) {
+      console.error('Yandex Delivery credentials missing:', {
         hasToken: !!this.token,
+        hasClientId: !!this.clientId,
         tokenLength: this.token?.length || 0,
+        clientIdLength: this.clientId?.length || 0,
       });
-      throw new Error('Yandex Delivery OAuth token not configured');
+      throw new Error('Yandex Delivery OAuth token or client_id not configured');
     }
 
     console.log('Yandex Delivery credentials check:', {
       hasToken: !!this.token,
+      hasClientId: !!this.clientId,
       tokenLength: this.token?.length,
+      clientIdLength: this.clientId?.length,
       tokenPrefix: this.token?.substring(0, 10) + '...',
+      clientIdPrefix: this.clientId?.substring(0, 10) + '...',
     });
 
+    // Formato OAuth ufficiale Yandex Delivery
     return {
-      'Authorization': `Bearer ${this.token}`,
+      'Authorization': `OAuth oauth_token="${this.token}", oauth_client_id="${this.clientId}"`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
@@ -110,13 +118,13 @@ class YandexGoService {
   ): Promise<any> {
     const url = `${this.baseUrl}/offers/calculate`;
     
-    // Prepara items per Yandex Delivery
+    // Prepara items per Yandex Delivery (dimensioni in METRI)
     const deliveryItems: YandexDeliveryItem[] = [{
       weight: 2, // Default 2kg per piccoli ordini food
-      dimensions: {
-        length: 30,  // 30cm
-        width: 20,   // 20cm
-        height: 15,  // 15cm
+      size: {
+        length: 0.30,  // 30cm = 0.30 metri
+        width: 0.20,   // 20cm = 0.20 metri
+        height: 0.15,  // 15cm = 0.15 metri
       }
     }];
     
