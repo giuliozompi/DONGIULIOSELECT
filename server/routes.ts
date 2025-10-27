@@ -2335,6 +2335,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           height: 0.15,  // 15cm = 0.15 metri
         },
         pickup_point: 0, // Prelievo dal primo punto della rotta (source)
+        cost_value: order.amount.toString(), // Valore dichiarato per assicurazione
+        cost_currency: 'RUB',
       }];
       
       // Crea ordine Yandex Delivery

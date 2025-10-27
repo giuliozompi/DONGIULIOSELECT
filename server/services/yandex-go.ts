@@ -15,6 +15,8 @@ export interface YandexDeliveryItem {
     height: number;  // meters
   };
   pickup_point: number; // Indice del punto di prelievo nella route_points
+  cost_value: string; // Valore dichiarato per l'assicurazione
+  cost_currency: string; // Valuta (es. RUB)
 }
 
 export interface YandexDeliveryRoutePoint {
