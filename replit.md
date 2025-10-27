@@ -21,7 +21,7 @@ The backend is an Express.js application in TypeScript, providing a RESTful API 
 - **Gamification**: A fortune wheel system that automatically rewards users with spin tokens upon order completion, with idempotent and race-safe token assignment.
 - **Payment Flow**: Supports YooKassa Online Payment (with 54-ФЗ compliance and marking code transmission) and Cash on Delivery. Online payment links are sent after order preparation.
 - **Dual Delivery System**: Two independent courier services with separate tracking and management:
-  - **Yandex Dostavka**: Express courier delivery service (API v2 via https://b2b-authproxy.taxi.yandex.net) with features:
+  - **Yandex Dostavka**: Express courier delivery service (API v2 via https://b2b.taxi.yandex.net) with features:
     - Real-time price calculation with multiple delivery options (express, 30min longer, 60min longer, 4-hour delivery)
     - Distance & ETA display using Haversine formula and API time intervals
     - Smart offer selection - automatically uses the best available offer (payload)
@@ -48,8 +48,8 @@ The backend is an Express.js application in TypeScript, providing a RESTful API 
 1.  **Telegram WebApp Platform**: For native app hosting, authentication, and UI/UX integration.
 2.  **OpenRouter AI API**: Powers the AI product assistant (Anthropic Claude 3 Haiku) for recommendations.
 3.  **YooKassa Payment Gateway**: For online payment processing, supporting various Russian payment methods and 54-ФЗ compliance.
-4.  **Yandex Dostavka API v2**: Express courier delivery service (https://b2b-authproxy.taxi.yandex.net) with real-time tracking, pricing estimates, and automated order management. **Token source**: Yandex Delivery Corporate Dashboard (OAuth format). **Secret**: `YANDEX_DOSTAVKA_TOKEN`.
-5.  **Yandex Go API v2**: General taxi-based delivery service (https://b2b.taxi.yandex.net) with cargo delivery, flexible requirements, and real-time courier tracking. **Token source**: Yandex Go B2B Corporate Dashboard (separate from Dostavka, format: y2_...). **Secret**: `YANDEX_GO_TOKEN`. **Important**: Yandex Go and Yandex Dostavka require different OAuth tokens obtained from separate corporate dashboards, even though both use similar API endpoints.
+4.  **Yandex Dostavka API v2**: Express courier delivery service (https://b2b.taxi.yandex.net) with real-time tracking, pricing estimates, and automated order management. **Token source**: Yandex Delivery Corporate Dashboard → Интеграции → Получить токен. **Secret**: `YANDEX_DOSTAVKA_TOKEN`.
+5.  **Yandex Go API v2**: General taxi-based delivery service (https://b2b.taxi.yandex.net) with cargo delivery, flexible requirements, and real-time courier tracking. **Token source**: Yandex Go B2B Corporate Dashboard (separate login from Dostavka). **Secret**: `YANDEX_GO_TOKEN`. **Important**: Both services use the same API endpoint (https://b2b.taxi.yandex.net) but require different OAuth tokens obtained from separate corporate dashboards with different login credentials.
 6.  **DaData.ru Address Autocomplete**: For Russian address validation and standardization.
 7.  **Neon Database**: Serverless PostgreSQL hosting.
 8.  **NPM Dependencies**: Libraries for UI (Radix UI, Tailwind CSS), forms (react-hook-form, Zod), and data persistence (Drizzle ORM).

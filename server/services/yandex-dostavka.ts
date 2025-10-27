@@ -1,8 +1,8 @@
 
 // Yandex Dostavka API - Express/Courier service for small packages
-// Docs: https://yandex.com/support/delivery-profile/en/api/express/overview
-// Production endpoint: https://b2b-authproxy.taxi.yandex.net
-const YANDEX_DELIVERY_BASE_URL = 'https://b2b-authproxy.taxi.yandex.net/b2b/cargo/integration/v2';
+// Docs: https://yandex.ru/support/delivery-profile/ru/api/express/quickstart
+// Production endpoint: https://b2b.taxi.yandex.net (stesso endpoint di Yandex Go)
+const YANDEX_DELIVERY_BASE_URL = 'https://b2b.taxi.yandex.net/b2b/cargo/integration/v2';
 const YANDEX_DELIVERY_TOKEN = process.env.YANDEX_DOSTAVKA_TOKEN;
 const YANDEX_DELIVERY_CLIENT_ID = process.env.YANDEX_DOSTAVKA_CLIENT_ID;
 
@@ -105,7 +105,8 @@ class YandexDostavkaService {
     const cleanToken = this.token.trim();
 
     // Formato Bearer token ufficiale Yandex Dostavka
-    // Endpoint: https://b2b-authproxy.taxi.yandex.net
+    // Endpoint: https://b2b.taxi.yandex.net (stesso di Yandex Go)
+    // Token da: Dashboard Yandex Dostavka → Интеграции → Получить токен
     return {
       'Authorization': `Bearer ${cleanToken}`,
       'Content-Type': 'application/json',
