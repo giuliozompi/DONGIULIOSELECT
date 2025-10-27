@@ -614,7 +614,11 @@ export function YandexGoDialog({
               </div>
             </div>
             
-            {!deliveryCoords && (
+            {deliveryCoords ? (
+              <div className="text-sm text-muted-foreground">
+                Координаты: {deliveryCoords[1].toFixed(6)}, {deliveryCoords[0].toFixed(6)}
+              </div>
+            ) : (
               <div className="p-3 border border-amber-500/50 rounded-md bg-amber-500/10">
                 <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
                   ⚠️ Координаты доставки отсутствуют. Нажмите кнопку ниже, чтобы рассчитать их из адреса.
