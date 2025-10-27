@@ -75,7 +75,8 @@ export function YandexDeliveryDialog({
   
   // Initialize with default pickup address or show form
   useEffect(() => {
-    if (pickupAddresses.length > 0) {
+    if (pickupAddresses.length > 0 && !pickupAddress) {
+      // Solo inizializza se non c'è già un indirizzo selezionato
       const defaultAddr = pickupAddresses.find(addr => addr.isDefault) || pickupAddresses[0];
       setPickupAddress(defaultAddr.fullAddress);
       setPickupContactName(defaultAddr.contactName || '');
@@ -89,13 +90,13 @@ export function YandexDeliveryDialog({
         ]);
       }
       setShowPickupForm(false);
-    } else {
+    } else if (pickupAddresses.length === 0 && !pickupAddress) {
       // No pickup addresses exist - show form to create one
       setShowPickupForm(true);
       setPickupLabel('Магазин Don Giulio');
       setPickupContactName('Don Giulio Select');
     }
-  }, [pickupAddresses]);
+  }, [pickupAddresses, pickupAddress]);
   
   // Initialize delivery address and coordinates from order
   useEffect(() => {
@@ -212,9 +213,11 @@ export function YandexDeliveryDialog({
       });
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (savedAddress) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/pickup-addresses'] });
       setShowPickupForm(false);
+      // Mantieni i valori appena salvati (non permettere all'useEffect di sovrascriverli)
+      // I valori sono già impostati, quindi non serve fare altro
       toast({
         title: 'Адрес сохранён',
         description: 'Адрес pick-up успешно сохранён',
