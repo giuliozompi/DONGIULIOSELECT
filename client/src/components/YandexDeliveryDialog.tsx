@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit } from 'lucide-react';
+import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit, XCircle } from 'lucide-react';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { Order, PickupAddress } from '@shared/schema';
 
@@ -336,6 +336,29 @@ export function YandexDeliveryDialog({
       toast({
         title: 'Ошибка',
         description: error.message || 'Не удалось создать заказ на доставку',
+        variant: 'destructive',
+      });
+    },
+  });
+  
+  // Cancel delivery mutation - enabled even when courier is dispatched
+  const cancelDeliveryMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-delivery-cancel`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Доставка отменена',
+        description: 'Заказ на доставку Яндекс Dostavka успешно отменён',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Ошибка отмены',
+        description: error.message || 'Не удалось отменить доставку',
         variant: 'destructive',
       });
     },
@@ -685,27 +708,51 @@ export function YandexDeliveryDialog({
           >
             Отмена
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => calculatePriceMutation.mutate()}
-            disabled={!canCalculate || calculatePriceMutation.isPending}
-            data-testid="button-calculate-price"
-          >
-            {calculatePriceMutation.isPending && (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            )}
-            Рассчитать цену
-          </Button>
-          <Button
-            onClick={() => createDeliveryMutation.mutate()}
-            disabled={!canCreateDelivery || createDeliveryMutation.isPending}
-            data-testid="button-create-delivery"
-          >
-            {createDeliveryMutation.isPending && (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            )}
-            Вызвать курьера
-          </Button>
+          
+          {order.yandexClaimId ? (
+            <Button
+              onClick={() => cancelDeliveryMutation.mutate()}
+              disabled={cancelDeliveryMutation.isPending}
+              variant="destructive"
+              data-testid="button-cancel-yandex-dostavka-delivery"
+            >
+              {cancelDeliveryMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Отмена...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Отменить доставку
+                </>
+              )}
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => calculatePriceMutation.mutate()}
+                disabled={!canCalculate || calculatePriceMutation.isPending}
+                data-testid="button-calculate-price"
+              >
+                {calculatePriceMutation.isPending && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                Рассчитать цену
+              </Button>
+              <Button
+                onClick={() => createDeliveryMutation.mutate()}
+                disabled={!canCreateDelivery || createDeliveryMutation.isPending}
+                data-testid="button-create-delivery"
+              >
+                {createDeliveryMutation.isPending && (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                )}
+                Вызвать курьера
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
