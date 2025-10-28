@@ -3,10 +3,9 @@
 // Docs: https://yandex.ru/support/taxi-for-business/api/
 // Production endpoint: https://b2b.taxi.yandex.net
 // NOTE: Yandex Dostavka and Yandex Go use the SAME API endpoint (b2b.taxi.yandex.net)
-// According to documentation, they may use the same token if it has correct permissions
-// Testing with Dostavka token since both services share the same underlying API
+// BUT they require SEPARATE tokens with different permissions
 const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net';
-const YANDEX_GO_TOKEN = process.env.YANDEX_DOSTAVKA_TOKEN; // Using Dostavka token (same API)
+const YANDEX_GO_TOKEN = process.env.YANDEX_GO_TOKEN; // Using dedicated Yandex Go token
 const YANDEX_GO_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
 // Haversine formula to calculate distance between two coordinates
