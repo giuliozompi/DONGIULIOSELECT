@@ -24,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -1259,6 +1260,10 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [yandexGoDialogOrder, setYandexGoDialogOrder] = useState<Order | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: string; status: string } | null>(null);
   
+  // States for cancel confirmation dialogs
+  const [cancelDostavkaOrder, setCancelDostavkaOrder] = useState<Order | null>(null);
+  const [cancelGoOrder, setCancelGoOrder] = useState<Order | null>(null);
+  
   // Fetch orders with filter
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/admin/orders', statusFilter !== 'all' ? statusFilter : undefined],
@@ -1300,6 +1305,52 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       toast({ 
         title: 'Ошибка', 
         description: error.message || 'Не удалось вызвать курьера',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Cancel Yandex Dostavka delivery mutation
+  const cancelDostavkaMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest('POST', `/api/admin/orders/${orderId}/yandex-delivery-cancel`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      setCancelDostavkaOrder(null);
+      toast({ 
+        title: '✅ Доставка отменена',
+        description: 'Yandex Dostavka успешно отменена'
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось отменить доставку',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Cancel Yandex Go delivery mutation
+  const cancelGoMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest('POST', `/api/admin/orders/${orderId}/yandex-go-cancel`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      setCancelGoOrder(null);
+      toast({ 
+        title: '✅ Доставка отменена',
+        description: 'Yandex Go успешно отменена'
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось отменить доставку',
         variant: 'destructive' 
       });
     },
@@ -1571,7 +1622,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       </>
                     )}
                     
-                    {/* Show Yandex Dostavka status and manage button ONLY if courier was called (claim ID exists) */}
+                    {/* Show Yandex Dostavka status and cancel button ONLY if courier was called (claim ID exists) */}
                     {order.yandexClaimId && (
                       <div className="flex items-center gap-2">
                         <Badge variant="default" className="flex items-center gap-1" data-testid={`badge-yandex-dostavka-status-${order.id}`}>
@@ -1581,16 +1632,17 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                         </Badge>
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => setYandexDeliveryDialogOrder(order)}
-                          data-testid={`button-manage-yandex-dostavka-${order.id}`}
+                          variant="destructive"
+                          onClick={() => setCancelDostavkaOrder(order)}
+                          data-testid={`button-cancel-yandex-dostavka-${order.id}`}
                         >
-                          Gestisci
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Отменить доставку
                         </Button>
                       </div>
                     )}
                     
-                    {/* Show Yandex Go status if exists */}
+                    {/* Show Yandex Go status and cancel button ONLY if courier was called (claim ID exists) */}
                     {order.yandexGoClaimId && (
                       <div className="flex items-center gap-2">
                         <Badge variant="secondary" className="flex items-center gap-1" data-testid={`badge-yandex-go-status-${order.id}`}>
@@ -1600,11 +1652,12 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                         </Badge>
                         <Button
                           size="sm"
-                          variant="outline"
-                          onClick={() => setYandexGoDialogOrder(order)}
-                          data-testid={`button-manage-yandex-go-${order.id}`}
+                          variant="destructive"
+                          onClick={() => setCancelGoOrder(order)}
+                          data-testid={`button-cancel-yandex-go-${order.id}`}
                         >
-                          Gestisci
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Отменить доставку
                         </Button>
                       </div>
                     )}
@@ -1675,6 +1728,82 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           onOpenChange={(open) => !open && setYandexGoDialogOrder(null)}
         />
       )}
+
+      {/* Cancel Yandex Dostavka Confirmation Dialog */}
+      <AlertDialog open={!!cancelDostavkaOrder} onOpenChange={(open) => !open && setCancelDostavkaOrder(null)}>
+        <AlertDialogContent data-testid="dialog-cancel-dostavka-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Отменить доставку Yandex Dostavka?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите отменить заказ на доставку через Yandex Dostavka для заказа {cancelDostavkaOrder?.id.slice(0, 8)}?
+              <br />
+              <br />
+              Это действие необратимо. Вам нужно будет создать новый заказ на доставку, если потребуется.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-confirm-no">
+              Отмена
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancelDostavkaOrder && cancelDostavkaMutation.mutate(cancelDostavkaOrder.id)}
+              disabled={cancelDostavkaMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-cancel-confirm-yes"
+            >
+              {cancelDostavkaMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Отмена...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Да, отменить доставку
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel Yandex Go Confirmation Dialog */}
+      <AlertDialog open={!!cancelGoOrder} onOpenChange={(open) => !open && setCancelGoOrder(null)}>
+        <AlertDialogContent data-testid="dialog-cancel-go-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Отменить доставку Yandex Go?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите отменить заказ на доставку через Yandex Go для заказа {cancelGoOrder?.id.slice(0, 8)}?
+              <br />
+              <br />
+              Это действие необратимо. Вам нужно будет создать новый заказ на доставку, если потребуется.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-go-confirm-no">
+              Отмена
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancelGoOrder && cancelGoMutation.mutate(cancelGoOrder.id)}
+              disabled={cancelGoMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-cancel-go-confirm-yes"
+            >
+              {cancelGoMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Отмена...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Да, отменить доставку
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
