@@ -365,7 +365,7 @@ export class YandexGoService {
    * Accept claim (step 4)
    */
   async acceptClaim(claimId: string, version: number): Promise<YandexGoClaimResponse> {
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/accept`;
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/accept?claim_id=${claimId}`;
     
     console.log('Yandex Go acceptClaim request:', {
       url,
@@ -377,7 +377,6 @@ export class YandexGoService {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
-        claim_id: claimId,
         version: version,
       }),
     });
