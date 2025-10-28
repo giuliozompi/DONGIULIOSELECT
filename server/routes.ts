@@ -2722,8 +2722,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Crea claim
       const claim = await yandexGoService.createClaim(claimRequest, requestId);
       
-      // Ottieni info aggiornate
-      const claimInfo = await yandexGoService.getClaimInfo(claim.id);
+      // Aspetta che il claim sia pronto per l'accettazione
+      // Il claim passa da "new" → "estimating" → "ready_for_approval"
+      let claimInfo = await yandexGoService.getClaimInfo(claim.id);
+      let attempts = 0;
+      const maxAttempts = 15; // 30 secondi (15 tentativi x 2 secondi)
+      
+      while (claimInfo.status !== 'ready_for_approval' && attempts < maxAttempts) {
+        console.log(`Yandex Go: claim ${claim.id} status: ${claimInfo.status}, waiting... (attempt ${attempts + 1}/${maxAttempts})`);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Aspetta 2 secondi
+        claimInfo = await yandexGoService.getClaimInfo(claim.id);
+        attempts++;
+      }
+      
+      if (claimInfo.status !== 'ready_for_approval') {
+        throw new Error(`Claim not ready for approval after ${maxAttempts * 2} seconds. Current status: ${claimInfo.status}`);
+      }
       
       // Accetta il claim
       const acceptedClaim = await yandexGoService.acceptClaim(claim.id, claimInfo.version);
