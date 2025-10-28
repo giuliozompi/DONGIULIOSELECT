@@ -9,6 +9,18 @@ const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net';
 const YANDEX_GO_TOKEN = process.env.YANDEX_DOSTAVKA_TOKEN; // Using Dostavka token (same API)
 const YANDEX_GO_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
+// Haversine formula to calculate distance between two coordinates
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c); // Distance in km
+}
+
 export interface YandexGoCheckPriceRequest {
   items: Array<{
     quantity: number;
@@ -225,8 +237,21 @@ export class YandexGoService {
     
     const priceFormatted = priceValue.toFixed(2);
     
-    // Calculate distance and time from intervals
+    // Calculate distance using Haversine formula from request coordinates
     let distance = 0;
+    if (request.route_points && request.route_points.length >= 2) {
+      const pickup = request.route_points[0];
+      const delivery = request.route_points[1];
+      if (pickup.coordinates && delivery.coordinates) {
+        // coordinates are [longitude, latitude]
+        distance = calculateDistance(
+          pickup.coordinates[1], pickup.coordinates[0],
+          delivery.coordinates[1], delivery.coordinates[0]
+        );
+      }
+    }
+    
+    // Calculate delivery time from intervals
     let time = 0;
     
     // Extract delivery time from delivery_interval
@@ -251,11 +276,6 @@ export class YandexGoService {
         const toTime = new Date(to).getTime();
         time = Math.round((toTime - fromTime) / 60000); // milliseconds to minutes
       }
-    }
-    
-    // Fallback: estimate distance based on coordinates if available
-    if (bestOffer.estimated_route_distance) {
-      distance = Math.round(bestOffer.estimated_route_distance / 1000); // meters to km
     }
     
     return {
