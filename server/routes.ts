@@ -2853,7 +2853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         yandexGoPrice: null,
         yandexGoPerformerInfo: null,
         courierService: order.courierService === 'yandex_go' ? null : order.courierService,
-        status: order.status === 'ВЫЗВАН КУРЬЕР' ? 'IN PREPARAZIONE' : order.status,
+        status: order.status === 'ВЫЗВАН КУРЬЕР' ? 'ОПЛАЧЕН' : order.status,
       });
       
       // Log dell'azione
