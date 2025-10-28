@@ -118,7 +118,15 @@ export function YandexGoDialog({
     }
     
     setIsEditingDelivery(false);
+    setPriceInfo(null); // Reset price info when order changes
   }, [order]);
+  
+  // Reset state when dialog opens
+  useEffect(() => {
+    if (open) {
+      setPriceInfo(null);
+    }
+  }, [open]);
   
   // Handle pickup address change from dropdown
   const handlePickupChange = (addressId: string) => {
@@ -326,12 +334,14 @@ export function YandexGoDialog({
       const response = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-go-cancel`, {});
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+    onSuccess: async () => {
+      // Invalida la query per ricaricare la lista ordini
+      await queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       toast({
         title: 'Доставка отменена',
-        description: 'Yandex Go доставка успешно отменена',
+        description: 'Yandex Go доставка успешно отменена. Ora puoi richiamare il corriere.',
       });
+      // Chiudi il dialog - quando si riapre vedrà l'ordine aggiornato
       onOpenChange(false);
     },
     onError: (error: any) => {
