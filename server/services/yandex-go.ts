@@ -2,8 +2,11 @@
 // Yandex Go API - General delivery service
 // Docs: https://yandex.ru/support/taxi-for-business/api/
 // Production endpoint: https://b2b.taxi.yandex.net
+// NOTE: Yandex Dostavka and Yandex Go use the SAME API endpoint (b2b.taxi.yandex.net)
+// According to documentation, they may use the same token if it has correct permissions
+// Testing with Dostavka token since both services share the same underlying API
 const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net';
-const YANDEX_GO_TOKEN = process.env.YANDEX_GO_TOKEN;
+const YANDEX_GO_TOKEN = process.env.YANDEX_DOSTAVKA_TOKEN; // Using Dostavka token (same API)
 const YANDEX_GO_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
 export interface YandexGoCheckPriceRequest {
@@ -198,7 +201,70 @@ export class YandexGoService {
     const data = await response.json();
     console.log('Yandex Go price data:', data);
     
-    return data;
+    // Parse Yandex response - API returns { offers: [...] }
+    if (!data.offers || !Array.isArray(data.offers) || data.offers.length === 0) {
+      throw new Error('No delivery offers available for this route');
+    }
+    
+    // Extract best offer (first one is usually the best/cheapest)
+    const bestOffer = data.offers[0];
+    
+    // Extract pricing from offer - price is a nested object
+    // Structure: { price: { total_price, total_price_with_vat, surge_ratio, currency } }
+    let priceValue = 0;
+    let currency = 'RUB';
+    
+    if (bestOffer.price && typeof bestOffer.price === 'object') {
+      // Price is an object with total_price field
+      priceValue = parseFloat(bestOffer.price.total_price || bestOffer.price.total_price_with_vat || '0');
+      currency = bestOffer.price.currency || 'RUB';
+    } else if (typeof bestOffer.price === 'number' || typeof bestOffer.price === 'string') {
+      // Fallback: price is a simple value
+      priceValue = parseFloat(bestOffer.price);
+    }
+    
+    const priceFormatted = priceValue.toFixed(2);
+    
+    // Calculate distance and time from intervals
+    let distance = 0;
+    let time = 0;
+    
+    // Extract delivery time from delivery_interval
+    if (bestOffer.delivery_interval && typeof bestOffer.delivery_interval === 'object') {
+      // delivery_interval might have 'from' and 'to' timestamps
+      // Calculate time difference or use estimated delivery time
+      const from = bestOffer.delivery_interval.from;
+      const to = bestOffer.delivery_interval.to;
+      if (from && to) {
+        const fromTime = new Date(from).getTime();
+        const toTime = new Date(to).getTime();
+        time = Math.round((toTime - fromTime) / 60000); // milliseconds to minutes
+      }
+    }
+    
+    // If no time from interval, use pickup_interval
+    if (time === 0 && bestOffer.pickup_interval && typeof bestOffer.pickup_interval === 'object') {
+      const from = bestOffer.pickup_interval.from;
+      const to = bestOffer.pickup_interval.to;
+      if (from && to) {
+        const fromTime = new Date(from).getTime();
+        const toTime = new Date(to).getTime();
+        time = Math.round((toTime - fromTime) / 60000); // milliseconds to minutes
+      }
+    }
+    
+    // Fallback: estimate distance based on coordinates if available
+    if (bestOffer.estimated_route_distance) {
+      distance = Math.round(bestOffer.estimated_route_distance / 1000); // meters to km
+    }
+    
+    return {
+      price: priceFormatted,
+      price_raw: priceValue,
+      currency: currency,
+      distance: distance,
+      time: time,
+    };
   }
 
   /**

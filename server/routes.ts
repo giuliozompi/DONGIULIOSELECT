@@ -2559,10 +2559,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { pickupAddress, pickupCoords } = req.body;
       
-      // Usa coordinate di consegna dall'ordine
-      const deliveryCoords: [number, number] = order.deliveryLongitude && order.deliveryLatitude
-        ? [parseFloat(order.deliveryLongitude), parseFloat(order.deliveryLatitude)]
-        : [0, 0]; // fallback se coordinate non disponibili
+      // Validate pickup coordinates
+      if (!pickupCoords || !Array.isArray(pickupCoords) || pickupCoords.length !== 2) {
+        return res.status(400).json({ 
+          error: 'Pickup coordinates missing',
+          message: 'Coordinate del punto di ritiro mancanti. Selezionare un indirizzo di ritiro con coordinate valide.'
+        });
+      }
+      
+      if (!pickupAddress) {
+        return res.status(400).json({
+          error: 'Pickup address missing',
+          message: 'Indirizzo del punto di ritiro mancante.'
+        });
+      }
+      
+      // Extract and validate delivery coordinates from order
+      if (!order.deliveryLongitude || !order.deliveryLatitude) {
+        return res.status(400).json({
+          error: 'Delivery coordinates missing',
+          message: 'Coordinate di consegna mancanti. Usare il pulsante "Ricalcola coordinate" per ottenerle dall\'indirizzo.'
+        });
+      }
+      
+      const deliveryCoords: [number, number] = [
+        parseFloat(order.deliveryLongitude),
+        parseFloat(order.deliveryLatitude)
+      ];
+      
+      // Validate coordinates are not [0, 0] or invalid
+      if (deliveryCoords[0] === 0 && deliveryCoords[1] === 0) {
+        return res.status(400).json({
+          error: 'Invalid delivery coordinates',
+          message: 'Coordinate di consegna non valide (0,0). Usare il pulsante "Ricalcola coordinate" per ottenerle dall\'indirizzo.'
+        });
+      }
+      
+      if (pickupCoords[0] === 0 && pickupCoords[1] === 0) {
+        return res.status(400).json({
+          error: 'Invalid pickup coordinates',
+          message: 'Coordinate del punto di ritiro non valide (0,0). Selezionare un indirizzo con coordinate GPS valide.'
+        });
+      }
       
       // API V2 offers/calculate - Usa fullname (formato ufficiale Yandex Go)
       // Docs: https://yandex.ru/support/taxi-for-business/api/
@@ -2644,10 +2682,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
           cost_value: order.amount,
           cost_currency: 'RUB',
-          title: 'Don Giulio Select - Food Order'
+          title: 'Don Giulio Select - Food Order',
+          pickup_point: 1,   // Required: ID of pickup route_point
+          dropoff_point: 2   // Required: ID of delivery route_point
         }],
         route_points: [
           {
+            id: 1,  // Required: Unique ID for this route point
             coordinates: pickupCoords,
             fullname: pickupAddress,
             contact: {
@@ -2658,6 +2699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             visit_order: 1
           },
           {
+            id: 2,  // Required: Unique ID for this route point
             coordinates: deliveryCoords,
             fullname: deliveryAddress,
             contact: {
