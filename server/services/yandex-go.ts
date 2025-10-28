@@ -1,10 +1,10 @@
 
-// Yandex Go API - General delivery service
+// Yandex Go API 2.0 - General delivery service
 // Docs: https://yandex.ru/support/taxi-for-business/api/
-// Production endpoint: https://b2b.taxi.yandex.net
-// NOTE: Yandex Dostavka and Yandex Go use the SAME API endpoint (b2b.taxi.yandex.net)
-// BUT they require SEPARATE tokens with different permissions
-const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net';
+// Production endpoint: http://b2b-api.go.yandex.ru (API 2.0)
+// NOTE: Yandex Dostavka uses https://b2b.taxi.yandex.net
+// Yandex Go uses http://b2b-api.go.yandex.ru and requires YANDEX_GO_TOKEN
+const YANDEX_GO_BASE_URL = 'http://b2b-api.go.yandex.ru';
 const YANDEX_GO_TOKEN = process.env.YANDEX_GO_TOKEN; // Using dedicated Yandex Go token
 const YANDEX_GO_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
