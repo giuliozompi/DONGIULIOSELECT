@@ -1548,7 +1548,8 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       </p>
                     )}
                     
-                    {order.status === 'ОПЛАЧЕН' && !order.yandexClaimId && !order.yandexGoClaimId && (
+                    {/* Always show delivery service buttons when order is paid */}
+                    {order.status === 'ОПЛАЧЕН' && (
                       <>
                         <Button 
                           size="sm"
@@ -1570,7 +1571,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       </>
                     )}
                     
-                    {/* Show Yandex Dostavka status if exists */}
+                    {/* Show Yandex Dostavka status and manage button ONLY if courier was called (claim ID exists) */}
                     {order.yandexClaimId && (
                       <div className="flex items-center gap-2">
                         <Badge variant="default" className="flex items-center gap-1" data-testid={`badge-yandex-dostavka-status-${order.id}`}>
