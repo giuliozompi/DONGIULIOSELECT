@@ -612,17 +612,30 @@ export function YandexGoDialog({
             </div>
             
             {isEditingDelivery && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setDeliveryAddress(order.deliveryAddress);
-                  setIsEditingDelivery(false);
-                }}
-                data-testid="button-cancel-delivery-edit"
-              >
-                Отмена
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDeliveryAddress(order.deliveryAddress);
+                    setIsEditingDelivery(false);
+                  }}
+                  data-testid="button-cancel-delivery-edit"
+                >
+                  Отмена
+                </Button>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={recalculateDeliveryCoords}
+                  disabled={isRecalculatingDelivery}
+                  data-testid="button-recalculate-delivery-coords-edit"
+                >
+                  {isRecalculatingDelivery && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Рассчитать координаты
+                </Button>
+              </div>
             )}
             
             <div className="grid grid-cols-2 gap-4">
@@ -647,27 +660,29 @@ export function YandexGoDialog({
               </div>
             </div>
             
-            {deliveryCoords ? (
-              <div className="text-sm text-muted-foreground">
-                Координаты: {deliveryCoords[1].toFixed(6)}, {deliveryCoords[0].toFixed(6)}
-              </div>
-            ) : (
-              <div className="p-3 border border-amber-500/50 rounded-md bg-amber-500/10">
-                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
-                  ⚠️ Координаты доставки отсутствуют. Нажмите кнопку ниже, чтобы рассчитать их из адреса.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={recalculateDeliveryCoords}
-                  disabled={isRecalculatingDelivery}
-                  data-testid="button-recalculate-delivery-coords"
-                >
-                  {isRecalculatingDelivery && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Рассчитать координаты из адреса
-                </Button>
-              </div>
+            {!isEditingDelivery && (
+              deliveryCoords ? (
+                <div className="text-sm text-muted-foreground">
+                  Координаты: {deliveryCoords[1].toFixed(6)}, {deliveryCoords[0].toFixed(6)}
+                </div>
+              ) : (
+                <div className="p-3 border border-amber-500/50 rounded-md bg-amber-500/10">
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
+                    ⚠️ Координаты доставки отсутствуют. Нажмите кнопку ниже, чтобы рассчитать их из адреса.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={recalculateDeliveryCoords}
+                    disabled={isRecalculatingDelivery}
+                    data-testid="button-recalculate-delivery-coords"
+                  >
+                    {isRecalculatingDelivery && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Рассчитать координаты из адреса
+                  </Button>
+                </div>
+              )
             )}
           </div>
           
