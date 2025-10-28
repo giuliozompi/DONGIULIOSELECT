@@ -405,7 +405,7 @@ export class YandexGoService {
    * Get cancel info
    */
   async getCancelInfo(claimId: string): Promise<YandexGoCancelInfoResponse> {
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel-info`;
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel-info?claim_id=${claimId}`;
     
     console.log('Yandex Go getCancelInfo request:', {
       url,
@@ -415,9 +415,7 @@ export class YandexGoService {
     const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({
-        claim_id: claimId,
-      }),
+      body: JSON.stringify({}),
     });
 
     if (!response.ok) {
@@ -433,7 +431,7 @@ export class YandexGoService {
    * Cancel claim
    */
   async cancelClaim(claimId: string, version: number, cancelState?: string): Promise<YandexGoClaimResponse> {
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel`;
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel?claim_id=${claimId}`;
     
     console.log('Yandex Go cancelClaim request:', {
       url,
@@ -446,7 +444,6 @@ export class YandexGoService {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
-        claim_id: claimId,
         version: version,
         cancel_state: cancelState,
       }),
