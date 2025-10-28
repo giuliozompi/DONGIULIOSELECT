@@ -2846,9 +2846,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cancelInfo.cancel_state
       );
       
-      // Aggiorna ordine
+      // Aggiorna ordine - resetta tutti i campi Yandex Go per permettere una nuova chiamata
       await storage.updateOrder(orderId, {
-        yandexGoStatus: result.status,
+        yandexGoClaimId: null,
+        yandexGoStatus: null,
+        yandexGoPrice: null,
+        yandexGoPerformerInfo: null,
+        courierService: order.courierService === 'yandex_go' ? null : order.courierService,
+        status: order.status === 'ВЫЗВАН КУРЬЕР' ? 'IN PREPARAZIONE' : order.status,
       });
       
       // Log dell'azione
