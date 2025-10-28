@@ -1,11 +1,13 @@
 
-// Yandex Go API 2.0 - General delivery service
-// Docs: https://yandex.ru/support/taxi-for-business/api/
-// Production endpoint: http://b2b-api.go.yandex.ru (API 2.0)
-// NOTE: Yandex Dostavka uses https://b2b.taxi.yandex.net
-// Yandex Go uses http://b2b-api.go.yandex.ru and requires YANDEX_GO_TOKEN
-const YANDEX_GO_BASE_URL = 'http://b2b-api.go.yandex.ru';
-const YANDEX_GO_TOKEN = process.env.YANDEX_GO_TOKEN; // Using dedicated Yandex Go token
+// Yandex Go Cargo API 2.0 - Taxi-based delivery service
+// Docs: https://yandex.com/dev/logistics/api/ref/v2/
+// Production endpoint: https://b2b.taxi.yandex.net (same as Dostavka)
+// NOTE: Yandex Go CARGO and Yandex Dostavka use the SAME API endpoint
+// but require DIFFERENT tokens with different service permissions
+// - YANDEX_GO_TOKEN: for taxi-based cargo delivery
+// - YANDEX_DOSTAVKA_TOKEN: for express courier service
+const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net';
+const YANDEX_GO_TOKEN = process.env.YANDEX_GO_TOKEN; // Dedicated token for Go Cargo service
 const YANDEX_GO_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
 // Haversine formula to calculate distance between two coordinates
