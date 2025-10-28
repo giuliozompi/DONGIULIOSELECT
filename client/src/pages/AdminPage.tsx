@@ -1572,20 +1572,40 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                     
                     {/* Show Yandex Dostavka status if exists */}
                     {order.yandexClaimId && (
-                      <Badge variant="default" className="flex items-center gap-1" data-testid={`badge-yandex-dostavka-status-${order.id}`}>
-                        <Truck className="w-3 h-3" />
-                        Yandex Dostavka: {order.yandexDeliveryStatus || 'в обработке'}
-                        {order.yandexDeliveryPrice && ` (${order.yandexDeliveryPrice} ₽)`}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="default" className="flex items-center gap-1" data-testid={`badge-yandex-dostavka-status-${order.id}`}>
+                          <Truck className="w-3 h-3" />
+                          Yandex Dostavka: {order.yandexDeliveryStatus || 'в обработке'}
+                          {order.yandexDeliveryPrice && ` (${order.yandexDeliveryPrice} ₽)`}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setYandexDeliveryDialogOrder(order)}
+                          data-testid={`button-manage-yandex-dostavka-${order.id}`}
+                        >
+                          Gestisci
+                        </Button>
+                      </div>
                     )}
                     
                     {/* Show Yandex Go status if exists */}
                     {order.yandexGoClaimId && (
-                      <Badge variant="secondary" className="flex items-center gap-1" data-testid={`badge-yandex-go-status-${order.id}`}>
-                        <Truck className="w-3 h-3" />
-                        Yandex Go: {order.yandexGoStatus || 'в обработке'}
-                        {order.yandexGoPrice && ` (${order.yandexGoPrice} ₽)`}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="flex items-center gap-1" data-testid={`badge-yandex-go-status-${order.id}`}>
+                          <Truck className="w-3 h-3" />
+                          Yandex Go: {order.yandexGoStatus || 'в обработке'}
+                          {order.yandexGoPrice && ` (${order.yandexGoPrice} ₽)`}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setYandexGoDialogOrder(order)}
+                          data-testid={`button-manage-yandex-go-${order.id}`}
+                        >
+                          Gestisci
+                        </Button>
+                      </div>
                     )}
                     
                     {/* Button to view/acquire marking codes */}
