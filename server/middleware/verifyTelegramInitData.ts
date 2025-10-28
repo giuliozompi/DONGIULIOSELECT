@@ -28,29 +28,29 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     console.log('[Telegram Auth] Request to:', req.method, req.path);
     console.log('[Telegram Auth] Has initData:', !!initData);
     
-    // In development, permetti bypass per test usando un admin normale (non master)
+    // In development, permetti bypass per test usando il Master Admin
     if (process.env.NODE_ENV === 'development' && !initData) {
-      console.log('[Telegram Auth] Development mode bypass - using normal admin user');
-      const adminUserId = '999999999'; // Admin normale per test (non master)
+      console.log('[Telegram Auth] Development mode bypass - using MASTER ADMIN user');
+      const adminUserId = process.env.MASTER_ADMIN_USER_ID || '999999999'; // Master Admin per test
       
       // Crea o ottieni l'utente admin in dev mode
       storage.getUser(adminUserId).then(user => {
         if (!user) {
-          console.log('[Telegram Auth] Creating normal admin user in dev mode:', adminUserId);
+          console.log('[Telegram Auth] Creating MASTER ADMIN user in dev mode:', adminUserId);
           return storage.createUser({
             id: adminUserId,
-            username: 'TestAdmin',
-            firstName: 'Test',
-            lastName: 'Admin',
+            username: 'MasterAdmin',
+            firstName: 'Master',
+            lastName: 'Administrator',
           });
         }
         return user;
       }).then(async (user) => {
-        // Assicurati che l'utente sia admin (ma non master)
+        // Assicurati che l'utente sia admin (MASTER ADMIN)
         const isAdmin = await storage.isAdmin(user.id);
         if (!isAdmin) {
-          console.log('[Telegram Auth] Adding user to admins table');
-          await storage.addAdmin(user.id, 'TestAdmin');
+          console.log('[Telegram Auth] Adding MASTER ADMIN user to admins table');
+          await storage.addAdmin(user.id, 'MasterAdmin');
         }
         req.userId = user.id;
         req.telegramUser = {
