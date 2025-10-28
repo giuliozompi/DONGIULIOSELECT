@@ -29,11 +29,12 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2 } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { YandexDeliveryDialog } from '@/components/YandexDeliveryDialog';
 import { YandexGoDialog } from '@/components/YandexGoDialog';
+import { OrderViewDialog } from '@/components/OrderViewDialog';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { Badge } from '@/components/ui/badge';
@@ -1259,6 +1260,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [yandexDeliveryDialogOrder, setYandexDeliveryDialogOrder] = useState<Order | null>(null);
   const [yandexGoDialogOrder, setYandexGoDialogOrder] = useState<Order | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: string; status: string } | null>(null);
+  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   
   // States for cancel confirmation dialogs
   const [cancelDostavkaOrder, setCancelDostavkaOrder] = useState<Order | null>(null);
@@ -1581,6 +1583,18 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                   </div>
 
                   <div className="flex gap-2">
+                    {/* View/Print button - Always visible in all statuses */}
+                    <Button 
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setViewingOrder(order)}
+                      data-testid={`button-view-order-${order.id}`}
+                      title="Просмотреть и распечатать заказ"
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      Просмотр
+                    </Button>
+                    
                     <Button 
                       size="sm"
                       variant="outline"
@@ -1804,6 +1818,15 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Order View/Print Dialog */}
+      {viewingOrder && (
+        <OrderViewDialog
+          order={viewingOrder}
+          open={!!viewingOrder}
+          onOpenChange={(open) => !open && setViewingOrder(null)}
+        />
+      )}
     </div>
   );
 }
