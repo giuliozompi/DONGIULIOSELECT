@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit } from 'lucide-react';
+import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit, XCircle } from 'lucide-react';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { Order, PickupAddress } from '@shared/schema';
 
@@ -315,6 +315,29 @@ export function YandexGoDialog({
       toast({
         title: 'Ошибка',
         description: error.message || 'Не удалось вызвать курьера',
+        variant: 'destructive',
+      });
+    },
+  });
+  
+  // Cancel delivery mutation
+  const cancelDeliveryMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-go-cancel`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({
+        title: 'Доставка отменена',
+        description: 'Yandex Go доставка успешно отменена',
+      });
+      onOpenChange(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось отменить доставку',
         variant: 'destructive',
       });
     },
@@ -672,42 +695,65 @@ export function YandexGoDialog({
             Отмена
           </Button>
           
-          <Button
-            onClick={handleCalculatePrice}
-            disabled={!canCalculatePrice || calculatePriceMutation.isPending}
-            variant="secondary"
-            data-testid="button-calculate-price-yandex-go"
-          >
-            {calculatePriceMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Расчет...
-              </>
-            ) : (
-              <>
-                <DollarSign className="w-4 h-4 mr-2" />
-                Рассчитать цену
-              </>
-            )}
-          </Button>
-          
-          <Button
-            onClick={handleCreateDelivery}
-            disabled={!canCreateDelivery || createDeliveryMutation.isPending}
-            data-testid="button-call-courier-yandex-go"
-          >
-            {createDeliveryMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Вызов...
-              </>
-            ) : (
-              <>
-                <Truck className="w-4 h-4 mr-2" />
-                Вызвать курьера
-              </>
-            )}
-          </Button>
+          {order.yandexGoClaimId ? (
+            <Button
+              onClick={() => cancelDeliveryMutation.mutate()}
+              disabled={cancelDeliveryMutation.isPending}
+              variant="destructive"
+              data-testid="button-cancel-yandex-go-delivery"
+            >
+              {cancelDeliveryMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Отмена...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Отменить доставку
+                </>
+              )}
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={handleCalculatePrice}
+                disabled={!canCalculatePrice || calculatePriceMutation.isPending}
+                variant="secondary"
+                data-testid="button-calculate-price-yandex-go"
+              >
+                {calculatePriceMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Расчет...
+                  </>
+                ) : (
+                  <>
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Рассчитать цену
+                  </>
+                )}
+              </Button>
+              
+              <Button
+                onClick={handleCreateDelivery}
+                disabled={!canCreateDelivery || createDeliveryMutation.isPending}
+                data-testid="button-call-courier-yandex-go"
+              >
+                {createDeliveryMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Вызов...
+                  </>
+                ) : (
+                  <>
+                    <Truck className="w-4 h-4 mr-2" />
+                    Вызвать курьера
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
