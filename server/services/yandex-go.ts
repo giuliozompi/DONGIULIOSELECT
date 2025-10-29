@@ -8,7 +8,6 @@ import {
   YandexLogger,
   yandexFetch,
 } from '../utils/yandex-integration';
-import { yandexOAuthService } from './yandex-oauth';
 
 // Yandex Go Доставка для бизнеса - Business taxi delivery service
 // Docs: https://yandex.com/dev/logistics/api/ref/v2/
@@ -147,12 +146,16 @@ export interface YandexGoCancelInfoResponse {
 export class YandexGoService {
   private baseUrl = YANDEX_GO_BASE_URL;
 
-  private async getHeaders(): Promise<Record<string, string>> {
-    // Use OAuth service to get authentication headers
-    const authHeaders = await yandexOAuthService.getAuthHeaders();
+  private getHeaders(): Record<string, string> {
+    // Get token directly from environment
+    const token = process.env.YANDEX_GO_TOKEN;
+    
+    if (!token) {
+      throw new Error('YANDEX_GO_TOKEN not configured. Please add the OAuth token to environment secrets.');
+    }
     
     return {
-      ...authHeaders,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
@@ -198,7 +201,7 @@ export class YandexGoService {
     const idempotencyKey = generateIdempotencyKey();
     
     const headers = {
-      ...(await this.getHeaders()),
+      ...this.getHeaders(),
       'X-Idempotency-Key': idempotencyKey,
     };
     
@@ -332,7 +335,7 @@ export class YandexGoService {
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/create?request_id=${requestId}`;
     
     const headers = {
-      ...(await this.getHeaders()),
+      ...this.getHeaders(),
       'X-Idempotency-Key': idempotencyKey,
     };
     
@@ -377,7 +380,7 @@ export class YandexGoService {
     const data = await withRetry(async () => {
       const response = await yandexFetch(url, {
         method: 'POST',
-        headers: await this.getHeaders(),
+        headers: this.getHeaders(),
         body: JSON.stringify({}),
       }, logger, corrId);
 
@@ -410,7 +413,7 @@ export class YandexGoService {
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/accept?claim_id=${claimId}`;
     
     const headers = {
-      ...(await this.getHeaders()),
+      ...this.getHeaders(),
       'X-Idempotency-Key': idempotencyKey,
     };
     
@@ -450,7 +453,7 @@ export class YandexGoService {
     const data = await withRetry(async () => {
       const response = await yandexFetch(url, {
         method: 'POST',
-        headers: await this.getHeaders(),
+        headers: this.getHeaders(),
         body: JSON.stringify({}),
       }, logger, corrId);
 
@@ -484,7 +487,7 @@ export class YandexGoService {
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel?claim_id=${claimId}`;
     
     const headers = {
-      ...(await this.getHeaders()),
+      ...this.getHeaders(),
       'X-Idempotency-Key': idempotencyKey,
     };
     
