@@ -32,8 +32,7 @@ import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, t
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
-import { YandexDeliveryDialog } from '@/components/YandexDeliveryDialog';
-import { YandexGoDialog } from '@/components/YandexGoDialog';
+import { DeliveryDialog } from '@/components/DeliveryDialog';
 import { OrderViewDialog } from '@/components/OrderViewDialog';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
@@ -1257,8 +1256,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [markingDialogOrder, setMarkingDialogOrder] = useState<Order | null>(null);
-  const [yandexDeliveryDialogOrder, setYandexDeliveryDialogOrder] = useState<Order | null>(null);
-  const [yandexGoDialogOrder, setYandexGoDialogOrder] = useState<Order | null>(null);
+  const [deliveryDialogOrder, setDeliveryDialogOrder] = useState<Order | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ orderId: string; status: string } | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   
@@ -1614,26 +1612,15 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                     )}
                     
                     {/* Always show delivery service buttons when order is paid */}
-                    {order.status === 'ОПЛАЧЕН' && (
-                      <>
-                        <Button 
-                          size="sm"
-                          onClick={() => setYandexDeliveryDialogOrder(order)}
-                          data-testid={`button-yandex-dostavka-${order.id}`}
-                        >
-                          <Truck className="w-4 h-4 mr-2" />
-                          Yandex Dostavka
-                        </Button>
-                        <Button 
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setYandexGoDialogOrder(order)}
-                          data-testid={`button-yandex-go-${order.id}`}
-                        >
-                          <Truck className="w-4 h-4 mr-2" />
-                          Yandex Go
-                        </Button>
-                      </>
+                    {order.status === 'ОПЛАЧЕН' && !order.yandexClaimId && !order.yandexGoClaimId && (
+                      <Button 
+                        size="sm"
+                        onClick={() => setDeliveryDialogOrder(order)}
+                        data-testid={`button-call-courier-${order.id}`}
+                      >
+                        <Truck className="w-4 h-4 mr-2" />
+                        Вызвать курьер
+                      </Button>
                     )}
                     
                     {/* Show Yandex Dostavka status and cancel button ONLY if courier was called (claim ID exists) */}
@@ -1725,21 +1712,12 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
         />
       )}
 
-      {/* Yandex Dostavka Delivery Dialog */}
-      {yandexDeliveryDialogOrder && (
-        <YandexDeliveryDialog
-          order={yandexDeliveryDialogOrder}
-          open={!!yandexDeliveryDialogOrder}
-          onOpenChange={(open) => !open && setYandexDeliveryDialogOrder(null)}
-        />
-      )}
-      
-      {/* Yandex Go Delivery Dialog */}
-      {yandexGoDialogOrder && (
-        <YandexGoDialog
-          order={yandexGoDialogOrder}
-          open={!!yandexGoDialogOrder}
-          onOpenChange={(open) => !open && setYandexGoDialogOrder(null)}
+      {/* Unified Delivery Dialog */}
+      {deliveryDialogOrder && (
+        <DeliveryDialog
+          order={deliveryDialogOrder}
+          open={!!deliveryDialogOrder}
+          onOpenChange={(open) => !open && setDeliveryDialogOrder(null)}
         />
       )}
 
