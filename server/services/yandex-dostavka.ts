@@ -237,13 +237,23 @@ class YandexDostavkaService {
         offersCount: data.offers?.length || 0,
       });
 
-      // Filtra solo le offerte Express (tutte le varianti: express, express_30min_longer, express_60min_longer)
-      const expressOffers = data.offers?.filter((offer: any) => 
-        offer.taxi_class?.startsWith('express')
+      // Filtra le tariffe desiderate: Express, 2 ore, 4 ore, bici
+      const allowedTariffs = [
+        'express',
+        'express_30min_longer', 
+        'express_60min_longer',
+        '2_hours_delivery',
+        '4_hours_delivery',
+        'courier',  // вело курьер
+        'bicycle'   // possibile alternativa per вело курьер
+      ];
+      
+      const filteredOffers = data.offers?.filter((offer: any) => 
+        allowedTariffs.includes(offer.taxi_class)
       ) || [];
       
-      // Se non ci sono offerte Express, usa tutte le offerte disponibili
-      const availableOffers = expressOffers.length > 0 ? expressOffers : data.offers;
+      // Se non ci sono offerte filtrate, usa tutte le offerte disponibili
+      const availableOffers = filteredOffers.length > 0 ? filteredOffers : data.offers;
       
       const bestOffer = availableOffers?.[0];
       if (!bestOffer) {
@@ -252,9 +262,9 @@ class YandexDostavkaService {
       
       logger.info('Selected offer', {
         taxiClass: bestOffer.taxi_class,
-        expressOffersCount: expressOffers.length,
+        filteredOffersCount: filteredOffers.length,
         totalOffersCount: data.offers?.length || 0,
-        allExpressTaxiClasses: expressOffers.map((o: any) => o.taxi_class)
+        availableTaxiClasses: filteredOffers.map((o: any) => o.taxi_class)
       });
 
       // Estrai prezzo e valuta dal campo price
