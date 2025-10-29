@@ -395,7 +395,8 @@ class YandexDostavkaService {
       claimId,
     });
 
-    const url = `${this.baseUrl}/claims/cancel`;
+    // claim_id deve essere passato come query parameter, non nel body
+    const url = `${this.baseUrl}/claims/cancel?claim_id=${encodeURIComponent(claimId)}`;
     
     const headers = {
       ...this.getHeaders(),
@@ -410,7 +411,6 @@ class YandexDostavkaService {
           method: 'POST',
           headers,
           body: JSON.stringify({ 
-            claim_id: claimId,
             version: 1,
           }),
         }, logger, corrId);
