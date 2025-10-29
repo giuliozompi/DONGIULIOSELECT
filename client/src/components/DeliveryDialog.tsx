@@ -33,6 +33,27 @@ interface DeliveryDialogProps {
   order: Order;
 }
 
+interface DostavkaOffer {
+  price: {
+    total_price: string;
+    total_price_with_vat: string;
+    surge_ratio: number;
+    currency: string;
+  };
+  taxi_class: string;
+  pickup_interval: {
+    from: string;
+    to: string;
+  };
+  delivery_interval: {
+    from: string;
+    to: string;
+  };
+  description: string;
+  payload: string;
+  offer_ttl: string;
+}
+
 interface DostavkaPriceInfo {
   price: string;
   currency_rules: {
@@ -41,6 +62,8 @@ interface DostavkaPriceInfo {
   };
   distance_meters: number;
   eta: number;
+  offer_id: string;
+  all_offers: DostavkaOffer[];
 }
 
 interface GoPriceInfo {
@@ -89,6 +112,7 @@ export function DeliveryDialog({
   const [dostavkaError, setDostavkaError] = useState<string | null>(null);
   const [goError, setGoError] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<'dostavka' | 'go' | null>(null);
+  const [selectedDostavkaOffer, setSelectedDostavkaOffer] = useState<string>(''); // payload dell'offerta selezionata
   
   // Load pickup addresses
   const { data: pickupAddresses = [], isLoading: isLoadingPickup } = useQuery<PickupAddress[]>({
@@ -148,6 +172,7 @@ export function DeliveryDialog({
       setDostavkaError(null);
       setGoError(null);
       setSelectedService(null);
+      setSelectedDostavkaOffer('');
     }
   }, [open]);
   
@@ -223,6 +248,7 @@ export function DeliveryDialog({
       setDostavkaError(null);
       setGoError(null);
       setSelectedService(null);
+      setSelectedDostavkaOffer('');
       
       // Ricalcola automaticamente dopo un breve delay per permettere l'aggiornamento dello stato
       setTimeout(() => {
@@ -250,6 +276,7 @@ export function DeliveryDialog({
       setDostavkaError(null);
       setGoError(null);
       setSelectedService(null);
+      setSelectedDostavkaOffer('');
       
       // Ricalcola automaticamente dopo un breve delay per permettere l'aggiornamento dello stato
       setTimeout(() => {
@@ -452,6 +479,10 @@ export function DeliveryDialog({
       throw new Error('Координаты не указаны');
     }
     
+    if (!selectedDostavkaOffer && dostavkaPriceInfo?.all_offers?.length) {
+      throw new Error('Выберите вариант доставки');
+    }
+    
     const response = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-delivery`, {
       pickupAddress,
       pickupCoords,
@@ -461,6 +492,7 @@ export function DeliveryDialog({
       deliveryCoords,
       deliveryContactPhone: deliveryContactPhone || order.customerPhone,
       deliveryContactName: deliveryContactName || order.customerName,
+      offerPayload: selectedDostavkaOffer || dostavkaPriceInfo?.offer_id,  // Passa l'offerta selezionata
     });
     
     return response.json();
@@ -893,12 +925,11 @@ export function DeliveryDialog({
                   <Label>Результаты расчета стоимости доставки:</Label>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Yandex Dostavka Card - Always show after calculation */}
+                    {/* Yandex Dostavka Card - Shows all available offers */}
                     <Card 
                       className={`transition-all ${
-                        dostavkaPriceInfo ? `cursor-pointer ${selectedService === 'dostavka' ? 'ring-2 ring-primary' : ''}` : 'opacity-75'
+                        dostavkaPriceInfo ? `${selectedService === 'dostavka' ? 'ring-2 ring-primary' : ''}` : 'opacity-75'
                       }`}
-                      onClick={() => dostavkaPriceInfo && setSelectedService('dostavka')}
                       data-testid="card-dostavka-option"
                     >
                       <CardHeader className="pb-3">
@@ -909,16 +940,70 @@ export function DeliveryDialog({
                       </CardHeader>
                       <CardContent>
                         {dostavkaPriceInfo ? (
-                          <div className="space-y-1">
-                            <p className="text-2xl font-bold">
-                              {dostavkaPriceInfo.price} {dostavkaPriceInfo.currency_rules.sign}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              ~{dostavkaPriceInfo.eta} мин • {(dostavkaPriceInfo.distance_meters / 1000).toFixed(1)} км
-                            </p>
-                            <Badge variant="secondary" className="text-xs">
-                              Курьер пешком/велосипед
-                            </Badge>
+                          <div className="space-y-3">
+                            {/* Mostra tutte le offerte disponibili */}
+                            {dostavkaPriceInfo.all_offers && dostavkaPriceInfo.all_offers.length > 0 ? (
+                              <div className="space-y-2">
+                                {dostavkaPriceInfo.all_offers.map((offer, index) => {
+                                  // Calcola i tempi di consegna dalle date ISO
+                                  const deliveryTime = offer.delivery_interval?.to ? 
+                                    Math.round((new Date(offer.delivery_interval.to).getTime() - new Date(offer.delivery_interval.from).getTime()) / 60000) : 
+                                    Math.round(dostavkaPriceInfo.eta / 60);
+                                  
+                                  // Traduci le descrizioni
+                                  const descriptions: { [key: string]: string } = {
+                                    'express': 'Экспресс доставка',
+                                    'express_30min_longer': 'Стандарт (+30 мин)',
+                                    'express_60min_longer': 'Эконом (+60 мин)',
+                                    '2_hours_delivery': 'В течение 2 часов',
+                                    '4_hours_delivery': 'В течение 4 часов'
+                                  };
+                                  
+                                  return (
+                                    <div
+                                      key={offer.payload}
+                                      className={`p-2 border rounded cursor-pointer transition-all ${
+                                        selectedDostavkaOffer === offer.payload ? 
+                                        'border-primary bg-primary/5' : 
+                                        'border-muted hover:border-primary/50'
+                                      }`}
+                                      onClick={() => {
+                                        setSelectedService('dostavka');
+                                        setSelectedDostavkaOffer(offer.payload);
+                                      }}
+                                      data-testid={`dostavka-offer-${index}`}
+                                    >
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                          <p className="font-medium text-sm">
+                                            {descriptions[offer.description] || offer.description}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground">
+                                            ~{deliveryTime} мин • {(dostavkaPriceInfo.distance_meters / 1000).toFixed(1)} км
+                                          </p>
+                                        </div>
+                                        <p className="font-bold text-lg">
+                                          {offer.price.total_price} ₽
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              // Fallback se non ci sono all_offers (compatibilità)
+                              <div className="space-y-1">
+                                <p className="text-2xl font-bold">
+                                  {dostavkaPriceInfo.price} {dostavkaPriceInfo.currency_rules.sign}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  ~{Math.round(dostavkaPriceInfo.eta / 60)} мин • {(dostavkaPriceInfo.distance_meters / 1000).toFixed(1)} км
+                                </p>
+                                <Badge variant="secondary" className="text-xs">
+                                  Курьер пешком/велосипед
+                                </Badge>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="space-y-2">
