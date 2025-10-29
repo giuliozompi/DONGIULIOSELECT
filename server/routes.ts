@@ -2716,7 +2716,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             visit_order: 2
           }
         ],
-        comment: `Заказ ${orderId.substring(0, 8)} - Don Giulio Select`
+        comment: `Заказ ${orderId.substring(0, 8)} - Don Giulio Select`,
+        requirements: {
+          taxi_classes: ['express'],  // Specifica tariffa Express per Yandex Go
+          skip_door_to_door: false    // Consegna porta a porta
+        }
       };
       
       // Crea claim
