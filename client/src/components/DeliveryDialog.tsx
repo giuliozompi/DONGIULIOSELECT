@@ -322,11 +322,9 @@ export function DeliveryDialog({
       
       // Calculate prices for both services in parallel
       const [dostavkaResponse, goResponse] = await Promise.allSettled([
-        apiRequest('POST', `/api/admin/orders/${order.id}/yandex-price`, {
-          pickupAddress,
-          pickupCoords,
-          senderPhone: pickupContactPhone || '+79000000000',
-          recipientPhone: deliveryContactPhone || order.customerPhone,
+        apiRequest('POST', `/api/admin/orders/${order.id}/yandex-delivery-price`, {
+          pickupCoordinates: pickupCoords,
+          deliveryCoordinates: deliveryCoords,
         }),
         apiRequest('POST', `/api/admin/orders/${order.id}/yandex-go-price`, {
           pickupAddress,
