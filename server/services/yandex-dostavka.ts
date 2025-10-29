@@ -319,7 +319,12 @@ class YandexDostavkaService {
       'X-Idempotency-Key': idempotencyKey,
     };
     
-    logger.info('Creating order', { requestId, idempotencyKey });
+    logger.info('Creating order', { 
+      requestId, 
+      idempotencyKey,
+      offerId: orderData.offer_id,
+      hasOfferId: !!orderData.offer_id
+    });
 
     try {
       const data = await withRetry(async () => {
