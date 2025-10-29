@@ -1,3 +1,13 @@
+import {
+  generateIdempotencyKey,
+  generateRequestId,
+  generateCorrelationId,
+  withRetry,
+  validateCoordinates,
+  validatePackage,
+  YandexLogger,
+  yandexFetch,
+} from '../utils/yandex-integration';
 
 // Yandex Dostavka API - Express/Courier service for small packages
 // Docs: https://yandex.ru/support/delivery-profile/ru/api/express/quickstart
@@ -147,8 +157,29 @@ class YandexDostavkaService {
     pickupCoords: [number, number],
     deliveryCoords: [number, number],
     items?: any[],
-    requirements?: any
+    requirements?: any,
+    correlationId?: string
   ): Promise<any> {
+    const corrId = correlationId || generateCorrelationId();
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      service: 'yandex-dostavka',
+      operation: 'checkPrice',
+    });
+
+    // Validate coordinates
+    const pickupValidation = validateCoordinates(pickupCoords, 'pickupCoords');
+    if (!pickupValidation.valid) {
+      logger.error('Pickup coordinate validation failed', { errors: pickupValidation.errors });
+      throw new Error(`Validazione coordinate pickup fallita: ${pickupValidation.errors.join(', ')}`);
+    }
+
+    const deliveryValidation = validateCoordinates(deliveryCoords, 'deliveryCoords');
+    if (!deliveryValidation.valid) {
+      logger.error('Delivery coordinate validation failed', { errors: deliveryValidation.errors });
+      throw new Error(`Validazione coordinate consegna fallita: ${deliveryValidation.errors.join(', ')}`);
+    }
+
     const url = `${this.baseUrl}/offers/calculate`;
     
     // Prepara items per Yandex Dostavka (dimensioni in METRI)
@@ -161,6 +192,13 @@ class YandexDostavkaService {
         height: 0.15,  // 15cm = 0.15 metri
       }
     }];
+
+    // Validate package
+    const packageValidation = validatePackage(deliveryItems[0]);
+    if (!packageValidation.valid) {
+      logger.error('Package validation failed', { errors: packageValidation.errors });
+      throw new Error(`Validazione pacco fallita: ${packageValidation.errors.join(', ')}`);
+    }
     
     const payload = {
       items: deliveryItems,
@@ -176,34 +214,21 @@ class YandexDostavkaService {
       ],
     };
 
-    console.log('Yandex Dostavka checkPrice request:', {
-      url,
-      payload: JSON.stringify(payload, null, 2),
-    });
+    logger.info('Starting price calculation');
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(payload),
-      });
+      const data = await withRetry(async () => {
+        const response = await yandexFetch(url, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify(payload),
+        }, logger, corrId);
 
-      console.log('Yandex Dostavka checkPrice response:', {
-        status: response.status,
-        statusText: response.statusText,
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('Yandex Dostavka checkPrice error response:', error);
-        throw new Error(`Yandex Dostavka API error: ${response.status} - ${error}`);
-      }
-
-      const data = await response.json() as YandexDeliveryCalculateResponse;
+        return await response.json() as YandexDeliveryCalculateResponse;
+      }, {}, corrId);
       
-      console.log('Yandex Dostavka price data:', {
+      logger.info('Price calculation response received', {
         offersCount: data.offers?.length || 0,
-        firstOffer: data.offers?.[0],
       });
 
       // Converti formato per compatibilità con frontend
@@ -249,43 +274,66 @@ class YandexDostavkaService {
   /**
    * Create delivery order (claim)
    */
-  async createOrder(orderData: {
-    items: YandexDeliveryItem[];
-    route_points: YandexDeliveryRoutePoint[];
-    comment?: string;
-    offer_id?: string;
-  }): Promise<YandexDeliveryClaimResponse> {
-    // Genera request_id univoco (richiesto da Yandex API)
-    const requestId = `don-giulio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const url = `${this.baseUrl}/claims/create?request_id=${encodeURIComponent(requestId)}`;
+  async createOrder(
+    orderData: {
+      items: YandexDeliveryItem[];
+      route_points: YandexDeliveryRoutePoint[];
+      comment?: string;
+      offer_id?: string;
+    },
+    orderId?: string,
+    correlationId?: string
+  ): Promise<YandexDeliveryClaimResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const requestId = generateRequestId();
+    const idempotencyKey = generateIdempotencyKey();
     
-    console.log('Yandex Dostavka createOrder request:', {
-      url,
+    const logger = new YandexLogger({
+      correlationId: corrId,
       requestId,
-      payload: JSON.stringify(orderData, null, 2),
+      idempotencyKey,
+      service: 'yandex-dostavka',
+      operation: 'createOrder',
+      orderId,
     });
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(orderData),
-      });
-
-      console.log('Yandex Dostavka createOrder response:', {
-        status: response.status,
-        statusText: response.statusText,
-      });
-
-      if (!response.ok) {
-        const error = await response.text();
-        console.error('Yandex Dostavka createOrder error:', error);
-        throw new Error(`Yandex Dostavka API error: ${response.status} - ${error}`);
+    // Validate route points
+    for (const point of orderData.route_points) {
+      const validation = validateCoordinates(point.coordinates, `${point.type} coordinates`);
+      if (!validation.valid) {
+        logger.error('Route point validation failed', { errors: validation.errors });
+        throw new Error(`Validazione punto percorso fallita: ${validation.errors.join(', ')}`);
       }
+    }
 
-      return await response.json() as YandexDeliveryClaimResponse;
+    const url = `${this.baseUrl}/claims/create?request_id=${encodeURIComponent(requestId)}`;
+    
+    const headers = {
+      ...this.getHeaders(),
+      'X-Idempotency-Key': idempotencyKey,
+    };
+    
+    logger.info('Creating order', { requestId, idempotencyKey });
+
+    try {
+      const data = await withRetry(async () => {
+        const response = await yandexFetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(orderData),
+        }, logger, corrId);
+
+        return await response.json() as YandexDeliveryClaimResponse;
+      }, {}, corrId);
+
+      logger.info('Order created successfully', {
+        claimId: data.id,
+        status: data.status
+      });
+
+      return data;
     } catch (error) {
-      console.error('Yandex Dostavka createOrder error:', error);
+      logger.error('Create order failed', { error });
       throw error;
     }
   }
@@ -293,24 +341,35 @@ class YandexDostavkaService {
   /**
    * Get order status
    */
-  async getOrderStatus(claimId: string): Promise<YandexDeliveryClaimResponse> {
+  async getOrderStatus(claimId: string, correlationId?: string): Promise<YandexDeliveryClaimResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      service: 'yandex-dostavka',
+      operation: 'getOrderStatus',
+      claimId,
+    });
+
     const url = `${this.baseUrl}/claims/info`;
     
+    logger.info('Getting order status');
+
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ claim_id: claimId }),
-      });
+      const data = await withRetry(async () => {
+        const response = await yandexFetch(url, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({ claim_id: claimId }),
+        }, logger, corrId);
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Yandex Dostavka API error: ${response.status} - ${error}`);
-      }
+        return await response.json() as YandexDeliveryClaimResponse;
+      }, {}, corrId);
 
-      return await response.json() as YandexDeliveryClaimResponse;
+      logger.info('Order status retrieved', { status: data.status });
+
+      return data;
     } catch (error) {
-      console.error('Yandex Dostavka getOrderStatus error:', error);
+      logger.error('Get order status failed', { error });
       throw error;
     }
   }
@@ -318,27 +377,46 @@ class YandexDostavkaService {
   /**
    * Cancel order
    */
-  async cancelOrder(claimId: string): Promise<YandexDeliveryClaimResponse> {
+  async cancelOrder(claimId: string, correlationId?: string): Promise<YandexDeliveryClaimResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const idempotencyKey = generateIdempotencyKey();
+    
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      idempotencyKey,
+      service: 'yandex-dostavka',
+      operation: 'cancelOrder',
+      claimId,
+    });
+
     const url = `${this.baseUrl}/claims/cancel`;
     
+    const headers = {
+      ...this.getHeaders(),
+      'X-Idempotency-Key': idempotencyKey,
+    };
+    
+    logger.info('Cancelling order');
+
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ 
-          claim_id: claimId,
-          version: 1,
-        }),
-      });
+      const data = await withRetry(async () => {
+        const response = await yandexFetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ 
+            claim_id: claimId,
+            version: 1,
+          }),
+        }, logger, corrId);
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Yandex Dostavka API error: ${response.status} - ${error}`);
-      }
+        return await response.json() as YandexDeliveryClaimResponse;
+      }, {}, corrId);
 
-      return await response.json() as YandexDeliveryClaimResponse;
+      logger.info('Order cancelled', { status: data.status });
+
+      return data;
     } catch (error) {
-      console.error('Yandex Dostavka cancelOrder error:', error);
+      logger.error('Cancel order failed', { error });
       throw error;
     }
   }

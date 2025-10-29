@@ -1,3 +1,13 @@
+import {
+  generateIdempotencyKey,
+  generateRequestId,
+  generateCorrelationId,
+  withRetry,
+  validateCoordinates,
+  validatePackage,
+  YandexLogger,
+  yandexFetch,
+} from '../utils/yandex-integration';
 
 // Yandex Go Cargo API 2.0 - Taxi-based delivery service
 // Docs: https://yandex.com/dev/logistics/api/ref/v2/
@@ -172,48 +182,61 @@ export class YandexGoService {
    * API V2: offers/calculate (identical to Yandex Dostavka - same service!)
    * Docs: https://yandex.ru/support/taxi-for-business/api/
    */
-  async checkPrice(request: YandexGoCheckPriceRequest): Promise<YandexGoCheckPriceResponse> {
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/offers/calculate`;
-    
-    const headers = this.getHeaders('v2'); // V2 = only Bearer token (no Client-Id)
-    
-    console.log('Yandex Go V2 offers/calculate request to:', url);
-    console.log('Yandex Go V2 headers:', {
-      'Content-Type': headers['Content-Type'],
-      'Accept': headers['Accept'],
-      'Accept-Language': headers['Accept-Language'],
-      'Authorization': headers['Authorization'] ? `Bearer ${headers['Authorization'].substring(7, 15)}...` : 'MISSING'
-    });
-    console.log('Yandex Go V2 request body:', JSON.stringify(request, null, 2));
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(request),
+  async checkPrice(request: YandexGoCheckPriceRequest, correlationId?: string): Promise<YandexGoCheckPriceResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      service: 'yandex-go',
+      operation: 'checkPrice',
     });
 
-    console.log('Yandex Go checkPrice response:', {
-      status: response.status,
-      statusText: response.statusText
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Yandex Go checkPrice error:', errorText);
-      
-      if (response.status === 403 || response.status === 401) {
-        throw new Error(`Yandex Go API: Access denied (${response.status}). Verify that YANDEX_GO_TOKEN is valid and obtained from Yandex Go B2B Corporate Dashboard (separate from Yandex Dostavka).`);
+    // Validate coordinates
+    for (let i = 0; i < request.route_points.length; i++) {
+      const point = request.route_points[i];
+      const validation = validateCoordinates(point.coordinates, `route_points[${i}].coordinates`);
+      if (!validation.valid) {
+        logger.error('Coordinate validation failed', { errors: validation.errors });
+        throw new Error(`Validazione coordinate fallita: ${validation.errors.join(', ')}`);
       }
-      
-      throw new Error(`Yandex Go API error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
-    console.log('Yandex Go price data:', data);
+    // Validate packages
+    for (let i = 0; i < request.items.length; i++) {
+      const item = request.items[i];
+      const validation = validatePackage(item);
+      if (!validation.valid) {
+        logger.error('Package validation failed', { errors: validation.errors });
+        throw new Error(`Validazione pacco fallita: ${validation.errors.join(', ')}`);
+      }
+    }
+
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/offers/calculate`;
+    const headers = this.getHeaders('v2'); // V2 = only Bearer token (no Client-Id)
+    
+    logger.info('Starting price calculation', { 
+      url, 
+      routePoints: request.route_points.length,
+      items: request.items.length 
+    });
+
+    // Wrap in retry logic
+    const data = await withRetry(async () => {
+      const response = await yandexFetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(request),
+      }, logger, corrId);
+
+      return await response.json();
+    }, {}, corrId);
+    logger.info('Price calculation response received', { 
+      offersCount: data.offers?.length || 0 
+    });
     
     // Parse Yandex response - API returns { offers: [...] }
     if (!data.offers || !Array.isArray(data.offers) || data.offers.length === 0) {
-      throw new Error('No delivery offers available for this route');
+      logger.warn('No offers available');
+      throw new Error('Nessuna offerta di consegna disponibile per questo percorso');
     }
     
     // Extract best offer (first one is usually the best/cheapest)
@@ -288,30 +311,53 @@ export class YandexGoService {
   /**
    * Create delivery claim (step 2)
    */
-  async createClaim(request: YandexGoClaimRequest, requestId: string): Promise<YandexGoClaimResponse> {
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/create?request_id=${requestId}`;
+  async createClaim(
+    request: YandexGoClaimRequest, 
+    orderId?: string,
+    correlationId?: string
+  ): Promise<YandexGoClaimResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const requestId = generateRequestId();
+    const idempotencyKey = generateIdempotencyKey();
     
-    console.log('Yandex Go createClaim request to:', url, 'with requestId:', requestId);
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(request),
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      requestId,
+      idempotencyKey,
+      service: 'yandex-go',
+      operation: 'createClaim',
+      orderId,
     });
 
-    console.log('Yandex Go createClaim response:', {
-      status: response.status,
-      statusText: response.statusText
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Yandex Go createClaim error:', errorText);
-      throw new Error(`Yandex Go API error: ${response.status} - ${errorText}`);
+    // Validate route points
+    for (const point of request.route_points) {
+      const validation = validateCoordinates(point.coordinates, `${point.type} coordinates`);
+      if (!validation.valid) {
+        logger.error('Route point validation failed', { errors: validation.errors });
+        throw new Error(`Validazione punto percorso fallita: ${validation.errors.join(', ')}`);
+      }
     }
 
-    const data = await response.json();
-    console.log('Yandex Go claim created:', {
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/create?request_id=${requestId}`;
+    
+    const headers = {
+      ...this.getHeaders(),
+      'X-Idempotency-Key': idempotencyKey,
+    };
+    
+    logger.info('Creating claim', { url, requestId, idempotencyKey });
+
+    const data = await withRetry(async () => {
+      const response = await yandexFetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request),
+      }, logger, corrId);
+
+      return await response.json();
+    }, {}, corrId);
+
+    logger.info('Claim created successfully', {
       claimId: data.id,
       status: data.status,
       pricing: data.pricing
@@ -323,36 +369,31 @@ export class YandexGoService {
   /**
    * Get claim info (step 3)
    */
-  async getClaimInfo(claimId: string): Promise<YandexGoClaimResponse> {
+  async getClaimInfo(claimId: string, correlationId?: string): Promise<YandexGoClaimResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      service: 'yandex-go',
+      operation: 'getClaimInfo',
+      claimId,
+    });
+
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/info?claim_id=${claimId}`;
     
-    console.log('Yandex Go getClaimInfo request:', {
-      url,
-      claimId
-    });
+    logger.info('Getting claim info');
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({}),
-    });
+    const data = await withRetry(async () => {
+      const response = await yandexFetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({}),
+      }, logger, corrId);
 
-    console.log('Yandex Go getClaimInfo response:', {
-      status: response.status,
-      statusText: response.statusText
-    });
+      return await response.json();
+    }, {}, corrId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Yandex Go getClaimInfo error:', errorText);
-      throw new Error(`Yandex Go API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('Yandex Go claim info:', {
-      claimId: data.id,
+    logger.info('Claim info retrieved', {
       status: data.status,
-      pricing: data.pricing,
       performer: data.performer_info
     });
     
@@ -362,39 +403,38 @@ export class YandexGoService {
   /**
    * Accept claim (step 4)
    */
-  async acceptClaim(claimId: string, version: number): Promise<YandexGoClaimResponse> {
+  async acceptClaim(claimId: string, version: number, correlationId?: string): Promise<YandexGoClaimResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const idempotencyKey = generateIdempotencyKey();
+    
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      idempotencyKey,
+      service: 'yandex-go',
+      operation: 'acceptClaim',
+      claimId,
+    });
+
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/accept?claim_id=${claimId}`;
     
-    console.log('Yandex Go acceptClaim request:', {
-      url,
-      claimId,
-      version
-    });
+    const headers = {
+      ...this.getHeaders(),
+      'X-Idempotency-Key': idempotencyKey,
+    };
+    
+    logger.info('Accepting claim', { version });
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        version: version,
-      }),
-    });
+    const data = await withRetry(async () => {
+      const response = await yandexFetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ version }),
+      }, logger, corrId);
 
-    console.log('Yandex Go acceptClaim response:', {
-      status: response.status,
-      statusText: response.statusText
-    });
+      return await response.json();
+    }, {}, corrId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Yandex Go acceptClaim error:', errorText);
-      throw new Error(`Yandex Go API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('Yandex Go claim accepted:', {
-      claimId: data.id,
-      status: data.status
-    });
+    logger.info('Claim accepted', { status: data.status });
     
     return data;
   }
@@ -402,67 +442,75 @@ export class YandexGoService {
   /**
    * Get cancel info
    */
-  async getCancelInfo(claimId: string): Promise<YandexGoCancelInfoResponse> {
+  async getCancelInfo(claimId: string, correlationId?: string): Promise<YandexGoCancelInfoResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      service: 'yandex-go',
+      operation: 'getCancelInfo',
+      claimId,
+    });
+
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel-info?claim_id=${claimId}`;
     
-    console.log('Yandex Go getCancelInfo request:', {
-      url,
-      claimId
+    logger.info('Getting cancel info');
+
+    const data = await withRetry(async () => {
+      const response = await yandexFetch(url, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({}),
+      }, logger, corrId);
+
+      return await response.json();
+    }, {}, corrId);
+
+    logger.info('Cancel info retrieved', { 
+      cancelState: data.cancel_state,
+      freeCancellation: data.free_cancellation_available 
     });
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({}),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Yandex Go getCancelInfo error:', errorText);
-      throw new Error(`Yandex Go API error: ${response.status} - ${errorText}`);
-    }
-
-    return await response.json();
+    return data;
   }
 
   /**
    * Cancel claim
    */
-  async cancelClaim(claimId: string, version: number, cancelState?: string): Promise<YandexGoClaimResponse> {
+  async cancelClaim(claimId: string, version: number, cancelState?: string, correlationId?: string): Promise<YandexGoClaimResponse> {
+    const corrId = correlationId || generateCorrelationId();
+    const idempotencyKey = generateIdempotencyKey();
+    
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      idempotencyKey,
+      service: 'yandex-go',
+      operation: 'cancelClaim',
+      claimId,
+    });
+
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel?claim_id=${claimId}`;
     
-    console.log('Yandex Go cancelClaim request:', {
-      url,
-      claimId,
-      version,
-      cancelState
-    });
+    const headers = {
+      ...this.getHeaders(),
+      'X-Idempotency-Key': idempotencyKey,
+    };
+    
+    logger.info('Cancelling claim', { version, cancelState });
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        version: version,
-        cancel_state: cancelState,
-      }),
-    });
+    const data = await withRetry(async () => {
+      const response = await yandexFetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          version: version,
+          cancel_state: cancelState,
+        }),
+      }, logger, corrId);
 
-    console.log('Yandex Go cancelClaim response:', {
-      status: response.status,
-      statusText: response.statusText
-    });
+      return await response.json();
+    }, {}, corrId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Yandex Go cancelClaim error:', errorText);
-      throw new Error(`Yandex Go API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('Yandex Go claim cancelled:', {
-      claimId: data.id,
-      status: data.status
-    });
+    logger.info('Claim cancelled', { status: data.status });
     
     return data;
   }
