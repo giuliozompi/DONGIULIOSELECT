@@ -237,11 +237,22 @@ class YandexDostavkaService {
         offersCount: data.offers?.length || 0,
       });
 
-      // Converti formato per compatibilità con frontend
-      const bestOffer = data.offers?.[0];
+      // Filtra solo le offerte Express (taxi_class: 'express')
+      const expressOffers = data.offers?.filter((offer: any) => offer.taxi_class === 'express') || [];
+      
+      // Se non ci sono offerte Express, usa tutte le offerte disponibili
+      const availableOffers = expressOffers.length > 0 ? expressOffers : data.offers;
+      
+      const bestOffer = availableOffers?.[0];
       if (!bestOffer) {
         throw new Error('No delivery offers available');
       }
+      
+      logger.info('Selected offer', {
+        taxiClass: bestOffer.taxi_class,
+        expressOffersCount: expressOffers.length,
+        totalOffersCount: data.offers?.length || 0
+      });
 
       // Estrai prezzo e valuta dal campo price
       const currency = bestOffer.price?.currency || 'RUB';
@@ -269,7 +280,7 @@ class YandexDostavkaService {
         distance_meters: distanceMeters,
         eta: etaSeconds,
         offer_id: bestOffer.payload || '', // payload è l'offer_id di Yandex
-        all_offers: data.offers,
+        all_offers: expressOffers.length > 0 ? expressOffers : data.offers, // Solo offerte Express
       };
     } catch (error) {
       console.error('Yandex Dostavka checkPrice error:', error);
