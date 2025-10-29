@@ -293,7 +293,7 @@ class YandexDostavkaService {
         distance_meters: distanceMeters,
         eta: etaSeconds,
         offer_id: bestOffer.payload || '', // payload è l'offer_id di Yandex
-        all_offers: expressOffers.length > 0 ? expressOffers : data.offers, // Solo offerte Express
+        all_offers: filteredOffers.length > 0 ? filteredOffers : data.offers, // Offerte filtrate
       };
     } catch (error) {
       console.error('Yandex Dostavka checkPrice error:', error);
