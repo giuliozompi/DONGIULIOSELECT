@@ -15,8 +15,6 @@ import {
 // IMPORTANTE: Yandex Go e Yandex Dostavka sono servizi SEPARATI con token SEPARATI
 // Yandex Go richiede OAuth token dal cabinet "Яндекс Go Доставка для бизнеса"
 const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net';
-const YANDEX_GO_TOKEN = process.env.YANDEX_GO_TOKEN; // OAuth token da "Яндекс Go Доставка для бизнеса"
-const YANDEX_GO_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
 // Haversine formula to calculate distance between two coordinates
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -147,17 +145,21 @@ export interface YandexGoCancelInfoResponse {
 
 export class YandexGoService {
   private baseUrl = YANDEX_GO_BASE_URL;
-  private token = YANDEX_GO_TOKEN;
-  private clientId = YANDEX_GO_CLIENT_ID;
 
   private getHeaders(): Record<string, string> {
-    // Secondo la documentazione Yandex Go Доставка для бизнеса usa solo Bearer token
-    if (!this.token) {
+    // Leggi il token dinamicamente per supportare la rotazione delle credenziali
+    const token = process.env.YANDEX_GO_TOKEN;
+    
+    if (!token) {
       throw new Error('Yandex Go OAuth token not configured (YANDEX_GO_TOKEN). Ottieni il token dal cabinet "Яндекс Go Доставка для бизнеса"');
     }
 
+    // Log per debug (primi 10 caratteri del token per verificare quale viene usato)
+    const tokenPrefix = token.substring(0, 10);
+    console.log(`[YandexGo] Using token starting with: ${tokenPrefix}...`);
+
     return {
-      'Authorization': `Bearer ${this.token.trim()}`,
+      'Authorization': `Bearer ${token.trim()}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
