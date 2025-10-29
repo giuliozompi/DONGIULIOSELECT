@@ -1,0 +1,113 @@
+перед тем что бы передать API запрос надо проходить авторизация в яндекс ИД
+Relevant Posts
+0
+
+No tweets found
+
+
+RouteLLM
+Routing to GPT-5
+Коротко: да, перед тем как вызывать API Яндекс Go Доставки от имени вашего бизнеса, нужна авторизация. Но конкретный способ зависит от того, какой вариант доступа включён у вас в кабинете:
+
+Есть два основных варианта авторизации
+
+Сервисный OAuth через Яндекс ID
+Для кого: когда API требует OAuth-токен, выпущенный через Яндекс ID (организация/сервисный аккаунт).
+Как работает:
+Регистрируете приложение в Яндекс OAuth/Яндекс Cloud (если используется сервисный аккаунт).
+Получаете client_id/client_secret.
+Обмениваете их на access_token по OAuth-флоу (часто используют Client Credentials для серверного интеграционного сценария).
+В API-запросах к Яндекс Go отправляете заголовок Authorization: Bearer <access_token>.
+Плюсы: централизованный контроль доступов, ротация токенов, меньше “жёстко прошитых” ключей.
+Минусы: надо настроить приложение и периодически обновлять токен.
+Интеграционный API-ключ (статический ключ)
+Для кого: когда в вашем кабинете Яндекс Go Доставки включена интеграция по статическому ключу.
+Как работает:
+В кабинете формируете API-ключ.
+В запросах используете Authorization: Bearer <api_key>.
+Плюсы: проще внедрить, нет отдельного обмена токенов.
+Минусы: хранить ключ безопасно, при утечке — менять ключ и ревокнуть старый.
+Как узнать, что включено у вас
+
+Зайдите в кабинет Яндекс Go Доставки для бизнеса и откройте раздел интеграций/API.
+В документации к вашей организации/подключению будет указано: “используйте OAuth-токен” или “используйте API-ключ”.
+Также посмотрите примеры curl в кабинете — они покажут нужный заголовок.
+Рекомендованный безопасный пайплайн на Replit
+
+Переменные окружения:
+Если OAuth: OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, OAUTH_TOKEN_URL, YANDEX_SCOPE (если требуется), и храните актуальный ACCESS_TOKEN в памяти/кэше.
+Если API-ключ: YANDEX_API_KEY.
+Серверный код всегда добавляет Authorization заголовок сам, фронт никогда не видит ключи/токены.
+Шаблон для сервисного OAuth (Client Credentials) на Node.js
+
+javascript
+Copy
+import axios from 'axios';
+
+const OAUTH_TOKEN_URL = process.env.OAUTH_TOKEN_URL; // например: https://oauth.yandex.ru/token
+const OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID;
+const OAUTH_CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
+
+let accessToken = null;
+let tokenExpiresAt = 0;
+
+async function getAccessToken() {
+  const now = Date.now();
+  if (accessToken && now < tokenExpiresAt - 60_000) {
+    return accessToken;
+  }
+  const params = new URLSearchParams();
+  params.append('grant_type', 'client_credentials');
+  // Если требуется scope, раскомментируйте:
+  // params.append('scope', 'your.scope.here');
+
+  const resp = await axios.post(
+    OAUTH_TOKEN_URL,
+    params,
+    {
+      auth: { username: OAUTH_CLIENT_ID, password: OAUTH_CLIENT_SECRET },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    }
+  );
+  accessToken = resp.data.access_token;
+  const expiresInSec = resp.data.expires_in || 3600;
+  tokenExpiresAt = now + expiresInSec * 1000;
+  return accessToken;
+}
+
+export async function yaHeaders() {
+  const token = await getAccessToken();
+  return {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+}
+Использование при вызове API Доставки:
+
+javascript
+Copy
+import axios from 'axios';
+import { yaHeaders } from './oauth.js';
+
+const YANDEX_API_BASE = process.env.YANDEX_API_BASE;
+
+async function estimate(body) {
+  const headers = await yaHeaders();
+  const r = await axios.post(`${YANDEX_API_BASE}/v2/estimate`, body, { headers });
+  return r.data;
+}
+Что передать разработчику для окончательного выбора варианта
+
+Скрин или точную ссылку из кабинета с указанием способа авторизации.
+Если OAuth:
+client_id, client_secret (через .env, а не в коде),
+URL получения токена и, при необходимости, требуемые scopes.
+Если API-ключ:
+Сгенерированный ключ (через .env).
+Требования к IP/доменам (если есть ограничения).
+Тестовая организация/окружение, если доступно.
+Итого
+
+Да, авторизация обязательна.
+Либо Bearer OAuth-токен (через Яндекс ID/сервисный OAuth), либо Bearer API-ключ — зависит от настроек вашего аккаунта.
+На сервере Replit реализуйте получение/ротацию токена или хранение ключа в .env; фронт не должен видеть секреты.
