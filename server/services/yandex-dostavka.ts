@@ -386,6 +386,44 @@ class YandexDostavkaService {
   }
 
   /**
+   * Get cancel info (required before cancelling)
+   */
+  async getCancelInfo(claimId: string, correlationId?: string): Promise<{ cancel_state: string }> {
+    const corrId = correlationId || generateCorrelationId();
+    const logger = new YandexLogger({
+      correlationId: corrId,
+      service: 'yandex-dostavka',
+      operation: 'getCancelInfo',
+      claimId,
+    });
+
+    const url = `${this.baseUrl}/claims/cancel-info?claim_id=${encodeURIComponent(claimId)}`;
+    
+    logger.info('Getting cancel info');
+
+    try {
+      const data = await withRetry(async () => {
+        const response = await yandexFetch(url, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({}),
+        }, logger, corrId);
+
+        return await response.json();
+      }, {}, corrId);
+
+      logger.info('Cancel info retrieved', { 
+        cancelState: data.cancel_state 
+      });
+
+      return data;
+    } catch (error) {
+      logger.error('Get cancel info failed', { error });
+      throw error;
+    }
+  }
+
+  /**
    * Cancel order
    */
   async cancelOrder(claimId: string, correlationId?: string): Promise<YandexDeliveryClaimResponse> {
@@ -400,6 +438,16 @@ class YandexDostavkaService {
       claimId,
     });
 
+    // First, get the cancel info to obtain cancel_state
+    const cancelInfo = await this.getCancelInfo(claimId, corrId);
+
+    // Check if cancellation is available
+    if (cancelInfo.cancel_state === 'unavailable') {
+      const error = new Error('Невозможно отменить доставку. Заказ уже в финальном состоянии (доставлен или отменен ранее).');
+      logger.error('Cancellation unavailable', { cancelState: cancelInfo.cancel_state });
+      throw error;
+    }
+
     // claim_id deve essere passato come query parameter, non nel body
     const url = `${this.baseUrl}/claims/cancel?claim_id=${encodeURIComponent(claimId)}`;
     
@@ -408,7 +456,7 @@ class YandexDostavkaService {
       'X-Idempotency-Key': idempotencyKey,
     };
     
-    logger.info('Cancelling order');
+    logger.info('Cancelling order', { cancelState: cancelInfo.cancel_state });
 
     try {
       const data = await withRetry(async () => {
@@ -417,6 +465,7 @@ class YandexDostavkaService {
           headers,
           body: JSON.stringify({ 
             version: 1,
+            cancel_state: cancelInfo.cancel_state,
           }),
         }, logger, corrId);
 
