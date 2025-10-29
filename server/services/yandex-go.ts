@@ -197,8 +197,9 @@ export class YandexGoService {
       }
     }
 
-    // Secondo la documentazione Yandex Go usa /v2/estimate per la quotazione
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/estimate`;
+    // IMPORTANTE: Yandex Go usa gli stessi endpoint di Yandex Dostavka ma con token diverso
+    // L'endpoint /v2/estimate dalla documentazione ritorna 404, usiamo /v2/offers/calculate
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/offers/calculate`;
     const idempotencyKey = generateIdempotencyKey();
     
     const headers = {
@@ -332,8 +333,8 @@ export class YandexGoService {
       }
     }
 
-    // Secondo la documentazione Yandex Go usa /v2/create per creare ordini
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/create?request_id=${requestId}`;
+    // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/create
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/create?request_id=${requestId}`;
     
     const headers = {
       ...this.getHeaders(),
@@ -373,8 +374,8 @@ export class YandexGoService {
       claimId,
     });
 
-    // Secondo la documentazione Yandex Go usa /v2/orders/{order_id} per info ordine
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/orders/${claimId}`;
+    // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/info
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/info?claim_id=${claimId}`;
     
     logger.info('Getting claim info');
 
@@ -484,8 +485,8 @@ export class YandexGoService {
       claimId,
     });
 
-    // Secondo la documentazione Yandex Go usa /v2/orders/{order_id}/cancel per cancellare
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/orders/${claimId}/cancel`;
+    // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/cancel
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel?claim_id=${claimId}`;
     
     const headers = {
       ...this.getHeaders(),
