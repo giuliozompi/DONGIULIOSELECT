@@ -784,7 +784,6 @@ export function YandexGoDialog({
                   </>
                 ) : (
                   <>
-                    <DollarSign className="w-4 h-4 mr-2" />
                     Рассчитать цену
                   </>
                 )}
