@@ -557,9 +557,9 @@ export function DeliveryDialog({
     mutationFn: async () => {
       let endpoint = '';
       if (order.yandexClaimId) {
-        endpoint = `/api/admin/orders/${order.id}/yandex-delivery/cancel`;
+        endpoint = `/api/admin/orders/${order.id}/yandex-delivery-cancel`;
       } else if (order.yandexGoClaimId) {
-        endpoint = `/api/admin/orders/${order.id}/yandex-go/cancel`;
+        endpoint = `/api/admin/orders/${order.id}/yandex-go-cancel`;
       } else {
         throw new Error('Нет активной доставки для отмены');
       }
