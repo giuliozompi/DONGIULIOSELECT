@@ -237,8 +237,10 @@ class YandexDostavkaService {
         offersCount: data.offers?.length || 0,
       });
 
-      // Filtra solo le offerte Express (taxi_class: 'express')
-      const expressOffers = data.offers?.filter((offer: any) => offer.taxi_class === 'express') || [];
+      // Filtra solo le offerte Express (tutte le varianti: express, express_30min_longer, express_60min_longer)
+      const expressOffers = data.offers?.filter((offer: any) => 
+        offer.taxi_class?.startsWith('express')
+      ) || [];
       
       // Se non ci sono offerte Express, usa tutte le offerte disponibili
       const availableOffers = expressOffers.length > 0 ? expressOffers : data.offers;
@@ -251,7 +253,8 @@ class YandexDostavkaService {
       logger.info('Selected offer', {
         taxiClass: bestOffer.taxi_class,
         expressOffersCount: expressOffers.length,
-        totalOffersCount: data.offers?.length || 0
+        totalOffersCount: data.offers?.length || 0,
+        allExpressTaxiClasses: expressOffers.map((o: any) => o.taxi_class)
       });
 
       // Estrai prezzo e valuta dal campo price
@@ -334,15 +337,28 @@ class YandexDostavkaService {
       requestId, 
       idempotencyKey,
       offerId: orderData.offer_id,
-      hasOfferId: !!orderData.offer_id
+      hasOfferId: !!orderData.offer_id,
+      payloadPreview: {
+        hasItems: !!orderData.items?.length,
+        hasRoutePoints: !!orderData.route_points?.length,
+        hasComment: !!orderData.comment,
+        offerIdValue: orderData.offer_id
+      }
     });
 
     try {
       const data = await withRetry(async () => {
+        // Log the exact payload being sent
+        const payload = JSON.stringify(orderData);
+        logger.info('Sending payload to Yandex', { 
+          payloadLength: payload.length,
+          offerIdIncluded: payload.includes('offer_id')
+        });
+        
         const response = await yandexFetch(url, {
           method: 'POST',
           headers,
-          body: JSON.stringify(orderData),
+          body: payload,
         }, logger, corrId);
 
         return await response.json() as YandexDeliveryClaimResponse;
