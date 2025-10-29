@@ -2506,6 +2506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/orders/:id/yandex-delivery-cancel", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
       const { yandexDostavkaService } = await import("./services/yandex-dostavka");
+      const { ORDER_STATUSES } = await import("@shared/schema");
       
       const orderId = req.params.id;
       const order = await storage.getOrderById(orderId);
@@ -2520,19 +2521,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const result = await yandexDostavkaService.cancelOrder(order.yandexClaimId);
       
-      // Aggiorna ordine
+      // Riporta l'ordine allo stato PAID e rimuove tutti i dati del delivery
       await storage.updateOrder(orderId, {
-        yandexDeliveryStatus: result.status,
+        status: ORDER_STATUSES.PAID,
+        yandexClaimId: null,
+        yandexDeliveryStatus: null,
+        yandexDeliveryPrice: null,
+        yandexPerformerInfo: null,
       });
       
-      // Log dell'azione
+      // Log dell'azione con tutti i dettagli
       await storage.createOrderChangeLog({
         orderId,
         adminUserId: req.userId!,
         changeType: 'yandex_delivery_cancelled',
         changeData: {
-          oldStatus: order.yandexDeliveryStatus || null,
-          newStatus: result.status,
+          oldOrderStatus: order.status,
+          newOrderStatus: ORDER_STATUSES.PAID,
+          oldDeliveryStatus: order.yandexDeliveryStatus || null,
+          cancelledDeliveryStatus: result.status,
+          yandexClaimId: order.yandexClaimId,
+          deliveryPrice: order.yandexDeliveryPrice,
+          performerInfo: order.yandexPerformerInfo,
         },
       });
       
@@ -2825,6 +2835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/orders/:id/yandex-go-cancel", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
       const { yandexGoService } = await import("./services/yandex-go");
+      const { ORDER_STATUSES } = await import("@shared/schema");
       
       const orderId = req.params.id;
       const order = await storage.getOrderById(orderId);
@@ -2850,24 +2861,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cancelInfo.cancel_state
       );
       
-      // Aggiorna ordine - resetta tutti i campi Yandex Go per permettere una nuova chiamata
+      // Riporta l'ordine allo stato PAID e rimuove tutti i dati del delivery
       await storage.updateOrder(orderId, {
+        status: ORDER_STATUSES.PAID,
         yandexGoClaimId: null,
         yandexGoStatus: null,
         yandexGoPrice: null,
         yandexGoPerformerInfo: null,
         courierService: order.courierService === 'yandex_go' ? null : order.courierService,
-        status: order.status === 'ВЫЗВАН КУРЬЕР' ? 'ОПЛАЧЕН' : order.status,
       });
       
-      // Log dell'azione
+      // Log dell'azione con tutti i dettagli
       await storage.createOrderChangeLog({
         orderId,
         adminUserId: req.userId!,
         changeType: 'yandex_go_cancelled',
         changeData: {
-          oldStatus: order.yandexGoStatus || null,
-          newStatus: result.status,
+          oldOrderStatus: order.status,
+          newOrderStatus: ORDER_STATUSES.PAID,
+          oldDeliveryStatus: order.yandexGoStatus || null,
+          cancelledDeliveryStatus: result.status,
+          yandexGoClaimId: order.yandexGoClaimId,
+          deliveryPrice: order.yandexGoPrice,
+          performerInfo: order.yandexGoPerformerInfo,
           cancelInfo: cancelInfo
         },
       });
