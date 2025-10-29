@@ -11,10 +11,11 @@ import {
 
 // Yandex Go Доставка для бизнеса - Business taxi delivery service
 // Docs: https://yandex.com/dev/logistics/api/ref/v2/
-// Production endpoint: https://b2b.taxi.yandex.net/b2b/cargo/integration
-// IMPORTANTE: Yandex Go e Yandex Dostavka sono servizi SEPARATI con token SEPARATI
-// Yandex Go richiede OAuth token dal cabinet "Яндекс Go Доставка для бизнеса"
-const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net';
+// Production endpoint: https://b2b.taxi.yandex.net/b2b/cargo/integration/v2
+// IMPORTANTE: Yandex Go e Yandex Dostavka usano GLI STESSI ENDPOINT ma token DIVERSI
+// - Yandex Dostavka: Token per servizio "courier" (corriere a piedi/bicicletta)
+// - Yandex Go: Token per servizio "express" (corriere in auto)
+const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net/b2b/cargo/integration/v2';
 
 // Haversine formula to calculate distance between two coordinates
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -195,9 +196,8 @@ export class YandexGoService {
       }
     }
 
-    // IMPORTANTE: Yandex Go usa gli stessi endpoint di Yandex Dostavka ma con token diverso
-    // L'endpoint /v2/estimate dalla documentazione ritorna 404, usiamo /v2/offers/calculate
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/offers/calculate`;
+    // Yandex Go usa lo stesso endpoint di Yandex Dostavka
+    const url = `${this.baseUrl}/offers/calculate`;
     const idempotencyKey = generateIdempotencyKey();
     
     const headers = {
@@ -332,7 +332,7 @@ export class YandexGoService {
     }
 
     // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/create
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/create?request_id=${requestId}`;
+    const url = `${this.baseUrl}/claims/create?request_id=${requestId}`;
     
     const headers = {
       ...this.getHeaders(),
@@ -373,7 +373,7 @@ export class YandexGoService {
     });
 
     // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/info
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/info?claim_id=${claimId}`;
+    const url = `${this.baseUrl}/claims/info?claim_id=${claimId}`;
     
     logger.info('Getting claim info');
 
@@ -410,7 +410,7 @@ export class YandexGoService {
       claimId,
     });
 
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/accept?claim_id=${claimId}`;
+    const url = `${this.baseUrl}/claims/accept?claim_id=${claimId}`;
     
     const headers = {
       ...this.getHeaders(),
@@ -446,7 +446,7 @@ export class YandexGoService {
       claimId,
     });
 
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel-info?claim_id=${claimId}`;
+    const url = `${this.baseUrl}/claims/cancel-info?claim_id=${claimId}`;
     
     logger.info('Getting cancel info');
 
@@ -484,7 +484,7 @@ export class YandexGoService {
     });
 
     // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/cancel
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel?claim_id=${claimId}`;
+    const url = `${this.baseUrl}/claims/cancel?claim_id=${claimId}`;
     
     const headers = {
       ...this.getHeaders(),
