@@ -197,7 +197,8 @@ export class YandexGoService {
       }
     }
 
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/offers/calculate`;
+    // Secondo la documentazione Yandex Go usa /v2/estimate per la quotazione
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/estimate`;
     const idempotencyKey = generateIdempotencyKey();
     
     const headers = {
@@ -331,7 +332,8 @@ export class YandexGoService {
       }
     }
 
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/create?request_id=${requestId}`;
+    // Secondo la documentazione Yandex Go usa /v2/create per creare ordini
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/create?request_id=${requestId}`;
     
     const headers = {
       ...this.getHeaders(),
@@ -371,7 +373,8 @@ export class YandexGoService {
       claimId,
     });
 
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/info?claim_id=${claimId}`;
+    // Secondo la documentazione Yandex Go usa /v2/orders/{order_id} per info ordine
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/orders/${claimId}`;
     
     logger.info('Getting claim info');
 
@@ -481,7 +484,8 @@ export class YandexGoService {
       claimId,
     });
 
-    const url = `${this.baseUrl}/b2b/cargo/integration/v2/claims/cancel?claim_id=${claimId}`;
+    // Secondo la documentazione Yandex Go usa /v2/orders/{order_id}/cancel per cancellare
+    const url = `${this.baseUrl}/b2b/cargo/integration/v2/orders/${claimId}/cancel`;
     
     const headers = {
       ...this.getHeaders(),
