@@ -1,0 +1,303 @@
+Интеграция «Яндекс Go Доставка для бизнеса» в сайт (для передачи разработчику/Replit)
+Ниже — подробный, практичный бриф: что подготовить, какие API использовать, типовые сценарии, структура БД, примеры запросов и вебхуков, а также чек-лист тестирования. Этого достаточно, чтобы разработчик на Replit быстро собрал рабочий прототип интеграции.
+
+1) Что подготовить заранее
+Юридическое лицо/ИП и подключение к «Яндекс Доставка для бизнеса» (бывш. Яндекс.Такси/Go Доставка).
+Доступ к кабинету и API-ключи:
+OAuth-токен/Сервисный аккаунт или API ключ (в кабинете Яндекс Go Доставка).
+Идентификаторы парка/организации, если требуются.
+Белые списки доменов для вебхуков: публичный URL проекта на Replit (или через ngrok/Cloudflare Tunnel).
+Валюта, часовой пояс, города работы, ограничения по габаритам/весу.
+Примечание: Точные названия эндпоинтов и схемы авторизации могут отличаться в зависимости от версии API Яндекс Go Delivery B2B. Разработчику нужно сопоставить нижеописанное с актуальной документацией в личном кабинете или в официальном репозитории API.
+
+2) Основные сущности и поток
+Котировка/калькуляция: оценка цены и времени доставки по маршруту до создания заказа.
+Заказ: заявка на курьера с параметрами точки забора, точек доставки, окнами, контактами, особыми инструкциями.
+Статусы заказа: created → assigned → courier_arrived → picked_up → delivering → delivered / canceled / failed.
+Вебхуки: уведомления от Яндекса о смене статусов, координатах, ETA.
+Отчетность/документы: акты, закрывающие документы, выгрузки.
+Типовой пользовательский поток:
+
+Пользователь оформляет заказ у вас на сайте.
+Ваш бэкенд делает котировку в Яндекс Go (расчет цены/ETA).
+Показываете клиенту стоимость/время → подтверждение.
+Создаете заказ через API.
+Принимаете вебхуки о статусах и показываете трекинг/уведомления.
+Закрываете заказ, сохраняете финальные данные, при необходимости — чек/акт.
+3) Архитектура для Replit (Node.js пример)
+Frontend: форма заказа (адрес откуда, адрес куда, контактные данные, комментарии, желаемое время).
+Backend: Express.js
+POST /api/quote — котировка
+POST /api/order — создание заказа
+POST /api/webhooks/yandex — прием вебхуков
+GET /api/order/:id — получить детали/статус
+База данных (SQLite/Postgres) — таблицы:
+orders: id, external_id (yandex_order_id), client_name, phone, pickup_address, delivery_address, price_estimate, price_final, status, created_at, updated_at
+order_points: order_id, type (pickup|dropoff), address, lat, lon, contact_name, contact_phone, comment, time_window_from, time_window_to
+webhook_events: id, order_id, event_type, payload_json, created_at
+courier_tracking: order_id, lat, lon, heading, speed, reported_at
+Secrets: хранить API ключи через переменные окружения Replit.
+Пример .env:
+
+YANDEX_API_BASE=https://b2b.taxi.yandex.net/b2b/cargo/integration
+YANDEX_API_KEY=prod_xxx
+WEBHOOK_SECRET=your_webhook_shared_secret
+PUBLIC_BASE_URL=https://your-repl-name.username.repl.co
+4) Эндпоинты: примеры запросов
+Внимание: Ниже — шаблон. Уточнить актуальные пути и поля в документации Яндекса.
+
+4.1 Котировка (расчет стоимости)
+
+Метод: POST
+URL: https://b2b.taxi.yandex.net/b2b/cargo/integration/v2/estimate
+Заголовки:
+Authorization: Bearer <YANDEX_API_KEY>
+Content-Type: application/json
+Тело (пример):
+json
+Copy
+{
+  "items": [
+    {
+      "quantity": 1,
+      "size": { "length": 0.4, "width": 0.3, "height": 0.2 },
+      "weight_kg": 3.5,
+      "title": "Документы и образцы"
+    }
+  ],
+  "route_points": [
+    {
+      "point_id": 1,
+      "type": "source",
+      "address": { "fullname": "Москва, ул. Ленина, 10", "coordinates": [37.617, 55.755] },
+      "contact": { "name": "Иван", "phone": "+79999999999" }
+    },
+    {
+      "point_id": 2,
+      "type": "destination",
+      "address": { "fullname": "Москва, пр-т Мира, 50", "coordinates": [37.632, 55.78] },
+      "contact": { "name": "Петр", "phone": "+79998887766" }
+    }
+  ],
+  "requirements": {
+    "vehicle_type": "courier", 
+    "pro_courier": true
+  },
+  "optional_return": false
+}
+Ответ (примерно):
+json
+Copy
+{
+  "price": { "amount": "420.00", "currency": "RUB" },
+  "eta_minutes": 15,
+  "valid_till": "2025-10-29T12:00:00+03:00",
+  "offer_id": "offer_abc123"
+}
+4.2 Создание заказа
+
+Метод: POST
+URL: https://b2b.taxi.yandex.net/b2b/cargo/integration/v2/create
+Тело:
+json
+Copy
+{
+  "offer_id": "offer_abc123",
+  "client_order_id": "your_internal_order_100500",
+  "items": [
+    { "quantity": 1, "title": "Документы", "weight_kg": 3.5 }
+  ],
+  "route_points": [
+    {
+      "point_id": 1,
+      "type": "source",
+      "address": { "fullname": "Москва, ул. Ленина, 10", "coordinates": [37.617, 55.755] },
+      "contact": { "name": "Иван", "phone": "+79999999999" },
+      "comment": "Охрана, пропуск",
+      "time_window": { "from": "2025-10-29T10:00:00+03:00", "to": "2025-10-29T12:00:00+03:00" }
+    },
+    {
+      "point_id": 2,
+      "type": "destination",
+      "address": { "fullname": "Москва, пр-т Мира, 50", "coordinates": [37.632, 55.78] },
+      "contact": { "name": "Петр", "phone": "+79998887766" },
+      "comment": "Позвонить за 10 мин"
+    }
+  ],
+  "requirements": {
+    "vehicle_type": "courier",
+    "door_to_door": true,
+    "cash_on_delivery": false
+  },
+  "callback_url": "https://your-repl-name.username.repl.co/api/webhooks/yandex",
+  "webhook_secret": "your_webhook_shared_secret",
+  "recipient_tracking_enabled": true
+}
+Ответ:
+json
+Copy
+{
+  "order_id": "yandex_order_7f3c...",
+  "status": "created",
+  "tracking_url": "https://track.yandex.ru/XXXX"
+}
+4.3 Получение статуса заказа
+
+Метод: GET
+URL: https://b2b.taxi.yandex.net/b2b/cargo/integration/v2/orders/yandex_order_7f3c...
+Заголовок: Authorization: Bearer <YANDEX_API_KEY>
+Ответ (пример):
+json
+Copy
+{
+  "order_id": "yandex_order_7f3c...",
+  "status": "assigned",
+  "courier": { "name": "Алексей", "phone": "+7..." },
+  "eta_minutes": 12,
+  "price": { "final_amount": "430.00", "currency": "RUB" }
+}
+4.4 Отмена заказа
+
+Метод: POST
+URL: https://b2b.taxi.yandex.net/b2b/cargo/integration/v2/orders/yandex_order_7f3c.../cancel
+Тело:
+json
+Copy
+{ "reason": "client_request" }
+4.5 Вебхуки: пример payload
+Ваш POST /api/webhooks/yandex должен принимать:
+
+json
+Copy
+{
+  "event": "status_changed",
+  "order_id": "yandex_order_7f3c...",
+  "status": "picked_up",
+  "timestamp": "2025-10-29T09:41:00Z",
+  "signature": "HMAC-SHA256-BASE64",
+  "data": {
+    "courier": { "name": "Алексей", "phone": "+7..." },
+    "location": { "lat": 55.76, "lon": 37.62 },
+    "eta_minutes": 18
+  }
+}
+Проверка подлинности:
+
+Считайте signature, вычислите HMAC SHA256 от сырого тела запроса по WEBHOOK_SECRET, сравните.
+Ответ вебхуку: статус 200 и { "ok": true }.
+
+5) Сервер: пример кода (Node.js/Express, axios)
+javascript
+Copy
+import express from 'express';
+import axios from 'axios';
+import crypto from 'crypto';
+
+const app = express();
+app.use(express.json({ type: '*/*' }));
+
+const YANDEX_API_BASE = process.env.YANDEX_API_BASE;
+const YANDEX_API_KEY = process.env.YANDEX_API_KEY;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+
+function yaHeaders() {
+  return {
+    Authorization: `Bearer ${YANDEX_API_KEY}`,
+    'Content-Type': 'application/json'
+  };
+}
+
+app.post('/api/quote', async (req, res) => {
+  try {
+    const r = await axios.post(`${YANDEX_API_BASE}/v2/estimate`, req.body, { headers: yaHeaders() });
+    res.json(r.data);
+  } catch (e) {
+    console.error(e?.response?.data || e.message);
+    res.status(400).json({ error: 'quote_failed', details: e?.response?.data || e.message });
+  }
+});
+
+app.post('/api/order', async (req, res) => {
+  try {
+    const r = await axios.post(`${YANDEX_API_BASE}/v2/create`, req.body, { headers: yaHeaders() });
+    res.json(r.data);
+  } catch (e) {
+    console.error(e?.response?.data || e.message);
+    res.status(400).json({ error: 'order_create_failed', details: e?.response?.data || e.message });
+  }
+});
+
+function verifySignature(rawBody, signature) {
+  const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
+  hmac.update(rawBody);
+  const digest = hmac.digest('base64');
+  return crypto.timingSafeEqual(Buffer.from(signature || ''), Buffer.from(digest));
+}
+
+app.post('/api/webhooks/yandex', express.raw({ type: '*/*' }), (req, res) => {
+  try {
+    const signature = req.headers['x-signature'] || req.body.signature; // в зависимости от реализации
+    const raw = req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body));
+    if (!verifySignature(raw, signature)) {
+      return res.status(401).json({ ok: false, error: 'invalid_signature' });
+    }
+    const payload = JSON.parse(raw.toString());
+    // TODO: Сохранить payload в БД, обновить статус заказа, при необходимости отправить клиенту уведомление
+    console.log('Webhook:', payload);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ ok: false });
+  }
+});
+
+// Healthcheck
+app.get('/health', (req, res) => res.json({ ok: true }));
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Server running on ${port}`));
+Важно:
+
+Для корректной проверки подписи на Express нужно получать «сырой» body в вебхуке: используем express.raw на конкретном маршруте, а не глобально.
+В Replit включите Always On или используйте пингер, иначе вебхук может не достучаться, если проект «уснул».
+6) Валидация адресов и координат
+Рекомендуется геокодировать адреса до координат и проверять валидность. Это можно делать через API Геокодера Яндекса или другой геокодер.
+На фронте — автодополнение адреса, валидация номера телефона, указание желаемого окна доставки.
+7) Обработка статусов
+Минимальный набор:
+
+created: заказ создан у Яндекс
+assigned: назначен курьер
+courier_arrived: курьер приехал к точке забора
+picked_up: забрал
+delivering: в пути
+delivered: доставлено (закрыть заказ, зафиксировать финальную стоимость)
+canceled/failed: зафиксировать причину, при необходимости инициировать возврат или повтор
+UI:
+
+Лента статусов, ETA, имя/телефон курьера, ссылка tracking_url для клиента.
+8) Безопасность и надежность
+Хранить ключи только в переменных окружения.
+Ограничить CORS к фронту вашего домена.
+Логировать, но исключать персональные данные или маскировать телефоны.
+Ретраи вебхуков: обрабатывать идемпотентно по order_id+event+timestamp.
+Ввод пользователя валидировать: длины строк, телефон E.164, адрес обязателен.
+9) Чек-лист для тестирования
+Котировка с валидными адресами.
+Создание заказа с offer_id из свежей котировки.
+Получение статуса сразу после создания.
+Вебхук приходит и валидируется подпись.
+Изменение статуса до delivered в тестовой среде.
+Отмена до назначения курьера и после — корректная обработка ошибок.
+Корректное отображение ETA и трекинга клиенту.
+Падение сети/таймауты — повторные попытки.
+10) Что передать разработчику
+Доступ к кабинету Яндекс Go Доставки и тестовым ключам.
+Список городов, типы транспорта, ограничения по весу/габаритам, пожелания к окнам доставки.
+Макеты фронтенда формы заказа.
+Тексты уведомлений клиенту (SMS/Email/мессенджеры) — если планируете.
+Если хотите, могу:
+
+Подготовить минимальный репозиторий для Replit с готовыми роутами, .env.example и простым фронтом формы.
+Помочь сопоставить эти шаблоны с актуальной документацией конкретно вашего аккаунта Яндекс Go Доставки (поля, названия методов).
+Добавить поддержку нескольких точек доставки, наложенного платежа, и печати наклеек.
