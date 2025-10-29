@@ -86,6 +86,8 @@ export function DeliveryDialog({
   // Price info for both services
   const [dostavkaPriceInfo, setDostavkaPriceInfo] = useState<DostavkaPriceInfo | null>(null);
   const [goPriceInfo, setGoPriceInfo] = useState<GoPriceInfo | null>(null);
+  const [dostavkaError, setDostavkaError] = useState<string | null>(null);
+  const [goError, setGoError] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<'dostavka' | 'go' | null>(null);
   
   // Load pickup addresses
@@ -146,11 +148,13 @@ export function DeliveryDialog({
     }
   }, [open, pickupCoords, deliveryCoords]);
   
-  // Reset prices and selection when dialog closes
+  // Reset prices, errors and selection when dialog closes
   useEffect(() => {
     if (!open) {
       setDostavkaPriceInfo(null);
       setGoPriceInfo(null);
+      setDostavkaError(null);
+      setGoError(null);
       setSelectedService(null);
     }
   }, [open]);
@@ -310,6 +314,12 @@ export function DeliveryDialog({
         throw new Error('Координаты не указаны');
       }
       
+      // Reset previous errors and prices
+      setDostavkaError(null);
+      setGoError(null);
+      setDostavkaPriceInfo(null);
+      setGoPriceInfo(null);
+      
       // Calculate prices for both services in parallel
       const [dostavkaResponse, goResponse] = await Promise.allSettled([
         apiRequest('POST', `/api/admin/orders/${order.id}/yandex-price`, {
@@ -324,52 +334,67 @@ export function DeliveryDialog({
         })
       ]);
       
-      const results: { dostavka?: any; go?: any } = {};
+      const results: { dostavka?: any; dostavkaError?: string; go?: any; goError?: string } = {};
       
       if (dostavkaResponse.status === 'fulfilled') {
-        results.dostavka = await dostavkaResponse.value.json();
+        try {
+          results.dostavka = await dostavkaResponse.value.json();
+        } catch (e) {
+          results.dostavkaError = 'Ошибка обработки ответа от Yandex Dostavka';
+        }
+      } else {
+        results.dostavkaError = dostavkaResponse.reason?.message || 'Сервис Yandex Dostavka недоступен';
       }
       
       if (goResponse.status === 'fulfilled') {
-        results.go = await goResponse.value.json();
+        try {
+          results.go = await goResponse.value.json();
+        } catch (e) {
+          results.goError = 'Ошибка обработки ответа от Yandex Go';
+        }
+      } else {
+        results.goError = goResponse.reason?.message || 'Сервис Yandex Go недоступен';
       }
       
       return results;
     },
     onSuccess: (data) => {
+      // Handle Yandex Dostavka result
       if (data.dostavka) {
         setDostavkaPriceInfo(data.dostavka);
-      } else {
+        setDostavkaError(null);
+      } else if (data.dostavkaError) {
         setDostavkaPriceInfo(null);
-        toast({
-          title: 'Yandex Dostavka недоступна',
-          description: 'Не удалось получить цену от Yandex Dostavka',
-          variant: 'destructive',
-        });
+        setDostavkaError(data.dostavkaError);
       }
       
+      // Handle Yandex Go result
       if (data.go) {
         setGoPriceInfo(data.go);
-      } else {
+        setGoError(null);
+      } else if (data.goError) {
         setGoPriceInfo(null);
-        toast({
-          title: 'Yandex Go недоступна',
-          description: 'Не удалось получить цену от Yandex Go',
-          variant: 'destructive',
-        });
+        setGoError(data.goError);
       }
       
+      // Show success notification only if at least one service returned a price
       if (data.dostavka || data.go) {
         toast({
-          title: 'Цены рассчитаны',
-          description: 'Выберите службу доставки',
+          title: 'Расчет завершен',
+          description: 'Результаты отображены ниже',
+        });
+      } else {
+        toast({
+          title: 'Не удалось рассчитать цены',
+          description: 'Оба сервиса недоступны. Проверьте адреса и попробуйте снова.',
+          variant: 'destructive',
         });
       }
     },
     onError: (error: any) => {
       toast({
         title: 'Ошибка',
-        description: error.message || 'Не удалось рассчитать цены',
+        description: error.message || 'Не удалось выполнить расчет',
         variant: 'destructive',
       });
     },
@@ -814,29 +839,30 @@ export function DeliveryDialog({
               )}
             </div>
             
-            {/* Price Comparison Section */}
-            {(dostavkaPriceInfo || goPriceInfo) && (
+            {/* Price Comparison Section - Always show after calculation */}
+            {(dostavkaPriceInfo || goPriceInfo || dostavkaError || goError) && (
               <>
                 <Separator />
                 <div className="space-y-3">
-                  <Label>Выберите службу доставки:</Label>
+                  <Label>Результаты расчета стоимости доставки:</Label>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {dostavkaPriceInfo && (
-                      <Card 
-                        className={`cursor-pointer transition-all ${
-                          selectedService === 'dostavka' ? 'ring-2 ring-primary' : ''
-                        }`}
-                        onClick={() => setSelectedService('dostavka')}
-                        data-testid="card-dostavka-option"
-                      >
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-base flex items-center gap-2">
-                            <Package className="w-4 h-4" />
-                            Yandex Dostavka
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
+                    {/* Yandex Dostavka Card - Always show after calculation */}
+                    <Card 
+                      className={`transition-all ${
+                        dostavkaPriceInfo ? `cursor-pointer ${selectedService === 'dostavka' ? 'ring-2 ring-primary' : ''}` : 'opacity-75'
+                      }`}
+                      onClick={() => dostavkaPriceInfo && setSelectedService('dostavka')}
+                      data-testid="card-dostavka-option"
+                    >
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Package className="w-4 h-4" />
+                          Yandex Dostavka
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {dostavkaPriceInfo ? (
                           <div className="space-y-1">
                             <p className="text-2xl font-bold">
                               {dostavkaPriceInfo.price} {dostavkaPriceInfo.currency_rules.sign}
@@ -848,25 +874,36 @@ export function DeliveryDialog({
                               Курьер пешком/велосипед
                             </Badge>
                           </div>
-                        </CardContent>
-                      </Card>
-                    )}
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-destructive">
+                              <XCircle className="w-4 h-4" />
+                              <span className="text-sm font-medium">Недоступно</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {dostavkaError || 'Не удалось получить расчет'}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                     
-                    {goPriceInfo && (
-                      <Card 
-                        className={`cursor-pointer transition-all ${
-                          selectedService === 'go' ? 'ring-2 ring-primary' : ''
-                        }`}
-                        onClick={() => setSelectedService('go')}
-                        data-testid="card-go-option"
-                      >
-                        <CardHeader className="pb-3">
-                          <CardTitle className="text-base flex items-center gap-2">
-                            <Car className="w-4 h-4" />
-                            Yandex Go Express
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
+                    {/* Yandex Go Card - Always show after calculation */}
+                    <Card 
+                      className={`transition-all ${
+                        goPriceInfo ? `cursor-pointer ${selectedService === 'go' ? 'ring-2 ring-primary' : ''}` : 'opacity-75'
+                      }`}
+                      onClick={() => goPriceInfo && setSelectedService('go')}
+                      data-testid="card-go-option"
+                    >
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Car className="w-4 h-4" />
+                          Yandex Go Express
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {goPriceInfo ? (
                           <div className="space-y-1">
                             <p className="text-2xl font-bold">
                               {goPriceInfo.price} ₽
@@ -878,9 +915,19 @@ export function DeliveryDialog({
                               Курьер на авто
                             </Badge>
                           </div>
-                        </CardContent>
-                      </Card>
-                    )}
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-destructive">
+                              <XCircle className="w-4 h-4" />
+                              <span className="text-sm font-medium">Недоступно</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {goError || 'Не удалось получить расчет'}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   </div>
                 </div>
               </>
