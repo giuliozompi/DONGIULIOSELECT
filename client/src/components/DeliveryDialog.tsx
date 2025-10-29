@@ -170,13 +170,28 @@ export function DeliveryDialog({
         setPickupContactPhone(addr.contactPhone || '');
         setPickupLabel(addr.label);
         
-        if (addr.latitude && addr.longitude) {
-          setPickupCoords([
-            parseFloat(addr.longitude),
-            parseFloat(addr.latitude)
-          ]);
-        }
+        const newCoords = addr.latitude && addr.longitude ? [
+          parseFloat(addr.longitude),
+          parseFloat(addr.latitude)
+        ] as [number, number] : null;
+        
+        setPickupCoords(newCoords);
         setShowPickupForm(false);
+        
+        // Se erano già stati calcolati i prezzi e abbiamo coordinate valide, ricalcola automaticamente
+        if ((dostavkaPriceInfo || goPriceInfo) && newCoords && deliveryCoords) {
+          // Resetta i prezzi precedenti
+          setDostavkaPriceInfo(null);
+          setGoPriceInfo(null);
+          setDostavkaError(null);
+          setGoError(null);
+          setSelectedService(null);
+          
+          // Ricalcola automaticamente dopo un breve delay per permettere l'aggiornamento dello stato
+          setTimeout(() => {
+            calculatePricesMutation.mutate();
+          }, 100);
+        }
       }
     }
   };
@@ -185,14 +200,12 @@ export function DeliveryDialog({
   const handlePickupAddressSelect = (suggestion: AddressSuggestion) => {
     setPickupAddress(suggestion.fullAddress);
     
-    if (suggestion.geoLat && suggestion.geoLon) {
-      setPickupCoords([
-        parseFloat(suggestion.geoLon),
-        parseFloat(suggestion.geoLat)
-      ]);
-    } else {
-      setPickupCoords(null);
-    }
+    const newCoords = suggestion.geoLat && suggestion.geoLon ? [
+      parseFloat(suggestion.geoLon),
+      parseFloat(suggestion.geoLat)
+    ] as [number, number] : null;
+    
+    setPickupCoords(newCoords);
     
     setPickupStructured({
       city: suggestion.city || undefined,
@@ -201,19 +214,47 @@ export function DeliveryDialog({
       postalCode: suggestion.postalCode || undefined,
       dadataFiasId: suggestion.fiasId,
     });
+    
+    // Se erano già stati calcolati i prezzi e abbiamo coordinate valide, ricalcola automaticamente
+    if ((dostavkaPriceInfo || goPriceInfo) && newCoords && deliveryCoords) {
+      // Resetta i prezzi precedenti
+      setDostavkaPriceInfo(null);
+      setGoPriceInfo(null);
+      setDostavkaError(null);
+      setGoError(null);
+      setSelectedService(null);
+      
+      // Ricalcola automaticamente dopo un breve delay per permettere l'aggiornamento dello stato
+      setTimeout(() => {
+        calculatePricesMutation.mutate();
+      }, 100);
+    }
   };
   
   // Handle delivery address selection
   const handleDeliveryAddressSelect = (suggestion: AddressSuggestion) => {
     setDeliveryAddress(suggestion.fullAddress);
     
-    if (suggestion.geoLat && suggestion.geoLon) {
-      setDeliveryCoords([
-        parseFloat(suggestion.geoLon),
-        parseFloat(suggestion.geoLat)
-      ]);
-    } else {
-      setDeliveryCoords(null);
+    const newCoords = suggestion.geoLat && suggestion.geoLon ? [
+      parseFloat(suggestion.geoLon),
+      parseFloat(suggestion.geoLat)
+    ] as [number, number] : null;
+    
+    setDeliveryCoords(newCoords);
+    
+    // Se erano già stati calcolati i prezzi e abbiamo coordinate valide, ricalcola automaticamente
+    if ((dostavkaPriceInfo || goPriceInfo) && pickupCoords && newCoords) {
+      // Resetta i prezzi precedenti
+      setDostavkaPriceInfo(null);
+      setGoPriceInfo(null);
+      setDostavkaError(null);
+      setGoError(null);
+      setSelectedService(null);
+      
+      // Ricalcola automaticamente dopo un breve delay per permettere l'aggiornamento dello stato
+      setTimeout(() => {
+        calculatePricesMutation.mutate();
+      }, 100);
     }
   };
   
@@ -245,6 +286,21 @@ export function DeliveryDialog({
             title: 'Координаты найдены',
             description: 'Координаты доставки успешно рассчитаны и сохранены',
           });
+          
+          // Se erano già stati calcolati i prezzi, ricalcola automaticamente
+          if ((dostavkaPriceInfo || goPriceInfo) && pickupCoords && coords) {
+            // Resetta i prezzi precedenti
+            setDostavkaPriceInfo(null);
+            setGoPriceInfo(null);
+            setDostavkaError(null);
+            setGoError(null);
+            setSelectedService(null);
+            
+            // Ricalcola automaticamente dopo un breve delay
+            setTimeout(() => {
+              calculatePricesMutation.mutate();
+            }, 100);
+          }
         } else {
           throw new Error('DaData не вернул координаты для этого адреса');
         }
