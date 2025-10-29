@@ -138,15 +138,7 @@ export function DeliveryDialog({
     setIsEditingDelivery(false);
   }, [order]);
   
-  // Auto-calculate prices when dialog opens with valid coordinates
-  useEffect(() => {
-    if (open && pickupCoords && deliveryCoords && !dostavkaPriceInfo && !goPriceInfo && !calculatePricesMutation.isPending) {
-      // Delay slightly to ensure dialog is fully rendered
-      setTimeout(() => {
-        calculatePricesMutation.mutate();
-      }, 100);
-    }
-  }, [open, pickupCoords, deliveryCoords]);
+  // Removed auto-calculate - now user must click button to calculate prices
   
   // Reset prices, errors and selection when dialog closes
   useEffect(() => {
