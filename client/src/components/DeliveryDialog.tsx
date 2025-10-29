@@ -485,14 +485,18 @@ export function DeliveryDialog({
     
     const response = await apiRequest('POST', `/api/admin/orders/${order.id}/yandex-delivery`, {
       pickupAddress,
-      pickupCoords,
-      pickupContactPhone: pickupContactPhone || '+79000000000',
-      pickupContactName: pickupContactName || 'Don Giulio Select',
+      pickupCoordinates: pickupCoords,
       deliveryAddress,
-      deliveryCoords,
-      deliveryContactPhone: deliveryContactPhone || order.customerPhone,
-      deliveryContactName: deliveryContactName || order.customerName,
-      offerPayload: selectedDostavkaOffer || dostavkaPriceInfo?.offer_id,  // Passa l'offerta selezionata
+      deliveryCoordinates: deliveryCoords,
+      pickupContact: {
+        name: pickupContactName || 'Don Giulio Select',
+        phone: pickupContactPhone || '+79000000000',
+      },
+      deliveryContact: {
+        name: deliveryContactName || order.customerName,
+        phone: deliveryContactPhone || order.customerPhone,
+      },
+      offerId: selectedDostavkaOffer || dostavkaPriceInfo?.offer_id,  // Passa l'offerta selezionata
     });
     
     return response.json();
