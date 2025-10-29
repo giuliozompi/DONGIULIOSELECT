@@ -318,8 +318,20 @@ export async function yandexFetch(
       response: errorText,
     });
 
-    const error: any = new Error(`Yandex API error: ${response.status} - ${errorText}`);
+    // Parse specific Yandex error for better messaging
+    let errorMessage = `Yandex API error: ${response.status} - ${errorText}`;
+    
+    if (response.status === 403) {
+      // Access denied - token doesn't have proper permissions
+      errorMessage = `Token non autorizzato (403). Il token OAuth non ha i permessi per Yandex Go Доставка для бизнеса. Vai su https://b2b.taxi.yandex.net → Integrazione → Crea token con permessi "cargo:write" e "cargo:read"`;
+    } else if (response.status === 401) {
+      // Unauthorized - token is invalid or expired
+      errorMessage = `Token non valido (401). Verifica che YANDEX_GO_TOKEN sia un token OAuth valido dal cabinet Yandex Go Доставка для бизнеса`;
+    }
+
+    const error: any = new Error(errorMessage);
     error.status = response.status;
+    error.originalError = errorText;
     throw error;
   }
 

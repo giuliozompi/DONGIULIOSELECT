@@ -283,15 +283,19 @@ export function YandexGoDialog({
       });
     },
     onError: (error: any) => {
-      // Handle service unavailable gracefully
-      if (error.serviceUnavailable) {
+      // Handle different error types
+      if (error.status === 403) {
         toast({
-          title: 'Servizio non disponibile',
-          description: error.message || 'Il servizio Yandex Go non è configurato. Utilizzare Yandex Dostavka Express.',
+          title: 'Token non autorizzato',
+          description: 'Il token Yandex Go non ha i permessi corretti. Contatta l\'amministratore per configurare il token con permessi "cargo:write" e "cargo:read".',
           variant: 'destructive',
         });
-        // Close the dialog to encourage using Yandex Dostavka
-        setTimeout(() => onOpenChange(false), 3000);
+      } else if (error.status === 401) {
+        toast({
+          title: 'Token non valido',  
+          description: 'Il token Yandex Go non è valido o è scaduto. Contatta l\'amministratore.',
+          variant: 'destructive',
+        });
       } else {
         toast({
           title: 'Ошибка',
@@ -331,15 +335,19 @@ export function YandexGoDialog({
       onOpenChange(false);
     },
     onError: (error: any) => {
-      // Handle service unavailable gracefully
-      if (error.serviceUnavailable) {
+      // Handle different error types
+      if (error.status === 403) {
         toast({
-          title: 'Servizio non disponibile',
-          description: error.message || 'Il servizio Yandex Go non è configurato. Utilizzare Yandex Dostavka Express.',
+          title: 'Token non autorizzato',
+          description: 'Il token Yandex Go non ha i permessi corretti. Contatta l\'amministratore per configurare il token con permessi "cargo:write" e "cargo:read".',
           variant: 'destructive',
         });
-        // Close the dialog to encourage using Yandex Dostavka
-        setTimeout(() => onOpenChange(false), 3000);
+      } else if (error.status === 401) {
+        toast({
+          title: 'Token non valido',  
+          description: 'Il token Yandex Go non è valido o è scaduto. Contatta l\'amministratore.',
+          variant: 'destructive',
+        });
       } else {
         toast({
           title: 'Ошибка',
