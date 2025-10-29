@@ -283,11 +283,22 @@ export function YandexGoDialog({
       });
     },
     onError: (error: any) => {
-      toast({
-        title: 'Ошибка',
-        description: error.message || 'Не удалось рассчитать цену',
-        variant: 'destructive',
-      });
+      // Handle service unavailable gracefully
+      if (error.serviceUnavailable) {
+        toast({
+          title: 'Servizio non disponibile',
+          description: error.message || 'Il servizio Yandex Go non è configurato. Utilizzare Yandex Dostavka Express.',
+          variant: 'destructive',
+        });
+        // Close the dialog to encourage using Yandex Dostavka
+        setTimeout(() => onOpenChange(false), 3000);
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: error.message || 'Не удалось рассчитать цену',
+          variant: 'destructive',
+        });
+      }
     },
   });
   
@@ -320,11 +331,22 @@ export function YandexGoDialog({
       onOpenChange(false);
     },
     onError: (error: any) => {
-      toast({
-        title: 'Ошибка',
-        description: error.message || 'Не удалось вызвать курьера',
-        variant: 'destructive',
-      });
+      // Handle service unavailable gracefully
+      if (error.serviceUnavailable) {
+        toast({
+          title: 'Servizio non disponibile',
+          description: error.message || 'Il servizio Yandex Go non è configurato. Utilizzare Yandex Dostavka Express.',
+          variant: 'destructive',
+        });
+        // Close the dialog to encourage using Yandex Dostavka
+        setTimeout(() => onOpenChange(false), 3000);
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: error.message || 'Не удалось вызвать курьера',
+          variant: 'destructive',
+        });
+      }
     },
   });
   

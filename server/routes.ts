@@ -2548,6 +2548,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/admin/orders/:id/yandex-go-price - Calcola prezzo delivery Yandex Go (ADMIN ONLY)
   app.post("/api/admin/orders/:id/yandex-go-price", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
+      // Verifica se il token Yandex Go è configurato correttamente
+      if (!process.env.YANDEX_GO_TOKEN || !process.env.YANDEX_GO_TOKEN.startsWith('y')) {
+        return res.status(503).json({ 
+          error: 'Service unavailable',
+          message: 'Il servizio Yandex Go non è configurato correttamente. Usa Yandex Dostavka Express.',
+          serviceUnavailable: true
+        });
+      }
+
       const { yandexGoService } = await import("./services/yandex-go");
       
       const orderId = req.params.id;
@@ -2646,6 +2655,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/admin/orders/:id/yandex-go - Crea ordine delivery Yandex Go (ADMIN ONLY)
   app.post("/api/admin/orders/:id/yandex-go", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
+      // Verifica se il token Yandex Go è configurato correttamente
+      if (!process.env.YANDEX_GO_TOKEN || !process.env.YANDEX_GO_TOKEN.startsWith('y')) {
+        return res.status(503).json({ 
+          error: 'Service unavailable',
+          message: 'Il servizio Yandex Go non è configurato correttamente. Usa Yandex Dostavka Express.',
+          serviceUnavailable: true
+        });
+      }
+
       const { yandexGoService } = await import("./services/yandex-go");
       const { nanoid } = await import("nanoid");
       
