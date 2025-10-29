@@ -37,6 +37,14 @@ The backend is an Express.js application in TypeScript, providing a RESTful API 
     - Pick-up Address Management: Admins can save multiple pick-up addresses with full DaData integration for address validation and GPS coordinate extraction
     - Automatic Coordinate Calculation: GPS coordinates for both pickup and delivery locations are automatically extracted from DaData API responses
     - Both services support claim cancellation, info retrieval, and real-time performer tracking
+  - **Production-Ready Features** (October 2025):
+    - **Idempotency Keys**: All POST requests use `X-Idempotency-Key` headers to prevent duplicate orders during network retries
+    - **Correlation IDs**: Full request tracing from price calculation → claim creation → status updates
+    - **Exponential Backoff with Jitter**: Automatic retry logic for 5xx errors with exponential delay and random jitter
+    - **Pre-flight Validation**: Coordinates and package dimensions validated before API calls
+    - **Structured Logging**: Detailed logs with correlation IDs, request IDs, service names, and operation types
+    - **Smart Fallback**: Automatic failover between Yandex Go and Yandex Dostavka when one service is unavailable
+    - **Utilities Module**: `server/utils/yandex-integration.ts` provides reusable functions for production-grade integration
 
 ### System Design Choices
 - **Database**: PostgreSQL with Drizzle ORM for storing all application data, including users, products, orders, and gamification data.

@@ -211,12 +211,18 @@ export class YandexGoService {
     }
 
     const url = `${this.baseUrl}/b2b/cargo/integration/v2/offers/calculate`;
-    const headers = this.getHeaders('v2'); // V2 = only Bearer token (no Client-Id)
+    const idempotencyKey = generateIdempotencyKey();
+    
+    const headers = {
+      ...this.getHeaders('v2'), // V2 = only Bearer token (no Client-Id)
+      'X-Idempotency-Key': idempotencyKey,
+    };
     
     logger.info('Starting price calculation', { 
       url, 
       routePoints: request.route_points.length,
-      items: request.items.length 
+      items: request.items.length,
+      idempotencyKey
     });
 
     // Wrap in retry logic

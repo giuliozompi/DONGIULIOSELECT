@@ -181,6 +181,7 @@ class YandexDostavkaService {
     }
 
     const url = `${this.baseUrl}/offers/calculate`;
+    const idempotencyKey = generateIdempotencyKey();
     
     // Prepara items per Yandex Dostavka (dimensioni in METRI)
     const deliveryItems = [{
@@ -214,13 +215,18 @@ class YandexDostavkaService {
       ],
     };
 
-    logger.info('Starting price calculation');
+    const headers = {
+      ...this.getHeaders(),
+      'X-Idempotency-Key': idempotencyKey,
+    };
+
+    logger.info('Starting price calculation', { idempotencyKey });
 
     try {
       const data = await withRetry(async () => {
         const response = await yandexFetch(url, {
           method: 'POST',
-          headers: this.getHeaders(),
+          headers,
           body: JSON.stringify(payload),
         }, logger, corrId);
 
