@@ -237,19 +237,18 @@ class YandexDostavkaService {
         offersCount: data.offers?.length || 0,
       });
 
-      // Filtra le tariffe desiderate: Express, 2 ore, 4 ore, bici
+      // Filtra le tariffe desiderate: Express, 2 ore, 4 ore
+      // IMPORTANTE: Yandex usa il campo 'description' per il tipo di tariffa, non 'taxi_class'
       const allowedTariffs = [
         'express',
         'express_30min_longer', 
         'express_60min_longer',
         '2_hours_delivery',
         '4_hours_delivery',
-        'courier',  // вело курьер
-        'bicycle'   // possibile alternativa per вело курьер
       ];
       
       const filteredOffers = data.offers?.filter((offer: any) => 
-        allowedTariffs.includes(offer.taxi_class)
+        allowedTariffs.includes(offer.description)
       ) || [];
       
       // Se non ci sono offerte filtrate, usa tutte le offerte disponibili
@@ -262,9 +261,10 @@ class YandexDostavkaService {
       
       logger.info('Selected offer', {
         taxiClass: bestOffer.taxi_class,
+        description: bestOffer.description,
         filteredOffersCount: filteredOffers.length,
         totalOffersCount: data.offers?.length || 0,
-        availableTaxiClasses: filteredOffers.map((o: any) => o.taxi_class)
+        availableDescriptions: filteredOffers.map((o: any) => o.description)
       });
 
       // Estrai prezzo e valuta dal campo price
