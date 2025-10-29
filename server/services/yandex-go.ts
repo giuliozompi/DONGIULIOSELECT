@@ -9,13 +9,13 @@ import {
   yandexFetch,
 } from '../utils/yandex-integration';
 
-// Yandex Go Cargo API 2.0 - Taxi-based delivery service
+// Yandex Go Доставка для бизнеса - Business taxi delivery service
 // Docs: https://yandex.com/dev/logistics/api/ref/v2/
-// Production endpoint: https://b2b.taxi.yandex.net (same as Dostavka)
-// IMPORTANTE: Yandex Go CARGO e Yandex Dostavka usano lo STESSO endpoint API e lo STESSO token!
-// Il token YANDEX_GO_TOKEN è per un'API diversa (gestione utenti B2B), NON per le consegne cargo.
+// Production endpoint: https://b2b.taxi.yandex.net/b2b/cargo/integration
+// IMPORTANTE: Yandex Go e Yandex Dostavka sono servizi SEPARATI con token SEPARATI
+// Yandex Go richiede OAuth token dal cabinet "Яндекс Go Доставка для бизнеса"
 const YANDEX_GO_BASE_URL = 'https://b2b.taxi.yandex.net';
-const YANDEX_GO_TOKEN = process.env.YANDEX_DOSTAVKA_TOKEN; // USA IL TOKEN DI DOSTAVKA PER CARGO!
+const YANDEX_GO_TOKEN = process.env.YANDEX_GO_TOKEN; // OAuth token da "Яндекс Go Доставка для бизнеса"
 const YANDEX_GO_CLIENT_ID = process.env.YANDEX_GO_CLIENT_ID;
 
 // Haversine formula to calculate distance between two coordinates
@@ -150,32 +150,18 @@ export class YandexGoService {
   private token = YANDEX_GO_TOKEN;
   private clientId = YANDEX_GO_CLIENT_ID;
 
-  private getHeaders(apiVersion: 'v1' | 'v2' = 'v2'): Record<string, string> {
-    const headers: Record<string, string> = {
+  private getHeaders(): Record<string, string> {
+    // Secondo la documentazione Yandex Go Доставка для бизнеса usa solo Bearer token
+    if (!this.token) {
+      throw new Error('Yandex Go OAuth token not configured (YANDEX_GO_TOKEN). Ottieni il token dal cabinet "Яндекс Go Доставка для бизнеса"');
+    }
+
+    return {
+      'Authorization': `Bearer ${this.token.trim()}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
     };
-
-    if (apiVersion === 'v1') {
-      // V1 API (check-price) usa ENTRAMBI Client-Id e Bearer token
-      if (!this.clientId) {
-        throw new Error('Yandex Go Client ID not configured (YANDEX_GO_CLIENT_ID)');
-      }
-      if (!this.token) {
-        throw new Error('Yandex Go OAuth token not configured (YANDEX_GO_TOKEN)');
-      }
-      headers['X-B2B-Client-Id'] = this.clientId.trim();
-      headers['Authorization'] = `Bearer ${this.token.trim()}`;
-    } else {
-      // V2 API (claims/create, claims/accept, etc.) usa solo Bearer token
-      if (!this.token) {
-        throw new Error('Yandex Go OAuth token not configured (YANDEX_GO_TOKEN)');
-      }
-      headers['Authorization'] = `Bearer ${this.token.trim()}`;
-    }
-
-    return headers;
   }
 
   /**
@@ -215,7 +201,7 @@ export class YandexGoService {
     const idempotencyKey = generateIdempotencyKey();
     
     const headers = {
-      ...this.getHeaders('v2'), // V2 = only Bearer token (no Client-Id)
+      ...this.getHeaders(),
       'X-Idempotency-Key': idempotencyKey,
     };
     
