@@ -799,6 +799,17 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
   const [discountValue, setDiscountValue] = useState<string>('');
   const [newAddress, setNewAddress] = useState<string>(order.deliveryAddress || '');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [showAddressMode, setShowAddressMode] = useState<'saved' | 'new'>('saved');
+  const [addressStructured, setAddressStructured] = useState<{
+    city?: string;
+    street?: string;
+    building?: string;
+    flat?: string;
+    postalCode?: string;
+    dadataFiasId?: string;
+    latitude?: string;
+    longitude?: string;
+  }>({});
   
   // Determina se l'ordine è modificabile
   const editable = isOrderEditable(order.status);
@@ -816,6 +827,12 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
   // Fetch all products for adding
   const { data: allProducts = [] } = useQuery<Product[]>({
     queryKey: ['/api/products'],
+  });
+
+  // Fetch customer addresses
+  const { data: customerAddresses = [] } = useQuery<any[]>({
+    queryKey: ['/api/user-addresses', order.userId],
+    enabled: open && !!order.userId,
   });
 
   // Fetch order logs
@@ -1127,28 +1144,113 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
 
           {/* Change Address */}
           <div className="space-y-3">
-            <h3 className="font-semibold">Изменить адрес доставки</h3>
-            <div className="flex gap-2">
-              <Textarea
-                value={newAddress}
-                onChange={(e) => setNewAddress(e.target.value)}
-                className="flex-1"
-                placeholder="Адрес доставки"
-                disabled={!editable}
-                data-testid="textarea-delivery-address"
-              />
-              <Button 
-                onClick={() => {
-                  if (newAddress && newAddress !== order.deliveryAddress) {
-                    changeAddressMutation.mutate();
-                  }
-                }}
-                disabled={!editable || !newAddress || newAddress === order.deliveryAddress}
-                data-testid="button-change-address"
-              >
-                Обновить
-              </Button>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Изменить адрес доставки</h3>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={showAddressMode === 'saved' ? 'default' : 'outline'}
+                  onClick={() => setShowAddressMode('saved')}
+                  disabled={!editable}
+                >
+                  Сохраненные
+                </Button>
+                <Button
+                  size="sm"
+                  variant={showAddressMode === 'new' ? 'default' : 'outline'}
+                  onClick={() => setShowAddressMode('new')}
+                  disabled={!editable}
+                >
+                  Новый адрес
+                </Button>
+              </div>
             </div>
+
+            {showAddressMode === 'saved' ? (
+              <div className="space-y-2">
+                {customerAddresses.length > 0 ? (
+                  customerAddresses.map((address: any) => (
+                    <div
+                      key={address.id}
+                      className={`p-3 border rounded-md cursor-pointer hover-elevate ${
+                        newAddress === address.fullAddress ? 'border-primary bg-accent' : ''
+                      }`}
+                      onClick={() => {
+                        if (editable) {
+                          setNewAddress(address.fullAddress);
+                        }
+                      }}
+                      data-testid={`address-option-${address.id}`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-medium text-sm">{address.label}</p>
+                            {address.isDefault && (
+                              <Badge variant="default" className="text-xs">По умолчанию</Badge>
+                            )}
+                            {newAddress === address.fullAddress && (
+                              <Badge variant="outline" className="text-xs">Выбран</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">{address.fullAddress}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">У клиента нет сохраненных адресов</p>
+                )}
+                {newAddress && newAddress !== order.deliveryAddress && (
+                  <Button 
+                    className="w-full"
+                    onClick={() => changeAddressMutation.mutate()}
+                    disabled={!editable}
+                    data-testid="button-change-address"
+                  >
+                    Обновить адрес
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <AddressAutocomplete
+                  value={newAddress}
+                  onChange={(value, suggestion) => {
+                    setNewAddress(value);
+                    if (suggestion) {
+                      setAddressStructured({
+                        city: suggestion.city || undefined,
+                        street: suggestion.street || undefined,
+                        building: suggestion.building || undefined,
+                        flat: suggestion.flat || undefined,
+                        postalCode: suggestion.postalCode || undefined,
+                        dadataFiasId: suggestion.fiasId,
+                        latitude: suggestion.geoLat || undefined,
+                        longitude: suggestion.geoLon || undefined,
+                      });
+                    } else {
+                      setAddressStructured({});
+                    }
+                  }}
+                  placeholder="Начните вводить адрес..."
+                  disabled={!editable}
+                  data-testid="input-new-delivery-address"
+                />
+                <Button 
+                  className="w-full"
+                  onClick={() => {
+                    if (newAddress && newAddress !== order.deliveryAddress) {
+                      changeAddressMutation.mutate();
+                    }
+                  }}
+                  disabled={!editable || !newAddress || newAddress === order.deliveryAddress}
+                  data-testid="button-change-address"
+                >
+                  Обновить адрес
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Order Total */}
