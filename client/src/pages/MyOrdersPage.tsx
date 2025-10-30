@@ -8,8 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Package, ShoppingCart, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Package, ShoppingCart, ChevronDown, ChevronUp, Truck } from 'lucide-react';
 import type { Order } from '@shared/schema';
+import { DELIVERY_METHOD_LABELS } from '@shared/schema';
 
 export default function MyOrdersPage() {
   const [, setLocation] = useLocation();
@@ -176,19 +177,35 @@ export default function MyOrdersPage() {
                 </div>
 
                 {isExpanded && (
-                  <div className="pt-3 border-t space-y-2">
-                    {order.items.map((item, index) => (
-                      <div 
-                        key={`${item.productId}-${index}`} 
-                        className="flex items-center justify-between text-sm"
-                        data-testid={`order-item-${order.id}-${index}`}
-                      >
-                        <span className="flex-1">{item.productName}</span>
-                        <span className="text-muted-foreground">
-                          {item.quantity.toFixed(2)} {item.unit} × {Math.round(parseFloat(item.price))} ₽
-                        </span>
+                  <div className="pt-3 border-t space-y-3">
+                    {/* Prodotti */}
+                    <div className="space-y-2">
+                      {order.items.map((item, index) => (
+                        <div 
+                          key={`${item.productId}-${index}`} 
+                          className="flex items-center justify-between text-sm"
+                          data-testid={`order-item-${order.id}-${index}`}
+                        >
+                          <span className="flex-1">{item.productName}</span>
+                          <span className="text-muted-foreground">
+                            {item.quantity.toFixed(2)} {item.unit} × {Math.round(parseFloat(item.price))} ₽
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Metodo di spedizione */}
+                    {order.deliveryMethod && (
+                      <div className="flex items-start gap-2 pt-2 border-t">
+                        <Truck className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-xs text-muted-foreground">Метод доставки</p>
+                          <p className="text-sm font-medium" data-testid={`order-delivery-method-${order.id}`}>
+                            {DELIVERY_METHOD_LABELS[order.deliveryMethod as keyof typeof DELIVERY_METHOD_LABELS] || order.deliveryMethod}
+                          </p>
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
 
