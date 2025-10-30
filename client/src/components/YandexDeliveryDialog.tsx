@@ -23,6 +23,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit, XCircle } from 'lucide-react';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { Order, PickupAddress } from '@shared/schema';
+import { normalizePhoneNumber } from '@/lib/utils';
 
 interface YandexDeliveryDialogProps {
   open: boolean;
@@ -236,7 +237,7 @@ export function YandexDeliveryDialog({
         latitude: pickupCoords[1].toString(),
         longitude: pickupCoords[0].toString(),
         contactName: pickupContactName,
-        contactPhone: pickupContactPhone,
+        contactPhone: pickupContactPhone ? normalizePhoneNumber(pickupContactPhone) : pickupContactPhone,
         isDefault: pickupAddresses.length === 0, // First one becomes default
       });
       return await res.json();
@@ -315,11 +316,11 @@ export function YandexDeliveryDialog({
         deliveryAddress, // Invia l'indirizzo di consegna digitato dall'utente
         pickupContact: {
           name: pickupContactName,
-          phone: pickupContactPhone,
+          phone: pickupContactPhone ? normalizePhoneNumber(pickupContactPhone) : pickupContactPhone,
         },
         deliveryContact: {
           name: order.customerName,
-          phone: deliveryContactPhone, // Usa il telefono del campo delivery contact
+          phone: deliveryContactPhone ? normalizePhoneNumber(deliveryContactPhone) : deliveryContactPhone, // Usa il telefono del campo delivery contact
         },
       });
       return await res.json();

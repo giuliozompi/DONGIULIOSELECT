@@ -23,6 +23,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { Loader2, Truck, DollarSign, MapPin, Phone, User, Save, RefreshCw, Edit, XCircle } from 'lucide-react';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { Order, PickupAddress } from '@shared/schema';
+import { normalizePhoneNumber } from '@/lib/utils';
 
 interface YandexGoDialogProps {
   open: boolean;
@@ -239,7 +240,7 @@ export function YandexGoDialog({
         latitude: pickupCoords?.[1]?.toString(),
         longitude: pickupCoords?.[0]?.toString(),
         contactName: pickupContactName,
-        contactPhone: pickupContactPhone,
+        contactPhone: pickupContactPhone ? normalizePhoneNumber(pickupContactPhone) : pickupContactPhone,
         isDefault: false,
       });
       return response.json();
@@ -317,11 +318,11 @@ export function YandexGoDialog({
         pickupAddress,
         pickupCoords,
         pickupContactName,
-        pickupContactPhone,
+        pickupContactPhone: pickupContactPhone ? normalizePhoneNumber(pickupContactPhone) : pickupContactPhone,
         deliveryAddress,
         deliveryCoords,
         deliveryContactName,
-        deliveryContactPhone,
+        deliveryContactPhone: deliveryContactPhone ? normalizePhoneNumber(deliveryContactPhone) : deliveryContactPhone,
       });
       
       return response.json();

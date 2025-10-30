@@ -23,6 +23,7 @@ import { FallbackMainButton } from '@/components/FallbackMainButton';
 import { ShoppingBag, Gift, MapPin, X, Truck, Wallet } from 'lucide-react';
 import type { Cart, Product, Bonus, UserAddress } from '@shared/schema';
 import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@shared/schema';
+import { normalizePhoneNumber } from '@/lib/utils';
 
 const checkoutFormSchema = z.object({
   customerName: z.string().min(2, 'Введите имя (минимум 2 символа)'),
@@ -207,6 +208,7 @@ export default function CheckoutPage() {
     mutationFn: async (data: CheckoutFormData) => {
       const orderData = {
         ...data,
+        customerPhone: normalizePhoneNumber(data.customerPhone),
         ...structuredAddress,
         deliveryFlat: data.deliveryFlat || structuredAddress.deliveryFlat,
       };

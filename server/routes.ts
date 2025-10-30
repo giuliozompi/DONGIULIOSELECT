@@ -11,6 +11,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import path from "path";
+import { normalizePhoneNumber } from "./utils";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== NO-CACHE MIDDLEWARE FOR ADMIN ROUTES ====================
@@ -305,6 +306,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const updateData = updateSchema.parse(req.body);
+      
+      // Normalizza il numero di telefono se presente
+      if (updateData.phone) {
+        updateData.phone = normalizePhoneNumber(updateData.phone);
+      }
+      
       await storage.updateUser(req.userId!, updateData);
       
       const updatedUser = await storage.getUser(req.userId!);
@@ -476,6 +483,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const addressData = addressSchema.parse(req.body);
       
+      // Normalizza il numero di telefono se presente
+      if (addressData.contactPhone) {
+        addressData.contactPhone = normalizePhoneNumber(addressData.contactPhone);
+      }
+      
       const address = await storage.createPickupAddress(addressData as any);
       
       res.json(address);
@@ -512,6 +524,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const addressData = addressSchema.parse(req.body);
+      
+      // Normalizza il numero di telefono se presente
+      if (addressData.contactPhone) {
+        addressData.contactPhone = normalizePhoneNumber(addressData.contactPhone);
+      }
       
       const address = await storage.updatePickupAddress(addressId, addressData as any);
       
@@ -678,7 +695,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items: orderItems,
         amount: finalAmount,
         customerName: customerData.customerName,
-        customerPhone: customerData.customerPhone,
+        customerPhone: normalizePhoneNumber(customerData.customerPhone),
         customerEmail: customerData.customerEmail,
         deliveryAddress: customerData.deliveryAddress,
         deliveryCity: customerData.deliveryCity,
@@ -697,7 +714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Salva dati utente (nome, phone, email) per riproporli nel prossimo ordine
       await storage.updateUser(req.userId!, {
         customerName: customerData.customerName,
-        phone: customerData.customerPhone,
+        phone: normalizePhoneNumber(customerData.customerPhone),
         email: customerData.customerEmail || undefined,
       });
       
