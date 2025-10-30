@@ -3442,6 +3442,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
       
+      // Ottieni indirizzi del cliente
+      const addresses = await storage.getUserAddresses(userId);
+      
       res.json({
         ...user,
         stats: {
@@ -3452,6 +3455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         orders: userOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
         prizes: prizesWithProducts,
+        addresses: addresses,
       });
     } catch (error) {
       console.error('Error fetching client detail:', error);
@@ -3506,6 +3510,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
       console.error('Error updating client:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // PATCH /api/admin/clients/:userId/addresses/:addressId - Aggiorna indirizzo cliente (ADMIN ONLY)
+  app.patch("/api/admin/clients/:userId/addresses/:addressId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { userId, addressId } = req.params;
+      
+      const updateSchema = z.object({
+        label: z.string().min(1).optional(),
+        fullAddress: z.string().min(10).optional(),
+        city: z.string().optional(),
+        street: z.string().optional(),
+        building: z.string().optional(),
+        flat: z.string().optional(),
+        postalCode: z.string().optional(),
+        dadataFiasId: z.string().optional(),
+        latitude: z.string().optional(),
+        longitude: z.string().optional(),
+        phone: z.string().optional(),
+        isDefault: z.boolean().optional(),
+      });
+      
+      const updateData = updateSchema.parse(req.body);
+      
+      // Normalizza il numero di telefono se presente
+      if (updateData.phone !== undefined) {
+        if (updateData.phone && updateData.phone.trim()) {
+          updateData.phone = normalizePhoneNumber(updateData.phone);
+        } else {
+          updateData.phone = undefined;
+        }
+      }
+      
+      // Verifica che l'indirizzo appartenga all'utente
+      const addresses = await storage.getUserAddresses(userId);
+      const addressToUpdate = addresses.find(addr => addr.id === addressId);
+      
+      if (!addressToUpdate) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      
+      // Se questo indirizzo è impostato come default, rimuovi il flag da tutti gli altri
+      if (updateData.isDefault) {
+        for (const addr of addresses) {
+          if (addr.isDefault && addr.id !== addressId) {
+            await storage.updateUserAddress(addr.id, { isDefault: false });
+          }
+        }
+      }
+      
+      await storage.updateUserAddress(addressId, updateData);
+      
+      const updatedAddresses = await storage.getUserAddresses(userId);
+      const result = updatedAddresses.find(addr => addr.id === addressId);
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'updated',
+        entityType: 'user_address',
+        entityId: addressId,
+        actionData: {
+          affectedUserId: userId,
+          oldData: addressToUpdate,
+          newData: updateData,
+        },
+      });
+      
+      res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating client address:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // DELETE /api/admin/clients/:userId/addresses/:addressId - Elimina indirizzo cliente (ADMIN ONLY)
+  app.delete("/api/admin/clients/:userId/addresses/:addressId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { userId, addressId } = req.params;
+      
+      // Verifica che l'indirizzo appartenga all'utente
+      const addresses = await storage.getUserAddresses(userId);
+      const addressToDelete = addresses.find(addr => addr.id === addressId);
+      
+      if (!addressToDelete) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      
+      const success = await storage.deleteUserAddress(addressId);
+      
+      if (!success) {
+        return res.status(404).json({ error: 'Address not found' });
+      }
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: 'deleted',
+        entityType: 'user_address',
+        entityId: addressId,
+        actionData: {
+          affectedUserId: userId,
+          deletedAddress: addressToDelete,
+        },
+      });
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting client address:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

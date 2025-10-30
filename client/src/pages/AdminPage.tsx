@@ -2715,6 +2715,14 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
     phone: '',
     email: '',
   });
+  const [editAddressDialogOpen, setEditAddressDialogOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<any | null>(null);
+  const [editAddressForm, setEditAddressForm] = useState({
+    label: '',
+    fullAddress: '',
+    phone: '',
+    isDefault: false,
+  });
 
   // Fetch clients list
   const { data: clients = [], isLoading } = useQuery<ClientWithStats[]>({
@@ -2768,6 +2776,50 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
         customerName: editForm.customerName || null,
         phone: editForm.phone || null,
         email: editForm.email || null,
+      },
+    });
+  };
+
+  const handleEditAddressClick = (address: any) => {
+    setEditingAddress(address);
+    setEditAddressForm({
+      label: address.label || '',
+      fullAddress: address.fullAddress || '',
+      phone: address.phone || '',
+      isDefault: address.isDefault || false,
+    });
+    setEditAddressDialogOpen(true);
+  };
+
+  const updateAddressMutation = useMutation({
+    mutationFn: async (data: { userId: string; addressId: string; updates: any }) => {
+      await apiRequest('PATCH', `/api/admin/clients/${data.userId}/addresses/${data.addressId}`, data.updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/clients'] });
+      toast({ title: '✅ Адрес обновлен' });
+      setEditAddressDialogOpen(false);
+      setEditingAddress(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSaveAddress = () => {
+    if (!selectedClient || !editingAddress) return;
+    updateAddressMutation.mutate({
+      userId: selectedClient,
+      addressId: editingAddress.id,
+      updates: {
+        label: editAddressForm.label || editingAddress.label,
+        fullAddress: editAddressForm.fullAddress || editingAddress.fullAddress,
+        phone: editAddressForm.phone || null,
+        isDefault: editAddressForm.isDefault,
       },
     });
   };
@@ -3090,6 +3142,65 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                   </Card>
                 )}
 
+                {/* Addresses */}
+                {clientDetail.addresses && clientDetail.addresses.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Адреса клиента</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {clientDetail.addresses.map((address: any) => (
+                          <div key={address.id} className="p-3 border rounded-md">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="font-medium">{address.label}</p>
+                                  {address.isDefault && (
+                                    <Badge variant="default" className="text-xs">По умолчанию</Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground">{address.fullAddress}</p>
+                                {address.phone && (
+                                  <p className="text-sm text-muted-foreground mt-1">Тел: {address.phone}</p>
+                                )}
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleEditAddressClick(address)}
+                                  data-testid={`button-edit-address-${address.id}`}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={async () => {
+                                    if (confirm('Удалить этот адрес?')) {
+                                      try {
+                                        await apiRequest('DELETE', `/api/admin/clients/${clientDetail.id}/addresses/${address.id}`, {});
+                                        toast({ title: 'Адрес удален' });
+                                        queryClient.invalidateQueries({ queryKey: ['/api/admin/clients', selectedClient] });
+                                      } catch (error: any) {
+                                        toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+                                      }
+                                    }
+                                  }}
+                                  data-testid={`button-delete-address-${address.id}`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Orders */}
                 <Card>
                   <CardHeader>
@@ -3189,6 +3300,65 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               data-testid="button-save-edit"
             >
               {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Address Dialog */}
+      <Dialog open={editAddressDialogOpen} onOpenChange={setEditAddressDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Редактировать адрес</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Название адреса</Label>
+              <Input
+                value={editAddressForm.label}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, label: e.target.value })}
+                placeholder="Дом, Офис и т.д."
+                data-testid="input-edit-address-label"
+              />
+            </div>
+            <div>
+              <Label>Полный адрес</Label>
+              <Input
+                value={editAddressForm.fullAddress}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, fullAddress: e.target.value })}
+                placeholder="Полный адрес"
+                data-testid="input-edit-address-full"
+              />
+            </div>
+            <div>
+              <Label>Телефон</Label>
+              <Input
+                value={editAddressForm.phone}
+                onChange={(e) => {
+                  const normalizedPhone = e.target.value ? normalizePhoneNumber(e.target.value) : '';
+                  setEditAddressForm({ ...editAddressForm, phone: normalizedPhone });
+                }}
+                placeholder="+7..."
+                data-testid="input-edit-address-phone"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isDefault"
+                checked={editAddressForm.isDefault}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, isDefault: e.target.checked })}
+                data-testid="checkbox-edit-address-default"
+              />
+              <Label htmlFor="isDefault">По умолчанию</Label>
+            </div>
+            <Button
+              className="w-full"
+              onClick={handleSaveAddress}
+              disabled={updateAddressMutation.isPending}
+              data-testid="button-save-address"
+            >
+              {updateAddressMutation.isPending ? 'Сохранение...' : 'Сохранить'}
             </Button>
           </div>
         </DialogContent>
