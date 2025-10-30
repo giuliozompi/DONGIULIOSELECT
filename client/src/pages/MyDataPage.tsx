@@ -99,7 +99,7 @@ export default function MyDataPage() {
     if (suggestion) {
       setFormData(prev => ({
         ...prev,
-        address: suggestion.street ? `${suggestion.street}, ${suggestion.building || ''}`.trim() : fullAddress,
+        address: fullAddress, // Salva l'indirizzo completo fornito da DaData
         city: suggestion.city || '',
         building: suggestion.building || '',
         apartment: suggestion.flat || prev.apartment
