@@ -3514,6 +3514,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // GET /api/user-addresses/:userId - Ottieni tutti gli indirizzi di un utente specifico (per admin nel dialog ordini)
+  app.get("/api/user-addresses/:userId", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const addresses = await storage.getUserAddresses(userId);
+      res.json(addresses);
+    } catch (error) {
+      console.error('Error fetching user addresses:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // PATCH /api/admin/clients/:userId/addresses/:addressId - Aggiorna indirizzo cliente (ADMIN ONLY)
   app.patch("/api/admin/clients/:userId/addresses/:addressId", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
