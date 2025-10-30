@@ -2399,6 +2399,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cost_currency: 'RUB',
       }];
       
+      // Se c'è un offerId, recupera prima le offerte per trovare quella selezionata
+      let selectedOffer;
+      if (data.offerId) {
+        try {
+          const priceData = await yandexDostavkaService.checkPrice(
+            data.pickupCoordinates,
+            data.deliveryCoordinates
+          );
+          // Trova l'offerta selezionata dal payload (offer_id)
+          selectedOffer = priceData.all_offers?.find((offer: any) => offer.payload === data.offerId);
+        } catch (error) {
+          console.error('Error fetching offers for selected tariff:', error);
+          // Continua comunque, ma senza l'offerta selezionata
+        }
+      }
+      
       // Crea ordine Yandex Delivery
       const yandexOrder = await yandexDostavkaService.createOrder({
         items,
@@ -2428,6 +2444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ],
         comment: data.comment || `Заказ ${order.id.slice(0, 8)} - Don Giulio Select`,
         offer_id: data.offerId,
+        selected_offer: selectedOffer, // Passa l'offerta completa selezionata
       });
       
       // Salva info Yandex nell'ordine

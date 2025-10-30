@@ -310,6 +310,7 @@ class YandexDostavkaService {
       route_points: YandexDeliveryRoutePoint[];
       comment?: string;
       offer_id?: string;
+      selected_offer?: YandexDeliveryOffer; // L'offerta completa selezionata dall'utente
     },
     orderId?: string,
     correlationId?: string
@@ -343,26 +344,47 @@ class YandexDostavkaService {
       'X-Idempotency-Key': idempotencyKey,
     };
     
+    // Costruisci client_requirements basandoti sull'offerta selezionata
+    const client_requirements: any = {};
+    
+    if (orderData.selected_offer) {
+      // Usa taxi_class dall'offerta selezionata
+      client_requirements.taxi_class = orderData.selected_offer.taxi_class;
+      
+      // In base alla description, aggiungi parametri aggiuntivi se necessari
+      // Le varianti express_30min_longer, express_60min_longer, etc. 
+      // vengono gestite tramite la selezione del taxi_class corretto
+    }
+    
+    // Costruisci il payload finale senza offer_id (che Yandex ignora)
+    const { offer_id, selected_offer, ...cleanedOrderData } = orderData;
+    const finalPayload = {
+      ...cleanedOrderData,
+      ...(Object.keys(client_requirements).length > 0 && { client_requirements }),
+    };
+    
     logger.info('Creating order', { 
       requestId, 
       idempotencyKey,
+      selectedTariff: orderData.selected_offer?.description,
+      taxiClass: client_requirements.taxi_class,
       offerId: orderData.offer_id,
-      hasOfferId: !!orderData.offer_id,
       payloadPreview: {
         hasItems: !!orderData.items?.length,
         hasRoutePoints: !!orderData.route_points?.length,
         hasComment: !!orderData.comment,
-        offerIdValue: orderData.offer_id
+        hasClientRequirements: !!client_requirements.taxi_class
       }
     });
 
     try {
       const data = await withRetry(async () => {
         // Log the exact payload being sent
-        const payload = JSON.stringify(orderData);
+        const payload = JSON.stringify(finalPayload);
         logger.info('Sending payload to Yandex', { 
           payloadLength: payload.length,
-          offerIdIncluded: payload.includes('offer_id')
+          hasClientRequirements: !!finalPayload.client_requirements,
+          actualPayload: finalPayload // Log the complete payload for debugging
         });
         
         const response = await yandexFetch(url, {
