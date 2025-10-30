@@ -222,6 +222,7 @@ export default function MyDataPage() {
                 <Input
                   id="customerName"
                   type="text"
+                  dir="ltr"
                   placeholder="Введите ваше имя"
                   value={formData.customerName}
                   onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
@@ -234,6 +235,7 @@ export default function MyDataPage() {
                 <Input
                   id="phone"
                   type="tel"
+                  dir="ltr"
                   placeholder="+7 (___) ___-__-__"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -246,6 +248,7 @@ export default function MyDataPage() {
                 <Input
                   id="email"
                   type="email"
+                  dir="ltr"
                   placeholder="example@email.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -288,6 +291,7 @@ export default function MyDataPage() {
                   <Input
                     id="city"
                     type="text"
+                    dir="ltr"
                     placeholder="Автозаполнение"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
@@ -302,6 +306,7 @@ export default function MyDataPage() {
                   <Input
                     id="address"
                     type="text"
+                    dir="ltr"
                     placeholder="Автозаполнение"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
@@ -316,6 +321,7 @@ export default function MyDataPage() {
                   <Input
                     id="building"
                     type="text"
+                    dir="ltr"
                     placeholder="Автозаполнение"
                     value={formData.building}
                     onChange={(e) => setFormData({ ...formData, building: e.target.value })}
@@ -330,6 +336,7 @@ export default function MyDataPage() {
                   <Input
                     id="apartment"
                     type="text"
+                    dir="ltr"
                     placeholder="кв. 25"
                     value={formData.apartment}
                     onChange={(e) => setFormData({ ...formData, apartment: e.target.value })}
