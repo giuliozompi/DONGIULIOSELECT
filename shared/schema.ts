@@ -372,6 +372,9 @@ export const userAddresses = pgTable("user_addresses", {
   latitude: decimal("latitude", { precision: 10, scale: 7 }),
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   
+  // Telefono contatto per questo indirizzo
+  phone: text("phone"),
+  
   isDefault: boolean("is_default").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

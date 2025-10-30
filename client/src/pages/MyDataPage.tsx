@@ -50,7 +50,8 @@ export default function MyDataPage() {
     postalCode: '',
     dadataFiasId: '',
     latitude: '',
-    longitude: ''
+    longitude: '',
+    phone: ''
   });
   const [newAddressInput, setNewAddressInput] = useState('');
 
@@ -187,7 +188,8 @@ export default function MyDataPage() {
         postalCode: '',
         dadataFiasId: '',
         latitude: '',
-        longitude: ''
+        longitude: '',
+        phone: ''
       });
       setNewAddressInput('');
     },
@@ -511,6 +513,11 @@ export default function MyDataPage() {
                           <p className="text-sm text-muted-foreground" data-testid={`text-address-full-${address.id}`}>
                             {address.fullAddress}
                           </p>
+                          {address.phone && (
+                            <p className="text-sm text-muted-foreground mt-1" data-testid={`text-address-phone-${address.id}`}>
+                              Тел: {address.phone}
+                            </p>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           {!address.isDefault && (
@@ -615,6 +622,19 @@ export default function MyDataPage() {
                   data-testid="input-new-address-flat"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-address-phone">Телефон</Label>
+              <Input
+                id="new-address-phone"
+                type="tel"
+                dir="ltr"
+                placeholder="+7 (999) 123-45-67"
+                value={newAddress.phone}
+                onChange={(e) => setNewAddress({ ...newAddress, phone: e.target.value })}
+                data-testid="input-new-address-phone"
+              />
             </div>
 
             <div className="flex gap-2 justify-end">
