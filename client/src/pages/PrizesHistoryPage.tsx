@@ -32,7 +32,7 @@ export default function PrizesHistoryPage() {
   const [, setLocation] = useLocation();
   
   useTelegramBackButton(() => {
-    setLocation('/profile');
+    setLocation('/lk');
   });
 
   const { data: prizes = [], isLoading } = useQuery<PrizeWithProducts[]>({
