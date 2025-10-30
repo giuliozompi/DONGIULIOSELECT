@@ -28,7 +28,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress } from '@shared/schema';
+import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
@@ -1158,6 +1158,19 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
               </p>
             )}
           </div>
+
+          {/* Delivery Method Info */}
+          {displayOrder.deliveryMethod && (
+            <div className="space-y-2 border rounded-md p-4 bg-muted/50">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold">Метод доставки</h3>
+              </div>
+              <p className="text-sm" data-testid="order-delivery-method-admin">
+                {DELIVERY_METHOD_LABELS[displayOrder.deliveryMethod as keyof typeof DELIVERY_METHOD_LABELS] || displayOrder.deliveryMethod}
+              </p>
+            </div>
+          )}
 
           {/* Change Address */}
           <div className="space-y-3">
