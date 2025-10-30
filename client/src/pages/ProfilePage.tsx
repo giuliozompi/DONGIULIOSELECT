@@ -25,10 +25,13 @@ export default function ProfilePage() {
     order.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ'
   ).length;
   
-  // Auto-open dialog if there are pending orders (once per visit)
+  // Auto-open dialog if there are pending orders (only once per session)
   useEffect(() => {
-    if (pendingOrdersCount > 0) {
+    const hasShownDialog = sessionStorage.getItem('pendingOrdersDialogShown');
+    
+    if (pendingOrdersCount > 0 && !hasShownDialog) {
       setShowPendingDialog(true);
+      sessionStorage.setItem('pendingOrdersDialogShown', 'true');
     }
   }, [pendingOrdersCount]);
   
