@@ -66,3 +66,67 @@ ${paymentUrl}
     parseMode: 'HTML',
   });
 }
+
+export async function sendOrderStatusNotification(
+  chatId: string,
+  orderId: string,
+  status: string,
+  customerName: string
+): Promise<boolean> {
+  const statusMessages: Record<string, { emoji: string; title: string; description: string }> = {
+    'ОФОРМЛЕН': {
+      emoji: '✅',
+      title: 'Заказ оформлен',
+      description: 'Ваш заказ успешно оформлен и принят в работу.'
+    },
+    'СОБРАН': {
+      emoji: '📦',
+      title: 'Заказ собран',
+      description: 'Ваш заказ собран и готов к отправке.'
+    },
+    'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ': {
+      emoji: '💳',
+      title: 'Отправлена ссылка на оплату',
+      description: 'Вам отправлена ссылка для оплаты заказа.'
+    },
+    'ОПЛАЧЕН': {
+      emoji: '✅',
+      title: 'Заказ оплачен',
+      description: 'Ваш заказ успешно оплачен. Спасибо!'
+    },
+    'ВЫЗВАН КУРЬЕР': {
+      emoji: '🚚',
+      title: 'Курьер в пути',
+      description: 'Курьер выехал к вам с заказом.'
+    },
+    'ПОЛУЧЕН': {
+      emoji: '🎉',
+      title: 'Заказ получен',
+      description: 'Заказ успешно доставлен. Приятного аппетита!'
+    }
+  };
+
+  const statusInfo = statusMessages[status] || {
+    emoji: '📋',
+    title: 'Обновление статуса заказа',
+    description: `Статус вашего заказа изменен: ${status}`
+  };
+
+  const message = `
+${statusInfo.emoji} <b>${statusInfo.title}</b>
+
+Здравствуйте, ${customerName}!
+
+${statusInfo.description}
+
+📦 Заказ: <code>${orderId.slice(0, 13)}</code>
+
+Вы можете отследить ваш заказ в разделе "Мои заказы" нашего приложения.
+  `.trim();
+
+  return sendTelegramMessage({
+    chatId,
+    text: message,
+    parseMode: 'HTML',
+  });
+}

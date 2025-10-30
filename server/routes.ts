@@ -1883,6 +1883,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Invia notifica Telegram al cliente per il cambio di stato
+      // (tranne quando СОБРАН genera automaticamente link pagamento)
+      const shouldSendStatusNotification = !(status === 'СОБРАН' && order.paymentMethod !== 'cash_on_delivery');
+      
+      if (shouldSendStatusNotification) {
+        try {
+          const { sendOrderStatusNotification } = await import('./services/telegram-bot');
+          const telegramSent = await sendOrderStatusNotification(
+            order.userId,
+            orderId,
+            status,
+            order.customerName
+          );
+          if (telegramSent) {
+            console.log(`✅ Status notification sent to user ${order.userId} for order ${orderId}: ${status}`);
+          } else {
+            console.warn('⚠️ Telegram bot not configured - status notification not sent');
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to send status notification via Telegram:', error);
+        }
+      }
+      
       res.json(updatedOrder);
     } catch (error) {
       if (error instanceof z.ZodError) {
