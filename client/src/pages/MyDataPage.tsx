@@ -39,6 +39,7 @@ export default function MyDataPage() {
     addressNotes: ''
   });
 
+  const [isEditing, setIsEditing] = useState(false);
   const [addressInput, setAddressInput] = useState('');
   const [showAddAddressDialog, setShowAddAddressDialog] = useState(false);
   const [newAddress, setNewAddress] = useState({
@@ -130,6 +131,7 @@ export default function MyDataPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+      setIsEditing(false);
       toast({
         title: 'Данные сохранены',
         description: 'Ваша информация успешно обновлена'
@@ -421,14 +423,27 @@ export default function MyDataPage() {
           {/* Personal Information Card */}
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-lg bg-primary/10">
-                  <UserIcon className="w-6 h-6 text-primary" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-lg bg-primary/10">
+                    <UserIcon className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle>Личная информация</CardTitle>
+                    <CardDescription>Управляйте вашими контактными данными</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle>Личная информация</CardTitle>
-                  <CardDescription>Управляйте вашими контактными данными</CardDescription>
-                </div>
+                {!isEditing && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setIsEditing(true)}
+                    data-testid="button-edit-profile"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -450,6 +465,7 @@ export default function MyDataPage() {
                   value={formData.customerName}
                   onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
                   data-testid="input-customer-name"
+                  disabled={!isEditing}
                 />
               </div>
 
@@ -463,6 +479,7 @@ export default function MyDataPage() {
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   data-testid="input-phone"
+                  disabled={!isEditing}
                 />
               </div>
 
@@ -476,6 +493,7 @@ export default function MyDataPage() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   data-testid="input-email"
+                  disabled={!isEditing}
                 />
               </div>
             </CardContent>
@@ -484,14 +502,27 @@ export default function MyDataPage() {
           {/* Primary Address Card */}
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-3 rounded-lg bg-primary/10">
-                  <MapPin className="w-6 h-6 text-primary" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-lg bg-primary/10">
+                    <MapPin className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <CardTitle>Адрес доставки</CardTitle>
+                    <CardDescription>Основной адрес для доставки заказов</CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <CardTitle>Адрес доставки</CardTitle>
-                  <CardDescription>Основной адрес для доставки заказов</CardDescription>
-                </div>
+                {!isEditing && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setIsEditing(true)}
+                    data-testid="button-edit-address"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -502,6 +533,7 @@ export default function MyDataPage() {
                   onChange={handleAddressSelect}
                   placeholder="Начните вводить адрес: город, улица, дом..."
                   testId="input-address-autocomplete"
+                  disabled={!isEditing}
                 />
                 <p className="text-xs text-muted-foreground">
                   Выберите адрес из списка для автоматического заполнения данных
@@ -564,6 +596,7 @@ export default function MyDataPage() {
                     value={formData.apartment}
                     onChange={(e) => setFormData({ ...formData, apartment: e.target.value })}
                     data-testid="input-apartment"
+                    disabled={!isEditing}
                   />
                 </div>
 
@@ -576,21 +609,24 @@ export default function MyDataPage() {
                     onChange={(e) => setFormData({ ...formData, addressNotes: e.target.value })}
                     rows={3}
                     data-testid="input-address-notes"
+                    disabled={!isEditing}
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={updateMutation.isPending}
-            data-testid="button-save-all"
-          >
-            <Save className="w-4 h-4 mr-2" />
-            {updateMutation.isPending ? 'Сохранение...' : 'Сохранить все данные'}
-          </Button>
+          {isEditing && (
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={updateMutation.isPending}
+              data-testid="button-save-all"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {updateMutation.isPending ? 'Сохранение...' : 'Сохранить все данные'}
+            </Button>
+          )}
         </form>
 
         {/* Alternative Addresses Card */}
