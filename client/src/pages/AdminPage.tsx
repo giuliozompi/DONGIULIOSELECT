@@ -925,16 +925,12 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
         deliveryAddress: newAddress,
       };
       
-      // Se abbiamo dati strutturati dall'autocompletamento DaData, includiamoli
-      if (addressStructured.city && addressStructured.street && addressStructured.building) {
-        payload.deliveryCity = addressStructured.city;
-        payload.deliveryStreet = addressStructured.street;
-        payload.deliveryBuilding = addressStructured.building;
-        payload.deliveryFlat = addressStructured.flat;
-        payload.deliveryPostalCode = addressStructured.postalCode;
+      // Se abbiamo dati strutturati dall'autocompletamento DaData, includiamoli (solo coordinate e metadata necessari)
+      if (addressStructured.dadataFiasId) {
         payload.dadataFiasId = addressStructured.dadataFiasId;
         payload.latitude = addressStructured.latitude;
         payload.longitude = addressStructured.longitude;
+        payload.deliveryPostalCode = addressStructured.postalCode;
         payload.saveToCustomer = true; // Salva automaticamente l'indirizzo nel profilo del cliente
       }
       
