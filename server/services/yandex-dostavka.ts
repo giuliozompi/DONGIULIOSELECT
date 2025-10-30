@@ -345,29 +345,27 @@ class YandexDostavkaService {
     };
     
     // Costruisci il payload finale con la struttura corretta per Yandex
-    // IMPORTANTE: offer_id deve essere dentro un oggetto "offer", non come campo diretto!
+    // IMPORTANTE: Il campo si chiama "offer_payload" secondo la documentazione ufficiale!
     const { offer_id, selected_offer, ...cleanedOrderData } = orderData;
     const finalPayload: any = {
       ...cleanedOrderData,
     };
     
-    // Se c'è un offer_id, passalo nella struttura corretta
+    // Se c'è un offer_id, passalo come "offer_payload"
     if (offer_id) {
-      finalPayload.offer = {
-        offer_id: offer_id
-      };
+      finalPayload.offer_payload = offer_id;
     }
     
     logger.info('Creating order', { 
       requestId, 
       idempotencyKey,
       offerId: orderData.offer_id,
-      hasOffer: !!finalPayload.offer,
+      offerPayload: finalPayload.offer_payload,
       payloadPreview: {
         hasItems: !!orderData.items?.length,
         hasRoutePoints: !!orderData.route_points?.length,
         hasComment: !!orderData.comment,
-        hasOfferObject: !!finalPayload.offer
+        hasOfferPayload: !!finalPayload.offer_payload
       }
     });
 
@@ -377,8 +375,8 @@ class YandexDostavkaService {
         const payload = JSON.stringify(finalPayload);
         logger.info('Sending payload to Yandex', { 
           payloadLength: payload.length,
-          hasOfferObject: !!finalPayload.offer,
-          offerIdValue: finalPayload.offer?.offer_id,
+          hasOfferPayload: !!finalPayload.offer_payload,
+          offerPayloadValue: finalPayload.offer_payload,
           actualPayload: finalPayload // Log the complete payload for debugging
         });
         
