@@ -62,10 +62,16 @@ export interface YandexGoCheckPriceRequest {
 
 export interface YandexGoCheckPriceResponse {
   price: string;
-  price_raw: number;
-  currency: string;
-  distance: number;
-  time: number;
+  currency_rules: {
+    code: string;
+    sign: string;
+    template: string;
+    text: string;
+  };
+  distance_meters: number;
+  eta: number;
+  offer_id: string;
+  all_offers: any[];
 }
 
 export interface YandexGoClaimRequest {
@@ -94,14 +100,13 @@ export interface YandexGoClaimRequest {
   }>;
   optional_return?: boolean;
   skip_door_to_door?: boolean;
-  requirements?: {
-    taxi_class?: string;
-  };
   comment?: string;
   emergency_contact?: {
     phone: string;
     name: string;
   };
+  offer_id?: string;
+  selected_offer?: any;
 }
 
 export interface YandexGoClaimResponse {
@@ -205,100 +210,102 @@ export class YandexGoService {
       'X-Idempotency-Key': idempotencyKey,
     };
     
-    logger.info('Starting price calculation', { 
-      url, 
-      routePoints: request.route_points.length,
-      items: request.items.length,
-      idempotencyKey
-    });
+    logger.info('Starting price calculation', { idempotencyKey });
 
-    // Wrap in retry logic
-    const data = await withRetry(async () => {
-      const response = await yandexFetch(url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(request),
-      }, logger, corrId);
+    try {
+      const data = await withRetry(async () => {
+        const response = await yandexFetch(url, {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(request),
+        }, logger, corrId);
 
-      return await response.json();
-    }, {}, corrId);
-    logger.info('Price calculation response received', { 
-      offersCount: data.offers?.length || 0 
-    });
-    
-    // Parse Yandex response - API returns { offers: [...] }
-    if (!data.offers || !Array.isArray(data.offers) || data.offers.length === 0) {
-      logger.warn('No offers available');
-      throw new Error('Nessuna offerta di consegna disponibile per questo percorso');
-    }
-    
-    // Extract best offer (first one is usually the best/cheapest)
-    const bestOffer = data.offers[0];
-    
-    // Extract pricing from offer - price is a nested object
-    // Structure: { price: { total_price, total_price_with_vat, surge_ratio, currency } }
-    let priceValue = 0;
-    let currency = 'RUB';
-    
-    if (bestOffer.price && typeof bestOffer.price === 'object') {
-      // Price is an object with total_price field
-      priceValue = parseFloat(bestOffer.price.total_price || bestOffer.price.total_price_with_vat || '0');
-      currency = bestOffer.price.currency || 'RUB';
-    } else if (typeof bestOffer.price === 'number' || typeof bestOffer.price === 'string') {
-      // Fallback: price is a simple value
-      priceValue = parseFloat(bestOffer.price);
-    }
-    
-    const priceFormatted = priceValue.toFixed(2);
-    
-    // Calculate distance using Haversine formula from request coordinates
-    let distance = 0;
-    if (request.route_points && request.route_points.length >= 2) {
-      const pickup = request.route_points[0];
-      const delivery = request.route_points[1];
-      if (pickup.coordinates && delivery.coordinates) {
-        // coordinates are [longitude, latitude]
-        distance = calculateDistance(
-          pickup.coordinates[1], pickup.coordinates[0],
-          delivery.coordinates[1], delivery.coordinates[0]
-        );
+        return await response.json();
+      }, {}, corrId);
+      
+      // Log TUTTE le tariffe disponibili da Yandex prima del filtro
+      logger.info('Price calculation response received', {
+        offersCount: data.offers?.length || 0,
+        allAvailableDescriptions: data.offers?.map((o: any) => o.description) || []
+      });
+
+      // Filtra le tariffe desiderate - STESSA LOGICA di Yandex Dostavka
+      const allowedTariffs = [
+        'express',
+        'express_30min_longer', 
+        'express_60min_longer',
+        '2_hours_delivery',
+        '4_hours_delivery',
+      ];
+      
+      const filteredOffers = data.offers?.filter((offer: any) => 
+        allowedTariffs.includes(offer.description)
+      ) || [];
+      
+      // Se non ci sono offerte filtrate, usa tutte le offerte disponibili
+      const availableOffers = filteredOffers.length > 0 ? filteredOffers : data.offers;
+      
+      const bestOffer = availableOffers?.[0];
+      if (!bestOffer) {
+        throw new Error('No delivery offers available');
       }
-    }
-    
-    // Calculate delivery time from intervals
-    let time = 0;
-    
-    // Extract delivery time from delivery_interval
-    if (bestOffer.delivery_interval && typeof bestOffer.delivery_interval === 'object') {
-      // delivery_interval might have 'from' and 'to' timestamps
-      // Calculate time difference or use estimated delivery time
-      const from = bestOffer.delivery_interval.from;
-      const to = bestOffer.delivery_interval.to;
-      if (from && to) {
-        const fromTime = new Date(from).getTime();
-        const toTime = new Date(to).getTime();
-        time = Math.round((toTime - fromTime) / 60000); // milliseconds to minutes
+      
+      logger.info('Selected offer', {
+        taxiClass: bestOffer.taxi_class,
+        description: bestOffer.description,
+        filteredOffersCount: filteredOffers.length,
+        totalOffersCount: data.offers?.length || 0,
+        filteredDescriptions: filteredOffers.map((o: any) => o.description)
+      });
+
+      // Estrai prezzo e valuta dal campo price
+      const currency = bestOffer.price?.currency || 'RUB';
+      const totalPrice = bestOffer.price?.total_price || '0';
+
+      // Calcola ETA in secondi dalla differenza tra delivery e pickup
+      let etaSeconds = 0;
+      if (bestOffer.delivery_interval?.to && bestOffer.pickup_interval?.from) {
+        const deliveryTime = new Date(bestOffer.delivery_interval.to).getTime();
+        const pickupTime = new Date(bestOffer.pickup_interval.from).getTime();
+        etaSeconds = Math.round((deliveryTime - pickupTime) / 1000);
       }
-    }
-    
-    // If no time from interval, use pickup_interval
-    if (time === 0 && bestOffer.pickup_interval && typeof bestOffer.pickup_interval === 'object') {
-      const from = bestOffer.pickup_interval.from;
-      const to = bestOffer.pickup_interval.to;
-      if (from && to) {
-        const fromTime = new Date(from).getTime();
-        const toTime = new Date(to).getTime();
-        time = Math.round((toTime - fromTime) / 60000); // milliseconds to minutes
+
+      // Calcola distanza approssimativa dalle coordinate
+      let distanceMeters = 0;
+      if (request.route_points && request.route_points.length >= 2) {
+        const pickup = request.route_points[0];
+        const delivery = request.route_points[1];
+        if (pickup.coordinates && delivery.coordinates) {
+          const R = 6371000; // Earth radius in meters
+          const lat1 = pickup.coordinates[1] * Math.PI / 180;
+          const lat2 = delivery.coordinates[1] * Math.PI / 180;
+          const dLat = (delivery.coordinates[1] - pickup.coordinates[1]) * Math.PI / 180;
+          const dLon = (delivery.coordinates[0] - pickup.coordinates[0]) * Math.PI / 180;
+          const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1) * Math.cos(lat2) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          distanceMeters = Math.round(R * c);
+        }
       }
+
+      return {
+        price: totalPrice,
+        currency_rules: {
+          code: currency,
+          sign: currency === 'RUB' ? '₽' : currency,
+          template: '$VALUE$ $SIGN$$CURRENCY$',
+          text: currency,
+        },
+        distance_meters: distanceMeters,
+        eta: etaSeconds,
+        offer_id: bestOffer.payload || '', // payload è l'offer_id di Yandex
+        all_offers: filteredOffers.length > 0 ? filteredOffers : data.offers, // Offerte filtrate
+      };
+    } catch (error) {
+      logger.error('Yandex Go checkPrice error', { error });
+      throw error;
     }
-    
-    return {
-      price: priceFormatted,
-      price_raw: priceValue,
-      currency: currency,
-      distance: distance,
-      time: time,
-    };
   }
 
   /**
@@ -332,32 +339,68 @@ export class YandexGoService {
     }
 
     // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/create
-    const url = `${this.baseUrl}/claims/create?request_id=${requestId}`;
+    const url = `${this.baseUrl}/claims/create?request_id=${encodeURIComponent(requestId)}`;
     
     const headers = {
       ...this.getHeaders(),
       'X-Idempotency-Key': idempotencyKey,
     };
     
-    logger.info('Creating claim', { url, requestId, idempotencyKey });
-
-    const data = await withRetry(async () => {
-      const response = await yandexFetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(request),
-      }, logger, corrId);
-
-      return await response.json();
-    }, {}, corrId);
-
-    logger.info('Claim created successfully', {
-      claimId: data.id,
-      status: data.status,
-      pricing: data.pricing
-    });
+    // Costruisci il payload finale con la struttura corretta per Yandex
+    // IMPORTANTE: Il campo si chiama "offer_payload" secondo la documentazione ufficiale!
+    const { offer_id, selected_offer, ...cleanedRequest } = request;
+    const finalPayload: any = {
+      ...cleanedRequest,
+    };
     
-    return data;
+    // Se c'è un offer_id, passalo come "offer_payload"
+    if (offer_id) {
+      finalPayload.offer_payload = offer_id;
+    }
+    
+    logger.info('Creating claim', { 
+      requestId, 
+      idempotencyKey,
+      offerId: request.offer_id,
+      offerPayload: finalPayload.offer_payload,
+      payloadPreview: {
+        hasItems: !!request.items?.length,
+        hasRoutePoints: !!request.route_points?.length,
+        hasComment: !!request.comment,
+        hasOfferPayload: !!finalPayload.offer_payload
+      }
+    });
+
+    try {
+      const data = await withRetry(async () => {
+        // Log the exact payload being sent
+        const payload = JSON.stringify(finalPayload);
+        logger.info('Sending payload to Yandex', { 
+          payloadLength: payload.length,
+          hasOfferPayload: !!finalPayload.offer_payload,
+          offerPayloadValue: finalPayload.offer_payload,
+          actualPayload: finalPayload
+        });
+        
+        const response = await yandexFetch(url, {
+          method: 'POST',
+          headers,
+          body: payload,
+        }, logger, corrId);
+
+        return await response.json();
+      }, {}, corrId);
+
+      logger.info('Claim created successfully', {
+        claimId: data.id,
+        status: data.status
+      });
+
+      return data;
+    } catch (error) {
+      logger.error('Create claim failed', { error });
+      throw error;
+    }
   }
 
   /**
