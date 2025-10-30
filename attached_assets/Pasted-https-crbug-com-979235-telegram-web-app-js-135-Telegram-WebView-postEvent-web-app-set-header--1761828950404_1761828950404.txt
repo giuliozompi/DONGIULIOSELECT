@@ -1,0 +1,38 @@
+https://crbug.com/979235.
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_header_color Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_background_color Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_set_bottom_bar_color Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_theme 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_viewport 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_safe_area 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_content_safe_area 
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent theme_changed Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_main_button Object
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_secondary_button Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent safe_area_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent content_safe_area_changed Object
+5index-CwETPVX_.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_ready 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_expand 
+telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_setup_closing_behavior Object
+index-CwETPVX_.js:48 [Telegram] Init data saved to localStorage
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent visibility_changed Object
+don-giulio-catalog.replit.app/api/cart:1  Failed to load resource: the server responded with a status of 500 ()
+don-giulio-catalog.replit.app/api/admin/check:1  Failed to load resource: the server responded with a status of 500 ()
+don-giulio-catalog.replit.app/api/fortune:1  Failed to load resource: the server responded with a status of 500 ()
+PromisedWebSockets.ts:137 WebSocket connection to 'wss://zws1.web.telegram.org/apiws' failed: WebSocket is closed before the connection is established.
+(анонимная) @ PromisedWebSockets.ts:137
+Logger.ts:72 [2025-10-30T12:50:40.938Z] [ERROR] - [WebSocket connection failed attempt: 1]
+MTProtoSender.ts:326 Error: WebSocket connection timeout
+    at PromisedWebSockets.ts:131:16
+connect @ MTProtoSender.ts:326
+PromisedWebSockets.ts:107 WebSocket error Event
+client.onerror @ PromisedWebSockets.ts:107
+PromisedWebSockets.ts:116 Socket zws1.web.telegram.org closed. Code: 1006, reason: , was clean: false
+client.onclose @ PromisedWebSockets.ts:116
+Logger.ts:72 [2025-10-30T12:50:41.941Z] [WARN] - [Using fallback connection]
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed Object
+telegram-web-app.js:162 [Telegram.WebView] < receiveEvent viewport_changed {width: 420, height: 690, is_expanded: true, is_state_stable: true}
