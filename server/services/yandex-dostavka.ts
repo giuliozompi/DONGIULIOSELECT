@@ -233,8 +233,10 @@ class YandexDostavkaService {
         return await response.json() as YandexDeliveryCalculateResponse;
       }, {}, corrId);
       
+      // Log TUTTE le tariffe disponibili da Yandex prima del filtro
       logger.info('Price calculation response received', {
         offersCount: data.offers?.length || 0,
+        allAvailableDescriptions: data.offers?.map((o: any) => o.description) || []
       });
 
       // Filtra le tariffe desiderate: Express, 2 ore, 4 ore
@@ -264,7 +266,7 @@ class YandexDostavkaService {
         description: bestOffer.description,
         filteredOffersCount: filteredOffers.length,
         totalOffersCount: data.offers?.length || 0,
-        availableDescriptions: filteredOffers.map((o: any) => o.description)
+        filteredDescriptions: filteredOffers.map((o: any) => o.description)
       });
 
       // Estrai prezzo e valuta dal campo price
