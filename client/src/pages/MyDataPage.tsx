@@ -96,10 +96,13 @@ export default function MyDataPage() {
 
   const handleAddressSelect = (fullAddress: string, suggestion?: AddressSuggestion) => {
     setAddressInput(fullAddress);
-    // Salva solo l'indirizzo completo, non i campi separati
+    // Salva solo l'indirizzo completo e pulisce i campi separati obsoleti
     setFormData(prev => ({
       ...prev,
-      address: fullAddress
+      address: fullAddress,
+      city: '',
+      building: '',
+      apartment: ''
     }));
   };
 
@@ -371,13 +374,16 @@ export default function MyDataPage() {
     e.preventDefault();
     
     // Normalizza campi vuoti a null per permettere la cancellazione nel DB
-    // NON inviamo city, building, apartment perché il form usa solo l'indirizzo completo
+    // Impostiamo city, building, apartment a null per pulire i vecchi dati
     const normalizedData = {
       customerName: formData.customerName.trim() || null,
       phone: formData.phone.trim() ? normalizePhoneNumber(formData.phone.trim()) : null,
       email: formData.email.trim() || null,
       address: formData.address.trim() || null,
       addressNotes: formData.addressNotes.trim() || null,
+      city: null,
+      building: null,
+      apartment: null,
     };
     
     updateMutation.mutate(normalizedData);
