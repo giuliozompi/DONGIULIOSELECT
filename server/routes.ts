@@ -3471,6 +3471,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.params.userId;
       const updates = schema.parse(req.body);
       
+      // Normalizza il numero di telefono se presente
+      if (updates.phone !== undefined && updates.phone !== null && updates.phone.trim()) {
+        updates.phone = normalizePhoneNumber(updates.phone);
+      }
+      
       const user = await storage.getUserById(userId);
       if (!user) {
         return res.status(404).json({ error: 'Client not found' });

@@ -36,6 +36,7 @@ import { DeliveryDialog } from '@/components/DeliveryDialog';
 import { OrderViewDialog } from '@/components/OrderViewDialog';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
+import { normalizePhoneNumber } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { SubmitHandler } from 'react-hook-form';
@@ -3163,7 +3164,10 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               <Label>Телефон</Label>
               <Input
                 value={editForm.phone}
-                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                onChange={(e) => {
+                  const normalizedPhone = e.target.value ? normalizePhoneNumber(e.target.value) : '';
+                  setEditForm({ ...editForm, phone: normalizedPhone });
+                }}
                 placeholder="+7..."
                 data-testid="input-edit-phone"
               />
