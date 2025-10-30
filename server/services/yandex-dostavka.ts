@@ -344,36 +344,30 @@ class YandexDostavkaService {
       'X-Idempotency-Key': idempotencyKey,
     };
     
-    // Costruisci client_requirements basandoti sull'offerta selezionata
-    const client_requirements: any = {};
-    
-    if (orderData.selected_offer) {
-      // Usa taxi_class dall'offerta selezionata
-      client_requirements.taxi_class = orderData.selected_offer.taxi_class;
-      
-      // In base alla description, aggiungi parametri aggiuntivi se necessari
-      // Le varianti express_30min_longer, express_60min_longer, etc. 
-      // vengono gestite tramite la selezione del taxi_class corretto
-    }
-    
-    // Costruisci il payload finale senza offer_id (che Yandex ignora)
+    // Costruisci il payload finale con la struttura corretta per Yandex
+    // IMPORTANTE: offer_id deve essere dentro un oggetto "offer", non come campo diretto!
     const { offer_id, selected_offer, ...cleanedOrderData } = orderData;
-    const finalPayload = {
+    const finalPayload: any = {
       ...cleanedOrderData,
-      ...(Object.keys(client_requirements).length > 0 && { client_requirements }),
     };
+    
+    // Se c'è un offer_id, passalo nella struttura corretta
+    if (offer_id) {
+      finalPayload.offer = {
+        offer_id: offer_id
+      };
+    }
     
     logger.info('Creating order', { 
       requestId, 
       idempotencyKey,
-      selectedTariff: orderData.selected_offer?.description,
-      taxiClass: client_requirements.taxi_class,
       offerId: orderData.offer_id,
+      hasOffer: !!finalPayload.offer,
       payloadPreview: {
         hasItems: !!orderData.items?.length,
         hasRoutePoints: !!orderData.route_points?.length,
         hasComment: !!orderData.comment,
-        hasClientRequirements: !!client_requirements.taxi_class
+        hasOfferObject: !!finalPayload.offer
       }
     });
 
@@ -383,7 +377,8 @@ class YandexDostavkaService {
         const payload = JSON.stringify(finalPayload);
         logger.info('Sending payload to Yandex', { 
           payloadLength: payload.length,
-          hasClientRequirements: !!finalPayload.client_requirements,
+          hasOfferObject: !!finalPayload.offer,
+          offerIdValue: finalPayload.offer?.offer_id,
           actualPayload: finalPayload // Log the complete payload for debugging
         });
         
