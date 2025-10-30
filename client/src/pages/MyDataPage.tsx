@@ -531,87 +531,26 @@ export default function MyDataPage() {
                 <AddressAutocomplete
                   value={addressInput}
                   onChange={handleAddressSelect}
-                  placeholder="Начните вводить адрес: город, улица, дом..."
+                  placeholder="Начните вводить адрес: город, улица, дом, квартира..."
                   testId="input-address-autocomplete"
                   disabled={!isEditing}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Выберите адрес из списка для автоматического заполнения данных
+                  Выберите адрес из списка для автоматического заполнения
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="city">Город</Label>
-                  <Input
-                    id="city"
-                    type="text"
-                    dir="ltr"
-                    placeholder="Автозаполнение"
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    data-testid="input-city"
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="address">Улица и дом</Label>
-                  <Input
-                    id="address"
-                    type="text"
-                    dir="ltr"
-                    placeholder="Автозаполнение"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    data-testid="input-address"
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="building">Корпус/Строение</Label>
-                  <Input
-                    id="building"
-                    type="text"
-                    dir="ltr"
-                    placeholder="Автозаполнение"
-                    value={formData.building}
-                    onChange={(e) => setFormData({ ...formData, building: e.target.value })}
-                    data-testid="input-building"
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="apartment">Квартира</Label>
-                  <Input
-                    id="apartment"
-                    type="text"
-                    dir="ltr"
-                    placeholder="кв. 25"
-                    value={formData.apartment}
-                    onChange={(e) => setFormData({ ...formData, apartment: e.target.value })}
-                    data-testid="input-apartment"
-                    disabled={!isEditing}
-                  />
-                </div>
-
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="addressNotes">Примечания</Label>
-                  <Textarea
-                    id="addressNotes"
-                    placeholder="Этаж, домофон, подъезд..."
-                    value={formData.addressNotes}
-                    onChange={(e) => setFormData({ ...formData, addressNotes: e.target.value })}
-                    rows={3}
-                    data-testid="input-address-notes"
-                    disabled={!isEditing}
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="addressNotes">Примечания к адресу</Label>
+                <Textarea
+                  id="addressNotes"
+                  placeholder="Этаж, домофон, подъезд..."
+                  value={formData.addressNotes}
+                  onChange={(e) => setFormData({ ...formData, addressNotes: e.target.value })}
+                  rows={3}
+                  data-testid="input-address-notes"
+                  disabled={!isEditing}
+                />
               </div>
             </CardContent>
           </Card>
