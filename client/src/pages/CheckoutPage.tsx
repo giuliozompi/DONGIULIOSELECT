@@ -30,7 +30,6 @@ const checkoutFormSchema = z.object({
   customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/, 'Введите корректный номер телефона'),
   customerEmail: z.string().email('Введите корректный адрес электронной почты'),
   deliveryAddress: z.string().min(10, 'Введите полный адрес доставки'),
-  deliveryFlat: z.string().optional(),
   deliveryNotes: z.string().optional(),
   deliveryMethod: z.enum([
     DELIVERY_METHODS.YANDEX_GO,
@@ -61,10 +60,6 @@ const checkoutFormSchema = z.object({
 type CheckoutFormData = z.infer<typeof checkoutFormSchema>;
 
 interface StructuredAddress {
-  deliveryCity?: string;
-  deliveryStreet?: string;
-  deliveryBuilding?: string;
-  deliveryFlat?: string;
   deliveryPostalCode?: string;
   dadataFiasId?: string;
   deliveryLatitude?: string;
@@ -119,7 +114,6 @@ export default function CheckoutPage() {
       customerPhone: '',
       customerEmail: '',
       deliveryAddress: '',
-      deliveryFlat: '',
       deliveryNotes: '',
       deliveryMethod: DELIVERY_METHODS.YANDEX_GO,
       paymentMethod: PAYMENT_METHODS.YOOKASSA,
@@ -164,14 +158,7 @@ export default function CheckoutPage() {
       if (defaultAddress) {
         // Pre-compila automaticamente il form con l'indirizzo di default
         form.setValue('deliveryAddress', defaultAddress.fullAddress);
-        if (defaultAddress.flat) {
-          form.setValue('deliveryFlat', defaultAddress.flat);
-        }
         setStructuredAddress({
-          deliveryCity: defaultAddress.city || undefined,
-          deliveryStreet: defaultAddress.street || undefined,
-          deliveryBuilding: defaultAddress.building || undefined,
-          deliveryFlat: defaultAddress.flat || undefined,
           deliveryPostalCode: defaultAddress.postalCode || undefined,
           dadataFiasId: defaultAddress.dadataFiasId || undefined,
           deliveryLatitude: defaultAddress.latitude || undefined,
@@ -210,7 +197,6 @@ export default function CheckoutPage() {
         ...data,
         customerPhone: normalizePhoneNumber(data.customerPhone),
         ...structuredAddress,
-        deliveryFlat: data.deliveryFlat || structuredAddress.deliveryFlat,
       };
       const res = await apiRequest('POST', '/api/orders', orderData);
       return await res.json();
@@ -245,14 +231,7 @@ export default function CheckoutPage() {
   const handleUseAddress = (address: UserAddress) => {
     hapticFeedback('light');
     form.setValue('deliveryAddress', address.fullAddress);
-    if (address.flat) {
-      form.setValue('deliveryFlat', address.flat);
-    }
     setStructuredAddress({
-      deliveryCity: address.city || undefined,
-      deliveryStreet: address.street || undefined,
-      deliveryBuilding: address.building || undefined,
-      deliveryFlat: address.flat || undefined,
       deliveryPostalCode: address.postalCode || undefined,
       dadataFiasId: address.dadataFiasId || undefined,
       deliveryLatitude: address.latitude || undefined,
@@ -510,42 +489,17 @@ export default function CheckoutPage() {
                           field.onChange(value);
                           if (suggestion) {
                             setStructuredAddress({
-                              deliveryCity: suggestion.city || undefined,
-                              deliveryStreet: suggestion.street || undefined,
-                              deliveryBuilding: suggestion.building || undefined,
                               deliveryPostalCode: suggestion.postalCode || undefined,
                               dadataFiasId: suggestion.fiasId,
                               deliveryLatitude: suggestion.geoLat || undefined,
                               deliveryLongitude: suggestion.geoLon || undefined,
                             });
-                            if (suggestion.flat) {
-                              form.setValue('deliveryFlat', suggestion.flat);
-                            }
                           } else {
                             setStructuredAddress({});
                           }
                         }}
                         placeholder="Начните вводить адрес: город, улица, дом..."
                         testId="input-delivery-address"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="deliveryFlat"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Номер квартиры</FormLabel>
-                    <FormControl>
-                      <Input 
-                        {...field} 
-                        dir="ltr"
-                        placeholder="45"
-                        data-testid="input-delivery-flat"
                       />
                     </FormControl>
                     <FormMessage />
