@@ -3054,6 +3054,65 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                   </CardContent>
                 </Card>
 
+                {/* Addresses */}
+                {clientDetail.addresses && clientDetail.addresses.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Адреса клиента</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {clientDetail.addresses.map((address: any) => (
+                          <div key={address.id} className="p-3 border rounded-md">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="font-medium">{address.label}</p>
+                                  {address.isDefault && (
+                                    <Badge variant="default" className="text-xs">По умолчанию</Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground">{address.fullAddress}</p>
+                                {address.phone && (
+                                  <p className="text-sm text-muted-foreground mt-1">Тел: {address.phone}</p>
+                                )}
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleEditAddressClick(address)}
+                                  data-testid={`button-edit-address-${address.id}`}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={async () => {
+                                    if (confirm('Удалить этот адрес?')) {
+                                      try {
+                                        await apiRequest('DELETE', `/api/admin/clients/${clientDetail.id}/addresses/${address.id}`, {});
+                                        toast({ title: 'Адрес удален' });
+                                        queryClient.invalidateQueries({ queryKey: ['/api/admin/clients', selectedClient] });
+                                      } catch (error: any) {
+                                        toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+                                      }
+                                    }
+                                  }}
+                                  data-testid={`button-delete-address-${address.id}`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Top Products */}
                 {clientDetail.stats.topProducts.length > 0 && (
                   <Card>
@@ -3135,65 +3194,6 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                                 ))}
                               </div>
                             )}
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Addresses */}
-                {clientDetail.addresses && clientDetail.addresses.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Адреса клиента</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {clientDetail.addresses.map((address: any) => (
-                          <div key={address.id} className="p-3 border rounded-md">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <p className="font-medium">{address.label}</p>
-                                  {address.isDefault && (
-                                    <Badge variant="default" className="text-xs">По умолчанию</Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm text-muted-foreground">{address.fullAddress}</p>
-                                {address.phone && (
-                                  <p className="text-sm text-muted-foreground mt-1">Тел: {address.phone}</p>
-                                )}
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleEditAddressClick(address)}
-                                  data-testid={`button-edit-address-${address.id}`}
-                                >
-                                  <Edit className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={async () => {
-                                    if (confirm('Удалить этот адрес?')) {
-                                      try {
-                                        await apiRequest('DELETE', `/api/admin/clients/${clientDetail.id}/addresses/${address.id}`, {});
-                                        toast({ title: 'Адрес удален' });
-                                        queryClient.invalidateQueries({ queryKey: ['/api/admin/clients', selectedClient] });
-                                      } catch (error: any) {
-                                        toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
-                                      }
-                                    }
-                                  }}
-                                  data-testid={`button-delete-address-${address.id}`}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </div>
                           </div>
                         ))}
                       </div>
