@@ -68,15 +68,6 @@ declare global {
 export const tg = typeof window !== 'undefined' ? window.Telegram?.WebApp : undefined;
 
 export function initTelegramApp() {
-  console.log('[initTelegramApp] Inizializzazione Telegram WebApp', {
-    hasTelegram: !!window.Telegram,
-    hasWebApp: !!window.Telegram?.WebApp,
-    hasTg: !!tg,
-    hasInitData: !!tg?.initData,
-    hasUser: !!tg?.initDataUnsafe?.user,
-    userId: tg?.initDataUnsafe?.user?.id
-  });
-  
   if (tg) {
     tg.ready();
     tg.expand();
@@ -87,15 +78,10 @@ export function initTelegramApp() {
     // Salva initData in localStorage per autenticazione API
     if (tg.initData) {
       localStorage.setItem('telegram-init-data', tg.initData);
-      console.log('[Telegram] Init data saved to localStorage', {
-        length: tg.initData.length,
-        preview: tg.initData.substring(0, 50) + '...'
-      });
+      console.log('[Telegram] Init data saved to localStorage');
     } else {
-      console.warn('[Telegram] No initData available - L\'app potrebbe non essere aperta tramite Telegram WebApp!');
+      console.warn('[Telegram] No initData available');
     }
-  } else {
-    console.error('[Telegram] Telegram WebApp SDK non disponibile!');
   }
 }
 
@@ -136,23 +122,12 @@ export function getTelegramUser() {
 export function getTelegramInitData(): string | undefined {
   if (typeof window === 'undefined') return undefined;
   
-  // DEBUG: Log per diagnosticare
-  console.log('[getTelegramInitData] Chiamata funzione', {
-    hasTelegram: !!window.Telegram,
-    hasWebApp: !!window.Telegram?.WebApp,
-    hasTg: !!tg,
-    hasInitData: !!tg?.initData,
-    initDataPreview: tg?.initData ? tg.initData.substring(0, 50) + '...' : 'NONE'
-  });
-  
   // SEMPRE usa l'initData fresco dal Telegram WebApp SDK
   // Non usare localStorage perché l'initData scade dopo 24 ore
   if (tg?.initData) {
-    console.log('[getTelegramInitData] Ritorno initData dal Telegram SDK');
     return tg.initData;
   }
   
   // Fallback: development mode senza initData
-  console.warn('[getTelegramInitData] NESSUN initData disponibile!');
   return undefined;
 }
