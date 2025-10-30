@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Save, User as UserIcon, MapPin, Plus, Trash2, MapPinned } from 'lucide-react';
+import { ArrowLeft, Save, User as UserIcon, MapPin, Plus, Trash2, MapPinned, Edit } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -55,6 +55,22 @@ export default function MyDataPage() {
     phone: ''
   });
   const [newAddressInput, setNewAddressInput] = useState('');
+  const [showEditAddressDialog, setShowEditAddressDialog] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
+  const [editAddress, setEditAddress] = useState({
+    label: '',
+    fullAddress: '',
+    city: '',
+    street: '',
+    building: '',
+    flat: '',
+    postalCode: '',
+    dadataFiasId: '',
+    latitude: '',
+    longitude: '',
+    phone: ''
+  });
+  const [editAddressInput, setEditAddressInput] = useState('');
 
   // Update form when user data loads
   useEffect(() => {
@@ -203,6 +219,42 @@ export default function MyDataPage() {
     }
   });
 
+  const updateAddressMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof editAddress }) => {
+      return await apiRequest('PATCH', `/api/user/addresses/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/addresses'] });
+      toast({
+        title: 'Адрес обновлен',
+        description: 'Адрес успешно обновлен'
+      });
+      setShowEditAddressDialog(false);
+      setEditingAddress(null);
+      setEditAddress({
+        label: '',
+        fullAddress: '',
+        city: '',
+        street: '',
+        building: '',
+        flat: '',
+        postalCode: '',
+        dadataFiasId: '',
+        latitude: '',
+        longitude: '',
+        phone: ''
+      });
+      setEditAddressInput('');
+    },
+    onError: () => {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось обновить адрес',
+        variant: 'destructive'
+      });
+    }
+  });
+
   const handleNewAddressSelect = (fullAddress: string, suggestion?: AddressSuggestion) => {
     setNewAddressInput(fullAddress);
     if (suggestion) {
@@ -250,6 +302,76 @@ export default function MyDataPage() {
     };
     
     addAddressMutation.mutate(normalizedAddress);
+  };
+
+  const handleEditAddressClick = (address: UserAddress) => {
+    setEditingAddress(address);
+    setEditAddress({
+      label: address.label,
+      fullAddress: address.fullAddress,
+      city: address.city || '',
+      street: address.street || '',
+      building: address.building || '',
+      flat: address.flat || '',
+      postalCode: address.postalCode || '',
+      dadataFiasId: address.dadataFiasId || '',
+      latitude: address.latitude || '',
+      longitude: address.longitude || '',
+      phone: address.phone || ''
+    });
+    setEditAddressInput(address.fullAddress);
+    setShowEditAddressDialog(true);
+  };
+
+  const handleEditAddressSelect = (fullAddress: string, suggestion?: AddressSuggestion) => {
+    setEditAddressInput(fullAddress);
+    if (suggestion) {
+      setEditAddress(prev => ({
+        ...prev,
+        fullAddress,
+        city: suggestion.city || '',
+        street: suggestion.street || '',
+        building: suggestion.building || '',
+        flat: suggestion.flat || '',
+        postalCode: suggestion.postalCode || '',
+        dadataFiasId: suggestion.fiasId,
+        latitude: suggestion.geoLat || '',
+        longitude: suggestion.geoLon || ''
+      }));
+    } else {
+      setEditAddress(prev => ({
+        ...prev,
+        fullAddress
+      }));
+    }
+  };
+
+  const handleUpdateAddress = () => {
+    if (!editingAddress) return;
+    
+    if (!editAddress.label.trim()) {
+      toast({
+        title: 'Ошибка',
+        description: 'Введите название адреса',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (!editAddress.fullAddress.trim()) {
+      toast({
+        title: 'Ошибка',
+        description: 'Выберите адрес из списка',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    const normalizedAddress = {
+      ...editAddress,
+      phone: editAddress.phone ? normalizePhoneNumber(editAddress.phone) : ''
+    };
+    
+    updateAddressMutation.mutate({ id: editingAddress.id, data: normalizedAddress });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
