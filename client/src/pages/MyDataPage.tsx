@@ -663,6 +663,14 @@ export default function MyDataPage() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            onClick={() => handleEditAddressClick(address)}
+                            data-testid={`button-edit-address-${address.id}`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
                             onClick={() => deleteAddressMutation.mutate(address.id)}
                             disabled={deleteAddressMutation.isPending}
                             data-testid={`button-delete-address-${address.id}`}
@@ -780,6 +788,112 @@ export default function MyDataPage() {
                 data-testid="button-save-new-address"
               >
                 {addAddressMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Address Dialog */}
+      <Dialog open={showEditAddressDialog} onOpenChange={setShowEditAddressDialog}>
+        <DialogContent data-testid="dialog-edit-address">
+          <DialogHeader>
+            <DialogTitle>Изменить адрес</DialogTitle>
+            <DialogDescription>
+              Измените альтернативный адрес для доставки
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-address-label">Название адреса *</Label>
+              <Input
+                id="edit-address-label"
+                type="text"
+                dir="ltr"
+                placeholder="Дом, Работа, Дача..."
+                value={editAddress.label}
+                onChange={(e) => setEditAddress({ ...editAddress, label: e.target.value })}
+                data-testid="input-edit-address-label"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-address-autocomplete">Адрес *</Label>
+              <AddressAutocomplete
+                value={editAddressInput}
+                onChange={handleEditAddressSelect}
+                placeholder="Начните вводить адрес..."
+                testId="input-edit-address-autocomplete"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 space-y-2">
+                <Label>Город</Label>
+                <Input
+                  type="text"
+                  dir="ltr"
+                  value={editAddress.city}
+                  disabled
+                  className="bg-muted"
+                  data-testid="input-edit-address-city"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Улица и дом</Label>
+                <Input
+                  type="text"
+                  dir="ltr"
+                  value={`${editAddress.street || ''} ${editAddress.building || ''}`.trim()}
+                  disabled
+                  className="bg-muted"
+                  data-testid="input-edit-address-street"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-address-flat">Квартира</Label>
+                <Input
+                  id="edit-address-flat"
+                  type="text"
+                  dir="ltr"
+                  placeholder="кв. 25"
+                  value={editAddress.flat}
+                  onChange={(e) => setEditAddress({ ...editAddress, flat: e.target.value })}
+                  data-testid="input-edit-address-flat"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-address-phone">Телефон</Label>
+              <Input
+                id="edit-address-phone"
+                type="tel"
+                dir="ltr"
+                placeholder="+7 (999) 123-45-67"
+                value={editAddress.phone}
+                onChange={(e) => setEditAddress({ ...editAddress, phone: e.target.value })}
+                data-testid="input-edit-address-phone"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowEditAddressDialog(false)}
+                data-testid="button-cancel-edit-address"
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={handleUpdateAddress}
+                disabled={updateAddressMutation.isPending}
+                data-testid="button-save-edit-address"
+              >
+                {updateAddressMutation.isPending ? 'Сохранение...' : 'Сохранить'}
               </Button>
             </div>
           </div>
