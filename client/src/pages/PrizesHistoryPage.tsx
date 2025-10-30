@@ -78,7 +78,7 @@ export default function PrizesHistoryPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setLocation('/profile')}
+            onClick={() => setLocation('/lk')}
             data-testid="button-back"
           >
             <ArrowLeft className="w-5 h-5" />
