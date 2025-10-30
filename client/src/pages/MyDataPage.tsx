@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
+import { normalizePhoneNumber } from '@/lib/utils';
 import type { User, UserAddress } from '@shared/schema';
 
 export default function MyDataPage() {
@@ -242,7 +243,13 @@ export default function MyDataPage() {
       });
       return;
     }
-    addAddressMutation.mutate(newAddress);
+    
+    const normalizedAddress = {
+      ...newAddress,
+      phone: newAddress.phone ? normalizePhoneNumber(newAddress.phone) : ''
+    };
+    
+    addAddressMutation.mutate(normalizedAddress);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -251,7 +258,7 @@ export default function MyDataPage() {
     // Normalizza campi vuoti a null per permettere la cancellazione nel DB
     const normalizedData = {
       customerName: formData.customerName.trim() || null,
-      phone: formData.phone.trim() || null,
+      phone: formData.phone.trim() ? normalizePhoneNumber(formData.phone.trim()) : null,
       email: formData.email.trim() || null,
       address: formData.address.trim() || null,
       city: formData.city.trim() || null,
