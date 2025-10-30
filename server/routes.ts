@@ -2376,6 +2376,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryBuilding: z.string().optional(),
         deliveryFlat: z.string().optional(),
         deliveryPostalCode: z.string().optional(),
+        dadataFiasId: z.string().optional(),
+        latitude: z.string().optional(),
+        longitude: z.string().optional(),
+        saveToCustomer: z.boolean().optional(),
         notes: z.string().optional(),
       });
       
@@ -2390,6 +2394,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const oldAddress = order.deliveryAddress;
       
+      // Se richiesto, salva il nuovo indirizzo nella lista indirizzi del cliente
+      if (data.saveToCustomer && order.userId && data.deliveryCity && data.deliveryStreet && data.deliveryBuilding) {
+        // Verifica se l'indirizzo esiste già
+        const existingAddresses = await storage.getUserAddresses(order.userId);
+        const addressExists = existingAddresses.some(addr => addr.fullAddress === data.deliveryAddress);
+        
+        if (!addressExists) {
+          // Salva il nuovo indirizzo con etichetta automatica
+          await storage.createUserAddress({
+            userId: order.userId,
+            label: 'Inserito dall\'operatore',
+            fullAddress: data.deliveryAddress,
+            city: data.deliveryCity,
+            street: data.deliveryStreet,
+            building: data.deliveryBuilding,
+            flat: data.deliveryFlat || null,
+            postalCode: data.deliveryPostalCode || null,
+            dadataFiasId: data.dadataFiasId || null,
+            latitude: data.latitude || null,
+            longitude: data.longitude || null,
+            phone: null,
+            isDefault: false,
+          });
+        }
+      }
+      
       // Aggiorna ordine
       const updatedOrder = await storage.updateOrder(orderId, {
         deliveryAddress: data.deliveryAddress,
@@ -2398,6 +2428,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deliveryBuilding: data.deliveryBuilding || null,
         deliveryFlat: data.deliveryFlat || null,
         deliveryPostalCode: data.deliveryPostalCode || null,
+        deliveryLatitude: data.latitude ? parseFloat(data.latitude) : null,
+        deliveryLongitude: data.longitude ? parseFloat(data.longitude) : null,
+        dadataFiasId: data.dadataFiasId || null,
       });
       
       // Crea log
@@ -2408,6 +2441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         changeData: {
           oldAddress,
           newAddress: data.deliveryAddress,
+          savedToCustomer: data.saveToCustomer || false,
           notes: data.notes,
         },
       });

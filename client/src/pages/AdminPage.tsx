@@ -921,14 +921,31 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
   // Change address mutation
   const changeAddressMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('POST', `/api/admin/orders/${order.id}/change-address`, { 
-        deliveryAddress: newAddress 
-      });
+      const payload: any = { 
+        deliveryAddress: newAddress,
+      };
+      
+      // Se abbiamo dati strutturati dall'autocompletamento DaData, includiamoli
+      if (addressStructured.city && addressStructured.street && addressStructured.building) {
+        payload.deliveryCity = addressStructured.city;
+        payload.deliveryStreet = addressStructured.street;
+        payload.deliveryBuilding = addressStructured.building;
+        payload.deliveryFlat = addressStructured.flat;
+        payload.deliveryPostalCode = addressStructured.postalCode;
+        payload.dadataFiasId = addressStructured.dadataFiasId;
+        payload.latitude = addressStructured.latitude;
+        payload.longitude = addressStructured.longitude;
+        payload.saveToCustomer = true; // Salva automaticamente l'indirizzo nel profilo del cliente
+      }
+      
+      return await apiRequest('POST', `/api/admin/orders/${order.id}/change-address`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id, 'logs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/user-addresses', order.userId] });
+      setAddressStructured({}); // Reset dati strutturati
       toast({ title: '✅ Адрес обновлен' });
     },
     onError: (error: any) => {
