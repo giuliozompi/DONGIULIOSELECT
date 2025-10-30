@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
+import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { User, UserAddress } from '@shared/schema';
 
 export default function MyDataPage() {
@@ -36,6 +37,8 @@ export default function MyDataPage() {
     addressNotes: ''
   });
 
+  const [addressInput, setAddressInput] = useState('');
+
   // Update form when user data loads
   useEffect(() => {
     if (user) {
@@ -49,8 +52,31 @@ export default function MyDataPage() {
         apartment: user.apartment || '',
         addressNotes: user.addressNotes || ''
       });
+      // Set the full address for the autocomplete input
+      if (user.address || user.city) {
+        const fullAddr = [user.city, user.address, user.building].filter(Boolean).join(', ');
+        setAddressInput(fullAddr);
+      }
     }
   }, [user]);
+
+  const handleAddressSelect = (fullAddress: string, suggestion?: AddressSuggestion) => {
+    setAddressInput(fullAddress);
+    if (suggestion) {
+      setFormData(prev => ({
+        ...prev,
+        address: suggestion.street ? `${suggestion.street}, ${suggestion.building || ''}`.trim() : fullAddress,
+        city: suggestion.city || '',
+        building: suggestion.building || '',
+        apartment: suggestion.flat || prev.apartment
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        address: fullAddress
+      }));
+    }
+  };
 
   useTelegramBackButton(() => {
     setLocation('/lk');
@@ -243,28 +269,45 @@ export default function MyDataPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="address">Улица и номер дома</Label>
-                  <Input
-                    id="address"
-                    type="text"
-                    placeholder="ул. Ленина, д. 10"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    data-testid="input-address"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="address-autocomplete">Адрес доставки</Label>
+                <AddressAutocomplete
+                  value={addressInput}
+                  onChange={handleAddressSelect}
+                  placeholder="Начните вводить адрес: город, улица, дом..."
+                  testId="input-address-autocomplete"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Выберите адрес из списка для автоматического заполнения данных
+                </p>
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 space-y-2">
                   <Label htmlFor="city">Город</Label>
                   <Input
                     id="city"
                     type="text"
-                    placeholder="Москва"
+                    placeholder="Автозаполнение"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                     data-testid="input-city"
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="address">Улица и дом</Label>
+                  <Input
+                    id="address"
+                    type="text"
+                    placeholder="Автозаполнение"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    data-testid="input-address"
+                    disabled
+                    className="bg-muted"
                   />
                 </div>
 
@@ -273,10 +316,12 @@ export default function MyDataPage() {
                   <Input
                     id="building"
                     type="text"
-                    placeholder="к. 1"
+                    placeholder="Автозаполнение"
                     value={formData.building}
                     onChange={(e) => setFormData({ ...formData, building: e.target.value })}
                     data-testid="input-building"
+                    disabled
+                    className="bg-muted"
                   />
                 </div>
 
