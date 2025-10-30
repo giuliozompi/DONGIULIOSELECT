@@ -18,5 +18,9 @@ export function normalizePhoneNumber(phone: string): string {
     return '+7' + trimmed.substring(1);
   }
   
+  if (trimmed.startsWith('9')) {
+    return '+7' + trimmed;
+  }
+  
   return trimmed;
 }
