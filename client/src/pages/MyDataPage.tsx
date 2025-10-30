@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowLeft, Save, User as UserIcon, MapPin, Plus, Trash2, MapPinned } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,20 @@ export default function MyDataPage() {
   });
 
   const [addressInput, setAddressInput] = useState('');
+  const [showAddAddressDialog, setShowAddAddressDialog] = useState(false);
+  const [newAddress, setNewAddress] = useState({
+    label: '',
+    fullAddress: '',
+    city: '',
+    street: '',
+    building: '',
+    flat: '',
+    postalCode: '',
+    dadataFiasId: '',
+    latitude: '',
+    longitude: ''
+  });
+  const [newAddressInput, setNewAddressInput] = useState('');
 
   // Update form when user data loads
   useEffect(() => {
@@ -150,6 +165,83 @@ export default function MyDataPage() {
       });
     }
   });
+
+  const addAddressMutation = useMutation({
+    mutationFn: async (addressData: typeof newAddress) => {
+      return await apiRequest('POST', '/api/user/addresses', addressData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/addresses'] });
+      toast({
+        title: 'Адрес добавлен',
+        description: 'Новый адрес успешно добавлен'
+      });
+      setShowAddAddressDialog(false);
+      setNewAddress({
+        label: '',
+        fullAddress: '',
+        city: '',
+        street: '',
+        building: '',
+        flat: '',
+        postalCode: '',
+        dadataFiasId: '',
+        latitude: '',
+        longitude: ''
+      });
+      setNewAddressInput('');
+    },
+    onError: () => {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось добавить адрес',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const handleNewAddressSelect = (fullAddress: string, suggestion?: AddressSuggestion) => {
+    setNewAddressInput(fullAddress);
+    if (suggestion) {
+      setNewAddress(prev => ({
+        ...prev,
+        fullAddress,
+        city: suggestion.city || '',
+        street: suggestion.street || '',
+        building: suggestion.building || '',
+        flat: suggestion.flat || '',
+        postalCode: suggestion.postalCode || '',
+        dadataFiasId: suggestion.fiasId,
+        latitude: suggestion.geoLat || '',
+        longitude: suggestion.geoLon || ''
+      }));
+    } else {
+      setNewAddress(prev => ({
+        ...prev,
+        fullAddress
+      }));
+    }
+  };
+
+  const handleAddAddress = () => {
+    if (!newAddress.label.trim()) {
+      toast({
+        title: 'Ошибка',
+        description: 'Введите название адреса',
+        variant: 'destructive'
+      });
+      return;
+    }
+    if (!newAddress.fullAddress.trim()) {
+      toast({
+        title: 'Ошибка',
+        description: 'Выберите адрес из списка',
+        variant: 'destructive'
+      });
+      return;
+    }
+    addAddressMutation.mutate(newAddress);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -386,7 +478,7 @@ export default function MyDataPage() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setLocation('/lk')}
+                onClick={() => setShowAddAddressDialog(true)}
                 data-testid="button-add-address"
               >
                 <Plus className="w-4 h-4 mr-1" />
@@ -451,6 +543,99 @@ export default function MyDataPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Add Address Dialog */}
+      <Dialog open={showAddAddressDialog} onOpenChange={setShowAddAddressDialog}>
+        <DialogContent data-testid="dialog-add-address">
+          <DialogHeader>
+            <DialogTitle>Добавить новый адрес</DialogTitle>
+            <DialogDescription>
+              Добавьте альтернативный адрес для доставки
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-address-label">Название адреса *</Label>
+              <Input
+                id="new-address-label"
+                type="text"
+                dir="ltr"
+                placeholder="Дом, Работа, Дача..."
+                value={newAddress.label}
+                onChange={(e) => setNewAddress({ ...newAddress, label: e.target.value })}
+                data-testid="input-new-address-label"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="new-address-autocomplete">Адрес *</Label>
+              <AddressAutocomplete
+                value={newAddressInput}
+                onChange={handleNewAddressSelect}
+                placeholder="Начните вводить адрес..."
+                testId="input-new-address-autocomplete"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 space-y-2">
+                <Label>Город</Label>
+                <Input
+                  type="text"
+                  dir="ltr"
+                  value={newAddress.city}
+                  disabled
+                  className="bg-muted"
+                  data-testid="input-new-address-city"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Улица и дом</Label>
+                <Input
+                  type="text"
+                  dir="ltr"
+                  value={`${newAddress.street || ''} ${newAddress.building || ''}`.trim()}
+                  disabled
+                  className="bg-muted"
+                  data-testid="input-new-address-street"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="new-address-flat">Квартира</Label>
+                <Input
+                  id="new-address-flat"
+                  type="text"
+                  dir="ltr"
+                  placeholder="кв. 25"
+                  value={newAddress.flat}
+                  onChange={(e) => setNewAddress({ ...newAddress, flat: e.target.value })}
+                  data-testid="input-new-address-flat"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowAddAddressDialog(false)}
+                data-testid="button-cancel-add-address"
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={handleAddAddress}
+                disabled={addAddressMutation.isPending}
+                data-testid="button-save-new-address"
+              >
+                {addAddressMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
