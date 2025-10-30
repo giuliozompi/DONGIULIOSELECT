@@ -59,6 +59,12 @@ export function AddressAutocomplete({
   }, []);
 
   useEffect(() => {
+    if (disabled) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
     const handler = setTimeout(() => {
       if (value) {
         fetchSuggestions(value);
@@ -68,7 +74,7 @@ export function AddressAutocomplete({
     }, 300);
 
     return () => clearTimeout(handler);
-  }, [value, fetchSuggestions]);
+  }, [value, fetchSuggestions, disabled]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -108,7 +114,7 @@ export function AddressAutocomplete({
         autoComplete="off"
       />
       
-      {showSuggestions && suggestions.length > 0 && (
+      {!disabled && showSuggestions && suggestions.length > 0 && (
         <Card
           ref={suggestionsRef}
           className="absolute z-50 w-full mt-1 p-0 max-h-60 overflow-y-auto"

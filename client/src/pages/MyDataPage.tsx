@@ -96,20 +96,11 @@ export default function MyDataPage() {
 
   const handleAddressSelect = (fullAddress: string, suggestion?: AddressSuggestion) => {
     setAddressInput(fullAddress);
-    if (suggestion) {
-      setFormData(prev => ({
-        ...prev,
-        address: fullAddress, // Salva l'indirizzo completo fornito da DaData
-        city: suggestion.city || '',
-        building: suggestion.building || '',
-        apartment: suggestion.flat || prev.apartment
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        address: fullAddress
-      }));
-    }
+    // Salva solo l'indirizzo completo, non i campi separati
+    setFormData(prev => ({
+      ...prev,
+      address: fullAddress
+    }));
   };
 
   useTelegramBackButton(() => {
@@ -380,14 +371,12 @@ export default function MyDataPage() {
     e.preventDefault();
     
     // Normalizza campi vuoti a null per permettere la cancellazione nel DB
+    // NON inviamo city, building, apartment perché il form usa solo l'indirizzo completo
     const normalizedData = {
       customerName: formData.customerName.trim() || null,
       phone: formData.phone.trim() ? normalizePhoneNumber(formData.phone.trim()) : null,
       email: formData.email.trim() || null,
       address: formData.address.trim() || null,
-      city: formData.city.trim() || null,
-      building: formData.building.trim() || null,
-      apartment: formData.apartment.trim() || null,
       addressNotes: formData.addressNotes.trim() || null,
     };
     
