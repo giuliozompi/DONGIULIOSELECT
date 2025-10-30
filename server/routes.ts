@@ -669,10 +669,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/),
         customerEmail: z.string().email().optional(),
         deliveryAddress: z.string().min(10),
-        deliveryCity: z.string().optional(),
-        deliveryStreet: z.string().optional(),
-        deliveryBuilding: z.string().optional(),
-        deliveryFlat: z.string().optional(),
         deliveryPostalCode: z.string().optional(),
         dadataFiasId: z.string().optional(),
         deliveryLatitude: z.string().optional(),
@@ -749,8 +745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Verifica se l'indirizzo esiste già
         const existingAddresses = await storage.getUserAddresses(req.userId!);
         const addressExists = existingAddresses.some(addr => 
-          addr.fullAddress === customerData.deliveryAddress && 
-          addr.city === customerData.deliveryCity
+          addr.fullAddress === customerData.deliveryAddress
         );
         
         if (!addressExists) {
@@ -758,10 +753,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId: req.userId!,
             label: customerData.addressLabel,
             fullAddress: customerData.deliveryAddress,
-            city: customerData.deliveryCity,
-            street: customerData.deliveryStreet,
-            building: customerData.deliveryBuilding,
-            flat: customerData.deliveryFlat,
             postalCode: customerData.deliveryPostalCode,
             dadataFiasId: customerData.dadataFiasId,
             latitude: customerData.deliveryLatitude,
@@ -780,10 +771,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerPhone: normalizePhoneNumber(customerData.customerPhone),
         customerEmail: customerData.customerEmail,
         deliveryAddress: customerData.deliveryAddress,
-        deliveryCity: customerData.deliveryCity,
-        deliveryStreet: customerData.deliveryStreet,
-        deliveryBuilding: customerData.deliveryBuilding,
-        deliveryFlat: customerData.deliveryFlat,
         deliveryPostalCode: customerData.deliveryPostalCode,
         dadataFiasId: customerData.dadataFiasId,
         deliveryLatitude: customerData.deliveryLatitude,
@@ -2371,10 +2358,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const schema = z.object({
         deliveryAddress: z.string(),
-        deliveryCity: z.string().optional(),
-        deliveryStreet: z.string().optional(),
-        deliveryBuilding: z.string().optional(),
-        deliveryFlat: z.string().optional(),
         deliveryPostalCode: z.string().optional(),
         dadataFiasId: z.string().optional(),
         latitude: z.string().optional(),
@@ -2395,7 +2378,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const oldAddress = order.deliveryAddress;
       
       // Se richiesto, salva il nuovo indirizzo nella lista indirizzi del cliente
-      if (data.saveToCustomer && order.userId && data.deliveryCity && data.deliveryStreet && data.deliveryBuilding) {
+      if (data.saveToCustomer && order.userId) {
         // Verifica se l'indirizzo esiste già
         const existingAddresses = await storage.getUserAddresses(order.userId);
         const addressExists = existingAddresses.some(addr => addr.fullAddress === data.deliveryAddress);
@@ -2406,10 +2389,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId: order.userId,
             label: 'Inserito dall\'operatore',
             fullAddress: data.deliveryAddress,
-            city: data.deliveryCity,
-            street: data.deliveryStreet,
-            building: data.deliveryBuilding,
-            flat: data.deliveryFlat || null,
             postalCode: data.deliveryPostalCode || null,
             dadataFiasId: data.dadataFiasId || null,
             latitude: data.latitude || null,
@@ -2423,13 +2402,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Aggiorna ordine
       const updatedOrder = await storage.updateOrder(orderId, {
         deliveryAddress: data.deliveryAddress,
-        deliveryCity: data.deliveryCity || null,
-        deliveryStreet: data.deliveryStreet || null,
-        deliveryBuilding: data.deliveryBuilding || null,
-        deliveryFlat: data.deliveryFlat || null,
         deliveryPostalCode: data.deliveryPostalCode || null,
-        deliveryLatitude: data.latitude ? parseFloat(data.latitude) : null,
-        deliveryLongitude: data.longitude ? parseFloat(data.longitude) : null,
+        deliveryLatitude: data.latitude || null,
+        deliveryLongitude: data.longitude || null,
         dadataFiasId: data.dadataFiasId || null,
       });
       

@@ -133,14 +133,10 @@ export const orders = pgTable("orders", {
   customerPhone: text("customer_phone").notNull(),
   customerEmail: text("customer_email"),
   
-  // Indirizzo completo (backward compatibility)
+  // Indirizzo completo normalizzato da DaData
   deliveryAddress: text("delivery_address").notNull(),
   
-  // Indirizzo strutturato per integrazione logistica russa
-  deliveryCity: text("delivery_city"),
-  deliveryStreet: text("delivery_street"),
-  deliveryBuilding: text("delivery_building"),
-  deliveryFlat: text("delivery_flat"),
+  // Metadati indirizzo per integrazione logistica e tracking
   deliveryPostalCode: text("delivery_postal_code"),
   dadataFiasId: text("dadata_fias_id"), // FIAS ID per riferimento ufficiale
   
