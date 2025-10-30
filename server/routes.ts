@@ -312,6 +312,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.phone = normalizePhoneNumber(updateData.phone);
       }
       
+      // Normalizza campi vuoti a null
+      if (updateData.building !== undefined && updateData.building !== null && updateData.building.trim() === '') {
+        updateData.building = null;
+      }
+      if (updateData.apartment !== undefined && updateData.apartment !== null && updateData.apartment.trim() === '') {
+        updateData.apartment = null;
+      }
+      if (updateData.addressNotes !== undefined && updateData.addressNotes !== null && updateData.addressNotes.trim() === '') {
+        updateData.addressNotes = null;
+      }
+      
       await storage.updateUser(req.userId!, updateData);
       
       const updatedUser = await storage.getUser(req.userId!);
