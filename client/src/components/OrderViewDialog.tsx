@@ -5,6 +5,7 @@ import { Separator } from '@/components/ui/separator';
 import { Printer, Package, Loader2, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import type { Order } from '@shared/schema';
+import { DELIVERY_METHOD_LABELS } from '@shared/schema';
 
 interface MarkingLog {
   id: string;
@@ -184,6 +185,14 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
               <span className="text-muted-foreground print:text-gray-600">Способ оплаты:</span>
               <span className="font-medium">{order.paymentMethod === 'cash' ? 'Наличные' : 'Онлайн'}</span>
             </div>
+            {order.deliveryMethod && (
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground print:text-gray-600">Метод доставки:</span>
+                <span className="font-medium" data-testid="order-delivery-method-print">
+                  {DELIVERY_METHOD_LABELS[order.deliveryMethod as keyof typeof DELIVERY_METHOD_LABELS] || order.deliveryMethod}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Delivery Information */}
