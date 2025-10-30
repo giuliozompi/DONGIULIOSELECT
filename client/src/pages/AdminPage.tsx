@@ -28,7 +28,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS } from '@shared/schema';
+import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
@@ -1397,6 +1397,9 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const [cancelDostavkaOrder, setCancelDostavkaOrder] = useState<Order | null>(null);
   const [cancelGoOrder, setCancelGoOrder] = useState<Order | null>(null);
   
+  // State for courier warning dialog (when order has pickup or don_giulio_courier delivery)
+  const [courierWarningOrder, setCourierWarningOrder] = useState<Order | null>(null);
+  
   // Fetch orders with filter
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ['/api/admin/orders', statusFilter !== 'all' ? statusFilter : undefined],
@@ -1748,7 +1751,15 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                     {order.status === 'ОПЛАЧЕН' && !order.yandexClaimId && !order.yandexGoClaimId && (
                       <Button 
                         size="sm"
-                        onClick={() => setDeliveryDialogOrder(order)}
+                        variant={order.deliveryMethod === DELIVERY_METHODS.PICKUP || order.deliveryMethod === DELIVERY_METHODS.DON_GIULIO_COURIER ? 'outline' : 'default'}
+                        onClick={() => {
+                          // Se l'ordine ha pickup o don_giulio_courier, mostra prima il warning
+                          if (order.deliveryMethod === DELIVERY_METHODS.PICKUP || order.deliveryMethod === DELIVERY_METHODS.DON_GIULIO_COURIER) {
+                            setCourierWarningOrder(order);
+                          } else {
+                            setDeliveryDialogOrder(order);
+                          }
+                        }}
                         data-testid={`button-call-courier-${order.id}`}
                       >
                         <Truck className="w-4 h-4 mr-2" />
@@ -1925,6 +1936,48 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                   Да, отменить доставку
                 </>
               )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Courier Warning Dialog (for pickup/don_giulio orders) */}
+      <AlertDialog open={!!courierWarningOrder} onOpenChange={(open) => !open && setCourierWarningOrder(null)}>
+        <AlertDialogContent data-testid="dialog-courier-warning">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              Внимание: Стоимость доставки не включена
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Этот заказ был оформлен с методом доставки "{courierWarningOrder?.deliveryMethod === DELIVERY_METHODS.PICKUP ? 'Самовывоз' : 'Дон Джулио курьер'}", 
+                но вы пытаетесь вызвать платного курьера (Yandex).
+              </p>
+              <p className="font-semibold text-foreground">
+                ⚠️ Заказ уже оплачен, поэтому стоимость доставки через Yandex НЕ МОЖЕТ быть добавлена в счет.
+              </p>
+              <p>
+                Вы уверены, что хотите продолжить? Стоимость доставки придется оплатить отдельно или согласовать с клиентом.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-courier-warning-cancel">
+              Отмена
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (courierWarningOrder) {
+                  setDeliveryDialogOrder(courierWarningOrder);
+                  setCourierWarningOrder(null);
+                }
+              }}
+              className="bg-yellow-600 text-white hover:bg-yellow-700"
+              data-testid="button-courier-warning-continue"
+            >
+              <Truck className="w-4 h-4 mr-2" />
+              Продолжить вызов курьера
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
