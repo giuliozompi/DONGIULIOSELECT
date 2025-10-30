@@ -2702,6 +2702,20 @@ interface ClientDetail extends ClientWithStats {
     createdAt: string;
     products?: Product[];
   }>;
+  addresses: Array<{
+    id: string;
+    label: string;
+    fullAddress: string;
+    phone: string | null;
+    isDefault: boolean;
+    city?: string | null;
+    street?: string | null;
+    building?: string | null;
+    postalCode?: string | null;
+    dadataFiasId?: string | null;
+    latitude?: string | null;
+    longitude?: string | null;
+  }>;
 }
 
 function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
@@ -2723,6 +2737,15 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
     phone: '',
     isDefault: false,
   });
+  const [editAddressStructured, setEditAddressStructured] = useState<{
+    city?: string;
+    street?: string;
+    building?: string;
+    postalCode?: string;
+    dadataFiasId?: string;
+    latitude?: string;
+    longitude?: string;
+  }>({});
 
   // Fetch clients list
   const { data: clients = [], isLoading } = useQuery<ClientWithStats[]>({
@@ -2788,6 +2811,15 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       phone: address.phone || '',
       isDefault: address.isDefault || false,
     });
+    setEditAddressStructured({
+      city: address.city || undefined,
+      street: address.street || undefined,
+      building: address.building || undefined,
+      postalCode: address.postalCode || undefined,
+      dadataFiasId: address.dadataFiasId || undefined,
+      latitude: address.latitude || undefined,
+      longitude: address.longitude || undefined,
+    });
     setEditAddressDialogOpen(true);
   };
 
@@ -2820,6 +2852,13 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
         fullAddress: editAddressForm.fullAddress || editingAddress.fullAddress,
         phone: editAddressForm.phone || null,
         isDefault: editAddressForm.isDefault,
+        city: editAddressStructured.city,
+        street: editAddressStructured.street,
+        building: editAddressStructured.building,
+        postalCode: editAddressStructured.postalCode,
+        dadataFiasId: editAddressStructured.dadataFiasId,
+        latitude: editAddressStructured.latitude,
+        longitude: editAddressStructured.longitude,
       },
     });
   };
@@ -3323,10 +3362,25 @@ function ClientsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
             </div>
             <div>
               <Label>Полный адрес</Label>
-              <Input
+              <AddressAutocomplete
                 value={editAddressForm.fullAddress}
-                onChange={(e) => setEditAddressForm({ ...editAddressForm, fullAddress: e.target.value })}
-                placeholder="Полный адрес"
+                onChange={(value, suggestion) => {
+                  setEditAddressForm({ ...editAddressForm, fullAddress: value });
+                  if (suggestion) {
+                    setEditAddressStructured({
+                      city: suggestion.city || undefined,
+                      street: suggestion.street || undefined,
+                      building: suggestion.building || undefined,
+                      postalCode: suggestion.postalCode || undefined,
+                      dadataFiasId: suggestion.fiasId,
+                      latitude: suggestion.geoLat || undefined,
+                      longitude: suggestion.geoLon || undefined,
+                    });
+                  } else {
+                    setEditAddressStructured({});
+                  }
+                }}
+                placeholder="Начните вводить адрес..."
                 data-testid="input-edit-address-full"
               />
             </div>
