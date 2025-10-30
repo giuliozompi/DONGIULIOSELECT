@@ -23,19 +23,10 @@ export default function PurchasedProductsPage() {
 
   const addToCartMutation = useMutation({
     mutationFn: async (productId: string) => {
-      const cartResult = await fetch('/api/cart');
-      const currentCart = await cartResult.json();
-      
-      const existingItem = currentCart.items?.find((item: any) => item.productId === productId);
-      const newQuantity = existingItem ? existingItem.quantity + 1 : 1;
-      
-      const updatedItems = existingItem
-        ? currentCart.items.map((item: any) =>
-            item.productId === productId ? { ...item, quantity: newQuantity } : item
-          )
-        : [...(currentCart.items || []), { productId, quantity: 1 }];
-      
-      return await apiRequest('POST', '/api/cart', { items: updatedItems });
+      return await apiRequest('POST', '/api/cart/items', { 
+        productId,
+        quantity: 1
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });

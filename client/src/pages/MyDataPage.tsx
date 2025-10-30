@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Save, User as UserIcon, MapPin } from 'lucide-react';
+import { ArrowLeft, Save, User as UserIcon, MapPin, Plus, Trash2, MapPinned } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
-import type { User } from '@shared/schema';
+import { Badge } from '@/components/ui/badge';
+import type { User, UserAddress } from '@shared/schema';
 
 export default function MyDataPage() {
   const [, setLocation] = useLocation();
@@ -18,6 +19,10 @@ export default function MyDataPage() {
   
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ['/api/user']
+  });
+
+  const { data: addresses = [] } = useQuery<UserAddress[]>({
+    queryKey: ['/api/user/addresses']
   });
 
   const [formData, setFormData] = useState({
@@ -80,6 +85,46 @@ export default function MyDataPage() {
     }
   });
 
+  const deleteAddressMutation = useMutation({
+    mutationFn: async (addressId: string) => {
+      return await apiRequest('DELETE', `/api/user/addresses/${addressId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/addresses'] });
+      toast({
+        title: 'Адрес удален',
+        description: 'Адрес успешно удален'
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось удалить адрес',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const setDefaultAddressMutation = useMutation({
+    mutationFn: async (addressId: string) => {
+      return await apiRequest('POST', `/api/user/addresses/${addressId}/set-default`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user/addresses'] });
+      toast({
+        title: 'Адрес по умолчанию обновлен',
+        description: 'Этот адрес теперь используется по умолчанию'
+      });
+    },
+    onError: () => {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось установить адрес по умолчанию',
+        variant: 'destructive'
+      });
+    }
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -122,21 +167,22 @@ export default function MyDataPage() {
         </div>
       </div>
 
-      <div className="p-4">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <UserIcon className="w-6 h-6 text-primary" />
+      <div className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Personal Information Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-lg bg-primary/10">
+                  <UserIcon className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <CardTitle>Личная информация</CardTitle>
+                  <CardDescription>Управляйте вашими контактными данными</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle>Личная информация</CardTitle>
-                <CardDescription>Управляйте вашими контактными данными</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="telegram-info">Telegram</Label>
                 <div className="p-3 rounded-md bg-muted" data-testid="text-telegram-info">
@@ -180,34 +226,23 @@ export default function MyDataPage() {
                   data-testid="input-email"
                 />
               </div>
+            </CardContent>
+          </Card>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={updateMutation.isPending}
-                data-testid="button-save"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="mt-4">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-lg bg-primary/10">
-                <MapPin className="w-6 h-6 text-primary" />
+          {/* Primary Address Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-lg bg-primary/10">
+                  <MapPin className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <CardTitle>Адрес доставки</CardTitle>
+                  <CardDescription>Основной адрес для доставки заказов</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle>Адрес доставки</CardTitle>
-                <CardDescription>Сохраните адрес для быстрого оформления заказов</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 space-y-2">
                   <Label htmlFor="address">Улица и номер дома</Label>
@@ -269,17 +304,98 @@ export default function MyDataPage() {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={updateMutation.isPending}
+            data-testid="button-save-all"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {updateMutation.isPending ? 'Сохранение...' : 'Сохранить все данные'}
+          </Button>
+        </form>
+
+        {/* Alternative Addresses Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-lg bg-primary/10">
+                  <MapPinned className="w-6 h-6 text-primary" />
+                </div>
+                <div>
+                  <CardTitle>Альтернативные адреса</CardTitle>
+                  <CardDescription>Дополнительные адреса для доставки</CardDescription>
+                </div>
+              </div>
               <Button
-                type="submit"
-                className="w-full"
-                disabled={updateMutation.isPending}
-                data-testid="button-save-address"
+                size="sm"
+                variant="outline"
+                onClick={() => setLocation('/lk')}
+                data-testid="button-add-address"
               >
-                <Save className="w-4 h-4 mr-2" />
-                {updateMutation.isPending ? 'Сохранение...' : 'Сохранить адрес'}
+                <Plus className="w-4 h-4 mr-1" />
+                Добавить
               </Button>
-            </form>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {addresses.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground" data-testid="text-no-addresses">
+                У вас нет дополнительных адресов
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {addresses.map((address) => (
+                  <Card key={address.id} data-testid={`card-address-${address.id}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-semibold" data-testid={`text-address-label-${address.id}`}>
+                              {address.label}
+                            </h4>
+                            {address.isDefault && (
+                              <Badge variant="default" data-testid={`badge-default-${address.id}`}>
+                                По умолчанию
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground" data-testid={`text-address-full-${address.id}`}>
+                            {address.fullAddress}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {!address.isDefault && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setDefaultAddressMutation.mutate(address.id)}
+                              disabled={setDefaultAddressMutation.isPending}
+                              data-testid={`button-set-default-${address.id}`}
+                            >
+                              Основной
+                            </Button>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => deleteAddressMutation.mutate(address.id)}
+                            disabled={deleteAddressMutation.isPending}
+                            data-testid={`button-delete-address-${address.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

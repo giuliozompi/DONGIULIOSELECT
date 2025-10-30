@@ -21,6 +21,7 @@ import {
   adminActionLogs,
   favoriteProducts,
   productMarkingLogs,
+  PAID_ORDER_STATUSES,
   type User,
   type InsertUser,
   type Admin,
@@ -90,14 +91,19 @@ export class DbStorage implements IStorage {
   }
 
   async getPurchasedProducts(userId: string): Promise<Product[]> {
-    // Get all completed orders for this user
+    // Get only completed/paid orders for this user
     const userOrders = await db.select()
       .from(orders)
       .where(eq(orders.userId, userId));
     
-    // Extract unique product IDs from all completed orders
+    // Filter to only paid/completed orders
+    const paidOrders = userOrders.filter(order => 
+      PAID_ORDER_STATUSES.includes(order.status as any)
+    );
+    
+    // Extract unique product IDs from paid orders
     const productIds = new Set<string>();
-    userOrders.forEach(order => {
+    paidOrders.forEach(order => {
       if (order.items && Array.isArray(order.items)) {
         order.items.forEach((item: any) => {
           if (item.productId) {
