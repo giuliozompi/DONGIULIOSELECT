@@ -12,6 +12,13 @@ export const users = pgTable("users", {
   phone: text("phone"),
   email: text("email"),
   customerName: text("customer_name"), // Nome completo inserito dall'utente nel checkout
+  
+  // Indirizzo di consegna
+  address: text("address"), // Via e numero civico
+  city: text("city"), // Città
+  building: text("building"), // Edificio/palazzo
+  apartment: text("apartment"), // Numero appartamento
+  addressNotes: text("address_notes"), // Note aggiuntive (citofono, piano, etc.)
 });
 
 export const insertUserSchema = createInsertSchema(users);

@@ -89,6 +89,36 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async getPurchasedProducts(userId: string): Promise<Product[]> {
+    // Get all completed orders for this user
+    const userOrders = await db.select()
+      .from(orders)
+      .where(eq(orders.userId, userId));
+    
+    // Extract unique product IDs from all completed orders
+    const productIds = new Set<string>();
+    userOrders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item: any) => {
+          if (item.productId) {
+            productIds.add(item.productId);
+          }
+        });
+      }
+    });
+    
+    // Fetch all products by IDs
+    if (productIds.size === 0) {
+      return [];
+    }
+    
+    const purchasedProducts = await db.select()
+      .from(products)
+      .where(sql`${products.id} IN ${sql.raw(`(${Array.from(productIds).map(id => `'${id}'`).join(',')})`)}`);
+    
+    return purchasedProducts;
+  }
+
   // Администраторы
   async isAdmin(userId: string): Promise<boolean> {
     const result = await db.select().from(admins).where(eq(admins.userId, userId));

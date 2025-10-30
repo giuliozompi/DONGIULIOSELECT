@@ -297,6 +297,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         customerName: z.string().nullable().optional(),
         phone: z.string().nullable().optional(),
         email: z.union([z.string().email(), z.null()]).optional(),
+        address: z.string().nullable().optional(),
+        city: z.string().nullable().optional(),
+        building: z.string().nullable().optional(),
+        apartment: z.string().nullable().optional(),
+        addressNotes: z.string().nullable().optional(),
       });
       
       const updateData = updateSchema.parse(req.body);
@@ -309,6 +314,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid data', details: error.errors });
       }
       console.error('Error updating user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET /api/user/purchased-products - Ottieni tutti i prodotti unici acquistati dal cliente
+  app.get("/api/user/purchased-products", verifyTelegramInitData, async (req, res) => {
+    try {
+      const purchasedProducts = await storage.getPurchasedProducts(req.userId!);
+      res.json(purchasedProducts);
+    } catch (error) {
+      console.error('Error fetching purchased products:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Save, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, Save, User as UserIcon, MapPin } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import type { User } from '@shared/schema';
@@ -22,7 +23,12 @@ export default function MyDataPage() {
   const [formData, setFormData] = useState({
     customerName: '',
     phone: '',
-    email: ''
+    email: '',
+    address: '',
+    city: '',
+    building: '',
+    apartment: '',
+    addressNotes: ''
   });
 
   // Update form when user data loads
@@ -31,7 +37,12 @@ export default function MyDataPage() {
       setFormData({
         customerName: user.customerName || '',
         phone: user.phone || '',
-        email: user.email || ''
+        email: user.email || '',
+        address: user.address || '',
+        city: user.city || '',
+        building: user.building || '',
+        apartment: user.apartment || '',
+        addressNotes: user.addressNotes || ''
       });
     }
   }, [user]);
@@ -41,7 +52,16 @@ export default function MyDataPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { customerName?: string | null; phone?: string | null; email?: string | null }) => {
+    mutationFn: async (data: { 
+      customerName?: string | null; 
+      phone?: string | null; 
+      email?: string | null;
+      address?: string | null;
+      city?: string | null;
+      building?: string | null;
+      apartment?: string | null;
+      addressNotes?: string | null;
+    }) => {
       return await apiRequest('PUT', '/api/user', data);
     },
     onSuccess: () => {
@@ -68,6 +88,11 @@ export default function MyDataPage() {
       customerName: formData.customerName.trim() || null,
       phone: formData.phone.trim() || null,
       email: formData.email.trim() || null,
+      address: formData.address.trim() || null,
+      city: formData.city.trim() || null,
+      building: formData.building.trim() || null,
+      apartment: formData.apartment.trim() || null,
+      addressNotes: formData.addressNotes.trim() || null,
     };
     
     updateMutation.mutate(normalizedData);
@@ -164,6 +189,95 @@ export default function MyDataPage() {
               >
                 <Save className="w-4 h-4 mr-2" />
                 {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-4">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-lg bg-primary/10">
+                <MapPin className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <CardTitle>Адрес доставки</CardTitle>
+                <CardDescription>Сохраните адрес для быстрого оформления заказов</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="address">Улица и номер дома</Label>
+                  <Input
+                    id="address"
+                    type="text"
+                    placeholder="ул. Ленина, д. 10"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    data-testid="input-address"
+                  />
+                </div>
+
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="city">Город</Label>
+                  <Input
+                    id="city"
+                    type="text"
+                    placeholder="Москва"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                    data-testid="input-city"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="building">Корпус/Строение</Label>
+                  <Input
+                    id="building"
+                    type="text"
+                    placeholder="к. 1"
+                    value={formData.building}
+                    onChange={(e) => setFormData({ ...formData, building: e.target.value })}
+                    data-testid="input-building"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="apartment">Квартира</Label>
+                  <Input
+                    id="apartment"
+                    type="text"
+                    placeholder="кв. 25"
+                    value={formData.apartment}
+                    onChange={(e) => setFormData({ ...formData, apartment: e.target.value })}
+                    data-testid="input-apartment"
+                  />
+                </div>
+
+                <div className="col-span-2 space-y-2">
+                  <Label htmlFor="addressNotes">Примечания</Label>
+                  <Textarea
+                    id="addressNotes"
+                    placeholder="Этаж, домофон, подъезд..."
+                    value={formData.addressNotes}
+                    onChange={(e) => setFormData({ ...formData, addressNotes: e.target.value })}
+                    rows={3}
+                    data-testid="input-address-notes"
+                  />
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={updateMutation.isPending}
+                data-testid="button-save-address"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {updateMutation.isPending ? 'Сохранение...' : 'Сохранить адрес'}
               </Button>
             </form>
           </CardContent>

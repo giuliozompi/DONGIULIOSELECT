@@ -19,6 +19,7 @@ import PaymentReturnPage from '@/pages/PaymentReturnPage';
 import FavoritesPage from '@/pages/FavoritesPage';
 import ProfilePage from '@/pages/ProfilePage';
 import MyDataPage from '@/pages/MyDataPage';
+import PurchasedProductsPage from '@/pages/PurchasedProductsPage';
 import PrizesHistoryPage from '@/pages/PrizesHistoryPage';
 import FortunePage from '@/pages/FortunePage';
 import AssistantPage from '@/pages/AssistantPage';
@@ -45,6 +46,7 @@ function Router() {
         <Route path="/favorites" component={FavoritesPage} />
         <Route path="/lk" component={ProfilePage} />
         <Route path="/my-data" component={MyDataPage} />
+        <Route path="/purchased-products" component={PurchasedProductsPage} />
         <Route path="/prizes-history" component={PrizesHistoryPage} />
         <Route path="/fortune" component={FortunePage} />
         <Route path="/assistant" component={AssistantPage} />

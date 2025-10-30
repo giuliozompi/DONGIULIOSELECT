@@ -118,6 +118,7 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<InsertUser>): Promise<User | undefined>;
+  getPurchasedProducts(userId: string): Promise<Product[]>;
 
   // Администраторы
   isAdmin(userId: string): Promise<boolean>;

@@ -5,7 +5,7 @@ import { useTelegramBackButton } from '@/hooks/useTelegramBackButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, User, Heart, Package, Gift } from 'lucide-react';
+import { ArrowLeft, User, Heart, Package, Gift, ShoppingBag } from 'lucide-react';
 import PendingOrdersDialog from '@/components/PendingOrdersDialog';
 import type { Order } from '@shared/schema';
 
@@ -43,6 +43,13 @@ export default function ProfilePage() {
       icon: User,
       path: '/my-data',
       testId: 'card-my-data'
+    },
+    {
+      title: 'Мои покупки',
+      description: 'Товары, которые вы покупали',
+      icon: ShoppingBag,
+      path: '/purchased-products',
+      testId: 'card-purchased-products'
     },
     {
       title: 'Мои избранные',
