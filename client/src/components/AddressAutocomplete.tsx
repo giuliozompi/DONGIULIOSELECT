@@ -35,11 +35,12 @@ export function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAddressConfirmed, setIsAddressConfirmed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const fetchSuggestions = useCallback(async (query: string) => {
-    if (query.length < 2) {
+    if (query.length < 2 || isAddressConfirmed) {
       setSuggestions([]);
       return;
     }
@@ -56,7 +57,7 @@ export function AddressAutocomplete({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAddressConfirmed]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -93,6 +94,14 @@ export function AddressAutocomplete({
     }
     setShowSuggestions(false);
     setSuggestions([]);
+    setIsAddressConfirmed(true);
+  };
+
+  const handleInputChange = (newValue: string) => {
+    onChange(newValue);
+    if (!newValue || newValue.length < 2) {
+      setIsAddressConfirmed(false);
+    }
   };
 
   return (
@@ -101,7 +110,7 @@ export function AddressAutocomplete({
         ref={inputRef}
         dir="ltr"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => handleInputChange(e.target.value)}
         placeholder={placeholder}
         data-testid={testId}
         disabled={disabled}
