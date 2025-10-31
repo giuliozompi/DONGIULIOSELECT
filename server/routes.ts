@@ -797,12 +797,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Invia notifica Telegram al cliente per conferma ordine
       try {
-        const { sendOrderStatusNotification } = await import('./services/telegram-bot');
-        const telegramSent = await sendOrderStatusNotification(
+        const { sendOrderCreatedNotification } = await import('./services/telegram-bot');
+        const telegramItems = orderItems.map(item => ({
+          productName: item.productName,
+          quantity: item.quantity,
+          price: item.price,
+          unit: item.unit,
+        }));
+        
+        const telegramSent = await sendOrderCreatedNotification(
           req.userId!,
           order.id,
-          order.status,
-          order.customerName
+          order.customerName,
+          order.customerPhone,
+          order.deliveryAddress,
+          order.paymentMethod,
+          telegramItems,
+          order.amount,
+          new Date()
         );
         if (telegramSent) {
           console.log(`✅ Order confirmation sent to user ${req.userId} for order ${order.id}`);
@@ -828,7 +840,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           order.id,
           order.customerName,
           order.customerPhone,
-          order.customerEmail,
+          order.customerEmail || 'Не указан',
           order.deliveryAddress,
           order.deliveryMethod || 'N/A',
           order.paymentMethod,
