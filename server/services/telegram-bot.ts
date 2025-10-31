@@ -80,11 +80,20 @@ export async function sendOrderCreatedNotification(
   customerName: string,
   customerPhone: string,
   deliveryAddress: string,
+  deliveryMethod: string,
   paymentMethod: string,
   items: OrderItem[],
   totalAmount: string,
   createdAt: Date
 ): Promise<boolean> {
+  const deliveryMethodLabels: Record<string, string> = {
+    'yandex_go': 'Яндекс Go',
+    'yandex_dostavka': 'Яндекс Доставка',
+    'cdek': 'CDEK',
+    'don_giulio_courier': 'Курьер Don Giulio',
+    'pickup': 'Самовывоз',
+  };
+
   const paymentMethodLabels: Record<string, string> = {
     'yookassa': 'Онлайн оплата (ЮКасса)',
     'cash_on_delivery': 'Наличными при получении',
@@ -138,6 +147,8 @@ ${formatQuantity(item.quantity, item.unit)} × ${formatPrice(item.price)} ₽
 <b>Оформлен</b>
 <b>Дата создания:</b>
 ${formatDate(createdAt)}
+<b>Способ доставки:</b>
+${deliveryMethodLabels[deliveryMethod] || deliveryMethod}
 <b>Способ оплаты:</b>
 ${paymentMethodLabels[paymentMethod] || paymentMethod}
 <b>Твой заказ в работе!</b>
