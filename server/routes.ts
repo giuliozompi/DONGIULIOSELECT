@@ -811,6 +811,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           order.customerName,
           order.customerPhone,
           order.deliveryAddress,
+          order.deliveryMethod || 'N/A',
           order.paymentMethod,
           telegramItems,
           order.amount,
