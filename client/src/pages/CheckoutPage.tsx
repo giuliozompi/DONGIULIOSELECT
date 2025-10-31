@@ -228,36 +228,6 @@ export default function CheckoutPage() {
     createOrderMutation.mutate(data);
   };
 
-  // Listen for test-fill event from BottomNav
-  useEffect(() => {
-    const handleTestFill = () => {
-      hapticFeedback('light');
-      form.setValue('customerName', 'Джулио Дзомпи');
-      form.setValue('customerPhone', '+79268429284');
-      form.setValue('customerEmail', 'test@dongiulio.ru');
-      form.setValue('deliveryAddress', 'г Москва, ул Скобелевская, д 34, кв 17');
-      form.setValue('deliveryNotes', 'Тестовый заказ для проверки');
-      form.setValue('deliveryMethod', DELIVERY_METHODS.YANDEX_GO);
-      form.setValue('paymentMethod', PAYMENT_METHODS.YOOKASSA);
-      form.setValue('saveAddress', false);
-      
-      setStructuredAddress({
-        deliveryPostalCode: '117311',
-        dadataFiasId: 'test-fias-id',
-        deliveryLatitude: '55.622824',
-        deliveryLongitude: '37.605207',
-      });
-
-      toast({
-        title: 'Данные заполнены',
-        description: 'Форма заполнена тестовыми данными. Можете оформить заказ.',
-      });
-    };
-
-    window.addEventListener('test-fill-checkout', handleTestFill);
-    return () => window.removeEventListener('test-fill-checkout', handleTestFill);
-  }, [form, toast]);
-
   const handleUseAddress = (address: UserAddress) => {
     hapticFeedback('light');
     form.setValue('deliveryAddress', address.fullAddress);
@@ -341,16 +311,30 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-background pb-20">
       <div className="p-4 space-y-4">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <ShoppingBag className="w-5 h-5 text-primary" />
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <ShoppingBag className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Оформление заказа</h1>
+              <p className="text-sm text-muted-foreground">
+                {cartItems.length} {cartItems.length === 1 ? 'товар' : 'товара'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Оформление заказа</h1>
-            <p className="text-sm text-muted-foreground">
-              {cartItems.length} {cartItems.length === 1 ? 'товар' : 'товара'}
-            </p>
-          </div>
+          
+          {/* Development Submit Button - Emulates Telegram MainButton */}
+          {import.meta.env.DEV && (
+            <Button
+              onClick={() => form.handleSubmit(onSubmit)()}
+              disabled={isSubmitting || !form.formState.isValid}
+              size="sm"
+              data-testid="button-dev-submit-order"
+            >
+              {isSubmitting ? 'Обработка...' : 'Оформить'}
+            </Button>
+          )}
         </div>
 
         {/* Riepilogo ordine */}
