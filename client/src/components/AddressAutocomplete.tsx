@@ -35,6 +35,7 @@ export function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +66,11 @@ export function AddressAutocomplete({
       return;
     }
 
+    // Mostra suggerimenti solo se l'utente ha interagito con il campo
+    if (!hasUserInteracted) {
+      return;
+    }
+
     const handler = setTimeout(() => {
       if (value) {
         fetchSuggestions(value);
@@ -74,7 +80,7 @@ export function AddressAutocomplete({
     }, 300);
 
     return () => clearTimeout(handler);
-  }, [value, fetchSuggestions, disabled]);
+  }, [value, fetchSuggestions, disabled, hasUserInteracted]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -107,7 +113,10 @@ export function AddressAutocomplete({
         ref={inputRef}
         dir="ltr"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          setHasUserInteracted(true);
+          onChange(e.target.value);
+        }}
         placeholder={placeholder}
         data-testid={testId}
         disabled={disabled}
