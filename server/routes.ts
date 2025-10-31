@@ -826,6 +826,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn('⚠️ Failed to send order confirmation via Telegram:', error);
       }
       
+      // Invia email di conferma al cliente
+      if (order.customerEmail) {
+        try {
+          const { sendOrderConfirmationToCustomer } = await import('./services/email');
+          const customerEmailItems = orderItems.map(item => ({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            priceAtAdd: item.price,
+            unit: item.unit,
+          }));
+          
+          const customerEmailSent = await sendOrderConfirmationToCustomer(
+            order.customerEmail,
+            order.id,
+            order.customerName,
+            order.customerPhone,
+            order.deliveryAddress,
+            order.deliveryMethod || 'N/A',
+            order.paymentMethod,
+            customerEmailItems,
+            order.amount,
+            new Date()
+          );
+          
+          if (customerEmailSent) {
+            console.log(`✅ Order confirmation email sent to customer ${order.customerEmail} for order ${order.id}`);
+          } else {
+            console.warn('⚠️ Failed to send order confirmation email to customer');
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to send order confirmation email to customer:', error);
+        }
+      }
+      
       // Invia notifica email ai manager per nuovo ordine
       try {
         const { sendNewOrderNotificationToManagers } = await import('./services/email');
