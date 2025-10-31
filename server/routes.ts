@@ -861,6 +861,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Invia notifica WhatsApp al cliente
+      try {
+        const { sendOrderConfirmationWhatsApp } = await import('./services/whatsapp');
+        const whatsappItems = orderItems.map(item => ({
+          productName: item.productName,
+          quantity: item.quantity,
+          price: item.price,
+          unit: item.unit,
+        }));
+        
+        const whatsappSent = await sendOrderConfirmationWhatsApp(
+          order.customerPhone,
+          order.id,
+          order.customerName,
+          whatsappItems,
+          order.amount,
+          order.deliveryMethod || 'N/A',
+          order.paymentMethod
+        );
+        
+        if (whatsappSent) {
+          console.log(`✅ Order confirmation sent via WhatsApp to ${order.customerPhone} for order ${order.id}`);
+        } else {
+          console.warn('⚠️ WhatsApp not configured or failed to send');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to send order confirmation via WhatsApp:', error);
+      }
+      
       // Invia notifica email ai manager per nuovo ordine
       try {
         const { sendNewOrderNotificationToManagers } = await import('./services/email');
@@ -2041,6 +2070,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
+          // Invia link pagamento via WhatsApp
+          try {
+            const { sendPaymentLinkWhatsApp } = await import('./services/whatsapp');
+            const whatsappSent = await sendPaymentLinkWhatsApp(
+              order.customerPhone,
+              orderId,
+              order.customerName,
+              order.amount,
+              confirmationUrl
+            );
+            if (whatsappSent) {
+              console.log('✅ Payment link sent via WhatsApp');
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to send payment link via WhatsApp:', error);
+          }
+          
           // Aggiorna ordine con info pagamento e timestamp invio link
           await storage.updateOrder(orderId, {
             status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
@@ -2088,6 +2134,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } catch (error) {
           console.warn('⚠️ Failed to send status notification via Telegram:', error);
+        }
+        
+        // Invia anche notifica WhatsApp
+        try {
+          const { sendOrderStatusUpdateWhatsApp } = await import('./services/whatsapp');
+          const whatsappSent = await sendOrderStatusUpdateWhatsApp(
+            order.customerPhone,
+            orderId,
+            order.customerName,
+            status
+          );
+          if (whatsappSent) {
+            console.log(`✅ Status notification sent via WhatsApp to ${order.customerPhone} for order ${orderId}: ${status}`);
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to send status notification via WhatsApp:', error);
         }
       }
       
