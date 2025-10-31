@@ -144,8 +144,8 @@ export async function sendOrderCreatedNotification(
 🚚 ${deliveryMethodLabels[deliveryMethod] || deliveryMethod}
 💰 ${paymentMethodLabels[paymentMethod] || paymentMethod}
 
-<b>Твой заказ в работе!</b>
-Мы создаём 50 оттенков твоего наслаждения${paymentNote}
+🔴 <b><u>Подожди еще немножко!</u></b>
+🔴 <b><u>Мы создаём 50 оттенков твоего наслаждения</u></b>${paymentNote}
 
 ━━━━━━━━━━━━━━━
 📦 <b>СОСТАВ ЗАКАЗА</b>
