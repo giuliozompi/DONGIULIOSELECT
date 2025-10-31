@@ -256,8 +256,12 @@ export async function sendOrderConfirmationToCustomer(
           </div>
 
           <div class="total-section">
-            <p style="margin: 5px 0; font-size: 18px; color: #666;">Итого к оплате:</p>
+            <p style="margin: 5px 0; font-size: 18px; color: #666;">Предварительная стоимость заказа*</p>
             <div class="total-amount">${formatPrice(totalAmount)} ₽</div>
+            <p style="margin: 15px 0 0 0; font-size: 12px; color: #666; line-height: 1.5;">
+              <strong>(*)</strong> Окончательная стоимость будет доступна, когда заказ будет готов.<br>
+              Нарезка сыров и колбасных изделий может привести к небольшим отклонениям в весе от заказанного количества.
+            </p>
           </div>
 
         </div>
