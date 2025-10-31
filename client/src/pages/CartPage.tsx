@@ -213,9 +213,22 @@ export default function CartPage() {
             </div>
           </div>
           
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            Нажмите кнопку внизу экрана для продолжения
-          </p>
+          {/* Development Checkout Button - Emulates Telegram MainButton */}
+          {import.meta.env.MODE === 'development' ? (
+            <Button
+              onClick={() => setLocation('/checkout')}
+              disabled={!cart?.items.length}
+              className="w-full mt-4"
+              size="lg"
+              data-testid="button-dev-checkout"
+            >
+              Продолжить оформление
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground text-center mt-4">
+              Нажмите кнопку внизу экрана для продолжения
+            </p>
+          )}
         </Card>
       </div>
     </div>
