@@ -361,56 +361,6 @@ export default function CheckoutPage() {
           </div>
         </Card>
 
-        {/* Indirizzi salvati */}
-        {!isLoadingAddresses && savedAddresses.length > 0 && (
-          <Card className="p-4">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <MapPin className="w-4 h-4" />
-              Сохранённые адреса
-            </h3>
-            <div className="space-y-2">
-              {savedAddresses.map((address) => (
-                <div
-                  key={address.id}
-                  className="p-3 border rounded-md hover-elevate"
-                  data-testid={`saved-address-${address.id}`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium">{address.label}</span>
-                        {address.isDefault && (
-                          <Badge variant="secondary" className="text-xs" data-testid={`badge-default-${address.id}`}>
-                            Default
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">{address.fullAddress}</p>
-                    </div>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleDeleteAddress(address.id)}
-                      data-testid={`button-delete-address-${address.id}`}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleUseAddress(address)}
-                    className="w-full"
-                    data-testid={`button-use-address-${address.id}`}
-                  >
-                    Использовать этот адрес
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
         {/* Form dati cliente */}
         <Card className="p-4">
           <h3 className="font-semibold mb-4">Данные для доставки</h3>
@@ -658,6 +608,56 @@ export default function CheckoutPage() {
             </form>
           </Form>
         </Card>
+
+        {/* Indirizzi salvati */}
+        {!isLoadingAddresses && savedAddresses.length > 0 && (
+          <Card className="p-4">
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
+              Сохранённые адреса
+            </h3>
+            <div className="space-y-2">
+              {savedAddresses.map((address) => (
+                <div
+                  key={address.id}
+                  className="p-3 border rounded-md hover-elevate"
+                  data-testid={`saved-address-${address.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">{address.label}</span>
+                        {address.isDefault && (
+                          <Badge variant="secondary" className="text-xs" data-testid={`badge-default-${address.id}`}>
+                            Default
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{address.fullAddress}</p>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDeleteAddress(address.id)}
+                      data-testid={`button-delete-address-${address.id}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleUseAddress(address)}
+                    className="w-full"
+                    data-testid={`button-use-address-${address.id}`}
+                  >
+                    Использовать этот адрес
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <p className="text-xs text-muted-foreground text-center">
           Нажмите кнопку внизу экрана для оформления заказа
