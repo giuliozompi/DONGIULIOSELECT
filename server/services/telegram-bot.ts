@@ -67,6 +67,111 @@ ${paymentUrl}
   });
 }
 
+interface OrderItem {
+  productName: string;
+  quantity: number;
+  price: string;
+  unit?: string;
+}
+
+export async function sendOrderCreatedNotification(
+  chatId: string,
+  orderId: string,
+  customerName: string,
+  customerPhone: string,
+  deliveryAddress: string,
+  paymentMethod: string,
+  items: OrderItem[],
+  totalAmount: string,
+  createdAt: Date
+): Promise<boolean> {
+  const paymentMethodLabels: Record<string, string> = {
+    'yookassa': 'Онлайн оплата (ЮКасса)',
+    'cash_on_delivery': 'Наличными при получении',
+  };
+
+  const formatDate = (date: Date) => {
+    const months = [
+      'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+    ];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
+    const year = date.getFullYear();
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${day} ${month} ${year} г. в ${hours}:${minutes}`;
+  };
+
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numPrice);
+  };
+
+  const formatQuantity = (qty: number, unit?: string) => {
+    const rounded = Number(qty.toFixed(3));
+    if (unit === 'кг') {
+      return `${rounded} кг`;
+    }
+    return `${rounded} шт`;
+  };
+
+  const itemsText = items.map(item => {
+    const itemTotal = parseFloat(item.price) * item.quantity;
+    return `<b>${item.productName}</b>
+
+${formatQuantity(item.quantity, item.unit)} × ${formatPrice(item.price)} ₽
+
+<b>${formatPrice(itemTotal)} ₽</b>`;
+  }).join('\n\n');
+
+  const paymentNote = paymentMethod === 'yookassa' 
+    ? '\n\nСсылка на оплату будет отправлена, когда заказ будет готов к отправке'
+    : '';
+
+  const message = `
+<b>Статус заказа</b>
+
+<b>Оформлен</b>
+<b>Дата создания:</b>
+${formatDate(createdAt)}
+<b>Способ оплаты:</b>
+${paymentMethodLabels[paymentMethod] || paymentMethod}
+<b>Твой заказ в работе!</b>
+
+Мы создаём 50 оттенков твоего наслаждения${paymentNote}
+
+<b>Состав заказа</b>
+${itemsText}
+
+<b>Данные доставки</b>
+<b>Получатель:</b>
+
+${customerName}
+
+<b>Телефон:</b>
+
+${customerPhone}
+
+<b>Адрес доставки:</b>
+
+${deliveryAddress}
+
+<b>Итого к оплате:</b>
+
+<b>${formatPrice(totalAmount)} ₽</b>
+  `.trim();
+
+  return sendTelegramMessage({
+    chatId,
+    text: message,
+    parseMode: 'HTML',
+  });
+}
+
 export async function sendOrderStatusNotification(
   chatId: string,
   orderId: string,
