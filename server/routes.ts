@@ -795,6 +795,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Svuota carrello
       await storage.clearCart(req.userId!);
       
+      // Invia notifica Telegram al cliente per conferma ordine
+      try {
+        const { sendOrderStatusNotification } = await import('./services/telegram-bot');
+        const telegramSent = await sendOrderStatusNotification(
+          req.userId!,
+          order.id,
+          order.status,
+          order.customerName
+        );
+        if (telegramSent) {
+          console.log(`✅ Order confirmation sent to user ${req.userId} for order ${order.id}`);
+        } else {
+          console.warn('⚠️ Telegram bot not configured - order confirmation not sent');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to send order confirmation via Telegram:', error);
+      }
+      
       res.json({
         ...order,
         bonusApplied: totalBonusApplied.toFixed(2),
