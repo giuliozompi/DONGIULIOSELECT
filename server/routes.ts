@@ -813,6 +813,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn('⚠️ Failed to send order confirmation via Telegram:', error);
       }
       
+      // Invia notifica email ai manager per nuovo ordine
+      try {
+        const { sendNewOrderNotificationToManagers } = await import('./services/email');
+        const emailItems = orderItems.map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          priceAtAdd: item.price,
+          unit: item.unit,
+        }));
+        
+        const emailSent = await sendNewOrderNotificationToManagers(
+          order.id,
+          order.customerName,
+          order.customerPhone,
+          order.customerEmail,
+          order.deliveryAddress,
+          order.deliveryMethod || 'N/A',
+          order.paymentMethod,
+          emailItems,
+          order.amount,
+          order.deliveryNotes || undefined
+        );
+        
+        if (emailSent) {
+          console.log(`✅ Order notification email sent to managers for order ${order.id}`);
+        } else {
+          console.warn('⚠️ Manager emails not configured or email service unavailable');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to send order notification to managers:', error);
+      }
+      
       res.json({
         ...order,
         bonusApplied: totalBonusApplied.toFixed(2),
