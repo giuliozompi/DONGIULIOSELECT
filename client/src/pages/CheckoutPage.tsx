@@ -311,7 +311,7 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-background pb-20">
       <div className="p-4 space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="flex flex-col gap-3 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <ShoppingBag className="w-5 h-5 text-primary" />
@@ -325,14 +325,14 @@ export default function CheckoutPage() {
           </div>
           
           {/* Development Submit Button - Emulates Telegram MainButton */}
-          {import.meta.env.DEV && (
+          {import.meta.env.MODE === 'development' && (
             <Button
               onClick={() => form.handleSubmit(onSubmit)()}
               disabled={isSubmitting || !form.formState.isValid}
-              size="sm"
+              className="w-full"
               data-testid="button-dev-submit-order"
             >
-              {isSubmitting ? 'Обработка...' : 'Оформить'}
+              {isSubmitting ? 'Обработка...' : 'Оформить заказ'}
             </Button>
           )}
         </div>
