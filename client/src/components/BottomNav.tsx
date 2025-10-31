@@ -1,10 +1,12 @@
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { Home, ShoppingCart, Sparkles, Package, Shield, Bot } from 'lucide-react';
+import { Home, ShoppingCart, Sparkles, Package, Shield, Bot, FlaskConical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 
 export default function BottomNav() {
   const [location, setLocation] = useLocation();
+  const { toast } = useToast();
 
   // Check if user is admin
   const { data: adminCheck } = useQuery<{ isAdmin: boolean }>({
@@ -34,12 +36,35 @@ export default function BottomNav() {
   // Count number of distinct products in cart
   const cartItemCount = cartData?.items?.length || 0;
 
+  const handleTestButton = () => {
+    if (location === '/checkout') {
+      // Trigger auto-fill via custom event
+      window.dispatchEvent(new CustomEvent('test-fill-checkout'));
+    } else {
+      toast({
+        title: '🧪 Тестовый режим',
+        description: 'Перейдите в Checkout, чтобы автоматически заполнить форму',
+      });
+      setLocation('/checkout');
+    }
+  };
+
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/cart', icon: ShoppingCart, label: 'Корзина' },
     { path: '/fortune', icon: Sparkles, label: 'Призы' },
     { path: '/assistant', icon: Bot, label: 'Помощник' },
   ];
+
+  // Add test button in development (before admin)
+  if (import.meta.env.DEV) {
+    navItems.push({ 
+      path: '#test', 
+      icon: FlaskConical, 
+      label: 'Тест',
+      isTestButton: true 
+    } as any);
+  }
 
   // Add admin link if user is admin (before ЛК)
   if (adminCheck?.isAdmin) {
@@ -57,15 +82,16 @@ export default function BottomNav() {
           const isActive = location === item.path;
           const isFortune = item.path === '/fortune';
           const isCart = item.path === '/cart';
+          const isTestButton = (item as any).isTestButton;
           const showFortuneBadge = isFortune && fortuneData && fortuneData.spinTokens > 0;
           const showCartBadge = isCart && cartItemCount > 0;
           
           return (
             <button
               key={item.path}
-              onClick={() => setLocation(item.path)}
+              onClick={() => isTestButton ? handleTestButton() : setLocation(item.path)}
               className={`flex flex-col items-center justify-center gap-1 flex-1 h-full hover-elevate active-elevate-2 ${
-                isActive ? 'text-primary' : 'text-muted-foreground'
+                isActive ? 'text-primary' : isTestButton ? 'text-orange-500' : 'text-muted-foreground'
               }`}
               data-testid={`button-nav-${item.label}`}
             >

@@ -130,50 +130,37 @@ export async function sendOrderCreatedNotification(
 
   const itemsText = items.map(item => {
     const itemTotal = parseFloat(item.price) * item.quantity;
-    return `<b>${item.productName}</b>
-
-${formatQuantity(item.quantity, item.unit)} × ${formatPrice(item.price)} ₽
-
-<b>${formatPrice(itemTotal)} ₽</b>`;
-  }).join('\n\n');
+    return `• <b>${item.productName}</b>\n  ${formatQuantity(item.quantity, item.unit)} × ${formatPrice(item.price)} ₽ = <b>${formatPrice(itemTotal)} ₽</b>`;
+  }).join('\n');
 
   const paymentNote = paymentMethod === 'yookassa' 
-    ? '\n\nСсылка на оплату будет отправлена, когда заказ будет готов к отправке'
+    ? '\n💳 <i>Ссылка на оплату будет отправлена, когда заказ будет готов к отправке</i>'
     : '';
 
   const message = `
-<b>Статус заказа</b>
+✅ <b>ЗАКАЗ ОФОРМЛЕН</b>
 
-<b>Оформлен</b>
-<b>Дата создания:</b>
-${formatDate(createdAt)}
-<b>Способ доставки:</b>
-${deliveryMethodLabels[deliveryMethod] || deliveryMethod}
-<b>Способ оплаты:</b>
-${paymentMethodLabels[paymentMethod] || paymentMethod}
+🗓 ${formatDate(createdAt)}
+🚚 ${deliveryMethodLabels[deliveryMethod] || deliveryMethod}
+💰 ${paymentMethodLabels[paymentMethod] || paymentMethod}
+
 <b>Твой заказ в работе!</b>
-
 Мы создаём 50 оттенков твоего наслаждения${paymentNote}
 
-<b>Состав заказа</b>
+━━━━━━━━━━━━━━━
+📦 <b>СОСТАВ ЗАКАЗА</b>
+
 ${itemsText}
 
-<b>Данные доставки</b>
-<b>Получатель:</b>
+━━━━━━━━━━━━━━━
+🏠 <b>ДОСТАВКА</b>
 
-${customerName}
+👤 ${customerName}
+📞 ${customerPhone}
+📍 ${deliveryAddress}
 
-<b>Телефон:</b>
-
-${customerPhone}
-
-<b>Адрес доставки:</b>
-
-${deliveryAddress}
-
-<b>Итого к оплате:</b>
-
-<b>${formatPrice(totalAmount)} ₽</b>
+━━━━━━━━━━━━━━━
+💵 <b>ИТОГО: ${formatPrice(totalAmount)} ₽</b>
   `.trim();
 
   return sendTelegramMessage({

@@ -228,6 +228,36 @@ export default function CheckoutPage() {
     createOrderMutation.mutate(data);
   };
 
+  // Listen for test-fill event from BottomNav
+  useEffect(() => {
+    const handleTestFill = () => {
+      hapticFeedback('light');
+      form.setValue('customerName', 'Джулио Дзомпи');
+      form.setValue('customerPhone', '+79268429284');
+      form.setValue('customerEmail', 'test@dongiulio.ru');
+      form.setValue('deliveryAddress', 'г Москва, ул Скобелевская, д 34, кв 17');
+      form.setValue('deliveryNotes', 'Тестовый заказ для проверки');
+      form.setValue('deliveryMethod', DELIVERY_METHODS.YANDEX_GO);
+      form.setValue('paymentMethod', PAYMENT_METHODS.YOOKASSA);
+      form.setValue('saveAddress', false);
+      
+      setStructuredAddress({
+        deliveryPostalCode: '117311',
+        dadataFiasId: 'test-fias-id',
+        deliveryLatitude: '55.622824',
+        deliveryLongitude: '37.605207',
+      });
+
+      toast({
+        title: 'Данные заполнены',
+        description: 'Форма заполнена тестовыми данными. Можете оформить заказ.',
+      });
+    };
+
+    window.addEventListener('test-fill-checkout', handleTestFill);
+    return () => window.removeEventListener('test-fill-checkout', handleTestFill);
+  }, [form, toast]);
+
   const handleUseAddress = (address: UserAddress) => {
     hapticFeedback('light');
     form.setValue('deliveryAddress', address.fullAddress);
@@ -307,30 +337,6 @@ export default function CheckoutPage() {
 
   const saveAddress = form.watch('saveAddress');
 
-  const fillTestData = () => {
-    hapticFeedback('light');
-    form.setValue('customerName', 'Джулио Дзомпи');
-    form.setValue('customerPhone', '+79268429284');
-    form.setValue('customerEmail', 'test@dongiulio.ru');
-    form.setValue('deliveryAddress', 'г Москва, ул Скобелевская, д 34, кв 17');
-    form.setValue('deliveryNotes', 'Тестовый заказ для проверки');
-    form.setValue('deliveryMethod', DELIVERY_METHODS.YANDEX_GO);
-    form.setValue('paymentMethod', PAYMENT_METHODS.YOOKASSA);
-    form.setValue('saveAddress', false);
-    
-    setStructuredAddress({
-      deliveryPostalCode: '117311',
-      dadataFiasId: 'test-fias-id',
-      deliveryLatitude: '55.622824',
-      deliveryLongitude: '37.605207',
-    });
-
-    toast({
-      title: 'Данные заполнены',
-      description: 'Форма заполнена тестовыми данными. Можете оформить заказ.',
-    });
-  };
-
   return (
     <div className="min-h-screen bg-background pb-20">
       <div className="p-4 space-y-4">
@@ -346,31 +352,6 @@ export default function CheckoutPage() {
             </p>
           </div>
         </div>
-
-        {/* Development Test Button */}
-        {import.meta.env.DEV && (
-          <Card className="p-4 bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="font-semibold text-amber-900 dark:text-amber-100">
-                  🧪 Режим разработки
-                </p>
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  Нажмите, чтобы заполнить форму тестовыми данными
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                onClick={fillTestData}
-                data-testid="button-fill-test-data"
-              >
-                Заполнить данные
-              </Button>
-            </div>
-          </Card>
-        )}
 
         {/* Riepilogo ordine */}
         <Card className="p-4 space-y-3">
