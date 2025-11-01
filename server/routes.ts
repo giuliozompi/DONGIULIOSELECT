@@ -2952,11 +2952,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }],
         route_points: [
           {
-            coordinates: pickupCoords,
+            coordinates: pickupCoords as [number, number],
             fullname: pickupAddress
           },
           {
-            coordinates: deliveryCoords,
+            coordinates: deliveryCoords as [number, number],
             fullname: order.deliveryAddress
           }
         ],

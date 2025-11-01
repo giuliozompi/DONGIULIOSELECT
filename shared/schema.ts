@@ -417,7 +417,7 @@ export type PickupAddress = typeof pickupAddresses.$inferSelect;
 export const orderChangeLogs = pgTable("order_change_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   orderId: varchar("order_id").notNull().references(() => orders.id),
-  adminUserId: varchar("admin_user_id").notNull(), // Admin che ha fatto la modifica
+  adminUserId: varchar("admin_user_id"), // Admin che ha fatto la modifica (null per webhook automatici)
   changeType: text("change_type").notNull(), // 'quantity_changed' | 'product_added' | 'product_removed' | 'product_replaced' | 'discount_applied' | 'address_changed'
   
   // Dati della modifica in formato strutturato
@@ -455,6 +455,31 @@ export const orderChangeLogs = pgTable("order_change_logs", {
     // Per address_changed
     oldAddress?: string;
     newAddress?: string;
+    
+    // Per Yandex delivery integration (yandex_go_created, yandex_dostavka_created, etc)
+    savedToCustomer?: boolean;
+    claimId?: string;
+    status?: string;
+    price?: string;
+    oldOrderStatus?: string;
+    newOrderStatus?: string;
+    oldDeliveryStatus?: string | null;
+    newDeliveryStatus?: string;
+    cancelledDeliveryStatus?: string;
+    yandexGoClaimId?: string;
+    yandexDostavkaClaimId?: string;
+    yandexClaimId?: string;
+    deliveryPrice?: string;
+    performerInfo?: any;
+    cancelInfo?: any;
+    
+    // Per yandex webhook status updates
+    event?: string;
+    oldStatus?: string;
+    newStatus?: string;
+    timestamp?: string | number;
+    location?: any;
+    eta?: any;
     
     // Note dell'admin
     notes?: string;
@@ -510,6 +535,12 @@ export const adminActionLogs = pgTable("admin_action_logs", {
     // Per admin
     affectedUserId?: string;
     affectedUsername?: string;
+    
+    // Per delete operations
+    deletedOrder?: any;
+    logId?: string;
+    deletedAddress?: any;
+    reason?: string;
     
     // Note generali
     notes?: string;
