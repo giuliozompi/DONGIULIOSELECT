@@ -215,9 +215,11 @@ export class YandexGoService {
 
   private async getHeaders(): Promise<Record<string, string>> {
     const token = await this.getAccessToken();
+    const clientId = process.env.YANDEX_GO_CLIENT_ID || 'default';
     
+    // Formato OAuth ufficiale Yandex Go: OAuth oauth_token="...", oauth_client_id="..."
     return {
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `OAuth oauth_token="${token}", oauth_client_id="${clientId}"`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
@@ -257,8 +259,9 @@ export class YandexGoService {
       }
     }
 
-    // IMPORTANTE: Yandex Go usa gli STESSI endpoint di Yandex Dostavka
-    const url = `${this.baseUrl}/offers/calculate`;
+    // Yandex Go API v1: /v1/check-price (endpoint DIVERSO da Yandex Dostavka!)
+    // Docs: https://yandex.com/dev/logistics/api-go-delivery/
+    const url = `${this.baseUrl.replace('/v2', '/v1')}/check-price`;
     const idempotencyKey = generateIdempotencyKey();
     
     const headers = {
