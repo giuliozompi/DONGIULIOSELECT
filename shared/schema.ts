@@ -546,6 +546,99 @@ export const insertProductMarkingLogSchema = createInsertSchema(productMarkingLo
 export type InsertProductMarkingLog = z.infer<typeof insertProductMarkingLogSchema>;
 export type ProductMarkingLog = typeof productMarkingLogs.$inferSelect;
 
+// Order points (pickup and delivery locations for Yandex integration)
+export const orderPoints = pgTable("order_points", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  
+  pointId: integer("point_id").notNull(), // Sequence number (1, 2, 3...)
+  type: text("type").notNull(), // 'source' (pickup) | 'destination' (delivery)
+  
+  // Address
+  fullAddress: text("full_address").notNull(),
+  city: text("city"),
+  street: text("street"),
+  building: text("building"),
+  flat: text("flat"),
+  porch: text("porch"),
+  floor: text("floor"),
+  
+  // Coordinates
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+  
+  // Contact info
+  contactName: text("contact_name").notNull(),
+  contactPhone: text("contact_phone").notNull(),
+  contactEmail: text("contact_email"),
+  
+  // Instructions and time window
+  comment: text("comment"), // Istruzioni per il corriere
+  timeWindowFrom: timestamp("time_window_from"), // Inizio finestra oraria
+  timeWindowTo: timestamp("time_window_to"), // Fine finestra oraria
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertOrderPointSchema = createInsertSchema(orderPoints).omit({ id: true, createdAt: true });
+export type InsertOrderPoint = z.infer<typeof insertOrderPointSchema>;
+export type OrderPoint = typeof orderPoints.$inferSelect;
+
+// Webhook events from Yandex (audit trail for all webhook calls)
+export const webhookEvents = pgTable("webhook_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").references(() => orders.id, { onDelete: 'set null' }), // Nullable per eventi senza orderId
+  
+  source: text("source").notNull(), // 'yandex_go' | 'yandex_dostavka' | 'yookassa' | etc.
+  eventType: text("event_type").notNull(), // 'status_changed' | 'courier_assigned' | etc.
+  
+  // Raw payload from webhook
+  payloadJson: jsonb("payload_json").notNull(),
+  
+  // Status tracking
+  processed: boolean("processed").notNull().default(false),
+  processingError: text("processing_error"), // Error message se processing fallisce
+  
+  // HTTP info
+  httpMethod: text("http_method"), // POST, GET, etc.
+  httpHeaders: jsonb("http_headers"), // Request headers
+  signature: text("signature"), // HMAC signature se presente
+  signatureValid: boolean("signature_valid"), // true/false/null
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  processedAt: timestamp("processed_at"),
+});
+
+export const insertWebhookEventSchema = createInsertSchema(webhookEvents).omit({ id: true, createdAt: true, processedAt: true });
+export type InsertWebhookEvent = z.infer<typeof insertWebhookEventSchema>;
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+
+// Courier tracking (real-time location updates from Yandex)
+export const courierTracking = pgTable("courier_tracking", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  
+  // Courier position
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+  
+  // Movement data
+  heading: decimal("heading", { precision: 5, scale: 2 }), // Direzione in gradi (0-360)
+  speed: decimal("speed", { precision: 5, scale: 2 }), // Velocità in km/h
+  
+  // ETA
+  etaMinutes: integer("eta_minutes"), // Tempo stimato di arrivo in minuti
+  
+  // Timestamp from provider
+  reportedAt: timestamp("reported_at").notNull(), // Quando il corriere ha inviato la posizione
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertCourierTrackingSchema = createInsertSchema(courierTracking).omit({ id: true, createdAt: true });
+export type InsertCourierTracking = z.infer<typeof insertCourierTrackingSchema>;
+export type CourierTracking = typeof courierTracking.$inferSelect;
+
 // Prodotti preferiti (favorites)
 export const favoriteProducts = pgTable("favorite_products", {
   userId: varchar("user_id").notNull().references(() => users.id),
