@@ -3,6 +3,9 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
 
+// Configura timezone UTC+3 (Mosca) per tutto il server
+process.env.TZ = 'Europe/Moscow';
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
