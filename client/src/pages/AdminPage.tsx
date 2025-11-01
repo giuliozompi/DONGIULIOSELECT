@@ -29,7 +29,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { DeliveryDialog } from '@/components/DeliveryDialog';
@@ -202,8 +202,8 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           <h1 className="text-xl font-bold">Панель администратора</h1>
         </header>
         <main className="flex-1 overflow-auto p-6">
-          {activeSection === 'categories' && <CategoriesManager />}
-          {activeSection === 'products' && <ProductsManager />}
+          {activeSection === 'categories' && <CategoriesManager isMasterAdmin={isMasterAdmin} />}
+          {activeSection === 'products' && <ProductsManager isMasterAdmin={isMasterAdmin} />}
           {activeSection === 'associations' && <ProductAssociationsManager />}
           {activeSection === 'orders' && <OrdersManager isMasterAdmin={isMasterAdmin} />}
           {activeSection === 'clients' && <ClientsManager isMasterAdmin={isMasterAdmin} />}
@@ -260,16 +260,21 @@ export default function AdminPage() {
 
 type CategoryFormData = z.infer<typeof insertCategorySchema>;
 
-function CategoriesManager() {
+function CategoriesManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [hasUnsavedImage, setHasUnsavedImage] = useState(false);
 
-  // Fetch categories
+  // Fetch categories (includeHidden for admin view)
   const { data: categories = [], isLoading } = useQuery<Category[]>({
-    queryKey: ['/api/categories'],
+    queryKey: ['/api/categories', { includeHidden: true }],
+    queryFn: async () => {
+      const response = await fetch('/api/categories?includeHidden=true');
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      return response.json();
+    },
   });
 
   // Form
@@ -340,6 +345,26 @@ function CategoriesManager() {
       toast({ 
         title: 'Ошибка', 
         description: error.message || 'Не удалось удалить категорию',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Toggle visibility mutation (Master Admin only)
+  const toggleVisibilityMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('PATCH', `/api/admin/categories/${id}/visibility`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      const status = data.isVisible ? 'видима' : 'скрыта';
+      toast({ title: `✅ Категория ${status}` });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось изменить видимость',
         variant: 'destructive' 
       });
     },
@@ -429,6 +454,21 @@ function CategoriesManager() {
                     </p>
                   </div>
                   <div className="absolute top-2 right-2 flex gap-2">
+                    {isMasterAdmin && (
+                      <Button
+                        size="icon"
+                        variant={category.isVisible ? "secondary" : "destructive"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleVisibilityMutation.mutate(category.id);
+                        }}
+                        data-testid={`button-toggle-visibility-category-${category.id}`}
+                        className="h-8 w-8"
+                        title={category.isVisible ? 'Скрыть категорию' : 'Показать категорию'}
+                      >
+                        {category.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      </Button>
+                    )}
                     <Button
                       size="icon"
                       variant="secondary"
@@ -622,18 +662,28 @@ function CategoriesManager() {
 
 // ========== PRODUCTS MANAGER ==========
 
-function ProductsManager() {
+function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
 
-  // Fetch products and categories
+  // Fetch products and categories (includeHidden for admin view)
   const { data: products = [], isLoading: isLoadingProducts } = useQuery<Product[]>({
-    queryKey: ['/api/products'],
+    queryKey: ['/api/products', { includeHidden: true }],
+    queryFn: async () => {
+      const response = await fetch('/api/products?includeHidden=true');
+      if (!response.ok) throw new Error('Failed to fetch products');
+      return response.json();
+    },
   });
 
   const { data: categories = [] } = useQuery<Category[]>({
-    queryKey: ['/api/categories'],
+    queryKey: ['/api/categories', { includeHidden: true }],
+    queryFn: async () => {
+      const response = await fetch('/api/categories?includeHidden=true');
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      return response.json();
+    },
   });
 
   // Filter products by selected category
@@ -655,6 +705,26 @@ function ProductsManager() {
       toast({ 
         title: 'Ошибка', 
         description: error.message || 'Не удалось удалить продукт',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Toggle visibility mutation (Master Admin only)
+  const toggleVisibilityMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('PATCH', `/api/admin/products/${id}/visibility`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      const status = data.isVisible ? 'виден' : 'скрыт';
+      toast({ title: `✅ Продукт ${status}` });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось изменить видимость',
         variant: 'destructive' 
       });
     },
@@ -742,6 +812,21 @@ function ProductsManager() {
                       </div>
                     </div>
                     <div className="absolute top-2 right-2 flex gap-2">
+                      {isMasterAdmin && (
+                        <Button
+                          size="icon"
+                          variant={product.isVisible ? "secondary" : "destructive"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleVisibilityMutation.mutate(product.id);
+                          }}
+                          data-testid={`button-toggle-visibility-product-${product.id}`}
+                          className="h-8 w-8"
+                          title={product.isVisible ? 'Скрыть продукт' : 'Показать продукт'}
+                        >
+                          {product.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="secondary"
