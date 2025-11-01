@@ -47,6 +47,14 @@ The backend is an Express.js application in TypeScript, providing a RESTful API 
     - **Structured Logging**: Detailed logs with correlation IDs, request IDs, service names, and operation types
     - **Smart Fallback**: Automatic failover between Yandex Go and Yandex Dostavka when one service is unavailable
     - **Utilities Module**: `server/utils/yandex-integration.ts` provides reusable functions for production-grade integration
+  - **Webhook & Tracking Infrastructure** (November 2025):
+    - **Database Tables**: Three new tables for complete delivery tracking:
+      - `orderPoints`: Stores delivery route waypoints (pickup/delivery addresses with GPS coordinates)
+      - `webhookEvents`: Complete audit trail of all webhook payloads received from Yandex services with processing status
+      - `courierTracking`: Real-time courier position tracking with timestamps for live delivery monitoring
+    - **Webhook Handler**: Enhanced `/api/webhooks/yandex-go` endpoint persists all incoming events to `webhookEvents` table, updates courier positions in `courierTracking`, and marks events as processed only after successful handling to prevent double-processing
+    - **E.164 Phone Validation**: `validatePhone()` utility in `server/utils/yandex-integration.ts` enforces Russian phone format (+7XXXXXXXXXX) for all Yandex API calls
+    - **Flexible Logging**: `orderChangeLogs` table supports both admin-initiated changes and automated webhook events (nullable `adminUserId` field with expanded `changeData`/`actionData` JSON payloads)
 
 ### System Design Choices
 - **Database**: PostgreSQL with Drizzle ORM for storing all application data, including users, products, orders, and gamification data.
