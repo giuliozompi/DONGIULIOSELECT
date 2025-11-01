@@ -198,6 +198,34 @@ export function validatePackage(item: {
   return { valid: errors.length === 0, errors };
 }
 
+/**
+ * Validate phone number in E.164 format
+ * For Russia: +7XXXXXXXXXX (10 digits after +7)
+ */
+export function validatePhone(
+  phone: string | null | undefined,
+  fieldName: string = 'phone'
+): ValidationResult {
+  const errors: string[] = [];
+
+  if (!phone) {
+    errors.push(`${fieldName} è richiesto`);
+    return { valid: false, errors };
+  }
+
+  // E.164 format: +[country code][subscriber number]
+  // Russia: +7 followed by 10 digits
+  const e164Regex = /^\+7\d{10}$/;
+
+  if (!e164Regex.test(phone)) {
+    errors.push(
+      `${fieldName} deve essere in formato E.164: +7XXXXXXXXXX (es: +79251234567)`
+    );
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 // ===== STRUCTURED LOGGING =====
 
 export interface YandexLogContext {

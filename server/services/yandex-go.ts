@@ -5,6 +5,7 @@ import {
   withRetry,
   validateCoordinates,
   validatePackage,
+  validatePhone,
   YandexLogger,
   yandexFetch,
 } from '../utils/yandex-integration';
