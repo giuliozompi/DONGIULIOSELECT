@@ -165,8 +165,15 @@ export class DbStorage implements IStorage {
   }
 
   // Категории
-  async getAllCategories(): Promise<Category[]> {
-    return await db.select().from(categories).orderBy(asc(categories.sortOrder));
+  async getAllCategories(includeHidden = false): Promise<Category[]> {
+    let query = db.select().from(categories);
+    
+    // Filtra solo visibili per il frontend cliente (tranne admin)
+    if (!includeHidden) {
+      query = query.where(eq(categories.isVisible, true)) as typeof query;
+    }
+    
+    return await query.orderBy(asc(categories.sortOrder));
   }
 
   async getCategoryById(id: string): Promise<Category | undefined> {
@@ -198,20 +205,27 @@ export class DbStorage implements IStorage {
   }
 
   // Продукты
-  async getAllProducts(filters?: { categoryId?: string; inStock?: boolean }): Promise<Product[]> {
+  async getAllProducts(filters?: { categoryId?: string; inStock?: boolean; includeHidden?: boolean }): Promise<Product[]> {
     let query = db.select().from(products);
     
-    if (filters?.categoryId && filters?.inStock !== undefined) {
-      query = query.where(
-        and(
-          eq(products.categoryId, filters.categoryId),
-          eq(products.inStock, filters.inStock)
-        )
-      ) as typeof query;
-    } else if (filters?.categoryId) {
-      query = query.where(eq(products.categoryId, filters.categoryId)) as typeof query;
-    } else if (filters?.inStock !== undefined) {
-      query = query.where(eq(products.inStock, filters.inStock)) as typeof query;
+    const conditions = [];
+    
+    // Aggiungi filtro visibilità (default: solo visibili)
+    if (!filters?.includeHidden) {
+      conditions.push(eq(products.isVisible, true));
+    }
+    
+    // Aggiungi altri filtri
+    if (filters?.categoryId) {
+      conditions.push(eq(products.categoryId, filters.categoryId));
+    }
+    if (filters?.inStock !== undefined) {
+      conditions.push(eq(products.inStock, filters.inStock));
+    }
+    
+    // Applica condizioni se presenti
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as typeof query;
     }
     
     // Ordina per priorità (alta prima) e poi per prezzo (basso prima)
@@ -220,8 +234,17 @@ export class DbStorage implements IStorage {
     return await query;
   }
 
-  async getProductById(id: string): Promise<Product | undefined> {
-    const result = await db.select().from(products).where(eq(products.id, id));
+  async getProductById(id: string, includeHidden = false): Promise<Product | undefined> {
+    let query = db.select().from(products);
+    
+    const conditions = [eq(products.id, id)];
+    
+    // Filtra solo visibili per il frontend cliente (tranne admin)
+    if (!includeHidden) {
+      conditions.push(eq(products.isVisible, true));
+    }
+    
+    const result = await query.where(and(...conditions));
     return result[0];
   }
 

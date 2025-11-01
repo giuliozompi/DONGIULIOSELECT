@@ -62,6 +62,7 @@ function normalizeProductInsert(input: InsertProduct, id: string): Product {
       additionalInfo: Array.from<string>(input.nutrition.additionalInfo),
     } : null,
     requiresMarking: input.requiresMarking ?? false,
+    isVisible: input.isVisible ?? true,
   };
 }
 
@@ -107,6 +108,7 @@ function mergeProductUpdate(product: Product, updates: Partial<InsertProduct>): 
       additionalInfo: Array.from<string>(updates.nutrition.additionalInfo),
     } : null;
   }
+  if (updates.isVisible !== undefined) merged.isVisible = updates.isVisible;
   
   return merged;
 }
@@ -127,7 +129,7 @@ export interface IStorage {
   getAllAdmins(): Promise<Array<{ userId: string; telegramUsername: string | null; createdAt: Date }>>;
 
   // Категории
-  getAllCategories(): Promise<Category[]>;
+  getAllCategories(includeHidden?: boolean): Promise<Category[]>;
   getCategoryById(id: string): Promise<Category | undefined>;
   getCategoryBySlug(slug: string): Promise<Category | undefined>;
   createCategory(category: InsertCategory): Promise<Category>;
@@ -135,8 +137,8 @@ export interface IStorage {
   deleteCategory(id: string): Promise<boolean>;
 
   // Продукты
-  getAllProducts(filters?: { categoryId?: string; inStock?: boolean }): Promise<Product[]>;
-  getProductById(id: string): Promise<Product | undefined>;
+  getAllProducts(filters?: { categoryId?: string; inStock?: boolean; includeHidden?: boolean }): Promise<Product[]>;
+  getProductById(id: string, includeHidden?: boolean): Promise<Product | undefined>;
   getProductBySlug(slug: string): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
@@ -456,8 +458,15 @@ export class MemStorage implements IStorage {
   }
 
   // Категории
-  async getAllCategories(): Promise<Category[]> {
-    return Array.from(this.categories.values());
+  async getAllCategories(includeHidden = false): Promise<Category[]> {
+    let categories = Array.from(this.categories.values());
+    
+    // Filtra solo visibili per il frontend cliente (tranne admin)
+    if (!includeHidden) {
+      categories = categories.filter(c => c.isVisible);
+    }
+    
+    return categories;
   }
 
   async getCategoryById(id: string): Promise<Category | undefined> {
@@ -477,6 +486,7 @@ export class MemStorage implements IStorage {
       image: insertCategory.image ?? null,
       parentId: insertCategory.parentId ?? null,
       sortOrder: insertCategory.sortOrder ?? 0,
+      isVisible: insertCategory.isVisible ?? true,
     };
     this.categories.set(id, category);
     return category;
@@ -496,8 +506,13 @@ export class MemStorage implements IStorage {
   }
 
   // Продукты
-  async getAllProducts(filters?: { categoryId?: string; inStock?: boolean }): Promise<Product[]> {
+  async getAllProducts(filters?: { categoryId?: string; inStock?: boolean; includeHidden?: boolean }): Promise<Product[]> {
     let products = Array.from(this.products.values());
+    
+    // Filtra solo visibili per il frontend cliente (tranne admin)
+    if (!filters?.includeHidden) {
+      products = products.filter(p => p.isVisible);
+    }
     
     if (filters?.categoryId) {
       products = products.filter(p => p.categoryId === filters.categoryId);
@@ -510,8 +525,15 @@ export class MemStorage implements IStorage {
     return products;
   }
 
-  async getProductById(id: string): Promise<Product | undefined> {
-    return this.products.get(id);
+  async getProductById(id: string, includeHidden = false): Promise<Product | undefined> {
+    const product = this.products.get(id);
+    
+    // Filtra solo visibili per il frontend cliente (tranne admin)
+    if (product && !includeHidden && !product.isVisible) {
+      return undefined;
+    }
+    
+    return product;
   }
 
   async getProductBySlug(slug: string): Promise<Product | undefined> {
