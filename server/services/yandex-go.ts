@@ -215,11 +215,10 @@ export class YandexGoService {
 
   private async getHeaders(): Promise<Record<string, string>> {
     const token = await this.getAccessToken();
-    const clientId = process.env.YANDEX_GO_CLIENT_ID || 'default';
     
-    // Formato OAuth ufficiale Yandex Go: OAuth oauth_token="...", oauth_client_id="..."
+    // Yandex Go Cargo usa STESSO formato di Yandex Dostavka: Bearer token
     return {
-      'Authorization': `OAuth oauth_token="${token}", oauth_client_id="${clientId}"`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'Accept-Language': 'ru',
@@ -259,9 +258,9 @@ export class YandexGoService {
       }
     }
 
-    // Yandex Go API v1: /v1/check-price (endpoint DIVERSO da Yandex Dostavka!)
-    // Docs: https://yandex.com/dev/logistics/api-go-delivery/
-    const url = `${this.baseUrl.replace('/v2', '/v1')}/check-price`;
+    // Yandex Go Cargo usa GLI STESSI endpoint di Yandex Dostavka (stesso backend cargo)
+    // Solo il token è diverso (per classi taxi diverse)
+    const url = `${this.baseUrl}/offers/calculate`;
     const idempotencyKey = generateIdempotencyKey();
     
     const headers = {
@@ -397,7 +396,7 @@ export class YandexGoService {
       }
     }
 
-    // IMPORTANTE: Yandex Go usa gli STESSI endpoint di Yandex Dostavka
+    // Yandex Go Cargo usa GLI STESSI endpoint di Yandex Dostavka
     const url = `${this.baseUrl}/claims/create`;
     
     const headers = {
@@ -488,7 +487,7 @@ export class YandexGoService {
       claimId,
     });
 
-    // IMPORTANTE: Yandex Go usa gli STESSI endpoint di Yandex Dostavka
+    // Yandex Go Cargo usa GLI STESSI endpoint di Yandex Dostavka
     const url = `${this.baseUrl}/claims/info?claim_id=${claimId}`;
     
     logger.info('Getting claim info');
@@ -598,7 +597,7 @@ export class YandexGoService {
       claimId,
     });
 
-    // IMPORTANTE: Yandex Go usa gli STESSI endpoint di Yandex Dostavka
+    // Yandex Go Cargo usa GLI STESSI endpoint di Yandex Dostavka
     const url = `${this.baseUrl}/claims/cancel?claim_id=${claimId}`;
     
     const headers = {

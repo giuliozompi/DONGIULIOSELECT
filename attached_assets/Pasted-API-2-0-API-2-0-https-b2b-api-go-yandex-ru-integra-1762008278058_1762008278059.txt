@@ -1,0 +1,74 @@
+API 2.0
+Для вызова методов API версии 2.0 используйте хост:
+
+https://b2b-api.go.yandex.ru/integration/...
+
+Ниже приведен список запросов к сервису Яндекс Такси для версии API 2.0:
+
+Адрес запроса	Метод	Описание
+Сотрудники		
+/2.0/users	POST	Создание сотрудника
+/2.0/users?user_id={user_id}	GET	Детальная информация о сотруднике
+/2.0/users?user_id={user_id}	PUT	Обновление данных сотрудника (PUT)
+/2.0/users?user_id={user_id}	PATCH	Обновление данных сотрудника (PATCH)
+/2.0/users/by_phone	POST	Детальная информация о сотруднике по номеру телефона
+/2.0/users/archive?user_id={user_id}	POST	Архивирование сотрудника
+/2.0/users	GET	Получение списка сотрудников
+/2.0/users-spending-details	POST	Детализация затрат сотрудников
+Роли менеджеров подразделений		
+/2.0/managers/create	POST	Создание роли
+/2.0/managers/update?id={manager_id}	POST	Обновление данных сотрудника
+/2.0/managers/delete?id={manager_id}	POST	Удаление роли менеджера подразделения
+/2.0/managers/list	GET	Получение списка ролей менеджеров подразделения
+Справочники		
+   ЦЗ и лимиты		
+/2.0/cost_centers/create	POST	Создание центра затрат
+/2.0/cost_centers/update	POST	Обновление центра затрат
+/2.0/cost_centers/list	GET	Получение списка центров затрат
+/2.0/limits/search	GET	Получение списка лимитов
+/2.0/limits?limit_id={limit_id}	GET	Получение информации о лимите
+/2.0/limits/personal?user_id={user_id}	PUT	Обновление персонального лимита
+   Департаменты/Подразделения		
+/2.0/departments/list	GET	Получение списка департаментов
+/2.0/departments/create	POST	Создание нового департаментов
+/2.0/departments/update?department_id={department_id}	PUT	Обновление данных о департаменте
+/2.0/departments/archive?department_id={department_id}	POST	Удаление департамента
+/2.0/departments/limits/taxi?department_id={идентификатор департамента}	GET	Получение лимита департамента на поездки
+/2.0/departments/limits/taxi/update?department_id={идентификатор департамента}	POST	Изменение лимита департамента на поездки
+   Районы		
+/2.0/geo_restrictions/list	GET	Список районов
+/2.0/geo_restrictions/create	POST	Создание нового района
+/2.0/geo_restrictions/update?id={geo_id}	POST	Изменение района
+/2.0/geo_restrictions/delete?id={geo_id}	POST	Удаление района
+   Получение информации о зонах для Такси и Доставки		
+/2.0/zoneinfo	GET	Получение информации о зоне
+Промокоды		
+2.0/promocodes/orders/create	POST	Создание серии промокодов
+2.0/promocodes/orders/cancel?order_id={order_id}	POST	Отмена заказа промокодов
+2.0/promocodes/orders/list	GET	Список заказов промокодов
+2.0/promocodes/orders/codes/list?order_id={order_id}	GET	Список промокодов в заказе
+2.0/promocodes/orders/info?order_id={order_id}	GET	Получение информации о заказе промокодов
+Такси		
+   Управление заказом		
+/2.0/orders/create	POST	Создание заказа
+/2.0/orders/routestats	POST	Получение информации о предстоящей поездке
+/2.0/orders/progress?order_id={order_id}	GET	Отслеживание заказа
+/2.0/orders/change-destinations?order_id={order_id}	POST	Изменение маршрута
+/2.0/orders/cancel?order_id={order_id}	POST	Отмена заказа
+/2.0/orders/feedback?order_id={order_id}	POST	Отзыв о водителе
+   Информация о заказах		
+/2.0/orders/info?order_id={order_id}	GET	Информация о заказе
+/2.0/orders/list	GET	Список заказов клиента
+/2.0/orders/active?user_id={user_id}	GET	Список активных заказов
+/2.0/orders/taxi/report	POST	Информация о заказах такси для отчета
+Автопарк		
+/2.0/vehicles/bulk-create	POST	Массовое создание автомобилей
+/2.0/vehicles/bulk-update	POST	Массовое обновление автомобилей
+/2.0/vehicles/bulk-archive	POST	Массовое удаление автомобилей
+/2.0/vehicles/list	GET	Получение списка автомобилей
+Другие сервисы		
+/2.0/orders/tanker	GET	Получение списка операций в сервисе "Заправки"
+/2.0/orders/eats/list	POST	Получение списка заказов в сервисе "Еда"
+/2.0/orders/travels/list	POST	Получение списка командировок
+Список доступных клиентов		
+/2.0/auth/list	GET	Список доступных клиентов по токену
