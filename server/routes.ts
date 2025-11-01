@@ -1764,6 +1764,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/admin/categories/:id/visibility - Toggle visibilità categoria (MASTER ADMIN ONLY)
+  app.patch("/api/admin/categories/:id/visibility", verifyTelegramInitData, requireAdmin, requireMasterAdmin, async (req, res) => {
+    try {
+      const category = await storage.getCategoryById(req.params.id);
+      if (!category) {
+        return res.status(404).json({ error: 'Category not found' });
+      }
+      
+      // Toggle visibilità
+      const newVisibility = !category.isVisible;
+      const updated = await storage.updateCategory(req.params.id, { isVisible: newVisibility });
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: newVisibility ? 'visibility_enabled' : 'visibility_disabled',
+        entityType: 'category',
+        entityId: category.id,
+        actionData: {
+          categoryName: category.name,
+          oldVisibility: category.isVisible,
+          newVisibility,
+        },
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error('Error toggling category visibility:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // POST /api/admin/products - Crea prodotto (ADMIN ONLY)
   app.post("/api/admin/products", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
@@ -1876,6 +1909,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // PATCH /api/admin/products/:id/visibility - Toggle visibilità prodotto (MASTER ADMIN ONLY)
+  app.patch("/api/admin/products/:id/visibility", verifyTelegramInitData, requireAdmin, requireMasterAdmin, async (req, res) => {
+    try {
+      const product = await storage.getProductById(req.params.id);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
+      // Toggle visibilità
+      const newVisibility = !product.isVisible;
+      const updated = await storage.updateProduct(req.params.id, { isVisible: newVisibility });
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: newVisibility ? 'visibility_enabled' : 'visibility_disabled',
+        entityType: 'product',
+        entityId: product.id,
+        actionData: {
+          productName: product.name,
+          oldVisibility: product.isVisible,
+          newVisibility,
+        },
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error('Error toggling product visibility:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

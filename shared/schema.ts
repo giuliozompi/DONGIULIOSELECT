@@ -546,6 +546,10 @@ export const adminActionLogs = pgTable("admin_action_logs", {
     deletedAddress?: any;
     reason?: string;
     
+    // Per visibility toggle (Master Admin only)
+    oldVisibility?: boolean;
+    newVisibility?: boolean;
+    
     // Note generali
     notes?: string;
   }>().notNull().default({}),
