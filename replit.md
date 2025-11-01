@@ -14,6 +14,8 @@ The frontend uses React 18 with TypeScript, Wouter for routing, and TanStack Que
 ### Technical Implementations
 The backend is an Express.js application in TypeScript, providing a RESTful API for core e-commerce functionalities, gamification, and AI integration. Authentication relies on Telegram WebApp init data verification and session-based security. Data is stored in PostgreSQL (Neon serverless) and accessed via Drizzle ORM.
 
+**Timezone Configuration (November 2025)**: The entire server operates in UTC+3 (Europe/Moscow timezone) to align with Russian business operations. All logs, notifications (email, WhatsApp, Telegram), and timestamps are formatted in Moscow time with "МСК" suffix. The `server/utils/date-formatter.ts` utility provides standardized date formatting functions for consistent display across all customer-facing communications and admin logs.
+
 ### Feature Specifications
 - **User Profile & Personal Cabinet**: Central hub for user data, favorites, and order history, with a pending orders dialog.
 - **Admin Panel**: Sidebar-based interface with role-based access for managing categories, products, orders, clients, recommendations, and pickup addresses. Includes search, filtering, and detailed views with editing capabilities. Master Admin can delete orders with cascade deletion of related logs. **Pickup Address Management** section allows admins to create, edit, delete, and set default pickup addresses with DaData autocomplete integration for automatic GPS coordinate extraction.
