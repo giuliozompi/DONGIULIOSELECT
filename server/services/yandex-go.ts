@@ -72,6 +72,10 @@ export interface YandexGoCheckPriceResponse {
   eta: number;
   offer_id: string;
   all_offers: any[];
+  // Campi aggiuntivi per compatibilità con routes.ts
+  currency?: string;
+  distance?: number;
+  time?: number;
 }
 
 export interface YandexGoClaimRequest {
@@ -359,6 +363,10 @@ export class YandexGoService {
         eta: etaSeconds,
         offer_id: bestOffer.payload || '', // payload è l'offer_id di Yandex
         all_offers: filteredOffers.length > 0 ? filteredOffers : data.offers, // Offerte filtrate
+        // Campi aggiuntivi per compatibilità
+        currency: currency,
+        distance: distanceMeters,
+        time: etaSeconds,
       };
     } catch (error) {
       logger.error('Yandex Go checkPrice error', { error });
