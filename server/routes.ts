@@ -3276,6 +3276,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!order_id) {
         console.error('[Yandex Go Webhook] Missing order_id in payload');
+        
+        // Salva evento fallito per audit
+        await storage.createWebhookEvent({
+          orderId: null,
+          source: 'yandex_go',
+          eventType: event || 'unknown',
+          payloadJson: payload,
+          processed: false,
+          processingError: 'Missing order_id in payload',
+          httpMethod: 'POST',
+          httpHeaders: req.headers,
+          signature: signature,
+          signatureValid: true,
+        });
+        
         return res.status(400).json({ ok: false, error: 'missing_order_id' });
       }
       
@@ -3287,52 +3302,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!order) {
         console.warn(`⚠️ [Yandex Go Webhook] Order not found for claimId ${order_id}`);
+        
+        // Salva evento per audit anche se ordine non trovato
+        await storage.createWebhookEvent({
+          orderId: null,
+          source: 'yandex_go',
+          eventType: event || 'status_changed',
+          payloadJson: payload,
+          processed: true,
+          processingError: `Order not found for claimId ${order_id}`,
+          httpMethod: 'POST',
+          httpHeaders: req.headers,
+          signature: signature,
+          signatureValid: true,
+        });
+        
         // Rispondi comunque 200 per evitare retry da Yandex
         return res.json({ ok: true, message: 'Order not found' });
       }
       
       console.log(`✅ [Yandex Go Webhook] Found order ${order.id}`);
       
-      // Aggiorna status e performer info
-      const updates: any = {
-        yandexGoStatus: status,
-      };
-      
-      if (data?.courier) {
-        updates.yandexGoPerformerInfo = {
-          courierName: data.courier.name,
-          courierPhone: data.courier.phone,
-        };
-      }
-      
-      if (data?.location) {
-        // Salva location del corriere (opzionale - potresti volerlo salvare in una tabella separata)
-        console.log('📍 [Yandex Go Webhook] Courier location:', data.location);
-      }
-      
-      if (data?.eta_minutes) {
-        console.log(`⏰ [Yandex Go Webhook] ETA: ${data.eta_minutes} minutes`);
-      }
-      
-      await storage.updateOrder(order.id, updates);
-      
-      console.log(`✅ [Yandex Go Webhook] Order ${order.id} updated successfully`);
-      
-      // Log evento webhook per audit
-      await storage.createOrderChangeLog({
+      // Salva evento webhook per audit trail (PRIMA del processing)
+      const webhookEvent = await storage.createWebhookEvent({
         orderId: order.id,
-        adminUserId: null, // Webhook automatico
-        changeType: 'yandex_go_status_update',
-        changeData: {
-          event,
-          oldStatus: order.yandexGoStatus,
-          newStatus: status,
-          timestamp,
-          performerInfo: data?.courier || null,
-          location: data?.location || null,
-          eta: data?.eta_minutes || null,
-        },
+        source: 'yandex_go',
+        eventType: event || 'status_changed',
+        payloadJson: payload,
+        processed: false,
+        httpMethod: 'POST',
+        httpHeaders: req.headers,
+        signature: signature,
+        signatureValid: true,
       });
+      
+      try {
+        // Aggiorna status e performer info
+        const updates: any = {
+          yandexGoStatus: status,
+        };
+        
+        if (data?.courier) {
+          updates.yandexGoPerformerInfo = {
+            courierName: data.courier.name,
+            courierPhone: data.courier.phone,
+          };
+        }
+        
+        // Salva location del corriere nella tabella courierTracking
+        if (data?.location?.latitude && data?.location?.longitude) {
+          console.log('📍 [Yandex Go Webhook] Saving courier location:', data.location);
+          await storage.createCourierTracking({
+            orderId: order.id,
+            latitude: data.location.latitude.toString(),
+            longitude: data.location.longitude.toString(),
+            heading: data.location.heading ? data.location.heading.toString() : null,
+            speed: data.location.speed ? data.location.speed.toString() : null,
+            etaMinutes: data.eta_minutes || null,
+            reportedAt: timestamp ? new Date(timestamp) : new Date(),
+          });
+        }
+        
+        if (data?.eta_minutes) {
+          console.log(`⏰ [Yandex Go Webhook] ETA: ${data.eta_minutes} minutes`);
+        }
+        
+        await storage.updateOrder(order.id, updates);
+        
+        console.log(`✅ [Yandex Go Webhook] Order ${order.id} updated successfully`);
+        
+        // Log evento webhook per audit
+        await storage.createOrderChangeLog({
+          orderId: order.id,
+          adminUserId: null, // Webhook automatico
+          changeType: 'yandex_go_status_update',
+          changeData: {
+            event,
+            oldStatus: order.yandexGoStatus,
+            newStatus: status,
+            timestamp,
+            performerInfo: data?.courier || null,
+            location: data?.location || null,
+            eta: data?.eta_minutes || null,
+          },
+        });
+        
+        // Marca webhook event come processato con successo
+        await storage.markWebhookEventAsProcessed(webhookEvent.id);
+      } catch (processingError) {
+        // Marca webhook event come fallito
+        await storage.markWebhookEventAsProcessed(
+          webhookEvent.id, 
+          processingError instanceof Error ? processingError.message : 'Unknown processing error'
+        );
+        throw processingError;
+      }
       
       // Invia notifica al cliente (opzionale)
       if (status === 'picked_up' || status === 'delivered') {
