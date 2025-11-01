@@ -1,4 +1,5 @@
 import { createHmac } from 'crypto';
+import { formatMoscowDateForNotification } from '../utils/date-formatter';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -99,17 +100,9 @@ export async function sendOrderCreatedNotification(
     'cash_on_delivery': 'Наличными при получении',
   };
 
+  // Usa formattazione UTC+3 (Mosca) per tutte le date
   const formatDate = (date: Date) => {
-    const months = [
-      'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-    ];
-    const day = date.getDate();
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${day} ${month} ${year} г. в ${hours}:${minutes}`;
+    return formatMoscowDateForNotification(date);
   };
 
   const formatPrice = (price: string | number) => {
