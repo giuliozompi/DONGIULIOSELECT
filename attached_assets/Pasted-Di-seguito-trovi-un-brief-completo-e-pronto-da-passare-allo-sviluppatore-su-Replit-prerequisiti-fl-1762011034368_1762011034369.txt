@@ -1,0 +1,291 @@
+Di seguito trovi un brief completo e pronto da passare allo sviluppatore su Replit: prerequisiti, flusso dei dati, autenticazione (OAuth vs API key), endpoint tipici, webhook, schema DB, esempi di richieste e un esempio di server Node/Express.
+
+1) Prerequisiti e setup
+Account aziendale attivo su “Yandex Go Delivery for Business”.
+Metodo di autenticazione confermato nel pannello Yandex:
+O OAuth (Yandex ID / Service OAuth) con client_id e client_secret, oppure
+API Key statica (Authorization: Bearer <api_key>).
+URL pubblico per ricevere webhook (Replit fornisce un URL pubblico; in alternativa usare ngrok/Cloudflare Tunnel).
+Variabili d’ambiente su Replit (Secrets):
+Se API key:
+YANDEX_API_BASE (es. https://b2b.taxi.yandex.net/b2b/cargo/integration)
+YANDEX_API_KEY
+WEBHOOK_SECRET (chiave condivisa per firmare/validare webhook)
+PUBLIC_BASE_URL (URL pubblico della tua app)
+Se OAuth:
+YANDEX_API_BASE
+OAUTH_TOKEN_URL (es. https://oauth.yandex.ru/token o endpoint indicato da Yandex)
+OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET
+WEBHOOK_SECRET, PUBLIC_BASE_URL
+Dati operativi: città coperte, tipo veicolo, limiti peso/dimensioni, finestre orarie, lingua e valuta (RUB), fuso orario.
+Nota: i path e i campi possono variare in base alla versione dell’API. Lo sviluppatore deve allinearsi alla documentazione nel tuo account Yandex.
+
+2) Flusso funzionale
+L’utente compila il form ordine sul tuo sito.
+Backend chiama “quote/estimate” per prezzo ed ETA.
+Mostri prezzo/ETA all’utente → conferma.
+Backend crea l’ordine in Yandex con offer_id della quotazione.
+Ricevi webhook sugli aggiornamenti di stato (assegnazione corriere, pickup, in consegna, consegnato, annullato).
+Mostri tracking/ETA e salvi i dati finali (prezzo finale, tempi).
+Stati tipici ordine: created → assigned → courier_arrived → picked_up → delivering → delivered / canceled / failed.
+
+3) Architettura (Node.js su Replit)
+Frontend: form con pickup, dropoff, contatti, commenti, eventuale finestra oraria.
+Backend: Express.js con rotte principali
+POST /api/quote → stima prezzo/ETA.
+POST /api/order → crea ordine.
+GET /api/order/:id → stato/Dettagli ordine.
+POST /api/webhooks/yandex → ricezione webhook da Yandex (raw body per verifica firma).
+Database (SQLite/Postgres):
+orders:
+id, external_id (yandex_order_id), client_name, phone,
+pickup_address, delivery_address, price_estimate, price_final,
+status, created_at, updated_at
+order_points:
+order_id, type (pickup|dropoff), address, lat, lon,
+contact_name, contact_phone, comment,
+time_window_from, time_window_to
+webhook_events:
+id, order_id, event_type, payload_json, created_at
+courier_tracking (opzionale):
+order_id, lat, lon, heading, speed, reported_at
+Sicurezza: le chiavi/tokens restano solo lato server (env), mai esposte al frontend.
+
+4) Autenticazione
+Variante A: API Key statica
+Header: Authorization: Bearer <YANDEX_API_KEY>
+Variante B: OAuth (Client Credentials)
+Recupero access_token da OAUTH_TOKEN_URL con client_id/client_secret.
+Header: Authorization: Bearer <access_token>
+Gestire caching e refresh del token.
+Snippet OAuth (Node):
+
+javascript
+Copy
+import axios from 'axios';
+
+const OAUTH_TOKEN_URL = process.env.OAUTH_TOKEN_URL;
+const OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID;
+const OAUTH_CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
+
+let accessToken = null;
+let tokenExp = 0;
+
+export async function getAuthHeader() {
+  if (!OAUTH_TOKEN_URL) {
+    // API KEY mode
+    return {
+      Authorization: `Bearer ${process.env.YANDEX_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+  }
+  const now = Date.now();
+  if (accessToken && now < tokenExp - 60000) {
+    return { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+  }
+  const params = new URLSearchParams();
+  params.append('grant_type', 'client_credentials');
+  const resp = await axios.post(OAUTH_TOKEN_URL, params, {
+    auth: { username: OAUTH_CLIENT_ID, password: OAUTH_CLIENT_SECRET },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+  accessToken = resp.data.access_token;
+  tokenExp = now + (resp.data.expires_in || 3600) * 1000;
+  return { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+}
+5) Endpoint tipici (esempi)
+Attenzione: sostituire con i path/campi effettivi della tua versione API.
+
+Quote/Estimate
+POST: ${YANDEX_API_BASE}/v2/estimate
+Body esempio:
+json
+Copy
+{
+  "items": [
+    { "quantity": 1, "title": "Documenti", "weight_kg": 3.5,
+      "size": {"length": 0.4, "width": 0.3, "height": 0.2} }
+  ],
+  "route_points": [
+    {
+      "point_id": 1, "type": "source",
+      "address": {"fullname": "Moskva, ul. Lenina, 10", "coordinates": [37.617, 55.755]},
+      "contact": {"name": "Ivan", "phone": "+79990000000"}
+    },
+    {
+      "point_id": 2, "type": "destination",
+      "address": {"fullname": "Moskva, pr-t Mira, 50", "coordinates": [37.632, 55.78]},
+      "contact": {"name": "Pietro", "phone": "+79998887766"}
+    }
+  ],
+  "requirements": { "vehicle_type": "courier", "pro_courier": true },
+  "optional_return": false
+}
+Risposta tipica:
+json
+Copy
+{
+  "price": {"amount": "420.00", "currency": "RUB"},
+  "eta_minutes": 15,
+  "valid_till": "2025-10-29T12:00:00+03:00",
+  "offer_id": "offer_abc123"
+}
+Creazione Ordine
+POST: ${YANDEX_API_BASE}/v2/create
+Body (usa offer_id dalla quote):
+json
+Copy
+{
+  "offer_id": "offer_abc123",
+  "client_order_id": "order_100500",
+  "items": [{ "quantity": 1, "title": "Documenti", "weight_kg": 3.5 }],
+  "route_points": [
+    {
+      "point_id": 1, "type": "source",
+      "address": {"fullname": "Moskva, ul. Lenina, 10", "coordinates": [37.617, 55.755]},
+      "contact": {"name": "Ivan", "phone": "+79990000000"},
+      "comment": "Pass di sicurezza",
+      "time_window": {"from": "2025-10-29T10:00:00+03:00", "to": "2025-10-29T12:00:00+03:00"}
+    },
+    {
+      "point_id": 2, "type": "destination",
+      "address": {"fullname": "Moskva, pr-t Mira, 50", "coordinates": [37.632, 55.78]},
+      "contact": {"name": "Pietro", "phone": "+79998887766"},
+      "comment": "Chiamare 10 min prima"
+    }
+  ],
+  "requirements": {"vehicle_type": "courier", "door_to_door": true, "cash_on_delivery": false},
+  "callback_url": "<PUBLIC_BASE_URL>/api/webhooks/yandex",
+  "webhook_secret": "<WEBHOOK_SECRET>",
+  "recipient_tracking_enabled": true
+}
+Risposta:
+json
+Copy
+{
+  "order_id": "yandex_order_7f3c...",
+  "status": "created",
+  "tracking_url": "https://track.yandex.ru/XXXX"
+}
+Stato Ordine
+GET: ${YANDEX_API_BASE}/v2/orders/{order_id}
+Risposta tipica:
+json
+Copy
+{
+  "order_id": "yandex_order_7f3c...",
+  "status": "assigned",
+  "courier": {"name": "Aleksei", "phone": "+7..."},
+  "eta_minutes": 12,
+  "price": {"final_amount": "430.00", "currency": "RUB"}
+}
+Annullamento
+POST: ${YANDEX_API_BASE}/v2/orders/{order_id}/cancel
+Body:
+json
+Copy
+{ "reason": "client_request" }
+6) Webhook: ricezione e verifica firma
+Rotta: POST /api/webhooks/yandex (usa raw body per HMAC).
+Header/Body: Yandex invia una signature (o header tipo x-signature); verificare HMAC-SHA256 base64 del raw body con WEBHOOK_SECRET.
+Payload esempio:
+json
+Copy
+{
+  "event": "status_changed",
+  "order_id": "yandex_order_7f3c...",
+  "status": "picked_up",
+  "timestamp": "2025-10-29T09:41:00Z",
+  "signature": "HMAC-SHA256-BASE64",
+  "data": {
+    "courier": {"name": "Aleksei", "phone": "+7..."},
+    "location": {"lat": 55.76, "lon": 37.62},
+    "eta_minutes": 18
+  }
+}
+Rispondere 200 con { "ok": true }. Salvare evento nel DB e aggiornare lo stato dell’ordine (idempotenza per order_id + event + timestamp).
+7) Esempio server Express minimale
+javascript
+Copy
+import express from 'express';
+import axios from 'axios';
+import crypto from 'crypto';
+import bodyParser from 'body-parser';
+import { getAuthHeader } from './auth.js'; // vedi snippet OAuth sopra; se usi API Key, puoi ritornare headers fissi
+
+const app = express();
+
+// JSON standard per tutte le rotte tranne il webhook (che richiede raw body)
+app.use('/api', bodyParser.json());
+
+const YANDEX_API_BASE = process.env.YANDEX_API_BASE;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+
+// Quote
+app.post('/api/quote', async (req, res) => {
+  try {
+    const headers = await getAuthHeader();
+    const r = await axios.post(`${YANDEX_API_BASE}/v2/estimate`, req.body, { headers });
+    res.json(r.data);
+  } catch (e) {
+    console.error(e?.response?.data || e.message);
+    res.status(400).json({ error: 'quote_failed', details: e?.response?.data || e.message });
+  }
+});
+
+// Create order
+app.post('/api/order', async (req, res) => {
+  try {
+    const headers = await getAuthHeader();
+    const r = await axios.post(`${YANDEX_API_BASE}/v2/create`, req.body, { headers });
+    res.json(r.data);
+  } catch (e) {
+    console.error(e?.response?.data || e.message);
+    res.status(400).json({ error: 'order_create_failed', details: e?.response?.data || e.message });
+  }
+});
+
+// Webhook con raw body per HMAC
+app.post('/api/webhooks/yandex',
+  bodyParser.raw({ type: '*/*' }),
+  (req, res) => {
+    try {
+      const signature = req.headers['x-signature'] || undefined;
+      const raw = req.body instanceof Buffer ? req.body : Buffer.from(req.body);
+      const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET);
+      hmac.update(raw);
+      const digest = hmac.digest('base64');
+      if (signature && !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest))) {
+        return res.status(401).json({ ok: false, error: 'invalid_signature' });
+      }
+      const payload = JSON.parse(raw.toString());
+      // TODO: persist payload, aggiornare stato ordine, notifiche al cliente
+      console.log('Webhook:', payload);
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      return res.status(400).json({ ok: false });
+    }
+  }
+);
+
+// Healthcheck
+app.get('/health', (req, res) => res.json({ ok: true }));
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Server running on ${port}`));
+8) Geocoding e validazione
+Convertire gli indirizzi in coordinate prima della quote/creazione per ridurre errori (Yandex Geocoder o altro).
+Validare telefono (E.164), indirizzi non vuoti, pesi/dimensioni nel range consentito.
+9) UX e tracking
+Mostrare tracking_url se Yandex lo fornisce per il destinatario.
+Timeline degli stati con ETA e contatto del corriere (se disponibile).
+Gestire retry su errori di rete e idempotenza su webhook.
+10) Checklist test
+Quote valida con indirizzi reali.
+Creazione ordine con offer_id della quote.
+Polling stato ordine e ricezione webhook.
+Cambio stati fino a delivered.
+Annullamento prima/dopo assegnazione (gestire messaggi d’errore).
+Verifica HMAC webhook e salvataggio eventi.
+Riconciliazione prezzo finale vs estimate.
