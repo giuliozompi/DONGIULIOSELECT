@@ -44,6 +44,7 @@ export const categories = pgTable("categories", {
   image: text("image"), // URL изображения категории
   parentId: varchar("parent_id"),
   sortOrder: integer("sort_order").default(0),
+  isVisible: boolean("is_visible").notNull().default(true), // Visibilità nel frontend cliente (solo Master Admin)
 });
 
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
@@ -89,6 +90,9 @@ export const products = pgTable("products", {
   
   // Маркировка (требование регулирования РФ)
   requiresMarking: boolean("requires_marking").notNull().default(false),
+  
+  // Visibilità nel frontend cliente (solo Master Admin può modificare)
+  isVisible: boolean("is_visible").notNull().default(true),
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
