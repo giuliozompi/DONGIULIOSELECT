@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import express from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
@@ -3217,6 +3218,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error cancelling Yandex Go delivery:', error);
       res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  // POST /api/webhooks/yandex-go - Webhook per notifiche Yandex Go (PUBBLICO - verifica tramite firma)
+  // IMPORTANTE: Express deve catturare raw body PRIMA del parsing JSON per verifica HMAC
+  app.post("/api/webhooks/yandex-go", express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+      const crypto = await import('crypto');
+      
+      // Parse body manualmente dal raw buffer
+      const rawBody = req.body instanceof Buffer ? req.body : Buffer.from(JSON.stringify(req.body));
+      const payload = JSON.parse(rawBody.toString());
+      
+      console.log('🔔 [Yandex Go Webhook] Received webhook notification');
+      console.log('📦 [Yandex Go Webhook] Event type:', payload?.event);
+      console.log('🚚 [Yandex Go Webhook] Order ID:', payload?.order_id);
+      console.log('📋 [Yandex Go Webhook] Status:', payload?.status);
+      
+      const webhookSecret = process.env.YANDEX_WEBHOOK_SECRET;
+      
+      if (!webhookSecret) {
+        console.error('❌ [Yandex Go Webhook] YANDEX_WEBHOOK_SECRET not configured');
+        return res.status(500).json({ ok: false, error: 'Webhook secret not configured' });
+      }
+      
+      // Verifica firma HMAC SHA256 usando raw body (CRITICO per correttezza!)
+      const signature = req.headers['x-signature'] as string || payload.signature;
+      
+      if (!signature) {
+        console.error('❌ [Yandex Go Webhook] Missing signature header');
+        return res.status(401).json({ ok: false, error: 'missing_signature' });
+      }
+      
+      const hmac = crypto.createHmac('sha256', webhookSecret);
+      hmac.update(rawBody);
+      const expectedSignature = hmac.digest('base64');
+      
+      // Verifica timing-safe con controllo lunghezza (fix crash Node.js)
+      const signatureBuffer = Buffer.from(signature);
+      const expectedBuffer = Buffer.from(expectedSignature);
+      
+      if (signatureBuffer.length !== expectedBuffer.length) {
+        console.error('❌ [Yandex Go Webhook] Signature length mismatch');
+        return res.status(401).json({ ok: false, error: 'invalid_signature' });
+      }
+      
+      const isValidSignature = crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
+      
+      if (!isValidSignature) {
+        console.error('❌ [Yandex Go Webhook] Invalid signature');
+        return res.status(401).json({ ok: false, error: 'invalid_signature' });
+      }
+      
+      console.log('✅ [Yandex Go Webhook] Signature verified successfully');
+      const { event, order_id, status, timestamp, data } = payload;
+      
+      if (!order_id) {
+        console.error('[Yandex Go Webhook] Missing order_id in payload');
+        return res.status(400).json({ ok: false, error: 'missing_order_id' });
+      }
+      
+      // Trova l'ordine tramite yandexGoClaimId
+      // TODO: Ottimizzare con storage.getOrderByYandexGoClaimId(order_id) per evitare O(n) scan
+      console.log(`🔍 [Yandex Go Webhook] Looking for order with claimId ${order_id}...`);
+      const orders = await storage.getAllOrders();
+      const order = orders.find(o => o.yandexGoClaimId === order_id);
+      
+      if (!order) {
+        console.warn(`⚠️ [Yandex Go Webhook] Order not found for claimId ${order_id}`);
+        // Rispondi comunque 200 per evitare retry da Yandex
+        return res.json({ ok: true, message: 'Order not found' });
+      }
+      
+      console.log(`✅ [Yandex Go Webhook] Found order ${order.id}`);
+      
+      // Aggiorna status e performer info
+      const updates: any = {
+        yandexGoStatus: status,
+      };
+      
+      if (data?.courier) {
+        updates.yandexGoPerformerInfo = {
+          courierName: data.courier.name,
+          courierPhone: data.courier.phone,
+        };
+      }
+      
+      if (data?.location) {
+        // Salva location del corriere (opzionale - potresti volerlo salvare in una tabella separata)
+        console.log('📍 [Yandex Go Webhook] Courier location:', data.location);
+      }
+      
+      if (data?.eta_minutes) {
+        console.log(`⏰ [Yandex Go Webhook] ETA: ${data.eta_minutes} minutes`);
+      }
+      
+      await storage.updateOrder(order.id, updates);
+      
+      console.log(`✅ [Yandex Go Webhook] Order ${order.id} updated successfully`);
+      
+      // Log evento webhook per audit
+      await storage.createOrderChangeLog({
+        orderId: order.id,
+        adminUserId: null, // Webhook automatico
+        changeType: 'yandex_go_status_update',
+        changeData: {
+          event,
+          oldStatus: order.yandexGoStatus,
+          newStatus: status,
+          timestamp,
+          performerInfo: data?.courier || null,
+          location: data?.location || null,
+          eta: data?.eta_minutes || null,
+        },
+      });
+      
+      // Invia notifica al cliente (opzionale)
+      if (status === 'picked_up' || status === 'delivered') {
+        try {
+          const { sendOrderStatusNotification } = await import('./services/telegram-bot');
+          await sendOrderStatusNotification(
+            order.userId,
+            order.id,
+            status === 'picked_up' ? 'КУРЬЕР ЗАБРАЛ' : 'ДОСТАВЛЕН',
+            order.customerName
+          );
+        } catch (error) {
+          console.warn('⚠️ Failed to send status notification:', error);
+        }
+      }
+      
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('❌ [Yandex Go Webhook] Error processing webhook:', error);
+      return res.status(500).json({ ok: false, error: 'internal_error' });
     }
   });
 

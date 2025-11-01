@@ -151,14 +151,70 @@ export interface YandexGoCancelInfoResponse {
 
 export class YandexGoService {
   private baseUrl = YANDEX_GO_BASE_URL;
+  private accessToken: string | null = null;
+  private tokenExpiresAt: number = 0;
 
-  private getHeaders(): Record<string, string> {
-    // Get token directly from environment
-    const token = process.env.YANDEX_GO_TOKEN;
-    
-    if (!token) {
-      throw new Error('YANDEX_GO_TOKEN not configured. Please add the OAuth token to environment secrets.');
+  /**
+   * Get OAuth access token (supports both static token and OAuth flow)
+   * Follows official Yandex Go documentation
+   */
+  private async getAccessToken(): Promise<string> {
+    // Check for static token first (simpler approach)
+    const staticToken = process.env.YANDEX_GO_TOKEN;
+    if (staticToken) {
+      return staticToken;
     }
+
+    // OAuth Client Credentials flow (if configured)
+    const clientId = process.env.YANDEX_GO_CLIENT_ID;
+    const clientSecret = process.env.YANDEX_GO_CLIENT_SECRET;
+    const tokenUrl = process.env.YANDEX_OAUTH_TOKEN_URL || 'https://oauth.yandex.ru/token';
+
+    if (!clientId || !clientSecret) {
+      throw new Error(
+        'YANDEX_GO_TOKEN o (YANDEX_GO_CLIENT_ID + YANDEX_GO_CLIENT_SECRET) devono essere configurati. ' +
+        'Aggiungi le credenziali nei secrets di Replit.'
+      );
+    }
+
+    // Check if we have a valid cached token
+    const now = Date.now();
+    if (this.accessToken && now < this.tokenExpiresAt - 60_000) {
+      return this.accessToken;
+    }
+
+    // Request new token via OAuth
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OAuth token request failed: ${error}`);
+    }
+
+    const data = await response.json();
+    if (!data.access_token) {
+      throw new Error('OAuth response missing access_token');
+    }
+    
+    this.accessToken = data.access_token;
+    const expiresInSec = data.expires_in || 3600;
+    this.tokenExpiresAt = now + expiresInSec * 1000;
+
+    return this.accessToken!
+  }
+
+  private async getHeaders(): Promise<Record<string, string>> {
+    const token = await this.getAccessToken();
     
     return {
       'Authorization': `Bearer ${token}`,
@@ -201,12 +257,12 @@ export class YandexGoService {
       }
     }
 
-    // Yandex Go usa lo stesso endpoint di Yandex Dostavka
+    // IMPORTANTE: Yandex Go usa gli STESSI endpoint di Yandex Dostavka
     const url = `${this.baseUrl}/offers/calculate`;
     const idempotencyKey = generateIdempotencyKey();
     
     const headers = {
-      ...this.getHeaders(),
+      ...(await this.getHeaders()),
       'X-Idempotency-Key': idempotencyKey,
     };
     
@@ -338,11 +394,11 @@ export class YandexGoService {
       }
     }
 
-    // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/create
-    const url = `${this.baseUrl}/claims/create?request_id=${encodeURIComponent(requestId)}`;
+    // IMPORTANTE: Yandex Go usa gli STESSI endpoint di Yandex Dostavka
+    const url = `${this.baseUrl}/claims/create`;
     
     const headers = {
-      ...this.getHeaders(),
+      ...(await this.getHeaders()),
       'X-Idempotency-Key': idempotencyKey,
     };
     
@@ -356,6 +412,20 @@ export class YandexGoService {
     // Se c'è un offer_id, passalo come "offer_payload"
     if (offer_id) {
       finalPayload.offer_payload = offer_id;
+    }
+
+    // Aggiungi callback URL e webhook secret (seguendo doc ufficiale)
+    const webhookSecret = process.env.YANDEX_WEBHOOK_SECRET;
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL || process.env.REPL_SLUG 
+      ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+      : 'http://localhost:5000';
+    
+    if (webhookSecret) {
+      finalPayload.callback_url = `${publicBaseUrl}/api/webhooks/yandex-go`;
+      finalPayload.webhook_secret = webhookSecret;
+      logger.info('Webhook configured', { 
+        callbackUrl: finalPayload.callback_url 
+      });
     }
     
     logger.info('Creating claim', { 
@@ -415,16 +485,15 @@ export class YandexGoService {
       claimId,
     });
 
-    // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/info
+    // IMPORTANTE: Yandex Go usa gli STESSI endpoint di Yandex Dostavka
     const url = `${this.baseUrl}/claims/info?claim_id=${claimId}`;
     
     logger.info('Getting claim info');
 
     const data = await withRetry(async () => {
       const response = await yandexFetch(url, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({}),
+        method: 'GET',
+        headers: await this.getHeaders(),
       }, logger, corrId);
 
       return await response.json();
@@ -456,7 +525,7 @@ export class YandexGoService {
     const url = `${this.baseUrl}/claims/accept?claim_id=${claimId}`;
     
     const headers = {
-      ...this.getHeaders(),
+      ...(await this.getHeaders()),
       'X-Idempotency-Key': idempotencyKey,
     };
     
@@ -496,7 +565,7 @@ export class YandexGoService {
     const data = await withRetry(async () => {
       const response = await yandexFetch(url, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({}),
       }, logger, corrId);
 
@@ -526,11 +595,11 @@ export class YandexGoService {
       claimId,
     });
 
-    // Yandex Go usa gli stessi endpoint di Yandex Dostavka: /claims/cancel
+    // IMPORTANTE: Yandex Go usa gli STESSI endpoint di Yandex Dostavka
     const url = `${this.baseUrl}/claims/cancel?claim_id=${claimId}`;
     
     const headers = {
-      ...this.getHeaders(),
+      ...(await this.getHeaders()),
       'X-Idempotency-Key': idempotencyKey,
     };
     
