@@ -21,6 +21,9 @@ import {
   adminActionLogs,
   favoriteProducts,
   productMarkingLogs,
+  orderPoints,
+  webhookEvents,
+  courierTracking,
   PAID_ORDER_STATUSES,
   type User,
   type InsertUser,
@@ -57,6 +60,12 @@ import {
   type InsertAdminActionLog,
   type ProductMarkingLog,
   type InsertProductMarkingLog,
+  type OrderPoint,
+  type InsertOrderPoint,
+  type WebhookEvent,
+  type InsertWebhookEvent,
+  type CourierTracking,
+  type InsertCourierTracking,
 } from '@shared/schema';
 import type { IStorage } from './storage';
 
@@ -858,5 +867,105 @@ export class DbStorage implements IStorage {
     await db
       .delete(productMarkingLogs)
       .where(eq(productMarkingLogs.id, logId));
+  }
+
+  // Order Points (Yandex integration)
+  async createOrderPoint(point: InsertOrderPoint): Promise<OrderPoint> {
+    const result = await db
+      .insert(orderPoints)
+      .values(point)
+      .returning();
+    return result[0]!;
+  }
+
+  async getOrderPoints(orderId: string): Promise<OrderPoint[]> {
+    return await db
+      .select()
+      .from(orderPoints)
+      .where(eq(orderPoints.orderId, orderId))
+      .orderBy(asc(orderPoints.pointId));
+  }
+
+  async deleteOrderPoints(orderId: string): Promise<void> {
+    await db
+      .delete(orderPoints)
+      .where(eq(orderPoints.orderId, orderId));
+  }
+
+  // Webhook Events
+  async createWebhookEvent(event: InsertWebhookEvent): Promise<WebhookEvent> {
+    const result = await db
+      .insert(webhookEvents)
+      .values(event)
+      .returning();
+    return result[0]!;
+  }
+
+  async getWebhookEvents(filters?: { orderId?: string; source?: string; processed?: boolean; limit?: number }): Promise<WebhookEvent[]> {
+    let query = db.select().from(webhookEvents);
+
+    const conditions: any[] = [];
+    if (filters?.orderId) {
+      conditions.push(eq(webhookEvents.orderId, filters.orderId));
+    }
+    if (filters?.source) {
+      conditions.push(eq(webhookEvents.source, filters.source));
+    }
+    if (filters?.processed !== undefined) {
+      conditions.push(eq(webhookEvents.processed, filters.processed));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
+    query = query.orderBy(desc(webhookEvents.createdAt));
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit);
+    }
+
+    return await query;
+  }
+
+  async markWebhookEventAsProcessed(id: string, error?: string): Promise<WebhookEvent | undefined> {
+    const result = await db
+      .update(webhookEvents)
+      .set({ 
+        processed: true, 
+        processingError: error || null,
+        processedAt: new Date()
+      })
+      .where(eq(webhookEvents.id, id))
+      .returning();
+    return result[0];
+  }
+
+  // Courier Tracking
+  async createCourierTracking(tracking: InsertCourierTracking): Promise<CourierTracking> {
+    const result = await db
+      .insert(courierTracking)
+      .values(tracking)
+      .returning();
+    return result[0]!;
+  }
+
+  async getCourierTracking(orderId: string, limit: number = 50): Promise<CourierTracking[]> {
+    return await db
+      .select()
+      .from(courierTracking)
+      .where(eq(courierTracking.orderId, orderId))
+      .orderBy(desc(courierTracking.reportedAt))
+      .limit(limit);
+  }
+
+  async getLatestCourierPosition(orderId: string): Promise<CourierTracking | undefined> {
+    const result = await db
+      .select()
+      .from(courierTracking)
+      .where(eq(courierTracking.orderId, orderId))
+      .orderBy(desc(courierTracking.reportedAt))
+      .limit(1);
+    return result[0];
   }
 }

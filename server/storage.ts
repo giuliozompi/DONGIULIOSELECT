@@ -228,6 +228,21 @@ export interface IStorage {
   isMarkingCodeUsed(markingCode: string): Promise<boolean>;
   getMarkingLogByCode(markingCode: string): Promise<ProductMarkingLog | undefined>;
   deleteMarkingLog(logId: string): Promise<void>;
+
+  // Order Points (Yandex integration)
+  createOrderPoint(point: InsertOrderPoint): Promise<OrderPoint>;
+  getOrderPoints(orderId: string): Promise<OrderPoint[]>;
+  deleteOrderPoints(orderId: string): Promise<void>;
+
+  // Webhook Events
+  createWebhookEvent(event: InsertWebhookEvent): Promise<WebhookEvent>;
+  getWebhookEvents(filters?: { orderId?: string; source?: string; processed?: boolean; limit?: number }): Promise<WebhookEvent[]>;
+  markWebhookEventAsProcessed(id: string, error?: string): Promise<WebhookEvent | undefined>;
+
+  // Courier Tracking
+  createCourierTracking(tracking: InsertCourierTracking): Promise<CourierTracking>;
+  getCourierTracking(orderId: string, limit?: number): Promise<CourierTracking[]>;
+  getLatestCourierPosition(orderId: string): Promise<CourierTracking | undefined>;
 }
 
 export class MemStorage implements IStorage {
