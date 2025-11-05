@@ -185,12 +185,47 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
 
 /**
  * Middleware opzionale per route che non richiedono autenticazione
+ * In development mode, imposta automaticamente MASTER ADMIN anche senza initData
  */
 export function optionalTelegramAuth(req: Request, res: Response, next: NextFunction) {
   const initData = req.headers['x-telegram-init-data'] as string;
   
   if (!initData) {
-    // Nessun init data, prosegui senza autenticazione
+    // In development mode, usa il bypass MASTER ADMIN
+    if (process.env.NODE_ENV === 'development') {
+      const adminUserId = process.env.MASTER_ADMIN_USER_ID || '999999999';
+      
+      storage.getUser(adminUserId).then(user => {
+        if (!user) {
+          return storage.createUser({
+            id: adminUserId,
+            username: 'MasterAdmin',
+            firstName: 'Master',
+            lastName: 'Administrator',
+          });
+        }
+        return user;
+      }).then(async (user) => {
+        const isAdmin = await storage.isAdmin(user.id);
+        if (!isAdmin) {
+          await storage.addAdmin(user.id, 'MasterAdmin');
+        }
+        req.userId = user.id;
+        req.telegramUser = {
+          id: user.id,
+          username: user.username ?? undefined,
+          firstName: user.firstName ?? undefined,
+          lastName: user.lastName ?? undefined,
+        };
+        next();
+      }).catch(error => {
+        console.error('[OptionalAuth] ERROR creating/fetching admin user:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      });
+      return;
+    }
+    
+    // Production: nessun init data, prosegui senza autenticazione
     return next();
   }
   

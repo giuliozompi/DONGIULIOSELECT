@@ -33,7 +33,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== CATEGORIE ====================
   
   // GET /api/categories - Ottieni tutte le categorie
-  app.get("/api/categories", async (req, res) => {
+  app.get("/api/categories", optionalTelegramAuth, async (req, res) => {
     try {
       // SECURITY: includeHidden solo per admin autenticati, altrimenti ignora il parametro
       const requestedIncludeHidden = req.query.includeHidden === 'true';
@@ -51,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== PRODOTTI ====================
   
   // GET /api/products - Ottieni tutti i prodotti con filtri opzionali
-  app.get("/api/products", async (req, res) => {
+  app.get("/api/products", optionalTelegramAuth, async (req, res) => {
     try {
       const categoryId = req.query.categoryId as string | undefined;
       const inStock = req.query.inStock === 'true' ? true : 
