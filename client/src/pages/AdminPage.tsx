@@ -428,7 +428,7 @@ function CategoriesManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
             {categories.map((category) => (
               <Card
                 key={category.id}
-                className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
+                className={`overflow-hidden cursor-pointer hover-elevate active-elevate-2 ${!category.isVisible ? 'opacity-60' : ''}`}
                 onClick={() => setLocation(`/admin/categories/${category.id}`)}
                 data-testid={`category-item-${category.id}`}
               >
@@ -446,9 +446,14 @@ function CategoriesManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-4">
-                    <h3 className="text-white font-semibold text-base">
-                      {category.name}
-                    </h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-white font-semibold text-base">
+                        {category.name}
+                      </h3>
+                      {!category.isVisible && (
+                        <Badge variant="destructive" className="text-xs">Nascosta</Badge>
+                      )}
+                    </div>
                     <p className="text-white/70 text-xs">
                       /{category.slug}
                     </p>
@@ -781,7 +786,7 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               filteredProducts.map((product) => (
                 <Card
                   key={product.id}
-                  className="overflow-hidden cursor-pointer hover-elevate active-elevate-2"
+                  className={`overflow-hidden cursor-pointer hover-elevate active-elevate-2 ${!product.isVisible ? 'opacity-60' : ''}`}
                   onClick={() => setLocation(`/admin/products/${product.id}`)}
                   data-testid={`product-item-${product.id}`}
                 >
@@ -799,9 +804,14 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-4">
-                      <h3 className="text-white font-semibold text-base">
-                        {product.name}
-                      </h3>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-white font-semibold text-base">
+                          {product.name}
+                        </h3>
+                        {!product.isVisible && (
+                          <Badge variant="destructive" className="text-xs">Nascosto</Badge>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <p className="text-white/80 text-xs">
                           {product.price} ₽/{product.unit}

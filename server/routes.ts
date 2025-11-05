@@ -35,7 +35,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/categories - Ottieni tutte le categorie
   app.get("/api/categories", async (req, res) => {
     try {
-      const categories = await storage.getAllCategories();
+      const includeHidden = req.query.includeHidden === 'true';
+      const categories = await storage.getAllCategories(includeHidden);
       res.json(categories);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -51,8 +52,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categoryId = req.query.categoryId as string | undefined;
       const inStock = req.query.inStock === 'true' ? true : 
                       req.query.inStock === 'false' ? false : undefined;
+      const includeHidden = req.query.includeHidden === 'true';
       
-      const products = await storage.getAllProducts({ categoryId, inStock });
+      const products = await storage.getAllProducts({ categoryId, inStock, includeHidden });
       res.json(products);
     } catch (error) {
       console.error('Error fetching products:', error);
