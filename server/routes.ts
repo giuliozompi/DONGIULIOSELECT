@@ -35,7 +35,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/categories - Ottieni tutte le categorie
   app.get("/api/categories", async (req, res) => {
     try {
-      const includeHidden = req.query.includeHidden === 'true';
+      // SECURITY: includeHidden solo per admin autenticati, altrimenti ignora il parametro
+      const requestedIncludeHidden = req.query.includeHidden === 'true';
+      const isAdmin = !!(req.userId && await storage.isAdmin(req.userId));
+      const includeHidden = requestedIncludeHidden && isAdmin;
+      
       const categories = await storage.getAllCategories(includeHidden);
       res.json(categories);
     } catch (error) {
@@ -52,7 +56,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categoryId = req.query.categoryId as string | undefined;
       const inStock = req.query.inStock === 'true' ? true : 
                       req.query.inStock === 'false' ? false : undefined;
-      const includeHidden = req.query.includeHidden === 'true';
+      
+      // SECURITY: includeHidden solo per admin autenticati, altrimenti ignora il parametro
+      const requestedIncludeHidden = req.query.includeHidden === 'true';
+      const isAdmin = !!(req.userId && await storage.isAdmin(req.userId));
+      const includeHidden = requestedIncludeHidden && isAdmin;
       
       const products = await storage.getAllProducts({ categoryId, inStock, includeHidden });
       res.json(products);
