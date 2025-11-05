@@ -357,7 +357,7 @@ function CategoriesManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories', { includeHidden: true }] });
       const status = data.isVisible ? 'видима' : 'скрыта';
       toast({ title: `✅ Категория ${status}` });
     },
@@ -722,7 +722,7 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       return response.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/products', { includeHidden: true }] });
       const status = data.isVisible ? 'виден' : 'скрыт';
       toast({ title: `✅ Продукт ${status}` });
     },
