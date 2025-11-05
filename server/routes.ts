@@ -1926,7 +1926,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PATCH /api/admin/products/:id/visibility - Toggle visibilità prodotto (MASTER ADMIN ONLY)
   app.patch("/api/admin/products/:id/visibility", verifyTelegramInitData, requireAdmin, requireMasterAdmin, async (req, res) => {
     try {
-      const product = await storage.getProductById(req.params.id);
+      // IMPORTANTE: includeHidden=true per trovare anche prodotti nascosti
+      const product = await storage.getProductById(req.params.id, true);
       if (!product) {
         return res.status(404).json({ error: 'Product not found' });
       }
