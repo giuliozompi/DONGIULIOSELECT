@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest, queryClient } from '@/lib/queryClient';
+import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
@@ -271,7 +271,10 @@ function CategoriesManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { data: categories = [], isLoading } = useQuery<Category[]>({
     queryKey: ['/api/categories', { includeHidden: true }],
     queryFn: async () => {
-      const response = await fetch('/api/categories?includeHidden=true');
+      const response = await fetch('/api/categories?includeHidden=true', {
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch categories');
       return response.json();
     },
@@ -676,7 +679,10 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { data: products = [], isLoading: isLoadingProducts } = useQuery<Product[]>({
     queryKey: ['/api/products', { includeHidden: true }],
     queryFn: async () => {
-      const response = await fetch('/api/products?includeHidden=true');
+      const response = await fetch('/api/products?includeHidden=true', {
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch products');
       return response.json();
     },
@@ -685,7 +691,10 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { data: categories = [] } = useQuery<Category[]>({
     queryKey: ['/api/categories', { includeHidden: true }],
     queryFn: async () => {
-      const response = await fetch('/api/categories?includeHidden=true');
+      const response = await fetch('/api/categories?includeHidden=true', {
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
       if (!response.ok) throw new Error('Failed to fetch categories');
       return response.json();
     },
