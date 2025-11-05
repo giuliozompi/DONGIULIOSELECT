@@ -296,7 +296,7 @@ function CategoriesManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories', { includeHidden: true }] });
       form.reset();
       setHasUnsavedImage(false); // Reset dopo la creazione
       toast({ title: '✅ Категория создана' });
@@ -317,7 +317,7 @@ function CategoriesManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories', { includeHidden: true }] });
       // NON resettare il form dopo il salvataggio - mantieni modalità modifica
       setHasUnsavedImage(false); // Reset flag immagine non salvata
       toast({ title: '✅ Categoria обновлена' });
@@ -338,7 +338,7 @@ function CategoriesManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/categories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/categories', { includeHidden: true }] });
       toast({ title: '✅ Категория удалена' });
     },
     onError: (error: any) => {
@@ -703,7 +703,7 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/products', { includeHidden: true }] });
       toast({ title: '✅ Продукт удален' });
     },
     onError: (error: any) => {
