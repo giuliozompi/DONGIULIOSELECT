@@ -155,19 +155,25 @@ export default function ProductCard({
             data-testid={`img-product-${name}-${index}`}
           />
         ))}
+        
+        {/* Badge stack - top left */}
+        <div className="absolute top-2 left-2 flex flex-col gap-2 z-10">
+          {!inStock && (
+            <Badge className="bg-destructive text-destructive-foreground text-xs backdrop-blur-sm">
+              тю-тю не в наличии
+            </Badge>
+          )}
+          {priceOld && (
+            <Badge className="bg-destructive text-destructive-foreground text-xs backdrop-blur-sm">
+              Скидка
+            </Badge>
+          )}
+        </div>
+        
+        {/* Favorite button - top right */}
         <div className="absolute top-2 right-2 z-10">
           <FavoriteButton productId={id} />
         </div>
-        {priceOld && (
-          <Badge className="absolute top-10 right-2 bg-destructive text-destructive-foreground">
-            Скидка
-          </Badge>
-        )}
-        {!inStock && (
-          <Badge className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-xs">
-            тю-тю не в наличии
-          </Badge>
-        )}
       </div>
       <div className="p-3 space-y-3">
         <div>
