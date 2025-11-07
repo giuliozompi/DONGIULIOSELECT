@@ -934,6 +934,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn('⚠️ Failed to send order notification to managers:', error);
       }
       
+      // Invia notifica Telegram ai manager per nuovo ordine
+      try {
+        const { sendNewOrderNotificationToManagers: sendTelegramToManagers } = await import('./services/telegram-bot');
+        const telegramManagerItems = orderItems.map(item => ({
+          productName: item.productName,
+          quantity: item.quantity,
+          price: item.price,
+          unit: item.unit,
+        }));
+        
+        const telegramManagerSent = await sendTelegramToManagers(
+          order.id,
+          order.customerName,
+          order.customerPhone,
+          order.deliveryAddress,
+          order.deliveryMethod || 'N/A',
+          order.paymentMethod,
+          telegramManagerItems,
+          order.amount,
+          new Date(),
+          order.deliveryNotes || undefined
+        );
+        
+        if (telegramManagerSent) {
+          console.log(`✅ Order notification sent to managers via Telegram for order ${order.id}`);
+        } else {
+          console.warn('⚠️ Manager Telegram chat IDs not configured - manager notifications disabled');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to send order notification to managers via Telegram:', error);
+      }
+      
       res.json({
         ...order,
         bonusApplied: totalBonusApplied.toFixed(2),
