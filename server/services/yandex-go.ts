@@ -367,7 +367,7 @@ export class YandexGoService {
         // Campi aggiuntivi per compatibilità
         currency: currency,
         distance: Math.round(distanceMeters / 1000), // Convert meters to km
-        time: etaSeconds,
+        time: Math.round(etaSeconds / 60), // Convert seconds to minutes
       };
     } catch (error) {
       logger.error('Yandex Go checkPrice error', { error });
