@@ -29,7 +29,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { DeliveryDialog } from '@/components/DeliveryDialog';
@@ -744,6 +744,26 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
     },
   });
 
+  // Toggle stock mutation (All managers)
+  const toggleStockMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('PATCH', `/api/admin/products/${id}/stock`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/products', { includeHidden: true }] });
+      const status = data.inStock ? 'в наличии' : 'тю-тю не в наличии';
+      toast({ title: `✅ Продукт ${status}` });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось изменить наличие',
+        variant: 'destructive' 
+      });
+    },
+  });
+
   if (isLoadingProducts) {
     return <div className="py-4">Загрузка продуктов...</div>;
   }
@@ -846,6 +866,19 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                           {product.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                         </Button>
                       )}
+                      <Button
+                        size="icon"
+                        variant={product.inStock ? "secondary" : "destructive"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleStockMutation.mutate(product.id);
+                        }}
+                        data-testid={`button-toggle-stock-product-${product.id}`}
+                        className="h-8 w-8"
+                        title={product.inStock ? 'Отметить как не в наличии' : 'Отметить как в наличии'}
+                      >
+                        {product.inStock ? <Package className="w-4 h-4" /> : <PackageX className="w-4 h-4" />}
+                      </Button>
                       <Button
                         size="icon"
                         variant="secondary"

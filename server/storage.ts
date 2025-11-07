@@ -143,6 +143,7 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: string): Promise<boolean>;
+  toggleProductStock(id: string): Promise<{ product: Product; oldStock: boolean; newStock: boolean } | undefined>;
 
   // Корзина
   getCart(userId: string): Promise<Cart | undefined>;

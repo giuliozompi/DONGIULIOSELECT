@@ -272,6 +272,24 @@ export class DbStorage implements IStorage {
     return result.length > 0;
   }
 
+  async toggleProductStock(id: string): Promise<{ product: Product; oldStock: boolean; newStock: boolean } | undefined> {
+    const product = await this.getProductById(id, true);
+    if (!product) return undefined;
+    
+    const newStock = !product.inStock;
+    const updated = await db
+      .update(products)
+      .set({ inStock: newStock })
+      .where(eq(products.id, id))
+      .returning();
+    
+    return {
+      product: updated[0],
+      oldStock: product.inStock,
+      newStock: newStock
+    };
+  }
+
   // Корзина (PERSISTENTE!)
   async getCart(userId: string): Promise<Cart | undefined> {
     const result = await db.select().from(carts).where(eq(carts.userId, userId));

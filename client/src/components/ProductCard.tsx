@@ -18,6 +18,7 @@ interface ProductCardProps {
   priceOld?: number;
   unit: string;
   image: string | string[];
+  inStock?: boolean;
   onClick?: () => void;
 }
 
@@ -29,6 +30,7 @@ export default function ProductCard({
   priceOld,
   unit,
   image,
+  inStock = true,
   onClick,
 }: ProductCardProps) {
   const { toast } = useToast();
@@ -161,6 +163,11 @@ export default function ProductCard({
             Скидка
           </Badge>
         )}
+        {!inStock && (
+          <Badge className="absolute top-2 left-2 bg-destructive text-destructive-foreground text-xs">
+            тю-тю не в наличии
+          </Badge>
+        )}
       </div>
       <div className="p-3 space-y-3">
         <div>
@@ -231,11 +238,11 @@ export default function ProductCard({
             size="sm"
             className="w-full"
             onClick={handleAddToCart}
-            disabled={addToCartMutation.isPending}
+            disabled={addToCartMutation.isPending || !inStock}
             data-testid={`button-add-cart-${id}`}
           >
             <ShoppingCart className="h-4 w-4 mr-2" />
-            {addToCartMutation.isPending ? 'Добавление...' : 'В корзину'}
+            {!inStock ? 'Нет в наличии' : (addToCartMutation.isPending ? 'Добавление...' : 'В корзину')}
           </Button>
         </div>
       </div>

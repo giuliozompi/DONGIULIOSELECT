@@ -1989,6 +1989,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/admin/products/:id/stock - Toggle disponibilità prodotto (ADMIN ONLY - tutti i manager)
+  app.patch("/api/admin/products/:id/stock", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const result = await storage.toggleProductStock(req.params.id);
+      if (!result) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      
+      // Log azione
+      await storage.createAdminActionLog({
+        adminUserId: req.userId!,
+        telegramUsername: req.telegramUser?.username || null,
+        actionType: result.newStock ? 'stock_enabled' : 'stock_disabled',
+        entityType: 'product',
+        entityId: result.product.id,
+        actionData: {
+          productName: result.product.name,
+          oldStock: result.oldStock,
+          newStock: result.newStock,
+        },
+      });
+      
+      res.json(result.product);
+    } catch (error) {
+      console.error('Error toggling product stock:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // ==================== ADMIN ORDER MANAGEMENT ====================
   
   // GET /api/admin/orders - Ottieni tutti gli ordini (ADMIN ONLY)
