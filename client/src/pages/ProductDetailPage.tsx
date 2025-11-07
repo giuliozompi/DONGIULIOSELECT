@@ -78,7 +78,9 @@ export default function ProductDetailPage() {
 
   const totalPrice = product ? parseFloat(product.price) * quantity : 0;
   const mainButtonText = product 
-    ? `Добавить ${formatQuantity(quantity, product.unit)} в корзину за ${Math.round(totalPrice)} ₽`
+    ? product.inStock 
+      ? `Добавить ${formatQuantity(quantity, product.unit)} в корзину за ${Math.round(totalPrice)} ₽`
+      : 'Нет в наличии'
     : 'Загрузка...';
 
   const isTelegramAvailable = typeof window !== 'undefined' && window.Telegram?.WebApp && (window.Telegram.WebApp as any).initData;
@@ -87,7 +89,7 @@ export default function ProductDetailPage() {
     text: mainButtonText,
     onClick: () => addToCartMutation.mutate(),
     show: !!product && isTelegramAvailable,
-    enabled: !addToCartMutation.isPending && quantity >= minQty,
+    enabled: !addToCartMutation.isPending && quantity >= minQty && (product?.inStock ?? true),
   });
 
   if (!product && !isLoading) {
@@ -145,11 +147,16 @@ export default function ProductDetailPage() {
       />
 
       <div className="p-6 space-y-6">
+        {!product.inStock && (
+          <Badge className="bg-destructive text-destructive-foreground text-sm">
+            тю-тю не в наличии
+          </Badge>
+        )}
         {!isTelegramAvailable && (
           <Button
             className="w-full"
             onClick={() => addToCartMutation.mutate()}
-            disabled={addToCartMutation.isPending || quantity < minQty}
+            disabled={addToCartMutation.isPending || quantity < minQty || !product.inStock}
             data-testid="button-add-to-cart"
           >
             {mainButtonText}
