@@ -229,3 +229,106 @@ ${statusInfo.description}
     parseMode: 'HTML',
   });
 }
+
+export async function sendNewOrderNotificationToManagers(
+  orderId: string,
+  customerName: string,
+  customerPhone: string,
+  deliveryAddress: string,
+  deliveryMethod: string,
+  paymentMethod: string,
+  items: OrderItem[],
+  totalAmount: string,
+  createdAt: Date,
+  deliveryNotes?: string
+): Promise<boolean> {
+  const MANAGER_CHAT_IDS = process.env.MANAGER_TELEGRAM_CHAT_IDS;
+  
+  if (!MANAGER_CHAT_IDS) {
+    console.warn('⚠️ MANAGER_TELEGRAM_CHAT_IDS not configured - manager notifications disabled');
+    return false;
+  }
+
+  const deliveryMethodLabels: Record<string, string> = {
+    'yandex_go': 'Яндекс Go',
+    'yandex_dostavka': 'Яндекс Доставка',
+    'cdek': 'CDEK',
+    'don_giulio_courier': 'Курьер Don Giulio',
+    'pickup': 'Самовывоз',
+  };
+
+  const paymentMethodLabels: Record<string, string> = {
+    'yookassa': 'Онлайн оплата (ЮКасса)',
+    'cash_on_delivery': 'Наличными при получении',
+  };
+
+  const formatDate = (date: Date) => {
+    return formatMoscowDateForNotification(date);
+  };
+
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numPrice);
+  };
+
+  const formatQuantity = (qty: number, unit?: string) => {
+    const rounded = Number(qty.toFixed(3));
+    if (unit === 'кг') {
+      return `${rounded} кг`;
+    }
+    return `${rounded} шт`;
+  };
+
+  const itemsText = items.map(item => {
+    const itemTotal = parseFloat(item.price) * item.quantity;
+    return `• <b>${item.productName}</b>\n  ${formatQuantity(item.quantity, item.unit)} × ${formatPrice(item.price)} ₽ = <b>${formatPrice(itemTotal)} ₽</b>`;
+  }).join('\n');
+
+  const notesSection = deliveryNotes 
+    ? `\n📝 <b>ПРИМЕЧАНИЯ К ДОСТАВКЕ</b>\n${deliveryNotes}\n\n━━━━━━━━━━━━━━━`
+    : '';
+
+  const message = `
+🔔 <b>НОВЫЙ ЗАКАЗ</b>
+
+🆔 <code>${orderId}</code>
+🗓 ${formatDate(createdAt)}
+🚚 ${deliveryMethodLabels[deliveryMethod] || deliveryMethod}
+💰 ${paymentMethodLabels[paymentMethod] || paymentMethod}
+
+━━━━━━━━━━━━━━━
+📦 <b>СОСТАВ ЗАКАЗА</b>
+
+${itemsText}
+
+━━━━━━━━━━━━━━━
+🏠 <b>ДОСТАВКА</b>
+
+👤 ${customerName}
+📞 ${customerPhone}
+📍 ${deliveryAddress}${notesSection}
+
+━━━━━━━━━━━━━━━
+💵 <b>ПРЕДВАРИТЕЛЬНАЯ СТОИМОСТЬ</b>
+<b>${formatPrice(totalAmount)} ₽</b>
+  `.trim();
+
+  const chatIds = MANAGER_CHAT_IDS.split(',').map(id => id.trim());
+  const results = await Promise.all(
+    chatIds.map(chatId => 
+      sendTelegramMessage({
+        chatId,
+        text: message,
+        parseMode: 'HTML',
+      })
+    )
+  );
+
+  const successCount = results.filter(r => r).length;
+  console.log(`📤 Manager notifications: ${successCount}/${chatIds.length} sent successfully`);
+
+  return successCount > 0;
+}
