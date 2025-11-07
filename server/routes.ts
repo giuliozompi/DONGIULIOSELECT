@@ -3076,6 +3076,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const priceInfo = await yandexGoService.checkPrice(priceRequest);
       
+      // Log temporaneo per debug conversioni
+      console.log('🚗 YANDEX GO - Risposta al frontend:', {
+        price: priceInfo.price,
+        currency: priceInfo.currency,
+        distance: priceInfo.distance,
+        time: priceInfo.time,
+        raw_distance_meters: priceInfo.distance_meters,
+        raw_eta_seconds: priceInfo.eta
+      });
+      
       res.json({
         price: priceInfo.price,
         currency: priceInfo.currency,
