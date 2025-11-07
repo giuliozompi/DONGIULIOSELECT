@@ -366,7 +366,7 @@ export class YandexGoService {
         all_offers: filteredOffers.length > 0 ? filteredOffers : data.offers, // Offerte filtrate
         // Campi aggiuntivi per compatibilità
         currency: currency,
-        distance: distanceMeters,
+        distance: Math.round(distanceMeters / 1000), // Convert meters to km
         time: etaSeconds,
       };
     } catch (error) {
