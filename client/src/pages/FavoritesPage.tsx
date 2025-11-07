@@ -71,7 +71,7 @@ export default function FavoritesPage() {
                 unit={product.unit}
                 image={product.images?.length > 0 ? product.images : ['https://images.unsplash.com/photo-1452195100486-9cc805987862?w=400&h=400&fit=crop']}
                 inStock={product.inStock}
-                onClick={() => setLocation(`/products/${product.id}`)}
+                onClick={() => setLocation(`/product/${product.id}`)}
               />
             ))}
           </div>
