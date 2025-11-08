@@ -19,7 +19,7 @@ export async function sendEmail(params: EmailParams): Promise<boolean> {
   }
 
   try {
-    const from = params.from || 'Don Giulio Select <onboarding@resend.dev>';
+    const from = params.from || 'Don Giulio Select <noreply@foodconsierge.ru>';
     const to = Array.isArray(params.to) ? params.to : [params.to];
 
     const response = await fetch(RESEND_API_URL, {
