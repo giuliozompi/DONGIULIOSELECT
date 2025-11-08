@@ -420,7 +420,7 @@ export class YandexGoService {
     }
 
     // Yandex Go Cargo usa GLI STESSI endpoint di Yandex Dostavka
-    const url = `${this.baseUrl}/claims/create`;
+    const url = `${this.baseUrl}/claims/create?request_id=${requestId}`;
     
     const headers = {
       ...(await this.getHeaders()),
