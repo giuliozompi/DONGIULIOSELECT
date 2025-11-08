@@ -170,6 +170,7 @@ export const orders = pgTable("orders", {
   // Yandex Dostavka Delivery specifics
   yandexClaimId: text("yandex_claim_id"), // ID della richiesta Yandex Dostavka
   yandexDeliveryPrice: decimal("yandex_delivery_price", { precision: 10, scale: 2 }), // Prezzo delivery Yandex
+  yandexDeliveryOfferId: text("yandex_delivery_offer_id"), // Offer ID/payload da checkPrice (necessario per createClaim)
   yandexDeliveryStatus: text("yandex_delivery_status"), // Status del delivery Yandex
   yandexPerformerInfo: jsonb("yandex_performer_info").$type<{
     courierName?: string;
@@ -181,6 +182,7 @@ export const orders = pgTable("orders", {
   // Yandex Go specifics (general delivery service)
   yandexGoClaimId: text("yandex_go_claim_id"), // ID della richiesta Yandex Go
   yandexGoPrice: decimal("yandex_go_price", { precision: 10, scale: 2 }), // Prezzo delivery Yandex Go
+  yandexGoOfferId: text("yandex_go_offer_id"), // Offer ID/payload da checkPrice (necessario per createClaim)
   yandexGoStatus: text("yandex_go_status"), // Status del delivery Yandex Go
   yandexGoPerformerInfo: jsonb("yandex_go_performer_info").$type<{
     courierName?: string;

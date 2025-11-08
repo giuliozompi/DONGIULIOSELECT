@@ -2831,6 +2831,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // SALVA il prezzo E l'offer_id nel database per usarli quando si crea l'ordine
+      // L'offer_id è necessario per confermare il prezzo in createClaim()
+      await storage.updateOrder(orderId, {
+        yandexDeliveryPrice: priceData.price,
+        yandexDeliveryOfferId: priceData.offer_id
+      });
+      
       console.log('Yandex Delivery response to frontend:', JSON.stringify(priceData, null, 2));
       res.json(priceData);
     } catch (error) {
@@ -2873,6 +2880,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const data = schema.parse(req.body);
       
+      // Usa l'offer_id salvato nel database se non viene passato nel body
+      const offerId = data.offerId || order.yandexDeliveryOfferId;
+      
       // Prepara items per Yandex Delivery (dimensioni in METRI, non cm!)
       const items = [{
         extra_id: order.id, // Nostro numero d'ordine per riferimento
@@ -2890,22 +2900,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cost_currency: 'RUB',
       }];
       
-      // Se c'è un offerId, recupera prima le offerte per trovare quella selezionata
-      let selectedOffer;
-      if (data.offerId) {
-        try {
-          const priceData = await yandexDostavkaService.checkPrice(
-            data.pickupCoordinates,
-            data.deliveryCoordinates
-          );
-          // Trova l'offerta selezionata dal payload (offer_id)
-          selectedOffer = priceData.all_offers?.find((offer: any) => offer.payload === data.offerId);
-        } catch (error) {
-          console.error('Error fetching offers for selected tariff:', error);
-          // Continua comunque, ma senza l'offerta selezionata
-        }
-      }
-      
       // Prepara destination point con payment on delivery se configurato
       const destinationPoint: any = {
         point_id: 2,
@@ -2920,8 +2914,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       // Aggiungi payment on delivery se il cliente paga la spedizione
-      if (order.customerPaysShipping && selectedOffer) {
-        const deliveryCost = selectedOffer.price?.total_price || selectedOffer.price?.total_price_with_vat || '0';
+      // Usa il prezzo salvato nel database (order.yandexDeliveryPrice)
+      if (order.customerPaysShipping && order.yandexDeliveryPrice) {
+        const deliveryCost = order.yandexDeliveryPrice;
         destinationPoint.external_order_cost = {
           value: deliveryCost,
           currency: 'RUB',
@@ -2956,24 +2951,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           destinationPoint,
         ],
         comment: data.comment || `Заказ ${order.id.slice(0, 8)} - Don Giulio Select`,
-        offer_id: data.offerId,
-        selected_offer: selectedOffer, // Passa l'offerta completa selezionata
+        offer_id: offerId || undefined, // Usa l'offer_id salvato nel database o passato nel body
       });
       
       // Salva info Yandex nell'ordine
       const updateData: any = {
         yandexClaimId: yandexOrder.id,
         yandexDeliveryStatus: yandexOrder.status,
-        yandexDeliveryPrice: yandexOrder.pricing?.offer?.price || null,
+        yandexDeliveryPrice: yandexOrder.pricing?.offer?.price || order.yandexDeliveryPrice,
         courierService: 'yandex_delivery',
         courierCalledAt: new Date(),
         status: 'ВЫЗВАН КУРЬЕР',
       };
       
       // Salva deliveryCost se il cliente paga la spedizione
-      if (order.customerPaysShipping && selectedOffer) {
-        const deliveryCost = selectedOffer.price?.total_price || selectedOffer.price?.total_price_with_vat || '0';
-        updateData.deliveryCost = deliveryCost;
+      // Usa il prezzo salvato nel database
+      if (order.customerPaysShipping && order.yandexDeliveryPrice) {
+        updateData.deliveryCost = order.yandexDeliveryPrice;
       }
       
       await storage.updateOrder(orderId, updateData);
@@ -3179,9 +3173,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const priceInfo = await yandexGoService.checkPrice(priceRequest);
       
-      // SALVA il prezzo nel database per usarlo quando si crea l'ordine
+      // SALVA il prezzo E l'offer_id nel database per usarli quando si crea l'ordine
+      // L'offer_id è necessario per confermare il prezzo in createClaim()
       await storage.updateOrder(orderId, {
-        yandexGoPrice: priceInfo.price
+        yandexGoPrice: priceInfo.price,
+        yandexGoOfferId: priceInfo.offer_id
       });
       
       // Log temporaneo per debug conversioni
@@ -3191,7 +3187,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         distance: priceInfo.distance,
         time: priceInfo.time,
         raw_distance_meters: priceInfo.distance_meters,
-        raw_eta_seconds: priceInfo.eta
+        raw_eta_seconds: priceInfo.eta,
+        offer_id: priceInfo.offer_id
       });
       
       res.json({
@@ -3328,8 +3325,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         skip_door_to_door: false  // Consegna porta a porta
       };
       
-      // NON passiamo offer_payload perché non abbiamo fatto checkPrice() con payment_on_delivery
-      // Yandex dovrebbe accettare il claim senza offer_payload quando usa payment_on_delivery
+      // PASSA l'offer_id salvato da checkPrice() se disponibile
+      // Questo conferma a Yandex che vogliamo usare esattamente quel prezzo calcolato
+      if (order.yandexGoOfferId) {
+        claimRequest.offer_id = order.yandexGoOfferId;
+      }
       
       // Crea claim
       const claim = await yandexGoService.createClaim(claimRequest, requestId);
