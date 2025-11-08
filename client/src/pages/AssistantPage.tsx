@@ -84,13 +84,10 @@ export default function AssistantPage() {
   const handleSend = async () => {
     if (!input.trim() || sendMessageMutation.isPending) return;
     
-    // Apply keyboard layout conversion if needed
-    const searchVariants = getSearchVariants(input);
-    const messageContent = searchVariants.length > 1 ? searchVariants[1] : input;
-    
+    // Send original input to AI - it will detect and respond in the same language
     const tempId = `temp-${nanoid()}`;
     setInput('');
-    sendMessageMutation.mutate({ tempId, content: messageContent });
+    sendMessageMutation.mutate({ tempId, content: input });
   };
 
   return (

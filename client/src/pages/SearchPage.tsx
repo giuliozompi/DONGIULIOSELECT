@@ -75,12 +75,8 @@ export default function SearchPage() {
   const handleSend = () => {
     if (!query.trim()) return;
     
-    // Use keyboard layout corrected version for AI search
-    const searchVariants = getSearchVariants(query);
-    // Use the corrected variant if available, otherwise use original
-    const searchQuery = searchVariants.length > 1 ? searchVariants[1] : query;
-    
-    sendMessageMutation.mutate(searchQuery);
+    // Send original query to AI - it will understand the language context
+    sendMessageMutation.mutate(query);
   };
 
   const aiSuggestions = messages
