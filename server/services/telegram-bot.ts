@@ -332,3 +332,141 @@ ${itemsText}
 
   return successCount > 0;
 }
+
+export async function sendOrderPaidNotificationToManagers(
+  orderId: string,
+  customerName: string,
+  customerPhone: string,
+  totalAmount: string,
+  paymentMethod: string
+): Promise<boolean> {
+  const MANAGER_CHAT_IDS = process.env.MANAGER_TELEGRAM_CHAT_IDS;
+  
+  if (!MANAGER_CHAT_IDS) {
+    console.warn('⚠️ MANAGER_TELEGRAM_CHAT_IDS not configured - payment notification not sent');
+    return false;
+  }
+
+  const paymentMethodLabels: Record<string, string> = {
+    'yookassa': 'Онлайн оплата (ЮКасса)',
+    'cash_on_delivery': 'Наличными при получении',
+  };
+
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numPrice);
+  };
+
+  const message = `
+💰 <b>ЗАКАЗ ОПЛАЧЕН</b>
+
+🆔 <code>${orderId}</code>
+
+━━━━━━━━━━━━━━━
+👤 <b>КЛИЕНТ</b>
+
+👤 ${customerName}
+📞 ${customerPhone}
+
+━━━━━━━━━━━━━━━
+💳 <b>ОПЛАТА</b>
+
+${paymentMethodLabels[paymentMethod] || paymentMethod}
+
+━━━━━━━━━━━━━━━
+💵 <b>СУММА</b>
+<b>${formatPrice(totalAmount)} ₽</b>
+
+✅ <b>Заказ можно готовить к отправке</b>
+  `.trim();
+
+  const chatIds = MANAGER_CHAT_IDS.split(',').map(id => id.trim());
+  const results = await Promise.all(
+    chatIds.map(chatId => 
+      sendTelegramMessage({
+        chatId,
+        text: message,
+        parseMode: 'HTML',
+      })
+    )
+  );
+
+  const successCount = results.filter(r => r).length;
+  console.log(`📤 Payment notifications to managers: ${successCount}/${chatIds.length} sent successfully`);
+
+  return successCount > 0;
+}
+
+export async function sendDeliveryStartedNotificationToManagers(
+  orderId: string,
+  customerName: string,
+  customerPhone: string,
+  deliveryAddress: string,
+  courierService: string,
+  totalAmount: string
+): Promise<boolean> {
+  const MANAGER_CHAT_IDS = process.env.MANAGER_TELEGRAM_CHAT_IDS;
+  
+  if (!MANAGER_CHAT_IDS) {
+    console.warn('⚠️ MANAGER_TELEGRAM_CHAT_IDS not configured - delivery notification not sent');
+    return false;
+  }
+
+  const courierServiceLabels: Record<string, string> = {
+    'yandex_go': 'Яндекс Go',
+    'yandex_delivery': 'Яндекс Доставка',
+    'cdek': 'CDEK',
+    'don_giulio_courier': 'Курьер Don Giulio',
+  };
+
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numPrice);
+  };
+
+  const message = `
+🚚 <b>КУРЬЕР ВЫЗВАН</b>
+
+🆔 <code>${orderId}</code>
+
+━━━━━━━━━━━━━━━
+👤 <b>КЛИЕНТ</b>
+
+👤 ${customerName}
+📞 ${customerPhone}
+
+━━━━━━━━━━━━━━━
+🚚 <b>ДОСТАВКА</b>
+
+📍 ${deliveryAddress}
+🚗 ${courierServiceLabels[courierService] || courierService}
+
+━━━━━━━━━━━━━━━
+💵 <b>СУММА</b>
+<b>${formatPrice(totalAmount)} ₽</b>
+
+📦 <b>Заказ в пути к клиенту</b>
+  `.trim();
+
+  const chatIds = MANAGER_CHAT_IDS.split(',').map(id => id.trim());
+  const results = await Promise.all(
+    chatIds.map(chatId => 
+      sendTelegramMessage({
+        chatId,
+        text: message,
+        parseMode: 'HTML',
+      })
+    )
+  );
+
+  const successCount = results.filter(r => r).length;
+  console.log(`📤 Delivery notifications to managers: ${successCount}/${chatIds.length} sent successfully`);
+
+  return successCount > 0;
+}

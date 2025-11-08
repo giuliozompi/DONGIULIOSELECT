@@ -1604,6 +1604,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateOrderStatus(paymentIntent.orderId, 'ОПЛАЧЕН');
         console.log(`✅ [YooKassa Webhook] Order status updated successfully`);
         
+        // Invia notifica pagamento ai manager via Email
+        try {
+          const { sendOrderPaidNotificationToManagers } = await import('./services/email');
+          await sendOrderPaidNotificationToManagers(
+            order.id,
+            order.customerName,
+            order.customerPhone,
+            order.amount,
+            order.paymentMethod
+          );
+          console.log(`✅ Payment notification email sent to managers for order ${order.id}`);
+        } catch (error) {
+          console.warn('⚠️ Failed to send payment notification email to managers:', error);
+        }
+        
+        // Invia notifica pagamento ai manager via Telegram
+        try {
+          const { sendOrderPaidNotificationToManagers: sendTelegramToManagers } = await import('./services/telegram-bot');
+          await sendTelegramToManagers(
+            order.id,
+            order.customerName,
+            order.customerPhone,
+            order.amount,
+            order.paymentMethod
+          );
+          console.log(`✅ Payment notification sent to managers via Telegram for order ${order.id}`);
+        } catch (error) {
+          console.warn('⚠️ Failed to send payment notification to managers via Telegram:', error);
+        }
+        
         // Assegna 1 spin token (atomicamente)
         console.log(`🎁 [YooKassa Webhook] Awarding spin token to user ${order.userId}...`);
         const awarded = await storage.awardSpinTokensForOrder(paymentIntent.orderId, order.userId);
@@ -2084,6 +2114,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const awarded = await storage.awardSpinTokensForOrder(orderId, order.userId);
         if (awarded) {
           console.log(`✅ Assigned 1 spin token to user ${order.userId} for order ${order.id} (admin status change)`);
+        }
+        
+        // Invia notifica pagamento ai manager via Email
+        try {
+          const { sendOrderPaidNotificationToManagers } = await import('./services/email');
+          await sendOrderPaidNotificationToManagers(
+            order.id,
+            order.customerName,
+            order.customerPhone,
+            order.amount,
+            order.paymentMethod
+          );
+          console.log(`✅ Payment notification email sent to managers for order ${order.id}`);
+        } catch (error) {
+          console.warn('⚠️ Failed to send payment notification email to managers:', error);
+        }
+        
+        // Invia notifica pagamento ai manager via Telegram
+        try {
+          const { sendOrderPaidNotificationToManagers: sendTelegramToManagers } = await import('./services/telegram-bot');
+          await sendTelegramToManagers(
+            order.id,
+            order.customerName,
+            order.customerPhone,
+            order.amount,
+            order.paymentMethod
+          );
+          console.log(`✅ Payment notification sent to managers via Telegram for order ${order.id}`);
+        } catch (error) {
+          console.warn('⚠️ Failed to send payment notification to managers via Telegram:', error);
         }
       }
       
@@ -2985,6 +3045,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       await storage.updateOrder(orderId, updateData);
       
+      // Invia notifica kuryer ai manager via Email
+      try {
+        const { sendDeliveryStartedNotificationToManagers } = await import('./services/email');
+        await sendDeliveryStartedNotificationToManagers(
+          order.id,
+          order.customerName,
+          order.customerPhone,
+          order.deliveryAddress,
+          'yandex_delivery',
+          order.amount
+        );
+        console.log(`✅ Delivery notification email sent to managers for order ${order.id}`);
+      } catch (error) {
+        console.warn('⚠️ Failed to send delivery notification email to managers:', error);
+      }
+      
+      // Invia notifica kuryer ai manager via Telegram
+      try {
+        const { sendDeliveryStartedNotificationToManagers: sendTelegramToManagers } = await import('./services/telegram-bot');
+        await sendTelegramToManagers(
+          order.id,
+          order.customerName,
+          order.customerPhone,
+          order.deliveryAddress,
+          'yandex_delivery',
+          order.amount
+        );
+        console.log(`✅ Delivery notification sent to managers via Telegram for order ${order.id}`);
+      } catch (error) {
+        console.warn('⚠️ Failed to send delivery notification to managers via Telegram:', error);
+      }
+      
       // Log dell'azione
       await storage.createOrderChangeLog({
         orderId,
@@ -3397,6 +3489,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       await storage.updateOrder(orderId, updateData);
+      
+      // Invia notifica kuryer ai manager via Email
+      try {
+        const { sendDeliveryStartedNotificationToManagers } = await import('./services/email');
+        await sendDeliveryStartedNotificationToManagers(
+          order.id,
+          order.customerName,
+          order.customerPhone,
+          order.deliveryAddress,
+          'yandex_go',
+          order.amount
+        );
+        console.log(`✅ Delivery notification email sent to managers for order ${order.id}`);
+      } catch (error) {
+        console.warn('⚠️ Failed to send delivery notification email to managers:', error);
+      }
+      
+      // Invia notifica kuryer ai manager via Telegram
+      try {
+        const { sendDeliveryStartedNotificationToManagers: sendTelegramToManagers } = await import('./services/telegram-bot');
+        await sendTelegramToManagers(
+          order.id,
+          order.customerName,
+          order.customerPhone,
+          order.deliveryAddress,
+          'yandex_go',
+          order.amount
+        );
+        console.log(`✅ Delivery notification sent to managers via Telegram for order ${order.id}`);
+      } catch (error) {
+        console.warn('⚠️ Failed to send delivery notification to managers via Telegram:', error);
+      }
       
       // Log dell'azione
       await storage.createOrderChangeLog({

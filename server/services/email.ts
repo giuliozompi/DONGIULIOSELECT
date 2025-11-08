@@ -275,6 +275,200 @@ export async function sendOrderConfirmationToCustomer(
   });
 }
 
+export async function sendOrderPaidNotificationToManagers(
+  orderId: string,
+  customerName: string,
+  customerPhone: string,
+  totalAmount: string,
+  paymentMethod: string
+): Promise<boolean> {
+  const MANAGER_EMAILS = process.env.MANAGER_EMAILS;
+  
+  if (!MANAGER_EMAILS) {
+    console.warn('⚠️ MANAGER_EMAILS not configured - payment notification not sent');
+    return false;
+  }
+
+  const managerEmailList = MANAGER_EMAILS.split(',').map(email => email.trim()).filter(Boolean);
+  
+  if (managerEmailList.length === 0) {
+    console.warn('⚠️ No valid manager emails found');
+    return false;
+  }
+
+  const paymentMethodLabels: Record<string, string> = {
+    'yookassa': 'Онлайн оплата (YooKassa)',
+    'cash_on_delivery': 'Наличными при получении',
+  };
+
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(numPrice);
+  };
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #4caf50; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }
+        .section { background-color: white; padding: 15px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ddd; }
+        .section-title { font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #4caf50; }
+        .info-row { margin-bottom: 8px; }
+        .info-label { font-weight: bold; color: #666; }
+        .amount { font-size: 28px; font-weight: bold; color: #4caf50; text-align: center; margin: 20px 0; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #999; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>💰 Заказ оплачен!</h1>
+          <p style="margin: 5px 0;">Заказ #${orderId.slice(0, 13)}</p>
+        </div>
+        <div class="content">
+          
+          <div class="section">
+            <div class="section-title">👤 Клиент</div>
+            <div class="info-row"><span class="info-label">Имя:</span> ${customerName}</div>
+            <div class="info-row"><span class="info-label">Телефон:</span> ${customerPhone}</div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">💳 Оплата</div>
+            <div class="info-row"><span class="info-label">Способ оплаты:</span> ${paymentMethodLabels[paymentMethod] || paymentMethod}</div>
+          </div>
+
+          <div class="amount">${formatPrice(totalAmount)}</div>
+
+          <p style="text-align: center; color: #4caf50; font-weight: bold;">
+            ✅ Заказ можно готовить к отправке
+          </p>
+
+        </div>
+        <div class="footer">
+          <p>Автоматическое уведомление о поступлении оплаты от Don Giulio Select.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({
+    to: managerEmailList,
+    subject: `💰 Заказ #${orderId.slice(0, 13)} оплачен - ${customerName}`,
+    html,
+  });
+}
+
+export async function sendDeliveryStartedNotificationToManagers(
+  orderId: string,
+  customerName: string,
+  customerPhone: string,
+  deliveryAddress: string,
+  courierService: string,
+  totalAmount: string
+): Promise<boolean> {
+  const MANAGER_EMAILS = process.env.MANAGER_EMAILS;
+  
+  if (!MANAGER_EMAILS) {
+    console.warn('⚠️ MANAGER_EMAILS not configured - delivery notification not sent');
+    return false;
+  }
+
+  const managerEmailList = MANAGER_EMAILS.split(',').map(email => email.trim()).filter(Boolean);
+  
+  if (managerEmailList.length === 0) {
+    console.warn('⚠️ No valid manager emails found');
+    return false;
+  }
+
+  const courierServiceLabels: Record<string, string> = {
+    'yandex_go': 'Яндекс Go',
+    'yandex_delivery': 'Яндекс Доставка',
+    'cdek': 'CDEK',
+    'don_giulio_courier': 'Курьер Don Giulio',
+  };
+
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(numPrice);
+  };
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #2481cc; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }
+        .section { background-color: white; padding: 15px; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ddd; }
+        .section-title { font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #2481cc; }
+        .info-row { margin-bottom: 8px; }
+        .info-label { font-weight: bold; color: #666; }
+        .amount { font-size: 24px; font-weight: bold; color: #2481cc; text-align: center; margin: 15px 0; }
+        .footer { text-align: center; padding: 20px; font-size: 12px; color: #999; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>🚚 Курьер вызван!</h1>
+          <p style="margin: 5px 0;">Заказ #${orderId.slice(0, 13)}</p>
+        </div>
+        <div class="content">
+          
+          <div class="section">
+            <div class="section-title">👤 Клиент</div>
+            <div class="info-row"><span class="info-label">Имя:</span> ${customerName}</div>
+            <div class="info-row"><span class="info-label">Телефон:</span> ${customerPhone}</div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">🚚 Доставка</div>
+            <div class="info-row"><span class="info-label">Адрес:</span> ${deliveryAddress}</div>
+            <div class="info-row"><span class="info-label">Служба:</span> ${courierServiceLabels[courierService] || courierService}</div>
+          </div>
+
+          <div class="amount">${formatPrice(totalAmount)}</div>
+
+          <p style="text-align: center; color: #2481cc; font-weight: bold;">
+            📦 Заказ в пути к клиенту
+          </p>
+
+        </div>
+        <div class="footer">
+          <p>Автоматическое уведомление о вызове курьера от Don Giulio Select.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({
+    to: managerEmailList,
+    subject: `🚚 Курьер вызван - Заказ #${orderId.slice(0, 13)} (${customerName})`,
+    html,
+  });
+}
+
 export async function sendNewOrderNotificationToManagers(
   orderId: string,
   customerName: string,
