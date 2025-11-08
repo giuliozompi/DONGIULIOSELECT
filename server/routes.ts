@@ -2884,7 +2884,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const offerId = data.offerId || order.yandexDeliveryOfferId;
       
       // Prepara items per Yandex Delivery (dimensioni in METRI, non cm!)
-      const items = [{
+      const orderItem: any = {
         extra_id: order.id, // Nostro numero d'ordine per riferimento
         title: 'Don Giulio Select - Food Order',
         quantity: 1,
@@ -2898,7 +2898,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         droppof_point: 2, // point_id del punto di consegna (destination) - typo ufficiale Yandex!
         cost_value: order.amount.toString(), // Valore dichiarato per assicurazione
         cost_currency: 'RUB',
-      }];
+      };
+      
+      // Aggiungi fiscalizzazione se payment_on_delivery è attivo
+      // OBBLIGATORIO per Yandex quando si usa payment_on_delivery in Russia
+      if (order.customerPaysShipping && order.yandexDeliveryPrice) {
+        orderItem.fiscalization = {
+          vat_code_str: 'vat_20',  // IVA 20% (standard in Russia per prodotti alimentari)
+          supplier_inn: '772863212942',  // Partita IVA Don Giulio
+          article: 'FOOD-ORDER',  // SKU prodotto
+          item_type: 'product'  // Tipo: prodotto (non servizio)
+        };
+      }
+      
+      const items = [orderItem];
       
       // Prepara destination point con payment on delivery se configurato
       const destinationPoint: any = {
@@ -3287,21 +3300,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Crea ordine Yandex Go
+      const orderItem: any = {
+        quantity: 1,
+        weight: 2,
+        size: {
+          length: 0.3,
+          width: 0.2,
+          height: 0.15
+        },
+        cost_value: order.amount,
+        cost_currency: 'RUB',
+        title: 'Don Giulio Select - Food Order',
+        pickup_point: 1,   // Required: ID of pickup route_point
+        dropoff_point: 2   // Required: ID of delivery route_point
+      };
+      
+      // Aggiungi fiscalizzazione se payment_on_delivery è attivo
+      // OBBLIGATORIO per Yandex quando si usa payment_on_delivery in Russia
+      if (order.customerPaysShipping) {
+        orderItem.fiscalization = {
+          vat_code_str: 'vat_20',  // IVA 20% (standard in Russia per prodotti alimentari)
+          supplier_inn: '772863212942',  // Partita IVA Don Giulio
+          article: 'FOOD-ORDER',  // SKU prodotto
+          item_type: 'product'  // Tipo: prodotto (non servizio)
+        };
+      }
+      
       const claimRequest: any = {
-        items: [{
-          quantity: 1,
-          weight: 2,
-          size: {
-            length: 0.3,
-            width: 0.2,
-            height: 0.15
-          },
-          cost_value: order.amount,
-          cost_currency: 'RUB',
-          title: 'Don Giulio Select - Food Order',
-          pickup_point: 1,   // Required: ID of pickup route_point
-          dropoff_point: 2   // Required: ID of delivery route_point
-        }],
+        items: [orderItem],
         route_points: [
           {
             point_id: 1,  // Required: Unique ID for this route point
