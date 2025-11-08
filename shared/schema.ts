@@ -465,6 +465,10 @@ export const orderChangeLogs = pgTable("order_change_logs", {
     oldAddress?: string;
     newAddress?: string;
     
+    // Per shipping_settings_changed
+    customerPaysShipping?: boolean;
+    shippingPaymentMethod?: 'card' | 'cash';
+    
     // Per Yandex delivery integration (yandex_go_created, yandex_dostavka_created, etc)
     savedToCustomer?: boolean;
     claimId?: string;

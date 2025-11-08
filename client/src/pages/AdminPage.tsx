@@ -1625,6 +1625,27 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
     },
   });
 
+  // Update shipping settings mutation
+  const updateShippingSettingsMutation = useMutation({
+    mutationFn: async ({ orderId, customerPaysShipping, shippingPaymentMethod }: { orderId: string; customerPaysShipping: boolean; shippingPaymentMethod: 'card' | 'cash' }) => {
+      return await apiRequest('PATCH', `/api/admin/orders/${orderId}/shipping-settings`, { 
+        customerPaysShipping, 
+        shippingPaymentMethod 
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({ title: '✅ Настройки доставки обновлены' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось обновить настройки доставки',
+        variant: 'destructive' 
+      });
+    },
+  });
+
   // Helper function to check if order has products requiring marking
   const orderRequiresMarking = (order: Order): boolean => {
     const result = order.items.some(item => {
@@ -1848,6 +1869,59 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       <p className="text-xs text-muted-foreground">Только мастер-администратор может изменять оплаченные заказы</p>
                     )}
                   </div>
+
+                  {/* Shipping Settings - показываем solo per ordini ОПЛАЧЕН senza corriere */}
+                  {order.status === 'ОПЛАЧЕН' && !order.yandexClaimId && !order.yandexGoClaimId && (
+                    <div className="flex gap-4 items-center p-3 bg-muted/30 rounded-md">
+                      <div className="flex gap-2 items-center">
+                        <Label className="text-sm font-medium">Оплачивает доставку:</Label>
+                        <Select 
+                          value={order.customerPaysShipping ? 'customer' : 'merchant'}
+                          onValueChange={(value) => {
+                            updateShippingSettingsMutation.mutate({
+                              orderId: order.id,
+                              customerPaysShipping: value === 'customer',
+                              shippingPaymentMethod: (order.shippingPaymentMethod || 'card') as 'card' | 'cash'
+                            });
+                          }}
+                          disabled={updateShippingSettingsMutation.isPending}
+                        >
+                          <SelectTrigger className="w-[200px]" data-testid={`select-customer-pays-${order.id}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="customer">Получатель</SelectItem>
+                            <SelectItem value="merchant">Магазин</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      {order.customerPaysShipping && (
+                        <div className="flex gap-2 items-center">
+                          <Label className="text-sm font-medium">Способ оплаты доставки:</Label>
+                          <Select 
+                            value={order.shippingPaymentMethod || 'card'}
+                            onValueChange={(value: 'card' | 'cash') => {
+                              updateShippingSettingsMutation.mutate({
+                                orderId: order.id,
+                                customerPaysShipping: true,
+                                shippingPaymentMethod: value
+                              });
+                            }}
+                            disabled={updateShippingSettingsMutation.isPending}
+                          >
+                            <SelectTrigger className="w-[180px]" data-testid={`select-shipping-payment-${order.id}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="card">Картой</SelectItem>
+                              <SelectItem value="cash">Наличными</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="flex gap-2">
                     {/* View/Print button - Always visible in all statuses */}
