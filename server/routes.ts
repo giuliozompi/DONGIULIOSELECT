@@ -3179,6 +3179,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const priceInfo = await yandexGoService.checkPrice(priceRequest);
       
+      // SALVA il prezzo nel database per usarlo quando si crea l'ordine
+      await storage.updateOrder(orderId, {
+        yandexGoPrice: priceInfo.price
+      });
+      
       // Log temporaneo per debug conversioni
       console.log('🚗 YANDEX GO - Risposta al frontend:', {
         price: priceInfo.price,
@@ -3234,7 +3239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (order.customerPaysShipping) {
         // Usa il costo salvato dall'admin quando ha cliccato "Calcola prezzo"
-        deliveryCost = order.yandexGoDeliveryCost;
+        deliveryCost = order.yandexGoPrice;
         
         if (!deliveryCost) {
           return res.status(400).json({
