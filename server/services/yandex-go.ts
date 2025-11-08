@@ -102,6 +102,20 @@ export interface YandexGoClaimRequest {
     };
     type: 'source' | 'destination';
     visit_order: number;
+    // Payment on delivery (solo per destination)
+    external_order_cost?: {
+      value: string; // Importo da riscuotere (es: "250.00")
+      currency: string; // Valuta (es: "RUB")
+    };
+    payment_on_delivery?: {
+      payment_method: 'card' | 'cash'; // Metodo di pagamento
+      client_order_id?: string; // ID ordine cliente
+      customer?: {
+        full_name: string;
+        phone: string;
+        email?: string;
+      };
+    };
   }>;
   optional_return?: boolean;
   skip_door_to_door?: boolean;

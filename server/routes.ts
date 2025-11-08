@@ -2862,6 +2862,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Prepara destination point con payment on delivery se configurato
+      const destinationPoint: any = {
+        point_id: 2,
+        visit_order: 2,
+        coordinates: data.deliveryCoordinates,
+        type: 'destination',
+        address: {
+          fullname: data.deliveryAddress, // Usa l'indirizzo digitato dall'admin, non quello vecchio del DB
+          coordinates: data.deliveryCoordinates,
+        },
+        contact: data.deliveryContact,
+      };
+      
+      // Aggiungi payment on delivery se il cliente paga la spedizione
+      if (order.customerPaysShipping && selectedOffer) {
+        const deliveryCost = selectedOffer.price?.total_price || selectedOffer.price?.total_price_with_vat || '0';
+        destinationPoint.external_order_cost = {
+          value: deliveryCost,
+          currency: 'RUB',
+        };
+        destinationPoint.payment_on_delivery = {
+          payment_method: order.shippingPaymentMethod || 'card',
+          client_order_id: order.id,
+          customer: {
+            full_name: data.deliveryContact.name,
+            phone: data.deliveryContact.phone,
+            ...(data.deliveryContact.email && { email: data.deliveryContact.email }),
+          },
+        };
+      }
+      
       // Crea ordine Yandex Delivery
       const yandexOrder = await yandexDostavkaService.createOrder({
         items,
@@ -2877,17 +2908,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
             contact: data.pickupContact,
           },
-          {
-            point_id: 2,
-            visit_order: 2,
-            coordinates: data.deliveryCoordinates,
-            type: 'destination',
-            address: {
-              fullname: data.deliveryAddress, // Usa l'indirizzo digitato dall'admin, non quello vecchio del DB
-              coordinates: data.deliveryCoordinates,
-            },
-            contact: data.deliveryContact,
-          },
+          destinationPoint,
         ],
         comment: data.comment || `Заказ ${order.id.slice(0, 8)} - Don Giulio Select`,
         offer_id: data.offerId,
@@ -3154,6 +3175,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Crea request_id univoco per idempotenza
       const requestId = `don-giulio-go-${Date.now()}-${nanoid(8)}`;
       
+      // Calcola prezzo se il cliente paga la spedizione
+      let deliveryCost: string | null = null;
+      if (order.customerPaysShipping) {
+        const priceRequest = {
+          items: [{
+            quantity: 1,
+            weight: 2,
+            size: { length: 0.3, width: 0.2, height: 0.15 }
+          }],
+          route_points: [
+            { coordinates: pickupCoords as [number, number], fullname: pickupAddress },
+            { coordinates: deliveryCoords as [number, number], fullname: deliveryAddress }
+          ],
+          requirements: { taxi_classes: ['express'] }
+        };
+        const priceInfo = await yandexGoService.checkPrice(priceRequest);
+        deliveryCost = priceInfo.price;
+      }
+      
+      // Prepara destination point con payment on delivery se configurato
+      const destinationPoint: any = {
+        point_id: 2,
+        coordinates: deliveryCoords,
+        fullname: deliveryAddress,
+        address: { fullname: deliveryAddress },
+        contact: {
+          phone: deliveryContactPhone,
+          name: deliveryContactName
+        },
+        type: 'destination' as const,
+        visit_order: 2
+      };
+      
+      // Aggiungi payment on delivery se il cliente paga la spedizione
+      if (order.customerPaysShipping && deliveryCost) {
+        destinationPoint.external_order_cost = {
+          value: deliveryCost,
+          currency: 'RUB',
+        };
+        destinationPoint.payment_on_delivery = {
+          payment_method: order.shippingPaymentMethod || 'card',
+          client_order_id: order.id,
+          customer: {
+            full_name: deliveryContactName,
+            phone: deliveryContactPhone,
+          },
+        };
+      }
+      
       // Crea ordine Yandex Go
       const claimRequest = {
         items: [{
@@ -3185,20 +3255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             type: 'source' as const,
             visit_order: 1
           },
-          {
-            point_id: 2,  // Required: Unique ID for this route point
-            coordinates: deliveryCoords,
-            fullname: deliveryAddress,
-            address: {
-              fullname: deliveryAddress
-            },
-            contact: {
-              phone: deliveryContactPhone,
-              name: deliveryContactName
-            },
-            type: 'destination' as const,
-            visit_order: 2
-          }
+          destinationPoint
         ],
         comment: `Заказ ${orderId.substring(0, 8)} - Don Giulio Select`,
         requirements: {
