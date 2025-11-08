@@ -3230,6 +3230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Calcola prezzo se il cliente paga la spedizione
       let deliveryCost: string | null = null;
+      let offerPayload: string | undefined = undefined;
       if (order.customerPaysShipping) {
         const priceRequest = {
           items: [{
@@ -3245,6 +3246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         const priceInfo = await yandexGoService.checkPrice(priceRequest);
         deliveryCost = priceInfo.price;
+        offerPayload = priceInfo.offer_id; // Salva l'offer_id per passarlo a createClaim
         
         // Validazione: se customerPaysShipping è true, deliveryCost deve esistere
         if (!deliveryCost) {
@@ -3286,7 +3288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Crea ordine Yandex Go
-      const claimRequest = {
+      const claimRequest: any = {
         items: [{
           quantity: 1,
           weight: 2,
@@ -3323,6 +3325,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         skip_door_to_door: false  // Consegna porta a porta
       };
+      
+      // Passa offer_payload se disponibile (richiesto dall'API Yandex)
+      if (offerPayload) {
+        claimRequest.offer_id = offerPayload;
+      }
       
       // Crea claim
       const claim = await yandexGoService.createClaim(claimRequest, requestId);
