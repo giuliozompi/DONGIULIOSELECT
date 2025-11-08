@@ -2925,6 +2925,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         destinationPoint.external_order_cost = {
           value: deliveryCost,
           currency: 'RUB',
+          currency_sign: '₽',
         };
         destinationPoint.payment_on_delivery = {
           payment_method: order.shippingPaymentMethod || 'card',
@@ -2932,7 +2933,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           customer: {
             full_name: data.deliveryContact.name,
             phone: data.deliveryContact.phone,
-            ...(data.deliveryContact.email && { email: data.deliveryContact.email }),
+            ...((data.deliveryContact as any).email && { email: (data.deliveryContact as any).email }),
           },
         };
       }
@@ -3273,6 +3274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         destinationPoint.external_order_cost = {
           value: deliveryCost,
           currency: 'RUB',
+          currency_sign: '₽',
         };
         destinationPoint.payment_on_delivery = {
           payment_method: order.shippingPaymentMethod || 'card',

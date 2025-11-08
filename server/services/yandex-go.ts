@@ -106,6 +106,7 @@ export interface YandexGoClaimRequest {
     external_order_cost?: {
       value: string; // Importo da riscuotere (es: "250.00")
       currency: string; // Valuta (es: "RUB")
+      currency_sign: string; // Simbolo della valuta (es: "₽")
     };
     payment_on_delivery?: {
       payment_method: 'card' | 'cash'; // Metodo di pagamento
