@@ -197,6 +197,11 @@ export const orders = pgTable("orders", {
   deliveryLatitude: decimal("delivery_latitude", { precision: 10, scale: 7 }),
   deliveryLongitude: decimal("delivery_longitude", { precision: 10, scale: 7 }),
   
+  // Costo spedizione e pagamento
+  deliveryCost: decimal("delivery_cost", { precision: 10, scale: 2 }), // Costo della spedizione (salvato per uso futuro)
+  customerPaysShipping: boolean("customer_pays_shipping").notNull().default(true), // Se true, il cliente paga la spedizione al corriere
+  shippingPaymentMethod: text("shipping_payment_method"), // 'card' | 'cash' - metodo di pagamento per la spedizione
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
