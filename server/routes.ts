@@ -2743,6 +2743,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PATCH /api/admin/orders/:id/shipping-settings - Aggiorna impostazioni spedizione (ADMIN ONLY)
+  app.patch("/api/admin/orders/:id/shipping-settings", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      const schema = z.object({
+        customerPaysShipping: z.boolean(),
+        shippingPaymentMethod: z.enum(['card', 'cash']).optional(),
+      });
+      
+      const data = schema.parse(req.body);
+      
+      // Aggiorna ordine
+      const updatedOrder = await storage.updateOrder(orderId, {
+        customerPaysShipping: data.customerPaysShipping,
+        shippingPaymentMethod: data.shippingPaymentMethod || 'card',
+      });
+      
+      // Crea log
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId: req.userId!,
+        changeType: 'shipping_settings_changed',
+        changeData: {
+          customerPaysShipping: data.customerPaysShipping,
+          shippingPaymentMethod: data.shippingPaymentMethod || 'card',
+        },
+      });
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error updating shipping settings:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // ==================== YANDEX GO DELIVERY ====================
   
   // POST /api/admin/orders/:id/yandex-delivery-price - Calcola prezzo delivery Yandex Taxi (ADMIN ONLY)
