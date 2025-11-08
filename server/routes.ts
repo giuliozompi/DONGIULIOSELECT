@@ -2916,14 +2916,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Salva info Yandex nell'ordine
-      await storage.updateOrder(orderId, {
+      const updateData: any = {
         yandexClaimId: yandexOrder.id,
         yandexDeliveryStatus: yandexOrder.status,
         yandexDeliveryPrice: yandexOrder.pricing?.offer?.price || null,
         courierService: 'yandex_delivery',
         courierCalledAt: new Date(),
         status: 'ВЫЗВАН КУРЬЕР',
-      });
+      };
+      
+      // Salva deliveryCost se il cliente paga la spedizione
+      if (order.customerPaysShipping && selectedOffer) {
+        const deliveryCost = selectedOffer.price?.total_price || selectedOffer.price?.total_price_with_vat || '0';
+        updateData.deliveryCost = deliveryCost;
+      }
+      
+      await storage.updateOrder(orderId, updateData);
       
       // Log dell'azione
       await storage.createOrderChangeLog({
@@ -3192,6 +3200,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         const priceInfo = await yandexGoService.checkPrice(priceRequest);
         deliveryCost = priceInfo.price;
+        
+        // Validazione: se customerPaysShipping è true, deliveryCost deve esistere
+        if (!deliveryCost) {
+          return res.status(500).json({
+            error: 'Failed to calculate delivery cost',
+            message: 'Non è stato possibile calcolare il costo della spedizione. Riprovare.'
+          });
+        }
       }
       
       // Prepara destination point con payment on delivery se configurato
@@ -3288,14 +3304,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const acceptedClaim = await yandexGoService.acceptClaim(claim.id, claimInfo.version);
       
       // Aggiorna ordine con info Yandex Go
-      await storage.updateOrder(orderId, {
+      const finalPrice = acceptedClaim.pricing?.offer?.price || acceptedClaim.pricing?.final_price || null;
+      const updateData: any = {
         yandexGoClaimId: acceptedClaim.id,
         yandexGoStatus: acceptedClaim.status,
-        yandexGoPrice: acceptedClaim.pricing?.offer?.price || acceptedClaim.pricing?.final_price || null,
+        yandexGoPrice: finalPrice,
         courierService: 'yandex_go',
         courierCalledAt: new Date(),
         status: 'ВЫЗВАН КУРЬЕР',
-      });
+      };
+      
+      // Salva deliveryCost se il cliente paga la spedizione (usa il prezzo passato all'API)
+      if (order.customerPaysShipping && deliveryCost) {
+        updateData.deliveryCost = deliveryCost;
+      }
+      
+      await storage.updateOrder(orderId, updateData);
       
       // Log dell'azione
       await storage.createOrderChangeLog({
