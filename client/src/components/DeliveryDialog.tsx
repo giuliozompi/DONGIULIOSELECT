@@ -114,6 +114,10 @@ export function DeliveryDialog({
   const [selectedService, setSelectedService] = useState<'dostavka' | 'go' | null>(null);
   const [selectedDostavkaOffer, setSelectedDostavkaOffer] = useState<string>(''); // payload dell'offerta selezionata
   
+  // Shipping payment settings
+  const [customerPaysShipping, setCustomerPaysShipping] = useState<boolean>(order.customerPaysShipping ?? true);
+  const [shippingPaymentMethod, setShippingPaymentMethod] = useState<'card' | 'cash'>((order.shippingPaymentMethod as 'card' | 'cash') || 'card');
+  
   // Load pickup addresses
   const { data: pickupAddresses = [], isLoading: isLoadingPickup } = useQuery<PickupAddress[]>({
     queryKey: ['/api/admin/pickup-addresses'],
@@ -377,6 +381,29 @@ export function DeliveryDialog({
       toast({
         title: 'Ошибка сохранения',
         description: error.message || 'Не удалось сохранить адрес',
+        variant: 'destructive',
+      });
+    },
+  });
+  
+  // Update shipping settings mutation
+  const updateShippingSettingsMutation = useMutation({
+    mutationFn: async ({ customerPays, paymentMethod }: { customerPays: boolean; paymentMethod: 'card' | 'cash' }) => {
+      return await apiRequest('PATCH', `/api/admin/orders/${order.id}/shipping-settings`, {
+        customerPaysShipping: customerPays,
+        shippingPaymentMethod: paymentMethod,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({
+        title: '✅ Настройки доставки обновлены',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Ошибка',
+        description: error.message || 'Не удалось обновить настройки доставки',
         variant: 'destructive',
       });
     },
@@ -919,6 +946,64 @@ export function DeliveryDialog({
                   )}
                 </div>
               )}
+            </div>
+            
+            <Separator />
+            
+            {/* Shipping Payment Settings */}
+            <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
+              <Label className="text-base font-semibold">Оплата доставки</Label>
+              
+              <div className="flex gap-4 items-center">
+                <div className="flex gap-2 items-center flex-1">
+                  <Label className="text-sm font-medium">Оплачивает доставку:</Label>
+                  <Select 
+                    value={customerPaysShipping ? 'customer' : 'merchant'}
+                    onValueChange={(value) => {
+                      const customerPays = value === 'customer';
+                      setCustomerPaysShipping(customerPays);
+                      updateShippingSettingsMutation.mutate({
+                        customerPays,
+                        paymentMethod: shippingPaymentMethod,
+                      });
+                    }}
+                    disabled={updateShippingSettingsMutation.isPending}
+                  >
+                    <SelectTrigger className="w-[200px]" data-testid="select-customer-pays-delivery">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="customer">Получатель</SelectItem>
+                      <SelectItem value="merchant">Магазин</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {customerPaysShipping && (
+                  <div className="flex gap-2 items-center flex-1">
+                    <Label className="text-sm font-medium">Способ оплаты:</Label>
+                    <Select 
+                      value={shippingPaymentMethod}
+                      onValueChange={(value: 'card' | 'cash') => {
+                        setShippingPaymentMethod(value);
+                        updateShippingSettingsMutation.mutate({
+                          customerPays: customerPaysShipping,
+                          paymentMethod: value,
+                        });
+                      }}
+                      disabled={updateShippingSettingsMutation.isPending}
+                    >
+                      <SelectTrigger className="w-[180px]" data-testid="select-shipping-payment-method">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="card">Картой</SelectItem>
+                        <SelectItem value="cash">Наличными</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* Price Comparison Section - Always show after calculation */}
