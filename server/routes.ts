@@ -3259,7 +3259,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const destinationPoint: any = {
         point_id: 2,
         coordinates: deliveryCoords,
-        fullname: deliveryAddress,
         address: { fullname: deliveryAddress },
         contact: {
           phone: deliveryContactPhone,
@@ -3306,7 +3305,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           {
             point_id: 1,  // Required: Unique ID for this route point
             coordinates: pickupCoords,
-            fullname: pickupAddress,
             address: {
               fullname: pickupAddress
             },
