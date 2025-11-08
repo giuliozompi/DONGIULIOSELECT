@@ -3228,33 +3228,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Crea request_id univoco per idempotenza
       const requestId = `don-giulio-go-${Date.now()}-${nanoid(8)}`;
       
-      // Calcola prezzo se il cliente paga la spedizione
+      // IMPORTANTE: Non ricalcolare il prezzo qui - usa i dati salvati dall'UI
+      // L'offer_id deve corrispondere esattamente alla chiamata checkPrice originale
       let deliveryCost: string | null = null;
-      let offerPayload: string | undefined = undefined;
+      
       if (order.customerPaysShipping) {
-        const priceRequest = {
-          items: [{
-            quantity: 1,
-            weight: 2,
-            size: { length: 0.3, width: 0.2, height: 0.15 }
-          }],
-          route_points: [
-            { coordinates: pickupCoords as [number, number], fullname: pickupAddress },
-            { coordinates: deliveryCoords as [number, number], fullname: deliveryAddress }
-          ],
-          requirements: { taxi_classes: ['express'] }
-        };
-        const priceInfo = await yandexGoService.checkPrice(priceRequest);
-        deliveryCost = priceInfo.price;
-        offerPayload = priceInfo.offer_id; // Salva l'offer_id per passarlo a createClaim
+        // Usa il costo salvato dall'admin quando ha cliccato "Calcola prezzo"
+        deliveryCost = order.yandexGoDeliveryCost;
         
-        // Validazione: se customerPaysShipping è true, deliveryCost deve esistere
         if (!deliveryCost) {
-          return res.status(500).json({
-            error: 'Failed to calculate delivery cost',
-            message: 'Non è stato possibile calcolare il costo della spedizione. Riprovare.'
+          return res.status(400).json({
+            error: 'Missing delivery cost',
+            message: 'Calcola prima il costo della spedizione cliccando il pulsante "Calcola prezzo Yandex Go".'
           });
         }
+        
+        // NON chiamiamo checkPrice() qui perché:
+        // 1. Il prezzo è già stato calcolato e salvato dall'UI
+        // 2. L'offer_id scade dopo 10 minuti
+        // 3. Non possiamo ottenere un nuovo offer_id con payment_on_delivery qui
+        //    perché richiederebbe di conoscere il costo in anticipo (circular dependency)
       }
       
       // Prepara destination point con payment on delivery se configurato
@@ -3272,8 +3265,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Aggiungi payment on delivery se il cliente paga la spedizione
       if (order.customerPaysShipping && deliveryCost) {
+        // external_order_cost = totale che il cliente paga al corriere (solo spedizione in questo caso)
+        // Secondo la documentazione Yandex, questo è l'importo totale della transazione
+        const totalCostToCourier = deliveryCost;
+        
         destinationPoint.external_order_cost = {
-          value: deliveryCost,
+          value: totalCostToCourier,
           currency: 'RUB',
           currency_sign: '₽',
         };
@@ -3326,10 +3323,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         skip_door_to_door: false  // Consegna porta a porta
       };
       
-      // Passa offer_payload se disponibile (richiesto dall'API Yandex)
-      if (offerPayload) {
-        claimRequest.offer_id = offerPayload;
-      }
+      // NON passiamo offer_payload perché non abbiamo fatto checkPrice() con payment_on_delivery
+      // Yandex dovrebbe accettare il claim senza offer_payload quando usa payment_on_delivery
       
       // Crea claim
       const claim = await yandexGoService.createClaim(claimRequest, requestId);
