@@ -474,9 +474,9 @@ export class YandexGoService {
         logger.info('Sending payload to Yandex', { 
           payloadLength: payload.length,
           hasOfferPayload: !!finalPayload.offer_payload,
-          offerPayloadValue: finalPayload.offer_payload,
-          actualPayload: finalPayload
+          offerPayloadValue: finalPayload.offer_payload
         });
+        console.log('[YANDEX GO PAYLOAD]', JSON.stringify(finalPayload, null, 2));
         
         const response = await yandexFetch(url, {
           method: 'POST',
