@@ -1113,6 +1113,33 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
     },
   });
 
+  // Generate payment link mutation
+  const generatePaymentLinkMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/admin/orders/${order.id}/generate-payment-link`, {});
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.details || error.error || 'Failed to generate payment link');
+      }
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
+      toast({ 
+        title: '✅ Ссылка на оплату создана', 
+        description: 'Ссылка на оплату успешно создана и отправлена клиенту.',
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка создания ссылки', 
+        description: error.message || 'Не удалось создать ссылку на оплату',
+        variant: 'destructive' 
+      });
+    },
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -1423,6 +1450,38 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
               <span>{displayOrder.amount}₽</span>
             </div>
           </div>
+
+          {/* Generate Payment Link Button (Only for СОБРАН status with online payment) */}
+          {displayOrder.status === 'СОБРАН' && displayOrder.paymentMethod !== 'cash_on_delivery' && (
+            <div className="border rounded-md p-4 bg-primary/5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h4 className="font-semibold text-sm mb-1">💳 Генерация ссылки на оплату</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Заказ готов к отправке. Создайте и отправьте ссылку на оплату клиенту.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => generatePaymentLinkMutation.mutate()}
+                  disabled={generatePaymentLinkMutation.isPending}
+                  variant="default"
+                  data-testid="button-generate-payment-link"
+                >
+                  {generatePaymentLinkMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Создание...
+                    </>
+                  ) : (
+                    <>
+                      <Link className="w-4 h-4 mr-2" />
+                      Создать ссылку
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Change Logs */}
           {logs.length > 0 && (

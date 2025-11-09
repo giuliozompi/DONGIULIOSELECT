@@ -2565,11 +2565,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         } catch (error) {
           console.error('❌ Error creating payment link:', error);
-          // Non fallire completamente - mantieni lo stato СОБРАН
-          return res.status(500).json({ 
-            error: 'Failed to create payment link',
-            details: error instanceof Error ? error.message : 'Unknown error',
-            hint: 'Check YooKassa credentials (YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY)',
+          console.error('   Error details:', error instanceof Error ? error.message : 'Unknown error');
+          console.error('   Stack trace:', error instanceof Error ? error.stack : '');
+          
+          // NON fallire completamente - lo stato СОБРАН è già salvato
+          // Restituisci successo con warning che il link pagamento va generato manualmente
+          return res.json({
+            ...updatedOrder,
+            status: 'СОБРАН', // Rimane in СОБРАН, non passa a ОТПРАВЛЕНА ССЫЛКА
+            paymentLinkSent: false,
+            warning: 'Status updated successfully, but payment link generation failed. You can regenerate it manually.',
+            error: error instanceof Error ? error.message : 'Unknown error',
           });
         }
       }
@@ -2656,6 +2662,186 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error('Error calling courier:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/generate-payment-link - Genera e invia link pagamento manualmente (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/generate-payment-link", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verifica che l'ordine non sia già pagato
+      if (order.status === 'ОПЛАЧЕН' || order.status === 'ПОЛУЧЕН') {
+        return res.status(400).json({ error: 'Order is already paid or completed' });
+      }
+      
+      // Verifica che non sia pagamento in contanti
+      if (order.paymentMethod === 'cash_on_delivery') {
+        return res.status(400).json({ error: 'Cannot generate payment link for cash on delivery orders' });
+      }
+      
+      console.log(`🔄 [Generate Payment Link] Manually generating payment link for order ${orderId}...`);
+      
+      // Verifica se esiste già un payment intent per questo ordine
+      let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
+      let confirmationUrl: string;
+      
+      if (!paymentIntent || paymentIntent.status !== 'pending') {
+        console.log(`📝 Creating new YooKassa payment...`);
+        // Crea nuovo payment con YooKassa
+        const { createYooKassaPayment, formatYooKassaAmount, createReceipt } = await import('./services/yookassa-payment');
+        
+        const baseUrl = process.env.REPLIT_DOMAINS 
+          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
+          : (process.env.APP_URL || 'http://localhost:5000');
+        
+        const returnUrl = `${baseUrl}/payment-return`;
+        
+        // Recupera informazioni sui prodotti per маркировка
+        const allProducts = await storage.getAllProducts();
+        const productsMap = new Map(allProducts.map(p => [p.id, p]));
+        
+        // Recupera codici маркировка per questo ordine
+        const markingLogs = await storage.getMarkingLogsByOrder(orderId);
+        const markingCodesMap = new Map<string, string[]>();
+        
+        // Organizza codici per productId
+        for (const log of markingLogs) {
+          const codes = markingCodesMap.get(log.productId) || [];
+          codes.push(log.markingCode);
+          markingCodesMap.set(log.productId, codes);
+        }
+        
+        // Aggiungi requiresMarking agli order items
+        const enrichedOrderItems = order.items.map(item => {
+          const product = productsMap.get(item.productId);
+          return {
+            ...item,
+            requiresMarking: product?.requiresMarking || false,
+          };
+        });
+        
+        // Crea receipt per scontrino fiscale (54-ФЗ) con маркировка
+        const receipt = createReceipt(
+          enrichedOrderItems,
+          order.customerEmail,
+          order.customerPhone,
+          markingCodesMap,
+          1, // tax_system_code: УСН доход
+          1  // vat_code: без НДС
+        );
+        
+        const yookassaPayment = await createYooKassaPayment({
+          amount: {
+            value: formatYooKassaAmount(parseFloat(order.amount)),
+            currency: 'RUB',
+          },
+          description: `Заказ №${orderId.slice(0, 8)}`,
+          return_url: returnUrl,
+          metadata: {
+            orderId,
+            userId: order.userId,
+          },
+          capture: true,
+          receipt,
+        });
+        
+        confirmationUrl = yookassaPayment.confirmation?.confirmation_url || '';
+        
+        // Salva payment intent nel database
+        paymentIntent = await storage.createPaymentIntent({
+          orderId,
+          provider: 'YooKassa',
+          status: 'pending',
+          amount: order.amount,
+          redirectUrl: confirmationUrl,
+          raw: {
+            yookassaPaymentId: yookassaPayment.id,
+            yookassaStatus: yookassaPayment.status,
+            createdAt: yookassaPayment.created_at,
+          },
+        });
+      } else {
+        console.log(`♻️ Reusing existing payment intent`);
+        confirmationUrl = paymentIntent.redirectUrl || '';
+      }
+      
+      // Invia link pagamento via Telegram
+      try {
+        const { sendPaymentLink } = await import('./services/telegram-bot');
+        const telegramSent = await sendPaymentLink(
+          order.userId,
+          orderId,
+          order.amount,
+          confirmationUrl
+        );
+        if (telegramSent) {
+          console.log('✅ Payment link sent via Telegram');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to send payment link via Telegram:', error);
+      }
+      
+      // Invia link pagamento via email
+      if (order.customerEmail) {
+        try {
+          const { sendPaymentLinkEmail } = await import('./services/email');
+          await sendPaymentLinkEmail(
+            order.customerEmail,
+            orderId,
+            order.customerName,
+            order.amount,
+            confirmationUrl
+          );
+          console.log('✅ Payment link sent via email');
+        } catch (error) {
+          console.warn('⚠️ Failed to send payment link via email:', error);
+        }
+      }
+      
+      // Invia link pagamento via WhatsApp
+      try {
+        const { sendPaymentLinkWhatsApp } = await import('./services/whatsapp');
+        const whatsappSent = await sendPaymentLinkWhatsApp(
+          order.customerPhone,
+          orderId,
+          order.customerName,
+          order.amount,
+          confirmationUrl
+        );
+        if (whatsappSent) {
+          console.log('✅ Payment link sent via WhatsApp');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to send payment link via WhatsApp:', error);
+      }
+      
+      // Aggiorna ordine
+      const updatedOrder = await storage.updateOrder(orderId, {
+        status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
+        paymentId: paymentIntent.id,
+        paymentLinkSentAt: new Date(),
+      });
+      
+      console.log(`✅ Payment link generated and sent for order ${orderId}`);
+      
+      res.json({
+        ...updatedOrder,
+        paymentUrl: confirmationUrl,
+        paymentLinkSent: true,
+      });
+    } catch (error) {
+      console.error('❌ Error generating payment link:', error);
+      console.error('   Details:', error instanceof Error ? error.message : 'Unknown error');
+      res.status(500).json({ 
+        error: 'Failed to generate payment link',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   });
   
