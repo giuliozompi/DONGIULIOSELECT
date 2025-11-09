@@ -1011,6 +1011,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // GET /api/orders/:id/receipt - Recupera scontrino fiscale dell'ordine
+  app.get("/api/orders/:id/receipt", verifyTelegramInitData, async (req, res) => {
+    try {
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verifica che l'ordine appartenga all'utente
+      if (order.userId !== req.userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      
+      // Verifica che l'ordine sia stato pagato
+      if (!order.receiptId) {
+        return res.status(404).json({ error: 'Receipt not available for this order' });
+      }
+      
+      res.json({
+        receiptId: order.receiptId,
+        receiptUrl: order.receiptUrl,
+        receiptStatus: order.receiptStatus,
+        fiscalData: order.fiscalData,
+      });
+    } catch (error) {
+      console.error('Error fetching order receipt:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // POST /api/orders/:id/receipt/refresh - Aggiorna stato scontrino da YooKassa
+  app.post("/api/orders/:id/receipt/refresh", verifyTelegramInitData, async (req, res) => {
+    try {
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verifica che l'ordine appartenga all'utente
+      if (order.userId !== req.userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      
+      // Verifica che esista un receiptId
+      if (!order.receiptId) {
+        return res.status(404).json({ error: 'Receipt not available for this order' });
+      }
+      
+      // Recupera lo stato aggiornato da YooKassa
+      const { getYooKassaReceipt } = await import('./services/yookassa-payment');
+      const receipt = await getYooKassaReceipt(order.receiptId);
+      
+      // Aggiorna i dati nel database
+      await storage.updateOrderReceipt(order.id, {
+        receiptId: receipt.id,
+        receiptStatus: receipt.status,
+        fiscalData: {
+          fiscal_document_number: receipt.fiscal_document_number,
+          fiscal_storage_number: receipt.fiscal_storage_number,
+          fiscal_attribute: receipt.fiscal_attribute,
+          registered_at: receipt.registered_at,
+        },
+      });
+      
+      res.json({
+        receiptId: receipt.id,
+        receiptStatus: receipt.status,
+        fiscalData: {
+          fiscal_document_number: receipt.fiscal_document_number,
+          fiscal_storage_number: receipt.fiscal_storage_number,
+          fiscal_attribute: receipt.fiscal_attribute,
+          registered_at: receipt.registered_at,
+        },
+      });
+    } catch (error) {
+      console.error('Error refreshing order receipt:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // POST /api/orders/:id/reorder - Riordina (aggiungi prodotti dell'ordine al carrello)
   app.post("/api/orders/:id/reorder", verifyTelegramInitData, async (req, res) => {
     try {
@@ -1641,6 +1721,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`✅ [YooKassa Webhook] Assigned 1 spin token to user ${order.userId} for completed order ${order.id}`);
         } else {
           console.log(`⚠️ [YooKassa Webhook] Spin token already awarded for order ${order.id}`);
+        }
+        
+        // Crea scontrino fiscale (receipt) tramite YooKassa API
+        try {
+          console.log(`🧾 [YooKassa Webhook] Creating fiscal receipt for order ${order.id}...`);
+          
+          const { createReceiptAfterPayment, createReceipt } = await import('./services/yookassa-payment');
+          
+          // Recupera eventuali codici маркировка per l'ordine
+          const markingLogs = await storage.getMarkingLogsByOrderId(order.id);
+          const markingCodes = new Map<string, string[]>();
+          
+          for (const log of markingLogs) {
+            const existing = markingCodes.get(log.productId) || [];
+            existing.push(log.code);
+            markingCodes.set(log.productId, existing);
+          }
+          
+          // Recupera info prodotti per verificare quali richiedono маркировка
+          const productIds = [...new Set(order.items.map(item => item.productId))];
+          const products = await Promise.all(
+            productIds.map(id => storage.getProductById(id))
+          );
+          const productsMap = new Map(products.filter(p => p).map(p => [p!.id, p!]));
+          
+          // Prepara items con info маркировка
+          const orderItemsWithMarking = order.items.map(item => ({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            price: item.price,
+            unit: item.unit,
+            requiresMarking: productsMap.get(item.productId)?.requiresMarking || false,
+          }));
+          
+          // Crea receipt object
+          const receiptData = createReceipt(
+            orderItemsWithMarking,
+            order.customerEmail,
+            order.customerPhone,
+            markingCodes
+          );
+          
+          // Crea receipt tramite API YooKassa
+          const receipt = await createReceiptAfterPayment({
+            payment_id: payment.id,
+            customer: receiptData.customer,
+            items: receiptData.items,
+            tax_system_code: receiptData.tax_system_code,
+            send: true, // YooKassa invierà lo scontrino al cliente via email/SMS
+          });
+          
+          console.log(`✅ [YooKassa Webhook] Receipt created successfully: ${receipt.id}`);
+          
+          // Salva dati receipt nel database
+          await storage.updateOrderReceipt(order.id, {
+            receiptId: receipt.id,
+            receiptStatus: receipt.status,
+            fiscalData: {
+              fiscal_document_number: receipt.fiscal_document_number,
+              fiscal_storage_number: receipt.fiscal_storage_number,
+              fiscal_attribute: receipt.fiscal_attribute,
+              registered_at: receipt.registered_at,
+            },
+          });
+          
+          console.log(`✅ [YooKassa Webhook] Receipt data saved to database for order ${order.id}`);
+          
+          // Se il receipt è stato creato con successo e il cliente ha email, invia notifica
+          if (order.customerEmail && receipt.status === 'succeeded') {
+            try {
+              const { sendEmail } = await import('./services/email');
+              await sendEmail({
+                to: order.customerEmail,
+                subject: `Чек об оплате заказа #${order.id.slice(0, 13)} - Don Giulio Select`,
+                html: `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <meta charset="utf-8">
+                    <style>
+                      body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                      .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                      .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                      .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }
+                      .fiscal-info { background-color: white; padding: 15px; margin: 15px 0; border-radius: 4px; border: 1px solid #ddd; }
+                      .info-row { margin-bottom: 8px; }
+                      .label { font-weight: bold; color: #666; }
+                    </style>
+                  </head>
+                  <body>
+                    <div class="container">
+                      <div class="header">
+                        <h1>✅ Чек об оплате</h1>
+                        <p style="margin: 5px 0;">Заказ #${order.id.slice(0, 13)}</p>
+                      </div>
+                      <div class="content">
+                        <p>Здравствуйте, ${order.customerName}!</p>
+                        <p>Ваш платеж успешно обработан. Ниже представлены фискальные данные вашего чека.</p>
+                        
+                        <div class="fiscal-info">
+                          <h3 style="margin-top: 0; color: #4CAF50;">📋 Фискальные данные</h3>
+                          ${receipt.fiscal_document_number ? `<div class="info-row"><span class="label">Номер фискального документа:</span> ${receipt.fiscal_document_number}</div>` : ''}
+                          ${receipt.fiscal_storage_number ? `<div class="info-row"><span class="label">Номер фискального накопителя:</span> ${receipt.fiscal_storage_number}</div>` : ''}
+                          ${receipt.fiscal_attribute ? `<div class="info-row"><span class="label">Фискальный признак:</span> ${receipt.fiscal_attribute}</div>` : ''}
+                          ${receipt.registered_at ? `<div class="info-row"><span class="label">Дата регистрации:</span> ${new Date(receipt.registered_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}</div>` : ''}
+                        </div>
+                        
+                        <p><strong>Сумма оплаты:</strong> ${order.amount} ₽</p>
+                        
+                        <p style="color: #666; font-size: 12px; margin-top: 20px;">
+                          Вы также можете найти этот чек в разделе "Мои заказы" нашего приложения.
+                        </p>
+                      </div>
+                    </div>
+                  </body>
+                  </html>
+                `,
+              });
+              console.log(`✅ [YooKassa Webhook] Receipt email sent to customer ${order.customerEmail}`);
+            } catch (emailError) {
+              console.warn('⚠️ [YooKassa Webhook] Failed to send receipt email to customer:', emailError);
+            }
+          }
+        } catch (receiptError) {
+          console.error('❌ [YooKassa Webhook] Failed to create receipt:', receiptError);
+          // Non blocchiamo il webhook se la creazione del receipt fallisce
+          // Lo scontrino può essere creato manualmente in seguito
         }
       }
       

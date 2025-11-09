@@ -158,6 +158,17 @@ export const orders = pgTable("orders", {
   paymentId: varchar("payment_id"),
   paymentLinkSentAt: timestamp("payment_link_sent_at"),
   
+  // Scontrino fiscale (54-ФЗ) - dati da YooKassa
+  receiptId: varchar("receipt_id"), // ID dello scontrino da YooKassa
+  receiptUrl: text("receipt_url"), // URL per scaricare lo scontrino
+  receiptStatus: text("receipt_status"), // 'pending' | 'succeeded' | 'canceled'
+  fiscalData: jsonb("fiscal_data").$type<{
+    fiscal_document_number?: string; // Номер фискального документа
+    fiscal_storage_number?: string; // Номер фискального накопителя
+    fiscal_attribute?: string; // Фискальный признак документа
+    registered_at?: string; // Data registrazione scontrino
+  }>(), // Dati fiscali completi dello scontrino
+  
   // Gamification: traccia se i spin tokens sono stati assegnati per questo ordine
   spinTokensAwarded: boolean("spin_tokens_awarded").notNull().default(false),
   

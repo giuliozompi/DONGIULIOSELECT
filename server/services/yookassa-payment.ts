@@ -88,6 +88,37 @@ export interface YooKassaWebhookEvent {
   object: YooKassaPayment;
 }
 
+// Interfaccia per Receipt (Scontrino fiscale)
+export interface YooKassaReceiptResponse {
+  id: string; // ID dello scontrino
+  type: 'payment' | 'refund';
+  payment_id?: string;
+  refund_id?: string;
+  status: 'pending' | 'succeeded' | 'canceled';
+  fiscal_document_number?: string; // Номер фискального документа
+  fiscal_storage_number?: string; // Номер фискального накопителя
+  fiscal_attribute?: string; // Фискальный признак документа
+  registered_at?: string; // Data e ora di registrazione fiscale
+  fiscal_provider_id?: string;
+  items: YooKassaReceiptItem[];
+  customer?: {
+    email?: string;
+    phone?: string;
+  };
+}
+
+// Parametri per creare un receipt dopo il pagamento
+export interface CreateReceiptAfterPaymentParams {
+  payment_id: string;
+  customer: {
+    email?: string;
+    phone?: string;
+  };
+  items: YooKassaReceiptItem[];
+  tax_system_code?: number;
+  send?: boolean; // Se true, YooKassa invia lo scontrino al cliente via email/SMS
+}
+
 /**
  * Crea Basic Auth header per YooKassa
  */
@@ -391,6 +422,85 @@ export async function verifyYooKassaWebhook(
   } catch (error) {
     console.error('[YooKassa] Webhook verification failed:', error);
     return false;
+  }
+}
+
+/**
+ * Crea uno scontrino fiscale (receipt) dopo il pagamento
+ * 
+ * Usato per scenari "Receipt after payment" quando lo scontrino
+ * non è stato creato durante il pagamento iniziale.
+ * 
+ * @param params - Parametri dello scontrino
+ * @param idempotencyKey - Chiave di idempotenza (UUID)
+ * @returns Receipt object da YooKassa
+ */
+export async function createReceiptAfterPayment(
+  params: CreateReceiptAfterPaymentParams,
+  idempotencyKey?: string
+): Promise<YooKassaReceiptResponse> {
+  const key = idempotencyKey || randomUUID();
+  
+  const payload = {
+    type: 'payment',
+    payment_id: params.payment_id,
+    customer: params.customer,
+    send: params.send ?? true, // Default: invia scontrino al cliente
+    items: params.items,
+    tax_system_code: params.tax_system_code || 1,
+  };
+
+  try {
+    const response = await fetch(`${YOOKASSA_API_URL}/receipts`, {
+      method: 'POST',
+      headers: {
+        'Authorization': getAuthHeader(),
+        'Idempotence-Key': key,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`YooKassa Receipt API error: ${response.status} - ${JSON.stringify(errorData)}`);
+    }
+
+    const receipt: YooKassaReceiptResponse = await response.json();
+    console.log('✅ Receipt created successfully:', receipt.id);
+    return receipt;
+  } catch (error) {
+    console.error('[YooKassa] Error creating receipt:', error);
+    throw error;
+  }
+}
+
+/**
+ * Recupera informazioni su uno scontrino esistente
+ * 
+ * @param receiptId - ID dello scontrino YooKassa
+ * @returns Receipt object
+ */
+export async function getYooKassaReceipt(receiptId: string): Promise<YooKassaReceiptResponse> {
+  try {
+    const response = await fetch(`${YOOKASSA_API_URL}/receipts/${receiptId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': getAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`YooKassa Receipt API error: ${response.status} - ${JSON.stringify(errorData)}`);
+    }
+
+    const receipt: YooKassaReceiptResponse = await response.json();
+    return receipt;
+  } catch (error) {
+    console.error('[YooKassa] Error fetching receipt:', error);
+    throw error;
   }
 }
 

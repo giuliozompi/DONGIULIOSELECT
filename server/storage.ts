@@ -163,6 +163,17 @@ export interface IStorage {
   getAllOrders(filters?: { status?: string; limit?: number }): Promise<Order[]>;
   updateOrderStatus(id: string, status: string, paymentId?: string): Promise<Order | undefined>;
   updateOrder(id: string, updates: Partial<Order>): Promise<Order | undefined>;
+  updateOrderReceipt(id: string, receiptData: {
+    receiptId: string;
+    receiptUrl?: string;
+    receiptStatus: string;
+    fiscalData?: {
+      fiscal_document_number?: string;
+      fiscal_storage_number?: string;
+      fiscal_attribute?: string;
+      registered_at?: string;
+    };
+  }): Promise<Order | undefined>;
   deleteOrder(id: string): Promise<boolean>; // Solo Master Admin - cancella ordine con cascade
 
   // Fortune Wheel

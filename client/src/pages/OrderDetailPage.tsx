@@ -8,9 +8,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle2, Clock, XCircle, AlertCircle, Wallet } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ArrowLeft, CheckCircle2, Clock, XCircle, AlertCircle, Wallet, FileText, Download } from 'lucide-react';
 import type { Order } from '@shared/schema';
 import { PAYMENT_METHOD_LABELS } from '@shared/schema';
+import { useState } from 'react';
 
 const statusConfig = {
   'ОФОРМЛЕН': { label: 'Оформлен', icon: Clock, variant: 'secondary' as const },
@@ -21,13 +23,52 @@ const statusConfig = {
   'ПОЛУЧЕН': { label: 'Получен', icon: CheckCircle2, variant: 'default' as const },
 };
 
+interface ReceiptData {
+  receiptId: string;
+  receiptUrl?: string;
+  receiptStatus: string;
+  fiscalData?: {
+    fiscal_document_number?: string;
+    fiscal_storage_number?: string;
+    fiscal_attribute?: string;
+    registered_at?: string;
+  };
+}
+
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
 
   const { data: order, isLoading, isError } = useQuery<Order>({
     queryKey: ['/api/orders', id],
+  });
+
+  const { data: receipt, isLoading: isReceiptLoading } = useQuery<ReceiptData>({
+    queryKey: ['/api/orders', id, 'receipt'],
+    enabled: !!order?.receiptId,
+  });
+
+  const refreshReceiptMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/orders/${id}/receipt/refresh`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/orders', id, 'receipt'] });
+      toast({
+        title: 'Чек обновлен',
+        description: 'Данные фискального чека успешно обновлены',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Ошибка обновления чека',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
   });
 
   const createPaymentMutation = useMutation({
@@ -252,6 +293,111 @@ export default function OrderDetailPage() {
             )}
           </Card>
         </div>
+
+        {/* Scontrino fiscale (se disponibile) */}
+        {isPaid && order.receiptId && (
+          <div>
+            <h2 className="text-lg font-semibold mb-3">Фискальный чек</h2>
+            <Card className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 flex-1">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-medium">Чек об оплате</p>
+                    <p className="text-sm text-muted-foreground">
+                      {receipt?.receiptStatus === 'succeeded' && 'Зарегистрирован'}
+                      {receipt?.receiptStatus === 'pending' && 'Обрабатывается...'}
+                      {receipt?.receiptStatus === 'canceled' && 'Отменен'}
+                      {!receipt?.receiptStatus && isReceiptLoading && 'Загрузка...'}
+                    </p>
+                  </div>
+                </div>
+                <Dialog open={receiptDialogOpen} onOpenChange={setReceiptDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" data-testid="button-view-receipt">
+                      Открыть
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Фискальный чек</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      {!receipt && isReceiptLoading && (
+                        <p className="text-muted-foreground">Загрузка данных чека...</p>
+                      )}
+                      {receipt && (
+                        <>
+                          <div className="space-y-3">
+                            <div>
+                              <p className="text-sm text-muted-foreground">Статус чека</p>
+                              <Badge variant={receipt.receiptStatus === 'succeeded' ? 'default' : 'secondary'}>
+                                {receipt.receiptStatus === 'succeeded' && 'Зарегистрирован'}
+                                {receipt.receiptStatus === 'pending' && 'Обрабатывается'}
+                                {receipt.receiptStatus === 'canceled' && 'Отменен'}
+                              </Badge>
+                            </div>
+                            
+                            {receipt.fiscalData && (
+                              <div className="border-t pt-3 space-y-2">
+                                <h3 className="font-semibold text-sm">Фискальные данные</h3>
+                                {receipt.fiscalData.fiscal_document_number && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Номер фискального документа</p>
+                                    <p className="font-mono text-sm">{receipt.fiscalData.fiscal_document_number}</p>
+                                  </div>
+                                )}
+                                {receipt.fiscalData.fiscal_storage_number && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Номер фискального накопителя</p>
+                                    <p className="font-mono text-sm">{receipt.fiscalData.fiscal_storage_number}</p>
+                                  </div>
+                                )}
+                                {receipt.fiscalData.fiscal_attribute && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Фискальный признак</p>
+                                    <p className="font-mono text-sm">{receipt.fiscalData.fiscal_attribute}</p>
+                                  </div>
+                                )}
+                                {receipt.fiscalData.registered_at && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Дата регистрации</p>
+                                    <p className="text-sm">
+                                      {new Date(receipt.fiscalData.registered_at).toLocaleString('ru-RU', {
+                                        timeZone: 'Europe/Moscow',
+                                        day: 'numeric',
+                                        month: 'long',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {receipt.receiptStatus === 'pending' && (
+                              <Button
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => refreshReceiptMutation.mutate()}
+                                disabled={refreshReceiptMutation.isPending}
+                                data-testid="button-refresh-receipt"
+                              >
+                                {refreshReceiptMutation.isPending ? 'Обновление...' : 'Обновить статус'}
+                              </Button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </Card>
+          </div>
+        )}
 
         <Card className="p-4">
           <div className="flex items-center justify-between">

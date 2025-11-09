@@ -415,6 +415,37 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async updateOrderReceipt(id: string, receiptData: {
+    receiptId: string;
+    receiptUrl?: string;
+    receiptStatus: string;
+    fiscalData?: {
+      fiscal_document_number?: string;
+      fiscal_storage_number?: string;
+      fiscal_attribute?: string;
+      registered_at?: string;
+    };
+  }): Promise<Order | undefined> {
+    // Usa COALESCE per preservare atomicamente i valori esistenti quando non forniti
+    const result = await db
+      .update(orders)
+      .set({
+        receiptId: receiptData.receiptId,
+        // Usa il nuovo valore se fornito, altrimenti mantieni l'esistente
+        receiptUrl: receiptData.receiptUrl !== undefined 
+          ? receiptData.receiptUrl 
+          : sql`COALESCE(${orders.receiptUrl}, NULL)`,
+        receiptStatus: receiptData.receiptStatus,
+        // Usa il nuovo valore se fornito, altrimenti mantieni l'esistente
+        fiscalData: receiptData.fiscalData !== undefined
+          ? receiptData.fiscalData
+          : sql`COALESCE(${orders.fiscalData}, NULL)`,
+      })
+      .where(eq(orders.id, id))
+      .returning();
+    return result[0];
+  }
+
   async deleteOrder(id: string): Promise<boolean> {
     try {
       // Cancella tutti i dati correlati in ordine (cascade delete manuale)
