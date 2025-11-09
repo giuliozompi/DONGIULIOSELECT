@@ -1730,17 +1730,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const { createReceiptAfterPayment, createReceipt } = await import('./services/yookassa-payment');
           
           // Recupera eventuali codici маркировка per l'ordine
-          const markingLogs = await storage.getMarkingLogsByOrderId(order.id);
+          const markingLogs = await storage.getMarkingLogsByOrder(order.id);
           const markingCodes = new Map<string, string[]>();
           
           for (const log of markingLogs) {
             const existing = markingCodes.get(log.productId) || [];
-            existing.push(log.code);
+            existing.push(log.markingCode);
             markingCodes.set(log.productId, existing);
           }
           
           // Recupera info prodotti per verificare quali richiedono маркировка
-          const productIds = [...new Set(order.items.map(item => item.productId))];
+          const uniqueProductIds = new Set(order.items.map(item => item.productId));
+          const productIds = Array.from(uniqueProductIds);
           const products = await Promise.all(
             productIds.map(id => storage.getProductById(id))
           );
@@ -2244,8 +2245,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: result.product.id,
         actionData: {
           productName: result.product.name,
-          oldStock: result.oldStock,
-          newStock: result.newStock,
+          oldData: { inStock: result.oldStock },
+          newData: { inStock: result.newStock },
         },
       });
       
