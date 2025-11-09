@@ -1596,14 +1596,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const payment = webhookEvent.object;
       
-      // Trova payment intent tramite orderId nei metadata
-      const orderId = payment.metadata?.orderId;
-      if (!orderId) {
-        console.error('[YooKassa Webhook] Missing orderId in payment metadata');
-        return res.status(400).json({ error: 'Missing orderId in metadata' });
+      // Trova l'ordine associato a questo pagamento
+      // PRIMA prova tramite metadata, POI cerca per paymentId nel database
+      let orderId = payment.metadata?.orderId;
+      let order;
+      
+      if (orderId) {
+        console.log(`🔍 [YooKassa Webhook] Found orderId in metadata: ${orderId}`);
+        order = await storage.getOrderById(orderId);
       }
       
-      console.log(`🔍 [YooKassa Webhook] Looking for payment intent for order ${orderId}...`);
+      // Se non trovato tramite metadata, cerca per paymentId in tutti i payment intents
+      if (!order) {
+        console.warn(`⚠️ [YooKassa Webhook] Order not found via metadata, searching by paymentId ${payment.id}...`);
+        
+        // Cerca tutti i payment intents con questo paymentId
+        const allPaymentIntents = await storage.getAllPaymentIntents();
+        const matchingIntent = allPaymentIntents.find(
+          intent => (intent.raw as any)?.yookassaPaymentId === payment.id
+        );
+        
+        if (matchingIntent) {
+          orderId = matchingIntent.orderId;
+          order = await storage.getOrderById(orderId);
+          console.log(`✅ [YooKassa Webhook] Found order via paymentId lookup: ${orderId}`);
+        }
+      }
+      
+      // Se ancora non trovato, ERRORE CRITICO
+      if (!orderId || !order) {
+        const errorMsg = `CRITICAL: Cannot find order for payment ${payment.id}. Metadata orderId: ${payment.metadata?.orderId || 'MISSING'}`;
+        console.error(`❌ [YooKassa Webhook] ${errorMsg}`);
+        
+        // TODO: Log to database for debugging in production
+        return res.status(400).json({ 
+          error: 'Order not found',
+          paymentId: payment.id,
+          metadataOrderId: payment.metadata?.orderId || null,
+        });
+      }
+      
+      console.log(`🔍 [YooKassa Webhook] Processing payment for order ${orderId}...`);
       
       let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
       
@@ -1669,8 +1702,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`✅ [YooKassa Webhook] Payment intent updated successfully`);
       
-      // Ottieni l'ordine
-      const order = await storage.getOrderById(paymentIntent.orderId);
+      // Ricarica l'ordine (potrebbe essere stato aggiornato)
+      order = await storage.getOrderById(paymentIntent.orderId);
       if (!order) {
         console.error(`[YooKassa Webhook] Order not found: ${paymentIntent.orderId}`);
         return res.status(404).json({ error: 'Order not found' });
@@ -2604,6 +2637,232 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error('Error calling courier:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/orders/:id/resend-notifications - Re-invia notifiche e scontrino per ordine pagato (ADMIN ONLY - MASTER ADMIN)
+  app.post("/api/admin/orders/:id/resend-notifications", verifyTelegramInitData, requireMasterAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verifica che l'ordine sia pagato
+      if (order.status !== 'ОПЛАЧЕН') {
+        return res.status(400).json({ error: 'Order must be paid to resend notifications' });
+      }
+      
+      console.log(`🔄 [Resend Notifications] Processing order ${orderId}...`);
+      
+      const results: any = {
+        emailToManagers: { sent: false, error: null },
+        telegramToManagers: { sent: false, error: null },
+        receipt: { created: false, sent: false, error: null },
+        emailToCustomer: { sent: false, error: null },
+      };
+      
+      // 1. Invia notifica pagamento ai manager via Email
+      try {
+        const { sendOrderPaidNotificationToManagers } = await import('./services/email');
+        await sendOrderPaidNotificationToManagers(
+          order.id,
+          order.customerName,
+          order.customerPhone,
+          order.amount,
+          order.paymentMethod
+        );
+        results.emailToManagers.sent = true;
+        console.log(`✅ Payment notification email sent to managers for order ${order.id}`);
+      } catch (error) {
+        results.emailToManagers.error = String(error);
+        console.warn('⚠️ Failed to send payment notification email to managers:', error);
+      }
+      
+      // 2. Invia notifica pagamento ai manager via Telegram
+      try {
+        const { sendOrderPaidNotificationToManagers: sendTelegramToManagers } = await import('./services/telegram-bot');
+        await sendTelegramToManagers(
+          order.id,
+          order.customerName,
+          order.customerPhone,
+          order.amount,
+          order.paymentMethod
+        );
+        results.telegramToManagers.sent = true;
+        console.log(`✅ Payment notification sent to managers via Telegram for order ${order.id}`);
+      } catch (error) {
+        results.telegramToManagers.error = String(error);
+        console.warn('⚠️ Failed to send payment notification to managers via Telegram:', error);
+      }
+      
+      // 3. Crea/aggiorna scontrino fiscale e invia email al cliente
+      try {
+        console.log(`🧾 [Resend Notifications] Creating/updating fiscal receipt for order ${order.id}...`);
+        
+        const { createReceiptAfterPayment, createReceipt, getYooKassaReceipt } = await import('./services/yookassa-payment');
+        
+        // Recupera payment intent per ottenere payment ID
+        const paymentIntent = await storage.getPaymentIntentByOrderId(order.id);
+        if (!paymentIntent) {
+          throw new Error('Payment intent not found for order');
+        }
+        
+        const yookassaPaymentId = (paymentIntent.raw as any)?.yookassaPaymentId;
+        if (!yookassaPaymentId) {
+          throw new Error('YooKassa payment ID not found in payment intent');
+        }
+        
+        let receipt;
+        
+        // Verifica se esiste già un receipt
+        if (order.receiptId) {
+          console.log(`📋 Receipt already exists (${order.receiptId}), fetching current status...`);
+          receipt = await getYooKassaReceipt(order.receiptId);
+          results.receipt.created = false; // Già esistente
+        } else {
+          // Crea nuovo receipt
+          // Recupera eventuali codici маркировка per l'ordine
+          const markingLogs = await storage.getMarkingLogsByOrder(order.id);
+          const markingCodes = new Map<string, string[]>();
+          
+          for (const log of markingLogs) {
+            const existing = markingCodes.get(log.productId) || [];
+            existing.push(log.markingCode);
+            markingCodes.set(log.productId, existing);
+          }
+          
+          // Recupera info prodotti per verificare quali richiedono маркировка
+          const uniqueProductIds = new Set(order.items.map(item => item.productId));
+          const productIds = Array.from(uniqueProductIds);
+          const products = await Promise.all(
+            productIds.map(id => storage.getProductById(id))
+          );
+          const productsMap = new Map(products.filter(p => p).map(p => [p!.id, p!]));
+          
+          // Prepara items con info маркировка
+          const orderItemsWithMarking = order.items.map(item => ({
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            price: item.price,
+            unit: item.unit,
+            requiresMarking: productsMap.get(item.productId)?.requiresMarking || false,
+          }));
+          
+          // Crea receipt object
+          const receiptData = createReceipt(
+            orderItemsWithMarking,
+            order.customerEmail,
+            order.customerPhone,
+            markingCodes
+          );
+          
+          // Crea receipt tramite API YooKassa
+          receipt = await createReceiptAfterPayment({
+            payment_id: yookassaPaymentId,
+            customer: receiptData.customer,
+            items: receiptData.items,
+            tax_system_code: receiptData.tax_system_code,
+            send: true,
+          });
+          
+          results.receipt.created = true;
+          console.log(`✅ Receipt created successfully: ${receipt.id}`);
+        }
+        
+        // Salva/aggiorna dati receipt nel database
+        await storage.updateOrderReceipt(order.id, {
+          receiptId: receipt.id,
+          receiptStatus: receipt.status,
+          fiscalData: {
+            fiscal_document_number: receipt.fiscal_document_number,
+            fiscal_storage_number: receipt.fiscal_storage_number,
+            fiscal_attribute: receipt.fiscal_attribute,
+            registered_at: receipt.registered_at,
+          },
+        });
+        
+        console.log(`✅ Receipt data saved to database for order ${order.id}`);
+        
+        // Invia email al cliente con i dati fiscali
+        if (order.customerEmail && receipt.status === 'succeeded') {
+          try {
+            const { sendEmail } = await import('./services/email');
+            await sendEmail({
+              to: order.customerEmail,
+              subject: `Чек об оплате заказа #${order.id.slice(0, 13)} - Don Giulio Select`,
+              html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="utf-8">
+                  <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                    .content { background-color: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px; }
+                    .fiscal-info { background-color: white; padding: 15px; margin: 15px 0; border-radius: 4px; border: 1px solid #ddd; }
+                    .info-row { margin-bottom: 8px; }
+                    .label { font-weight: bold; color: #666; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="header">
+                      <h1>✅ Чек об оплате</h1>
+                      <p style="margin: 5px 0;">Заказ #${order.id.slice(0, 13)}</p>
+                    </div>
+                    <div class="content">
+                      <p>Здравствуйте, ${order.customerName}!</p>
+                      <p>Ваш платеж успешно обработан. Ниже представлены фискальные данные вашего чека.</p>
+                      
+                      <div class="fiscal-info">
+                        <h3 style="margin-top: 0; color: #4CAF50;">📋 Фискальные данные</h3>
+                        ${receipt.fiscal_document_number ? `<div class="info-row"><span class="label">Номер фискального документа:</span> ${receipt.fiscal_document_number}</div>` : ''}
+                        ${receipt.fiscal_storage_number ? `<div class="info-row"><span class="label">Номер фискального накопителя:</span> ${receipt.fiscal_storage_number}</div>` : ''}
+                        ${receipt.fiscal_attribute ? `<div class="info-row"><span class="label">Фискальный признак:</span> ${receipt.fiscal_attribute}</div>` : ''}
+                        ${receipt.registered_at ? `<div class="info-row"><span class="label">Дата регистрации:</span> ${new Date(receipt.registered_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}</div>` : ''}
+                      </div>
+                      
+                      <p><strong>Сумма оплаты:</strong> ${order.amount} ₽</p>
+                      
+                      <p style="color: #666; font-size: 12px; margin-top: 20px;">
+                        Вы также можете найти этот чек в разделе "Мои заказы" нашего приложения.
+                      </p>
+                    </div>
+                  </div>
+                </body>
+                </html>
+              `,
+            });
+            results.receipt.sent = true;
+            results.emailToCustomer.sent = true;
+            console.log(`✅ Receipt email sent to customer ${order.customerEmail}`);
+          } catch (emailError) {
+            results.emailToCustomer.error = String(emailError);
+            console.warn('⚠️ Failed to send receipt email to customer:', emailError);
+          }
+        } else if (!order.customerEmail) {
+          results.emailToCustomer.error = 'No customer email provided';
+        } else if (receipt.status !== 'succeeded') {
+          results.emailToCustomer.error = `Receipt status is ${receipt.status}, not succeeded`;
+        }
+      } catch (receiptError) {
+        results.receipt.error = String(receiptError);
+        console.error('❌ Failed to create/update receipt:', receiptError);
+      }
+      
+      res.json({
+        success: true,
+        message: 'Notifications resend process completed',
+        results,
+      });
+    } catch (error) {
+      console.error('[Resend Notifications] Error:', error);
+      res.status(500).json({ error: 'Internal server error', details: String(error) });
     }
   });
   

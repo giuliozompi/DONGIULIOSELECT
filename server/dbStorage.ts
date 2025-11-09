@@ -625,6 +625,11 @@ export class DbStorage implements IStorage {
     return result[0];
   }
 
+  async getAllPaymentIntents(): Promise<PaymentIntent[]> {
+    const result = await db.select().from(paymentIntents);
+    return result;
+  }
+
   async getPaymentIntentByOrderId(orderId: string): Promise<PaymentIntent | undefined> {
     const result = await db
       .select()
