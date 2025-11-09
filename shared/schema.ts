@@ -238,8 +238,8 @@ export const DELIVERY_METHODS = {
 } as const;
 
 export const DELIVERY_METHOD_LABELS = {
-  [DELIVERY_METHODS.YANDEX_GO]: 'Яндекс го (доставку оплачивается в приложение)',
-  [DELIVERY_METHODS.CDEK]: 'Сдек (оплата доставку по России при получением)',
+  [DELIVERY_METHODS.YANDEX_GO]: 'Яндекс го (доставки оплачивается в приложение)',
+  [DELIVERY_METHODS.CDEK]: 'Сдек (оплата доставки по России при получением)',
   [DELIVERY_METHODS.DON_GIULIO_COURIER]: 'Дон Джулио курьер (договариваетесь с менеджером)',
   [DELIVERY_METHODS.PICKUP]: 'Самовывоз (бесплатно)',
 } as const;
