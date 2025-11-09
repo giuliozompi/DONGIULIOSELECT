@@ -2392,12 +2392,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Se lo stato è СОБРАН, genera e invia link pagamento automaticamente
       // SOLO per ordini con pagamento online (non per pagamento in contanti)
       if (status === 'СОБРАН' && order.paymentMethod !== 'cash_on_delivery') {
+        console.log(`🔄 [Status Change] Order ${orderId} status changed to СОБРАН - creating payment link...`);
+        console.log(`   Payment method: ${order.paymentMethod}`);
+        
         try {
+          console.log(`🔍 [Step 1/8] Checking for existing payment intent...`);
           // Verifica se esiste già un payment intent per questo ordine
           let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
           let confirmationUrl: string;
           
           if (!paymentIntent || paymentIntent.status !== 'pending') {
+            console.log(`📝 [Step 2/8] No pending payment intent found, creating new one...`);
             // Crea nuovo payment con YooKassa solo se non esiste o se è scaduto/completato
             const { createYooKassaPayment, formatYooKassaAmount, createReceipt } = await import('./services/yookassa-payment');
             
@@ -2406,22 +2411,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
               : (process.env.APP_URL || 'http://localhost:5000');
             
             const returnUrl = `${baseUrl}/payment-return`;
+            console.log(`🌐 Return URL configured: ${returnUrl}`);
             
+            console.log(`🔍 [Step 3/8] Fetching all products...`);
             // Recupera informazioni sui prodotti per маркировка
             const allProducts = await storage.getAllProducts();
             const productsMap = new Map(allProducts.map(p => [p.id, p]));
+            console.log(`   Found ${allProducts.length} products in database`);
             
+            console.log(`🔍 [Step 4/8] Fetching marking logs for order ${orderId}...`);
             // Recupera codici маркировка per questo ordine
             const markingLogs = await storage.getMarkingLogsByOrder(orderId);
+            console.log(`   Found ${markingLogs.length} marking codes`);
             const markingCodesMap = new Map<string, string[]>();
             
             // Organizza codici per productId
+            console.log(`🔍 [Step 5/8] Organizing marking codes by product...`);
             for (const log of markingLogs) {
               const codes = markingCodesMap.get(log.productId) || [];
               codes.push(log.markingCode);
               markingCodesMap.set(log.productId, codes);
             }
             
+            console.log(`🔍 [Step 6/8] Enriching order items with marking info...`);
             // Aggiungi requiresMarking agli order items
             const enrichedOrderItems = order.items.map(item => {
               const product = productsMap.get(item.productId);
@@ -2430,7 +2442,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 requiresMarking: product?.requiresMarking || false,
               };
             });
+            console.log(`   Enriched ${enrichedOrderItems.length} order items`);
             
+            console.log(`🧾 [Step 7/8] Creating fiscal receipt (54-ФЗ)...`);
+            console.log(`   Customer email: ${order.customerEmail || 'NOT PROVIDED'}`);
+            console.log(`   Customer phone: ${order.customerPhone}`);
             // Crea receipt per scontrino fiscale (54-ФЗ) con маркировка
             const receipt = createReceipt(
               enrichedOrderItems,
@@ -2440,7 +2456,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               1, // tax_system_code: 1 = УСН доход (sistema fiscale semplificato)
               1  // vat_code: 1 = без НДС (senza IVA per УСН)
             );
+            console.log(`   Receipt created with ${receipt.items.length} items`);
             
+            console.log(`💳 [Step 8/8] Creating YooKassa payment...`);
+            console.log(`   Amount: ${order.amount} RUB`);
             const yookassaPayment = await createYooKassaPayment({
               amount: {
                 value: formatYooKassaAmount(parseFloat(order.amount)),
