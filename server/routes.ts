@@ -2669,30 +2669,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/orders/:id/generate-payment-link", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
       const orderId = req.params.id;
+      const userId = req.userId || 'unknown';
+      
+      console.log(`\n🔄 [Order ${orderId}] [User ${userId}] Manual payment link generation started`);
+      
+      // Step 0: Check YooKassa credentials
+      const { checkYooKassaCredentials } = await import('./services/yookassa-payment');
+      const credCheck = checkYooKassaCredentials();
+      if (!credCheck.ok) {
+        console.error(`❌ [Order ${orderId}] Step 0/8 FAILED: ${credCheck.error}`);
+        return res.status(500).json({ 
+          error: 'YooKassa not configured', 
+          details: credCheck.error 
+        });
+      }
+      console.log(`✅ [Order ${orderId}] Step 0/8: YooKassa credentials verified`);
       
       const order = await storage.getOrderById(orderId);
       if (!order) {
+        console.error(`❌ [Order ${orderId}] Order not found in database`);
         return res.status(404).json({ error: 'Order not found' });
       }
       
       // Verifica che l'ordine non sia già pagato
       if (order.status === 'ОПЛАЧЕН' || order.status === 'ПОЛУЧЕН') {
+        console.warn(`⚠️ [Order ${orderId}] Cannot generate link - order already paid/completed`);
         return res.status(400).json({ error: 'Order is already paid or completed' });
       }
       
       // Verifica che non sia pagamento in contanti
       if (order.paymentMethod === 'cash_on_delivery') {
+        console.warn(`⚠️ [Order ${orderId}] Cannot generate link - cash on delivery order`);
         return res.status(400).json({ error: 'Cannot generate payment link for cash on delivery orders' });
       }
       
-      console.log(`🔄 [Generate Payment Link] Manually generating payment link for order ${orderId}...`);
+      console.log(`📋 [Order ${orderId}] Order details: ${order.amount}₽, method: ${order.paymentMethod}, status: ${order.status}`);
       
       // Verifica se esiste già un payment intent per questo ordine
+      console.log(`🔍 [Order ${orderId}] Step 1/8: Checking for existing payment intent...`);
       let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
       let confirmationUrl: string;
       
       if (!paymentIntent || paymentIntent.status !== 'pending') {
-        console.log(`📝 Creating new YooKassa payment...`);
+        console.log(`📝 [Order ${orderId}] Step 2/8: Creating new YooKassa payment...`);
         // Crea nuovo payment con YooKassa
         const { createYooKassaPayment, formatYooKassaAmount, createReceipt } = await import('./services/yookassa-payment');
         
@@ -2701,8 +2720,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : (process.env.APP_URL || 'http://localhost:5000');
         
         const returnUrl = `${baseUrl}/payment-return`;
+        console.log(`🔗 [Order ${orderId}] Return URL: ${returnUrl}`);
         
         // Recupera informazioni sui prodotti per маркировка
+        console.log(`📦 [Order ${orderId}] Step 3/8: Loading products and marking codes...`);
         const allProducts = await storage.getAllProducts();
         const productsMap = new Map(allProducts.map(p => [p.id, p]));
         
@@ -2716,6 +2737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           codes.push(log.markingCode);
           markingCodesMap.set(log.productId, codes);
         }
+        console.log(`✅ [Order ${orderId}] Loaded ${allProducts.length} products, ${markingLogs.length} marking codes`);
         
         // Aggiungi requiresMarking agli order items
         const enrichedOrderItems = order.items.map(item => {
@@ -2727,6 +2749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Crea receipt per scontrino fiscale (54-ФЗ) con маркировка
+        console.log(`🧾 [Order ${orderId}] Step 4/8: Creating fiscal receipt with ${enrichedOrderItems.length} items...`);
         const receipt = createReceipt(
           enrichedOrderItems,
           order.customerEmail,
@@ -2735,43 +2758,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
           1, // tax_system_code: УСН доход
           1  // vat_code: без НДС
         );
+        console.log(`✅ [Order ${orderId}] Receipt created with ${receipt.items.length} line items`);
         
-        const yookassaPayment = await createYooKassaPayment({
-          amount: {
-            value: formatYooKassaAmount(parseFloat(order.amount)),
-            currency: 'RUB',
-          },
-          description: `Заказ №${orderId.slice(0, 8)}`,
-          return_url: returnUrl,
-          metadata: {
+        console.log(`💳 [Order ${orderId}] Step 5/8: Calling YooKassa API...`);
+        try {
+          const yookassaPayment = await createYooKassaPayment({
+            amount: {
+              value: formatYooKassaAmount(parseFloat(order.amount)),
+              currency: 'RUB',
+            },
+            description: `Заказ №${orderId.slice(0, 8)}`,
+            return_url: returnUrl,
+            metadata: {
+              orderId,
+              userId: order.userId,
+            },
+            capture: true,
+            receipt,
+          });
+          
+          confirmationUrl = yookassaPayment.confirmation?.confirmation_url || '';
+          console.log(`✅ [Order ${orderId}] YooKassa payment created: ${yookassaPayment.id}`);
+          console.log(`🔗 [Order ${orderId}] Confirmation URL: ${confirmationUrl}`);
+          
+          // Salva payment intent nel database
+          console.log(`💾 [Order ${orderId}] Step 6/8: Saving payment intent to database...`);
+          paymentIntent = await storage.createPaymentIntent({
             orderId,
-            userId: order.userId,
-          },
-          capture: true,
-          receipt,
-        });
-        
-        confirmationUrl = yookassaPayment.confirmation?.confirmation_url || '';
-        
-        // Salva payment intent nel database
-        paymentIntent = await storage.createPaymentIntent({
-          orderId,
-          provider: 'YooKassa',
-          status: 'pending',
-          amount: order.amount,
-          redirectUrl: confirmationUrl,
-          raw: {
-            yookassaPaymentId: yookassaPayment.id,
-            yookassaStatus: yookassaPayment.status,
-            createdAt: yookassaPayment.created_at,
-          },
-        });
+            provider: 'YooKassa',
+            status: 'pending',
+            amount: order.amount,
+            redirectUrl: confirmationUrl,
+            raw: {
+              yookassaPaymentId: yookassaPayment.id,
+              yookassaStatus: yookassaPayment.status,
+              createdAt: yookassaPayment.created_at,
+            },
+          });
+          console.log(`✅ [Order ${orderId}] Payment intent saved to database`);
+        } catch (error) {
+          console.error(`❌ [Order ${orderId}] Step 5/8 FAILED: YooKassa API call failed`);
+          console.error(`   Error:`, error instanceof Error ? error.message : error);
+          throw error;
+        }
       } else {
-        console.log(`♻️ Reusing existing payment intent`);
+        console.log(`♻️ [Order ${orderId}] Step 2/8: Reusing existing payment intent (${paymentIntent.id})`);
         confirmationUrl = paymentIntent.redirectUrl || '';
       }
       
       // Invia link pagamento via Telegram
+      console.log(`📱 [Order ${orderId}] Step 7/8: Sending notifications...`);
+      let notificationsSent = { telegram: false, email: false, whatsapp: false };
+      
       try {
         const { sendPaymentLink } = await import('./services/telegram-bot');
         const telegramSent = await sendPaymentLink(
@@ -2781,10 +2819,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           confirmationUrl
         );
         if (telegramSent) {
-          console.log('✅ Payment link sent via Telegram');
+          console.log(`✅ [Order ${orderId}] Payment link sent via Telegram`);
+          notificationsSent.telegram = true;
         }
       } catch (error) {
-        console.warn('⚠️ Failed to send payment link via Telegram:', error);
+        console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via Telegram:`, error instanceof Error ? error.message : error);
       }
       
       // Invia link pagamento via email
@@ -2798,9 +2837,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             order.amount,
             confirmationUrl
           );
-          console.log('✅ Payment link sent via email');
+          console.log(`✅ [Order ${orderId}] Payment link sent via email`);
+          notificationsSent.email = true;
         } catch (error) {
-          console.warn('⚠️ Failed to send payment link via email:', error);
+          console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via email:`, error instanceof Error ? error.message : error);
         }
       }
       
@@ -2815,20 +2855,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           confirmationUrl
         );
         if (whatsappSent) {
-          console.log('✅ Payment link sent via WhatsApp');
+          console.log(`✅ [Order ${orderId}] Payment link sent via WhatsApp`);
+          notificationsSent.whatsapp = true;
         }
       } catch (error) {
-        console.warn('⚠️ Failed to send payment link via WhatsApp:', error);
+        console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via WhatsApp:`, error instanceof Error ? error.message : error);
       }
       
+      console.log(`📊 [Order ${orderId}] Notifications sent: Telegram=${notificationsSent.telegram}, Email=${notificationsSent.email}, WhatsApp=${notificationsSent.whatsapp}`);
+      
       // Aggiorna ordine
+      console.log(`💾 [Order ${orderId}] Step 8/8: Updating order status...`);
       const updatedOrder = await storage.updateOrder(orderId, {
         status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
         paymentId: paymentIntent.id,
         paymentLinkSentAt: new Date(),
       });
       
-      console.log(`✅ Payment link generated and sent for order ${orderId}`);
+      console.log(`✅ [Order ${orderId}] Payment link generation completed successfully!\n`);
       
       res.json({
         ...updatedOrder,
@@ -2836,8 +2880,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLinkSent: true,
       });
     } catch (error) {
-      console.error('❌ Error generating payment link:', error);
-      console.error('   Details:', error instanceof Error ? error.message : 'Unknown error');
+      console.error(`❌ [Order ${req.params.id}] Payment link generation failed:`, error);
+      console.error(`   Error details:`, error instanceof Error ? error.message : 'Unknown error');
+      console.error(`   Stack:`, error instanceof Error ? error.stack : 'No stack trace');
       res.status(500).json({ 
         error: 'Failed to generate payment link',
         details: error instanceof Error ? error.message : 'Unknown error',

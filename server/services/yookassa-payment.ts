@@ -14,7 +14,23 @@ const SHOP_ID = process.env.YOOKASSA_SHOP_ID;
 const SECRET_KEY = process.env.YOOKASSA_SECRET_KEY;
 
 if (!SHOP_ID || !SECRET_KEY) {
-  console.warn('⚠️  YooKassa credentials not configured. Set YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY.');
+  console.error('❌ YooKassa credentials not configured!');
+  console.error('   Missing:', !SHOP_ID ? 'YOOKASSA_SHOP_ID' : '', !SECRET_KEY ? 'YOOKASSA_SECRET_KEY' : '');
+  console.error('   Please configure these secrets in Replit Secrets panel.');
+  console.error('   Payment link generation will fail until configured.');
+}
+
+export function checkYooKassaCredentials(): { ok: boolean; error?: string } {
+  if (!SHOP_ID || !SECRET_KEY) {
+    const missing = [];
+    if (!SHOP_ID) missing.push('YOOKASSA_SHOP_ID');
+    if (!SECRET_KEY) missing.push('YOOKASSA_SECRET_KEY');
+    return { 
+      ok: false, 
+      error: `YooKassa credentials missing: ${missing.join(', ')}. Please configure in Replit Secrets panel.` 
+    };
+  }
+  return { ok: true };
 }
 
 // Tipi YooKassa
@@ -160,6 +176,7 @@ export async function createYooKassaPayment(
   }
 
   try {
+    console.log('[YooKassa] Creating payment with idempotency key:', key);
     const response = await fetch(`${YOOKASSA_API_URL}/payments`, {
       method: 'POST',
       headers: {
@@ -170,12 +187,28 @@ export async function createYooKassaPayment(
       body: JSON.stringify(payload),
     });
 
+    console.log('[YooKassa] API Response status:', response.status, response.statusText);
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`YooKassa API error: ${response.status} - ${JSON.stringify(errorData)}`);
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { raw: errorText };
+      }
+      
+      console.error('[YooKassa] API Error Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData
+      });
+      
+      throw new Error(`YooKassa API error ${response.status}: ${JSON.stringify(errorData)}`);
     }
 
     const payment: YooKassaPayment = await response.json();
+    console.log('[YooKassa] Payment created successfully:', payment.id);
     return payment;
   } catch (error) {
     console.error('[YooKassa] Error creating payment:', error);
