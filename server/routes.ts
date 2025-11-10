@@ -2433,15 +2433,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
               markingCodesMap.set(log.productId, codes);
             }
             
-            console.log(`🔍 [Step 6/8] Enriching order items with marking info...`);
-            // Aggiungi requiresMarking agli order items
-            const enrichedOrderItems = order.items.map(item => {
-              const product = productsMap.get(item.productId);
-              return {
-                ...item,
-                requiresMarking: product?.requiresMarking || false,
-              };
-            });
+            console.log(`🔍 [Step 6/8] Calculating discount and pricing...`);
+            // Calcola totale originale dagli items
+            const itemsSubtotal = order.items.reduce((sum, item) => {
+              return sum + (parseFloat(item.price) * item.quantity);
+            }, 0);
+            
+            // Calcola sconto applicato come differenza tra subtotal e amount
+            const totalToPay = parseFloat(order.amount);
+            const calculatedDiscount = itemsSubtotal - totalToPay;
+            
+            console.log(`💰 Pricing breakdown:`);
+            console.log(`   Items subtotal: ${itemsSubtotal.toFixed(2)}₽`);
+            console.log(`   Total to pay: ${totalToPay.toFixed(2)}₽`);
+            console.log(`   Discount (calculated): ${calculatedDiscount.toFixed(2)}₽`);
+            
+            // Applica sconto proporzionalmente agli items per la ricevuta fiscale
+            let enrichedOrderItems;
+            
+            if (calculatedDiscount > 0.01) {
+              // C'è uno sconto - distribuiscilo proporzionalmente
+              console.log(`🎁 Applying ${calculatedDiscount.toFixed(2)}₽ discount proportionally to items...`);
+              const discountRatio = 1 - (calculatedDiscount / itemsSubtotal);
+              
+              enrichedOrderItems = order.items.map(item => {
+                const product = productsMap.get(item.productId);
+                const originalPrice = parseFloat(item.price);
+                const discountedPrice = originalPrice * discountRatio;
+                
+                console.log(`   ${item.productName}: ${originalPrice.toFixed(2)}₽ → ${discountedPrice.toFixed(2)}₽`);
+                
+                return {
+                  ...item,
+                  price: discountedPrice.toFixed(2), // Usa prezzo scontato nella ricevuta
+                  requiresMarking: product?.requiresMarking || false,
+                };
+              });
+            } else {
+              // Nessuno sconto
+              enrichedOrderItems = order.items.map(item => {
+                const product = productsMap.get(item.productId);
+                return {
+                  ...item,
+                  requiresMarking: product?.requiresMarking || false,
+                };
+              });
+            }
             console.log(`   Enriched ${enrichedOrderItems.length} order items`);
             
             console.log(`🧾 [Step 7/8] Creating fiscal receipt (54-ФЗ)...`);
@@ -2459,10 +2496,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`   Receipt created with ${receipt.items.length} items`);
             
             console.log(`💳 [Step 8/8] Creating YooKassa payment...`);
-            console.log(`   Amount: ${order.amount} RUB`);
+            console.log(`   Amount: ${totalToPay.toFixed(2)} RUB`);
             const yookassaPayment = await createYooKassaPayment({
               amount: {
-                value: formatYooKassaAmount(parseFloat(order.amount)),
+                value: formatYooKassaAmount(totalToPay), // Usa totale reale da pagare
                 currency: 'RUB',
               },
               description: `Заказ №${orderId.slice(0, 8)}`,
