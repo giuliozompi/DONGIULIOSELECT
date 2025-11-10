@@ -3253,8 +3253,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`💳 [Refund] YooKassa Payment ID: ${order.paymentId}`);
       console.log(`💰 [Refund] Refund amount: ${order.amount} RUB`);
       
-      // 6. Chiama API YooKassa per creare rimborso
-      const { createYooKassaRefund, formatYooKassaAmount } = await import('./services/yookassa-payment');
+      // 6. Verifica status del pagamento su YooKassa
+      const { getYooKassaPayment, createYooKassaRefund, formatYooKassaAmount } = await import('./services/yookassa-payment');
+      
+      let payment;
+      try {
+        console.log(`🔍 [Refund] Fetching payment status from YooKassa...`);
+        payment = await getYooKassaPayment(order.paymentId);
+        console.log(`📊 [Refund] Payment status: ${payment.status}`);
+      } catch (fetchError: any) {
+        console.error(`❌ [Refund] Failed to fetch payment from YooKassa:`, fetchError);
+        return res.status(502).json({ 
+          error: 'Failed to verify payment status with YooKassa',
+          code: 'payment_fetch_failed',
+          details: fetchError.message || String(fetchError)
+        });
+      }
+      
+      // 7. Valida che il pagamento sia in stato corretto per il refund
+      if (payment.status === 'waiting_for_capture') {
+        return res.status(409).json({ 
+          error: 'Payment is waiting for capture. Use Cancel API instead of Refund.',
+          code: 'payment_waiting_capture',
+          paymentStatus: payment.status,
+          hint: 'This payment was authorized but not captured yet. You should cancel it instead of refunding it.'
+        });
+      }
+      
+      if (payment.status === 'canceled') {
+        return res.status(409).json({ 
+          error: 'Payment has already been canceled',
+          code: 'payment_already_canceled',
+          paymentStatus: payment.status
+        });
+      }
+      
+      if (payment.status === 'pending') {
+        return res.status(409).json({ 
+          error: 'Payment is still pending. Wait for payment to complete before refunding.',
+          code: 'payment_pending',
+          paymentStatus: payment.status
+        });
+      }
+      
+      if (payment.status !== 'succeeded') {
+        return res.status(409).json({ 
+          error: `Payment status is '${payment.status}'. Only succeeded payments can be refunded.`,
+          code: 'invalid_payment_status',
+          paymentStatus: payment.status
+        });
+      }
+      
+      // 8. Verifica che il pagamento sia refundable
+      if (!payment.refundable) {
+        return res.status(409).json({ 
+          error: 'Payment is not refundable according to YooKassa',
+          code: 'payment_not_refundable',
+          paymentStatus: payment.status,
+          hint: 'This payment cannot be refunded (e.g., too old or payment method does not support refunds)'
+        });
+      }
+      
+      console.log(`✅ [Refund] Payment is refundable`);
+      
+      // 9. Chiama API YooKassa per creare rimborso
       
       // Usa idempotency key DETERMINISTICO basato su orderId per evitare duplicati
       // Se l'admin riprova la richiesta, YooKassa restituirà lo stesso rimborso
@@ -3280,7 +3342,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const errorMessage = yookassaError.message || String(yookassaError);
         
         // Map YooKassa errors to HTTP status codes
-        if (errorMessage.includes('404')) {
+        if (errorMessage.includes('403')) {
+          return res.status(403).json({ 
+            error: 'Refunds not enabled for this YooKassa merchant account',
+            code: 'refunds_forbidden',
+            details: errorMessage,
+            hint: 'Contact YooKassa support to enable refunds for your merchant account, or check if there is a refund limit set in your YooKassa dashboard settings.'
+          });
+        } else if (errorMessage.includes('404')) {
           return res.status(502).json({ 
             error: 'Payment not found in YooKassa',
             code: 'payment_not_found',
