@@ -1,0 +1,70 @@
+🔄 handleStatusChange called {orderId: 'd9db75f7-021b-4a4b-b4d1-118e02bfe6fc', newStatus: 'СОБРАН', allProductsLength: 38}
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc requires marking: false
+index-De7LbpMq.js:432 📦 Order requires marking: false
+index-De7LbpMq.js:432 ➡️ No marking required - proceeding with status change
+index-De7LbpMq.js:48 [Auth Headers] InitData presente: user=%7B%22id%22%3A201331998%2C%22first_name%22%3A...
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc requires marking: false
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order a60d8d3b-e1d1-4ede-b98d-b3d1c284523e requires marking: false
+index-De7LbpMq.js:432   Product 4: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432   Product 1: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432 📋 Order afa73822-4a29-4a2f-87b0-9cc94a1b2914 requires marking: false
+index-De7LbpMq.js:432   Product d80c30c1-384f-4449-86d1-8bce1e69b15e: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432 📋 Order e7ec911d-ea8b-4794-9132-db6fca2565f5 requires marking: false
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc requires marking: false
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order a60d8d3b-e1d1-4ede-b98d-b3d1c284523e requires marking: false
+index-De7LbpMq.js:432   Product 4: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432   Product 1: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432 📋 Order afa73822-4a29-4a2f-87b0-9cc94a1b2914 requires marking: false
+index-De7LbpMq.js:432   Product d80c30c1-384f-4449-86d1-8bce1e69b15e: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432 📋 Order e7ec911d-ea8b-4794-9132-db6fca2565f5 requires marking: false
+index-De7LbpMq.js:48  PATCH https://don-giulio-catalog.replit.app/api/admin/orders/d9db75f7-021b-4a4b-b4d1-118e02bfe6fc/status 500 (Internal Server Error)
+ge @ index-De7LbpMq.js:48
+mutationFn @ index-De7LbpMq.js:432
+fn @ index-De7LbpMq.js:48
+w @ index-De7LbpMq.js:48
+start @ index-De7LbpMq.js:48
+execute @ index-De7LbpMq.js:48
+await in execute
+mutate @ index-De7LbpMq.js:48
+(анонимная) @ index-De7LbpMq.js:48
+$ @ index-De7LbpMq.js:432
+onValueChange @ index-De7LbpMq.js:432
+(анонимная) @ index-De7LbpMq.js:48
+(анонимная) @ index-De7LbpMq.js:48
+v @ index-De7LbpMq.js:408
+(анонимная) @ index-De7LbpMq.js:408
+(анонимная) @ index-De7LbpMq.js:48
+S4 @ index-De7LbpMq.js:37
+k4 @ index-De7LbpMq.js:37
+_4 @ index-De7LbpMq.js:37
+Ov @ index-De7LbpMq.js:37
+e2 @ index-De7LbpMq.js:37
+(анонимная) @ index-De7LbpMq.js:37
+Ag @ index-De7LbpMq.js:40
+SN @ index-De7LbpMq.js:37
+Ch @ index-De7LbpMq.js:37
+sg @ index-De7LbpMq.js:37
+B4 @ index-De7LbpMq.js:37
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc requires marking: false
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order a60d8d3b-e1d1-4ede-b98d-b3d1c284523e requires marking: false
+index-De7LbpMq.js:432   Product 4: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432   Product 1: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432 📋 Order afa73822-4a29-4a2f-87b0-9cc94a1b2914 requires marking: false
+index-De7LbpMq.js:432   Product d80c30c1-384f-4449-86d1-8bce1e69b15e: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432 📋 Order e7ec911d-ea8b-4794-9132-db6fca2565f5 requires marking: false
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc requires marking: false
+index-De7LbpMq.js:432   Product ff4e53aa-91d4-42dc-b2d0-e67df190e6a2: requiresMarking=false, isUnit=true, requires=false
+index-De7LbpMq.js:432 📋 Order a60d8d3b-e1d1-4ede-b98d-b3d1c284523e requires marking: false
+index-De7LbpMq.js:432   Product 4: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432   Product 1: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432 📋 Order afa73822-4a29-4a2f-87b0-9cc94a1b2914 requires marking: false
+index-De7LbpMq.js:432   Product d80c30c1-384f-4449-86d1-8bce1e69b15e: requiresMarking=false, isUnit=false, requires=false
+index-De7LbpMq.js:432 📋 Order e7ec911d-ea8b-4794-9132-db6fca2565f5 requires marking: false
