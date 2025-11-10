@@ -71,6 +71,7 @@ import {
   type InsertAbandonedCartNotification,
 } from '@shared/schema';
 import type { IStorage } from './storage';
+import { generateRandomReminderDelay } from './services/abandoned-cart';
 
 export class DbStorage implements IStorage {
   // Пользователи
@@ -300,20 +301,42 @@ export class DbStorage implements IStorage {
   }
 
   async setCart(userId: string, items: Cart['items']): Promise<Cart> {
-    // Upsert: se esiste aggiorna, altrimenti inserisci
     const existing = await this.getCart(userId);
+    const wasEmpty = !existing || existing.items.length === 0;
+    const isNowEmpty = items.length === 0;
+    const isFirstItem = wasEmpty && !isNowEmpty;
+    
+    // Prepare update fields
+    const updateFields: any = {
+      items,
+      updatedAt: new Date(),
+    };
+    
+    // Anti-gaming logic: set reminder check time only for FIRST item
+    if (isFirstItem) {
+      // Only set nextReminderCheckAt if no reminder was already sent (max 1 reminder)
+      const alreadySentReminder = existing?.reminderSent === true;
+      if (!alreadySentReminder) {
+        updateFields.nextReminderCheckAt = generateRandomReminderDelay();
+      }
+    } else if (isNowEmpty) {
+      // Reset anti-gaming fields when cart becomes empty
+      updateFields.nextReminderCheckAt = null;
+      updateFields.reminderSent = false;
+    }
+    // If NOT first item and NOT now empty → don't modify nextReminderCheckAt (anti-gaming)
     
     if (existing) {
       const result = await db
         .update(carts)
-        .set({ items, updatedAt: new Date() })
+        .set(updateFields)
         .where(eq(carts.userId, userId))
         .returning();
       return result[0];
     } else {
       const result = await db
         .insert(carts)
-        .values({ userId, items, updatedAt: new Date() })
+        .values({ userId, ...updateFields })
         .returning();
       return result[0];
     }
