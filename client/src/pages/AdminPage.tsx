@@ -1727,6 +1727,7 @@ function canChangeOrderStatus(status: string, isMasterAdmin: boolean): boolean {
 function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showDeleted, setShowDeleted] = useState<boolean>(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [markingDialogOrder, setMarkingDialogOrder] = useState<Order | null>(null);
@@ -1743,7 +1744,21 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   
   // Fetch orders with filter
   const { data: orders = [], isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/admin/orders', statusFilter !== 'all' ? statusFilter : undefined],
+    queryKey: ['/api/admin/orders', statusFilter !== 'all' ? statusFilter : undefined, showDeleted],
+    queryFn: async () => {
+      const headers = await getAuthHeaders();
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
+      if (showDeleted) {
+        params.append('includeDeleted', 'true');
+      }
+      const url = `/api/admin/orders${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await fetch(url, { headers });
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      return response.json();
+    },
   });
 
   // Fetch all products to check marking requirements
@@ -1956,6 +1971,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       case 'ВЫЗВАН КУРЬЕР': return 'secondary';
       case 'ПОЛУЧЕН': return 'default';
       case 'ВОЗВРАТ': return 'destructive';
+      case 'УДАЛЕНО': return 'destructive';
       default: return 'default';
     }
   };
@@ -1997,7 +2013,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
         <CardHeader>
           <CardTitle>Фильтр по статусу</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger data-testid="select-order-status-filter">
               <SelectValue />
@@ -2009,6 +2025,26 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               ))}
             </SelectContent>
           </Select>
+          
+          {/* Toggle для показа удаленных заказов */}
+          {isMasterAdmin && (
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDeleted(!showDeleted)}
+                className="w-full justify-start"
+                data-testid="button-toggle-deleted-orders"
+              >
+                {showDeleted ? (
+                  <Eye className="w-4 h-4 mr-2" />
+                ) : (
+                  <EyeOff className="w-4 h-4 mr-2" />
+                )}
+                {showDeleted ? 'Скрыть удаленные' : 'Показать удаленные'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -2063,7 +2099,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                     <Select 
                       value={order.status}
                       onValueChange={(newStatus) => handleStatusChange(order, newStatus)}
-                      disabled={updateStatusMutation.isPending || !canChangeOrderStatus(order.status, isMasterAdmin)}
+                      disabled={updateStatusMutation.isPending || !canChangeOrderStatus(order.status, isMasterAdmin) || order.status === ORDER_STATUSES.DELETED}
                     >
                       <SelectTrigger className="w-[280px]" data-testid={`select-status-${order.id}`}>
                         <SelectValue />
@@ -2074,9 +2110,11 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                         ))}
                       </SelectContent>
                     </Select>
-                    {!canChangeOrderStatus(order.status, isMasterAdmin) && (
+                    {order.status === ORDER_STATUSES.DELETED ? (
+                      <p className="text-xs text-muted-foreground">Удаленные заказы нельзя редактировать</p>
+                    ) : !canChangeOrderStatus(order.status, isMasterAdmin) ? (
                       <p className="text-xs text-muted-foreground">Только мастер-администратор может изменять оплаченные заказы</p>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Shipping Settings - показываем solo per ordini ОПЛАЧЕН senza corriere */}
