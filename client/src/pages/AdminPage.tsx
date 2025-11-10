@@ -2105,9 +2105,11 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.values(ORDER_STATUSES).map((status) => (
-                          <SelectItem key={status} value={status}>{status}</SelectItem>
-                        ))}
+                        {Object.values(ORDER_STATUSES)
+                          .filter(status => status !== ORDER_STATUSES.DELETED && status !== ORDER_STATUSES.REFUNDED)
+                          .map((status) => (
+                            <SelectItem key={status} value={status}>{status}</SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     {order.status === ORDER_STATUSES.DELETED ? (
