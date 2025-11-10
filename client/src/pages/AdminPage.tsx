@@ -1954,6 +1954,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       case 'ОПЛАЧЕН': return 'default';
       case 'ВЫЗВАН КУРЬЕР': return 'secondary';
       case 'ПОЛУЧЕН': return 'default';
+      case 'ВОЗВРАТ': return 'destructive';
       default: return 'default';
     }
   };

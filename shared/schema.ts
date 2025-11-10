@@ -237,6 +237,7 @@ export const ORDER_STATUSES = {
   PAID: 'ОПЛАЧЕН',
   COURIER_CALLED: 'ВЫЗВАН КУРЬЕР',
   RECEIVED: 'ПОЛУЧЕН',
+  REFUNDED: 'ВОЗВРАТ', // Ordine rimborsato tramite YooKassa
   DELETED: 'УДАЛЕНО', // Solo Master Admin può cancellare ordini
 } as const;
 

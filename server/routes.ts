@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, PAID_ORDER_STATUSES, type Product, type Prize } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize } from "@shared/schema";
 import { z } from "zod";
 import { getDaDataService } from "./services/dadata";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -3308,13 +3308,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // 7. Aggiorna ordine nel database
-      const updatedOrder = await storage.updateOrder(orderId, {
+      // Imposta status a ВОЗВРАТ solo se il rimborso è già succeeded
+      // Se è pending, mantieni lo status corrente e usa refundStatus per tracciare
+      const updateData: any = {
         refundId: refund.id,
         refundStatus: refund.status,
         refundReason: reason,
         refundedAmount: order.amount, // Full refund
         refundedAt: refund.status === 'succeeded' ? new Date() : null,
-      });
+      };
+      
+      // Solo se il rimborso YooKassa è già succeeded, cambia lo stato a ВОЗВРАТ
+      if (refund.status === 'succeeded') {
+        updateData.status = ORDER_STATUSES.REFUNDED;
+      }
+      
+      const updatedOrder = await storage.updateOrder(orderId, updateData);
       
       console.log(`💾 [Refund] Order updated with refund data`);
       console.log(`✅ [Refund] Refund request completed successfully!`);
