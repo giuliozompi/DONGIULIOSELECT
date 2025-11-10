@@ -1751,7 +1751,9 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       if (statusFilter !== 'all') {
         params.append('status', statusFilter);
       }
-      if (showDeleted) {
+      // Quando filtri per УДАЛЕНО o ВОЗВРАТ, mostra automaticamente gli ordini eliminati
+      const needsDeleted = statusFilter === ORDER_STATUSES.DELETED || statusFilter === ORDER_STATUSES.REFUNDED || showDeleted;
+      if (needsDeleted) {
         params.append('includeDeleted', 'true');
       }
       const url = `/api/admin/orders${params.toString() ? '?' + params.toString() : ''}`;
