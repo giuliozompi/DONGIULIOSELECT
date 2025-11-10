@@ -29,7 +29,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, ORDER_STATUSES, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3 } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { DeliveryDialog } from '@/components/DeliveryDialog';
@@ -41,6 +41,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { SubmitHandler } from 'react-hook-form';
 import { format } from 'date-fns';
+import AnalyticsManager from '@/components/admin/AnalyticsManager';
 
 // Nota: Telegram types già definiti in lib/telegram.ts
 
@@ -169,6 +170,16 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           {/* Отдельные разделы */}
           <SidebarGroup>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => handleNavClick('analytics')}
+                  className={activeSection === 'analytics' ? 'bg-sidebar-accent' : ''}
+                  data-testid="button-nav-analytics"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Аналитика</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               {isMasterAdmin && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -208,6 +219,7 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           {activeSection === 'orders' && <OrdersManager isMasterAdmin={isMasterAdmin} />}
           {activeSection === 'clients' && <ClientsManager isMasterAdmin={isMasterAdmin} />}
           {activeSection === 'pickup-addresses' && <PickupAddressesManager />}
+          {activeSection === 'analytics' && <AnalyticsManager />}
           {activeSection === 'logs' && <LogsManager />}
           {activeSection === 'admins' && isMasterAdmin && <AdminsManager />}
         </main>
