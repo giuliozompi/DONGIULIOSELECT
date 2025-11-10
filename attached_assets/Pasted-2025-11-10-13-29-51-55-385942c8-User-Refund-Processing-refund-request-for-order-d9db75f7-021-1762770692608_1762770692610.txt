@@ -1,0 +1,117 @@
+2025-11-10 13:29:51.55
+385942c8
+User
+🔄 [Refund] Processing refund request for order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc...
+2025-11-10 13:29:51.55
+385942c8
+User
+Admin: 201331998
+2025-11-10 13:29:51.55
+385942c8
+User
+Reason: ощивка при формирование заказа
+2025-11-10 13:29:51.55
+385942c8
+User
+💳 [Refund] YooKassa Payment ID: 4de0abc4-6ed1-41bb-95c1-a25e8d27ed4b
+2025-11-10 13:29:51.55
+385942c8
+User
+💰 [Refund] Refund amount: 400.00 RUB
+2025-11-10 13:29:51.55
+385942c8
+User
+[YooKassa Refund] Creating refund with idempotency key: refund-d9db75f7-021b-4a4b-b4d1-118e02bfe6fc
+2025-11-10 13:29:51.55
+385942c8
+User
+[YooKassa Refund] Payload: {
+2025-11-10 13:29:51.55
+385942c8
+User
+"payment_id": "4de0abc4-6ed1-41bb-95c1-a25e8d27ed4b",
+2025-11-10 13:29:51.55
+385942c8
+User
+"amount": {
+2025-11-10 13:29:51.55
+385942c8
+User
+"value": "400.00",
+2025-11-10 13:29:51.55
+385942c8
+User
+"currency": "RUB"
+2025-11-10 13:29:51.55
+385942c8
+User
+},
+2025-11-10 13:29:51.55
+385942c8
+User
+"description": "Refund for order d9db75f7: ощивка при формирование заказа"
+2025-11-10 13:29:51.55
+385942c8
+User
+}
+2025-11-10 13:29:51.72
+385942c8
+User
+[YooKassa Refund] API Response status: 403
+2025-11-10 13:29:51.73
+385942c8
+User
+[YooKassa Refund] API Error Response: {
+2025-11-10 13:29:51.73
+385942c8
+User
+status: 403,
+2025-11-10 13:29:51.73
+385942c8
+User
+statusText: '',
+2025-11-10 13:29:51.73
+385942c8
+User
+data: {
+2025-11-10 13:29:51.73
+385942c8
+User
+type: 'error',
+2025-11-10 13:29:51.73
+385942c8
+User
+id: '019a6d50-9fa0-744e-b131-e02347e7814f',
+2025-11-10 13:29:51.73
+385942c8
+User
+description: 'You have set a limit on the number of refunds for a store or you have changed the permissions for the issued OAuth token. If there are no limits, issue a new token with the rights to create a refund and repeat the request',
+2025-11-10 13:29:51.73
+385942c8
+User
+code: 'forbidden'
+2025-11-10 13:29:51.73
+385942c8
+User
+}
+2025-11-10 13:29:51.73
+385942c8
+User
+}
+2025-11-10 13:29:51.73
+385942c8
+User
+[YooKassa Refund] Error creating refund: Error: YooKassa Refund API error: 403 - {"type":"error","id":"019a6d50-9fa0-744e-b131-e02347e7814f","description":"You have set a limit on the number of refunds for a store or you have changed the permissions for the issued OAuth token. If there are no limits, issue a new token with the rights to create a refund and repeat the request","code":"forbidden"}
+2025-11-10 13:29:51.73
+385942c8
+User
+at createYooKassaRefund (file:///home/runner/workspace/dist/index.js:2079:13)
+2025-11-10 13:29:51.73
+385942c8
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+2025-11-10 13:29:51.73
+385942c8
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
