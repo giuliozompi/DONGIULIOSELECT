@@ -5,8 +5,10 @@ import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts } from "@shared/schema";
 import { z } from "zod";
+import { db } from "./db";
+import { sql as sqlDrizzle, sum, count, gte, lte, desc, and } from "drizzle-orm";
 import { getDaDataService } from "./services/dadata";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import multer from "multer";
@@ -1940,6 +1942,152 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ isAdmin: true, isMasterAdmin });
     } catch (error) {
       console.error('Error checking admin status:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ==================== ANALYTICS ROUTES (ADMIN ONLY) ====================
+  
+  // GET /api/admin/analytics/summary - Metriche aggregate nel periodo (ADMIN ONLY)
+  app.get("/api/admin/analytics/summary", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const querySchema = z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      });
+      
+      const { startDate, endDate } = querySchema.parse(req.query);
+      
+      const snapshots = await db
+        .select()
+        .from(analyticsSnapshots)
+        .where(
+          and(
+            gte(analyticsSnapshots.snapshotDate, startDate),
+            lte(analyticsSnapshots.snapshotDate, endDate)
+          )
+        );
+      
+      if (snapshots.length === 0) {
+        return res.json({
+          totalOrders: 0,
+          completedOrders: 0,
+          paidOrders: 0,
+          grossRevenue: '0',
+          netRevenue: '0',
+          totalDiscounts: '0',
+          totalRefunds: '0',
+          abandonedCarts: 0,
+          cartRemindersSent: 0,
+          cartRecoveryOrders: 0,
+          conversionRate: 0,
+        });
+      }
+      
+      const summary = snapshots.reduce((acc, s) => ({
+        totalOrders: acc.totalOrders + (s.totalOrders || 0),
+        completedOrders: acc.completedOrders + (s.completedOrders || 0),
+        paidOrders: acc.paidOrders + (s.paidOrders || 0),
+        grossRevenue: (parseFloat(acc.grossRevenue) + parseFloat(s.grossRevenue || '0')).toFixed(2),
+        netRevenue: (parseFloat(acc.netRevenue) + parseFloat(s.netRevenue || '0')).toFixed(2),
+        totalDiscounts: (parseFloat(acc.totalDiscounts) + parseFloat(s.totalDiscounts || '0')).toFixed(2),
+        totalRefunds: (parseFloat(acc.totalRefunds) + parseFloat(s.totalRefunds || '0')).toFixed(2),
+        abandonedCarts: acc.abandonedCarts + (s.abandonedCarts || 0),
+        cartRemindersSent: acc.cartRemindersSent + (s.cartRemindersSent || 0),
+        cartRecoveryOrders: acc.cartRecoveryOrders + (s.cartRecoveryOrders || 0),
+      }), {
+        totalOrders: 0,
+        completedOrders: 0,
+        paidOrders: 0,
+        grossRevenue: '0',
+        netRevenue: '0',
+        totalDiscounts: '0',
+        totalRefunds: '0',
+        abandonedCarts: 0,
+        cartRemindersSent: 0,
+        cartRecoveryOrders: 0,
+      });
+      
+      const conversionRate = summary.cartRemindersSent > 0
+        ? ((summary.cartRecoveryOrders / summary.cartRemindersSent) * 100).toFixed(2)
+        : 0;
+      
+      res.json({ ...summary, conversionRate });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      }
+      console.error('Error fetching analytics summary:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET /api/admin/analytics/timeseries - Serie temporale giornaliera (ADMIN ONLY)
+  app.get("/api/admin/analytics/timeseries", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const querySchema = z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      });
+      
+      const { startDate, endDate } = querySchema.parse(req.query);
+      
+      const snapshots = await db
+        .select()
+        .from(analyticsSnapshots)
+        .where(
+          and(
+            gte(analyticsSnapshots.snapshotDate, startDate),
+            lte(analyticsSnapshots.snapshotDate, endDate)
+          )
+        )
+        .orderBy(analyticsSnapshots.snapshotDate);
+      
+      res.json(snapshots);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      }
+      console.error('Error fetching analytics timeseries:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // GET /api/admin/analytics/top-products - Top prodotti più venduti (ADMIN ONLY)
+  app.get("/api/admin/analytics/top-products", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const querySchema = z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        limit: z.string().regex(/^\d+$/).transform(Number).default('10'),
+      });
+      
+      const { startDate, endDate, limit } = querySchema.parse(req.query);
+      
+      const topProducts = await db
+        .select({
+          productId: analyticsTopProducts.productId,
+          productName: analyticsTopProducts.productName,
+          totalUnitsSold: sqlDrizzle<number>`SUM(${analyticsTopProducts.unitsSold})`,
+          totalRevenue: sqlDrizzle<string>`SUM(${analyticsTopProducts.revenue})`,
+        })
+        .from(analyticsTopProducts)
+        .where(
+          and(
+            gte(analyticsTopProducts.snapshotDate, startDate),
+            lte(analyticsTopProducts.snapshotDate, endDate)
+          )
+        )
+        .groupBy(analyticsTopProducts.productId, analyticsTopProducts.productName)
+        .orderBy(desc(sqlDrizzle`SUM(${analyticsTopProducts.unitsSold})`))
+        .limit(limit);
+      
+      res.json(topProducts);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
+      }
+      console.error('Error fetching top products:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

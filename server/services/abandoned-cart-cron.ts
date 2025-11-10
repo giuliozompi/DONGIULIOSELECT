@@ -21,7 +21,7 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
         and(
           lte(carts.nextReminderCheckAt, now),
           eq(carts.reminderSent, false),
-          gt(sql`json_array_length(${carts.items})`, 0)
+          gt(sql`jsonb_array_length(${carts.items})`, 0)
         )
       );
 
