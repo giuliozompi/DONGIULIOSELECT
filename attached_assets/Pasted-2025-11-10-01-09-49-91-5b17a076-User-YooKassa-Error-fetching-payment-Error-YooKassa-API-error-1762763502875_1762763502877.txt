@@ -1,0 +1,97 @@
+2025-11-10 01:09:49.91
+5b17a076
+User
+[YooKassa] Error fetching payment: Error: YooKassa API error: 404 - {"type":"error","id":"019a6aab-1b08-7627-aa96-fa3cf7df52bd","description":"Incorrect payment_id. Payment doesn't exist or access denied. Specify the payment ID created in your store.","parameter":"payment_id","code":"not_found"}
+2025-11-10 01:09:49.91
+5b17a076
+User
+at getYooKassaPayment (file:///home/runner/workspace/dist/index.js:1757:13)
+2025-11-10 01:09:49.91
+5b17a076
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-10 01:09:49.91
+5b17a076
+User
+at async verifyYooKassaWebhook (file:///home/runner/workspace/dist/index.js:1875:21)
+2025-11-10 01:09:49.91
+5b17a076
+User
+at async file:///home/runner/workspace/dist/index.js:5594:23
+2025-11-10 01:09:49.92
+5b17a076
+User
+[YooKassa] Webhook verification failed: Error: YooKassa API error: 404 - {"type":"error","id":"019a6aab-1b08-7627-aa96-fa3cf7df52bd","description":"Incorrect payment_id. Payment doesn't exist or access denied. Specify the payment ID created in your store.","parameter":"payment_id","code":"not_found"}
+2025-11-10 01:09:49.92
+5b17a076
+User
+at getYooKassaPayment (file:///home/runner/workspace/dist/index.js:1757:13)
+2025-11-10 01:09:49.92
+5b17a076
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-10 01:09:49.92
+5b17a076
+User
+at async verifyYooKassaWebhook (file:///home/runner/workspace/dist/index.js:1875:21)
+2025-11-10 01:09:49.92
+5b17a076
+User
+at async file:///home/runner/workspace/dist/index.js:5594:23
+2025-11-10 01:09:49.92
+5b17a076
+User
+❌ [YooKassa Webhook] Invalid webhook - failed verification
+2025-11-10 01:51:41.85
+5b17a076
+User
+⚠️ [YooKassa Webhook] Order not found via metadata, searching by paymentId 30a1cadd-000f-5000-b000-1ff76e85ce8a...
+2025-11-10 01:51:41.89
+5b17a076
+User
+❌ [YooKassa Webhook] CRITICAL: Cannot find order for payment 30a1cadd-000f-5000-b000-1ff76e85ce8a. Metadata orderId: 93171321-2da3-4bf9-a25c-a3373ced073a
+2025-11-10 02:30:41.20
+5b17a076
+User
+⚠️ [YooKassa Webhook] Order not found via metadata, searching by paymentId 30a267a8-000f-5001-8000-114dff4e2dfd...
+2025-11-10 02:30:41.25
+5b17a076
+User
+❌ [YooKassa Webhook] CRITICAL: Cannot find order for payment 30a267a8-000f-5001-8000-114dff4e2dfd. Metadata orderId: e1d972dc-d05a-4fc2-b22e-a4cc918f0976
+2025-11-10 11:08:54.93
+5b17a076
+User
+⚠️ WhatsApp credentials not configured - message not sent
+2025-11-10 11:09:01.58
+5b17a076
+User
+[YooKassa] Error creating payment: Error: YooKassa API error: 400 - {"type":"error","id":"019a6ccf-af38-738c-902c-46f878b2c967","description":"Invalid parameter's value (for example, the value is illegal or its format is incorrect). Send the value in accordance with the documentation.","parameter":"receipt.items.amount","code":"invalid_request"}
+2025-11-10 11:09:01.58
+5b17a076
+User
+at createYooKassaPayment (file:///home/runner/workspace/dist/index.js:1737:13)
+2025-11-10 11:09:01.58
+5b17a076
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-10 11:09:01.58
+5b17a076
+User
+at async file:///home/runner/workspace/dist/index.js:6284:37
+2025-11-10 11:09:01.58
+5b17a076
+User
+❌ Error creating payment link: Error: YooKassa API error: 400 - {"type":"error","id":"019a6ccf-af38-738c-902c-46f878b2c967","description":"Invalid parameter's value (for example, the value is illegal or its format is incorrect). Send the value in accordance with the documentation.","parameter":"receipt.items.amount","code":"invalid_request"}
+2025-11-10 11:09:01.58
+5b17a076
+User
+at createYooKassaPayment (file:///home/runner/workspace/dist/index.js:1737:13)
+
+2025-11-10 11:09:01.58
+5b17a076
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-10 11:09:01.58
+5b17a076
+User
+at async file:///home/runner/workspace/dist/index.js:6284:37

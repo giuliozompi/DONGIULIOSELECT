@@ -173,10 +173,15 @@ export async function createYooKassaPayment(
   // Aggiungi dati per scontrino fiscale (54-ФЗ) se forniti
   if (params.receipt) {
     payload.receipt = params.receipt;
+    console.log('[YooKassa] Receipt included with', params.receipt.items.length, 'items:');
+    params.receipt.items.forEach((item, idx) => {
+      console.log(`  [${idx}] ${item.description}: qty=${item.quantity}, amount=${item.amount.value} ${item.amount.currency}`);
+    });
   }
 
   try {
     console.log('[YooKassa] Creating payment with idempotency key:', key);
+    console.log('[YooKassa] Full payload:', JSON.stringify(payload, null, 2));
     const response = await fetch(`${YOOKASSA_API_URL}/payments`, {
       method: 'POST',
       headers: {
@@ -592,6 +597,18 @@ export function createReceipt(
   const items: YooKassaReceiptItem[] = [];
   
   for (const item of orderItems) {
+    // Debug: valida price prima di usarlo
+    console.log(`[Receipt Item] ${item.productName}: price="${item.price}", quantity=${item.quantity}, unit=${item.unit}`);
+    
+    if (!item.price || item.price === '' || isNaN(parseFloat(item.price))) {
+      console.error(`❌ [Receipt Item] Invalid price for "${item.productName}": "${item.price}"`);
+      throw new Error(`Invalid price for product "${item.productName}": expected numeric string, got "${item.price}"`);
+    }
+    
+    const priceNum = parseFloat(item.price);
+    const priceFormatted = formatYooKassaAmount(priceNum);
+    console.log(`[Receipt Item] Price conversion: "${item.price}" → ${priceNum} → "${priceFormatted}"`);
+    
     const isMarked = item.requiresMarking && item.unit === 'шт';
     const codes = markingCodes?.get(item.productId) || [];
     
@@ -607,7 +624,7 @@ export function createReceipt(
             description: `${item.productName} - Единица ${i + 1}`,
             quantity: '1.000', // Sempre 1 per маркировка
             amount: {
-              value: formatYooKassaAmount(parseFloat(item.price)),
+              value: priceFormatted,
               currency: 'RUB',
             },
             vat_code: vatCode,
@@ -625,7 +642,7 @@ export function createReceipt(
             description: `${item.productName} - Единица ${i + 1}`,
             quantity: '1.000',
             amount: {
-              value: formatYooKassaAmount(parseFloat(item.price)),
+              value: priceFormatted,
               currency: 'RUB',
             },
             vat_code: vatCode,
@@ -640,7 +657,7 @@ export function createReceipt(
         description: item.productName,
         quantity: item.quantity.toFixed(3), // Formato: "1.000", "0.500"
         amount: {
-          value: formatYooKassaAmount(parseFloat(item.price)),
+          value: priceFormatted,
           currency: 'RUB',
         },
         vat_code: vatCode,
