@@ -23,7 +23,9 @@ export function generateRandomDiscountCode(): GenerateDiscountCodeResult {
 }
 
 export function generateRandomReminderDelay(): Date {
-  const hoursDelay = Math.floor(Math.random() * 17) + 20;
+  // TESTING MODE: Delay ridotto a ~3 minuti per test manuali
+  // PRODUZIONE: Ripristinare a Math.floor(Math.random() * 17) + 20 (20-36h)
+  const hoursDelay = 0.05; // ~3 minuti (0.05h)
   
   const checkAt = new Date();
   checkAt.setHours(checkAt.getHours() + hoursDelay);
