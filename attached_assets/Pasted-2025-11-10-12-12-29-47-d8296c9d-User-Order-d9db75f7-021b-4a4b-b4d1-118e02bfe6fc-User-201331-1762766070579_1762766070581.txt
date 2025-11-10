@@ -1,0 +1,169 @@
+2025-11-10 12:12:29.47
+d8296c9d
+User
+🔄 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] [User 201331998] Manual payment link generation started
+2025-11-10 12:12:29.47
+d8296c9d
+User
+✅ [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Step 0/8: YooKassa credentials verified
+2025-11-10 12:12:29.51
+d8296c9d
+User
+📋 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Order details: 400.00₽, method: yookassa, status: СОБРАН
+2025-11-10 12:12:29.51
+d8296c9d
+User
+🔍 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Step 1/8: Checking for existing payment intent...
+2025-11-10 12:12:29.54
+d8296c9d
+User
+📝 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Step 2/8: Creating new YooKassa payment...
+2025-11-10 12:12:29.54
+d8296c9d
+User
+🔗 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Return URL: https://don-giulio-catalog.replit.app/payment-return
+2025-11-10 12:12:29.54
+d8296c9d
+User
+📦 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Step 3/8: Loading products and marking codes...
+2025-11-10 12:12:29.70
+d8296c9d
+User
+✅ [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Loaded 38 products, 0 marking codes
+2025-11-10 12:12:29.70
+d8296c9d
+User
+💰 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Pricing breakdown:
+2025-11-10 12:12:29.70
+d8296c9d
+User
+Items subtotal: 500.00₽
+2025-11-10 12:12:29.70
+d8296c9d
+User
+Discount applied: 0.00₽
+2025-11-10 12:12:29.70
+d8296c9d
+User
+Total to pay: 400.00₽
+2025-11-10 12:12:29.70
+d8296c9d
+User
+🧾 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Step 4/8: Creating fiscal receipt with 1 items...
+2025-11-10 12:12:29.70
+d8296c9d
+User
+[Receipt Item] Песто верде - Pesto genovese: price="500.00", quantity=1, unit=шт
+2025-11-10 12:12:29.70
+d8296c9d
+User
+[Receipt Item] Price conversion: "500.00" → 500 → "500.00"
+2025-11-10 12:12:29.70
+d8296c9d
+User
+✅ [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Receipt created with 1 line items
+2025-11-10 12:12:29.70
+d8296c9d
+User
+💳 [Order d9db75f7-021b-4a4b-b4d1-118e02bfe6fc] Step 5/8: Calling YooKassa API...
+2025-11-10 12:12:29.70
+d8296c9d
+User
+[YooKassa] Receipt included with 1 items:
+2025-11-10 12:12:29.70
+d8296c9d
+User
+[0] Песто верде - Pesto genovese: qty=1.000, amount=500.00 RUB
+2025-11-10 12:12:29.70
+d8296c9d
+User
+[YooKassa] Creating payment with idempotency key: 6387138e-dfd3-42bc-bf3a-690db5020d46
+2025-11-10 12:12:29.70
+d8296c9d
+User
+[YooKassa] Full payload: {
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"amount": {
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"value": "400.00",
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"currency": "RUB"
+2025-11-10 12:12:29.70
+d8296c9d
+User
+},
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"description": "Заказ №d9db75f7",
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"capture": true,
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"confirmation": {
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"return_url": "https://don-giulio-catalog.replit.app/payment-return"
+2025-11-10 12:12:29.70
+d8296c9d
+User
+},
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"metadata": {
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"userId": "201331998"
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"receipt": {
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"customer": {
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"email": "giuliozompi@gmail.com",
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"phone": "+79268429284"
+2025-11-10 12:12:29.70
+d8296c9d
+User
+{
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"description": "Песто верде - Pesto genovese",
+2025-11-10 12:12:29.70
+d8296c9d
+User
+"quantity": "1.000",
+
+2025-11-10 12:12:29.97
+d8296c9d
+User
+status: 400,
+2025-11-10 12:12:29.97
+d8296c9d
+User
+statusText: '',
+2025-11-10 12:12:29.97
+d8296c9d
+User
+data: {

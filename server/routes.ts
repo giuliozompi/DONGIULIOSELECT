@@ -2744,22 +2744,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return sum + (parseFloat(item.price) * item.quantity);
         }, 0);
         
-        // Calcola sconto applicato (bonus, coupon, etc.)
-        const orderDiscount = parseFloat(order.discount || '0');
+        // Calcola sconto applicato come differenza tra subtotal e amount
+        // (include bonus, coupon, sconti admin, etc.)
         const totalToPay = parseFloat(order.amount);
+        const calculatedDiscount = itemsSubtotal - totalToPay;
         
         console.log(`💰 [Order ${orderId}] Pricing breakdown:`);
         console.log(`   Items subtotal: ${itemsSubtotal.toFixed(2)}₽`);
-        console.log(`   Discount applied: ${orderDiscount.toFixed(2)}₽`);
         console.log(`   Total to pay: ${totalToPay.toFixed(2)}₽`);
+        console.log(`   Discount (calculated): ${calculatedDiscount.toFixed(2)}₽`);
         
         // Applica sconto proporzionalmente agli items per la ricevuta fiscale
         let enrichedOrderItems;
         
-        if (orderDiscount > 0.01) {
+        if (calculatedDiscount > 0.01) {
           // C'è uno sconto - distribuiscilo proporzionalmente
-          console.log(`🎁 [Order ${orderId}] Applying discount proportionally to items...`);
-          const discountRatio = 1 - (orderDiscount / itemsSubtotal);
+          console.log(`🎁 [Order ${orderId}] Applying ${calculatedDiscount.toFixed(2)}₽ discount proportionally to items...`);
+          const discountRatio = 1 - (calculatedDiscount / itemsSubtotal);
           
           enrichedOrderItems = order.items.map(item => {
             const product = productsMap.get(item.productId);
