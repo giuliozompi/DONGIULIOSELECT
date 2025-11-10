@@ -2297,9 +2297,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const status = req.query.status as string | undefined;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+      const includeDeleted = req.query.includeDeleted === 'true';
       
       const orders = await storage.getAllOrders({ status, limit });
-      res.json(orders);
+      
+      // Di default, nascondi ordini eliminati (УДАЛЕНО)
+      // Master Admin può vederli passando includeDeleted=true
+      const filteredOrders = includeDeleted 
+        ? orders 
+        : orders.filter(order => order.status !== ORDER_STATUSES.DELETED);
+      
+      res.json(filteredOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
       res.status(500).json({ error: 'Internal server error' });
@@ -4896,16 +4904,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DELETE /api/admin/orders/:id - Cancella ordine (MASTER ADMIN ONLY)
-  // Cancella ordine con cascade: marking logs, change logs, e ordine stesso
+  // DELETE /api/admin/orders/:id - Soft delete ordine (MASTER ADMIN ONLY)
+  // Imposta status a УДАЛЕНО invece di eliminare fisicamente dal database
   app.delete("/api/admin/orders/:id", verifyTelegramInitData, requireAdmin, requireMasterAdmin, async (req, res) => {
     try {
       const orderId = req.params.id;
       
-      // Verifica che l'ordine esista prima di cancellarlo
+      // Verifica che l'ordine esista
       const order = await storage.getOrderById(orderId);
       if (!order) {
         return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verifica che non sia già eliminato
+      if (order.status === ORDER_STATUSES.DELETED) {
+        return res.status(409).json({ error: 'Order is already deleted' });
       }
       
       // Salva info ordine per audit log
@@ -4914,14 +4927,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: order.userId,
         customerName: order.customerName,
         amount: order.amount,
-        status: order.status,
+        previousStatus: order.status,
         itemCount: order.items.length,
       };
       
-      // Cancella l'ordine (con cascade per marking logs e change logs)
-      const deleted = await storage.deleteOrder(orderId);
+      // Soft delete: imposta status a УДАЛЕНО
+      const updatedOrder = await storage.updateOrderStatus(orderId, ORDER_STATUSES.DELETED);
       
-      if (!deleted) {
+      if (!updatedOrder) {
         return res.status(500).json({ error: 'Failed to delete order' });
       }
       
@@ -4934,11 +4947,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entityId: orderId,
         actionData: {
           deletedOrder: orderInfo,
-          reason: 'Master Admin deletion',
+          reason: 'Master Admin soft deletion',
         },
       });
       
-      res.json({ success: true, message: 'Order deleted successfully' });
+      res.json({ 
+        success: true, 
+        message: 'Order marked as deleted',
+        order: updatedOrder 
+      });
     } catch (error) {
       console.error('Error deleting order:', error);
       res.status(500).json({ error: 'Internal server error' });
