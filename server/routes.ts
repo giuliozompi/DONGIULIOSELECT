@@ -2760,11 +2760,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
         console.log(`✅ [Order ${orderId}] Receipt created with ${receipt.items.length} line items`);
         
+        // Calcola totale dagli items per garantire coerenza con la ricevuta
+        const calculatedTotal = enrichedOrderItems.reduce((sum, item) => {
+          return sum + (parseFloat(item.price) * item.quantity);
+        }, 0);
+        const totalAmount = formatYooKassaAmount(calculatedTotal);
+        
+        console.log(`💰 [Order ${orderId}] Amount verification:`);
+        console.log(`   Order.amount: ${order.amount}₽`);
+        console.log(`   Calculated from items: ${totalAmount}₽`);
+        
+        if (Math.abs(parseFloat(order.amount) - calculatedTotal) > 0.01) {
+          console.warn(`⚠️ [Order ${orderId}] MISMATCH: Order amount (${order.amount}₽) differs from items total (${totalAmount}₽)`);
+          console.warn(`   Using calculated total to ensure receipt consistency`);
+        }
+        
         console.log(`💳 [Order ${orderId}] Step 5/8: Calling YooKassa API...`);
         try {
           const yookassaPayment = await createYooKassaPayment({
             amount: {
-              value: formatYooKassaAmount(parseFloat(order.amount)),
+              value: totalAmount, // Usa il totale calcolato dagli items
               currency: 'RUB',
             },
             description: `Заказ №${orderId.slice(0, 8)}`,
