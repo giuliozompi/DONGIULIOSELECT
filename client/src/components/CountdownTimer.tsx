@@ -28,17 +28,17 @@ export default function CountdownTimer({
   labels = {}
 }: CountdownTimerProps) {
   const {
-    title = `Sconto speciale del ${discountPercent}%!`,
-    codeLabel = 'Usa il codice:',
-    expiresLabel = 'Scade tra:',
-    expiredTitle = 'Offerta scaduta',
-    expiredMessage = 'Il codice sconto non è più valido',
-    hourLabel = 'ora',
-    hoursLabel = 'ore',
-    minuteLabel = 'minuto',
-    minutesLabel = 'minuti',
-    secondLabel = 'secondo',
-    secondsLabel = 'secondi',
+    title = `Специальная скидка ${discountPercent}%!`,
+    codeLabel = 'Используйте код:',
+    expiresLabel = 'Истекает через:',
+    expiredTitle = 'Предложение истекло',
+    expiredMessage = 'Код скидки больше не действителен',
+    hourLabel = 'час',
+    hoursLabel = 'часов',
+    minuteLabel = 'минута',
+    minutesLabel = 'минут',
+    secondLabel = 'секунда',
+    secondsLabel = 'секунд',
   } = labels;
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [isExpired, setIsExpired] = useState(false);
@@ -55,7 +55,7 @@ export default function CountdownTimer({
 
       if (diff <= 0) {
         setIsExpired(true);
-        setTimeRemaining('scaduto');
+        setTimeRemaining('истёк');
         return;
       }
       
@@ -65,12 +65,31 @@ export default function CountdownTimer({
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
+      // Russian pluralization
+      const getHourWord = (n: number) => {
+        if (n % 10 === 1 && n % 100 !== 11) return hourLabel;
+        if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'часа';
+        return hoursLabel;
+      };
+      
+      const getMinuteWord = (n: number) => {
+        if (n % 10 === 1 && n % 100 !== 11) return minuteLabel;
+        if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'минуты';
+        return minutesLabel;
+      };
+      
+      const getSecondWord = (n: number) => {
+        if (n % 10 === 1 && n % 100 !== 11) return secondLabel;
+        if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'секунды';
+        return secondsLabel;
+      };
+
       if (hours > 0) {
-        setTimeRemaining(`${hours} ${hours === 1 ? hourLabel : hoursLabel}, ${minutes} ${minutes === 1 ? minuteLabel : minutesLabel} e ${seconds} ${seconds === 1 ? secondLabel : secondsLabel}`);
+        setTimeRemaining(`${hours} ${getHourWord(hours)}, ${minutes} ${getMinuteWord(minutes)} и ${seconds} ${getSecondWord(seconds)}`);
       } else if (minutes > 0) {
-        setTimeRemaining(`${minutes} ${minutes === 1 ? minuteLabel : minutesLabel} e ${seconds} ${seconds === 1 ? secondLabel : secondsLabel}`);
+        setTimeRemaining(`${minutes} ${getMinuteWord(minutes)} и ${seconds} ${getSecondWord(seconds)}`);
       } else {
-        setTimeRemaining(`${seconds} ${seconds === 1 ? secondLabel : secondsLabel}`);
+        setTimeRemaining(`${seconds} ${getSecondWord(seconds)}`);
       }
     };
 

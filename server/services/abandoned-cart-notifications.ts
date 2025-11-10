@@ -17,17 +17,30 @@ function calculateTimeRemaining(expiresAt: Date): string {
   const diff = expiresAt.getTime() - now.getTime();
 
   if (diff <= 0) {
-    return 'scaduto';
+    return 'истёк';
   }
 
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
+  // Russian pluralization rules
+  const getHourWord = (n: number) => {
+    if (n % 10 === 1 && n % 100 !== 11) return 'час';
+    if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'часа';
+    return 'часов';
+  };
+  
+  const getMinuteWord = (n: number) => {
+    if (n % 10 === 1 && n % 100 !== 11) return 'минута';
+    if ([2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100)) return 'минуты';
+    return 'минут';
+  };
+
   if (hours > 0) {
-    return `${hours} ${hours === 1 ? 'ora' : 'ore'} e ${minutes} ${minutes === 1 ? 'minuto' : 'minuti'}`;
+    return `${hours} ${getHourWord(hours)} и ${minutes} ${getMinuteWord(minutes)}`;
   }
   
-  return `${minutes} ${minutes === 1 ? 'minuto' : 'minuti'}`;
+  return `${minutes} ${getMinuteWord(minutes)}`;
 }
 
 export async function sendAbandonedCartReminder(
@@ -77,21 +90,21 @@ async function sendTelegramNotification(
   const { chatId, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining } = params;
 
   const text = `
-<b>Hai dimenticato qualcosa nel carrello!</b>
+<b>Вы забыли что-то в корзине!</b>
 
-Ciao ${firstName},
+Привет, ${firstName}!
 
-Abbiamo notato che hai lasciato alcuni prodotti nel carrello.
-Per ringraziarti dell'interesse, ti offriamo uno <b>sconto speciale del ${discountPercent}%</b>!
+Мы заметили, что вы оставили несколько товаров в корзине.
+В благодарность за ваш интерес мы предлагаем вам <b>специальную скидку ${discountPercent}%</b>!
 
-<b>Codice sconto:</b> <code>${discountCode}</code>
+<b>Код скидки:</b> <code>${discountCode}</code>
 
-<b>Scade tra:</b> ${timeRemaining}
-<b>Valido fino a:</b> ${formattedExpiry}
+<b>Истекает через:</b> ${timeRemaining}
+<b>Действителен до:</b> ${formattedExpiry}
 
-Non perdere questa opportunità! Completa il tuo ordine ora e risparmia.
+Не упустите эту возможность! Оформите заказ сейчас и сэкономьте.
 
-<a href="${process.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/DonGiulioSelectBot'}">Completa l'ordine</a>
+<a href="${process.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/DonGiulioSelectBot'}">Оформить заказ</a>
 `.trim();
 
   return sendTelegramMessage({
@@ -115,15 +128,15 @@ async function sendEmailNotification(
 ): Promise<boolean> {
   const { email, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining } = params;
 
-  const subject = `Hai dimenticato qualcosa! Sconto del ${discountPercent}% ti aspetta`;
+  const subject = `Вы забыли что-то! Скидка ${discountPercent}% ждёт вас`;
 
   const html = `
 <!DOCTYPE html>
-<html lang="it">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carrello Abbandonato</title>
+  <title>Забытая корзина</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
@@ -134,7 +147,7 @@ async function sendEmailNotification(
           <tr>
             <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center;">
               <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">
-                Hai dimenticato qualcosa!
+                Вы забыли что-то!
               </h1>
             </td>
           </tr>
@@ -143,12 +156,12 @@ async function sendEmailNotification(
           <tr>
             <td style="padding: 40px 30px;">
               <p style="margin: 0 0 20px 0; font-size: 16px; color: #333333; line-height: 1.6;">
-                Ciao <strong>${firstName}</strong>,
+                Привет, <strong>${firstName}</strong>!
               </p>
               
               <p style="margin: 0 0 20px 0; font-size: 16px; color: #333333; line-height: 1.6;">
-                Abbiamo notato che hai lasciato alcuni prodotti nel carrello.
-                Per ringraziarti dell'interesse, ti offriamo uno <strong style="color: #667eea;">sconto speciale del ${discountPercent}%</strong>!
+                Мы заметили, что вы оставили несколько товаров в корзине.
+                В благодарность за ваш интерес мы предлагаем вам <strong style="color: #667eea;">специальную скидку ${discountPercent}%</strong>!
               </p>
               
               <!-- Discount Code Box -->
@@ -156,7 +169,7 @@ async function sendEmailNotification(
                 <tr>
                   <td style="background-color: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; border-radius: 4px;">
                     <p style="margin: 0 0 10px 0; font-size: 14px; color: #666666; text-transform: uppercase; letter-spacing: 0.5px;">
-                      Codice Sconto
+                      Код скидки
                     </p>
                     <p style="margin: 0; font-size: 24px; color: #667eea; font-weight: 700; font-family: 'Courier New', monospace;">
                       ${discountCode}
@@ -170,17 +183,17 @@ async function sendEmailNotification(
                 <tr>
                   <td style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 4px;">
                     <p style="margin: 0 0 8px 0; font-size: 16px; color: #856404; font-weight: 600;">
-                      <strong>Scade tra:</strong> ${timeRemaining}
+                      <strong>Истекает через:</strong> ${timeRemaining}
                     </p>
                     <p style="margin: 0; font-size: 14px; color: #856404;">
-                      <strong>Valido fino a:</strong> ${formattedExpiry}
+                      <strong>Действителен до:</strong> ${formattedExpiry}
                     </p>
                   </td>
                 </tr>
               </table>
               
               <p style="margin: 30px 0 20px 0; font-size: 16px; color: #333333; line-height: 1.6;">
-                Non perdere questa opportunità! Completa il tuo ordine ora e risparmia.
+                Не упустите эту возможность! Оформите заказ сейчас и сэкономьте.
               </p>
               
               <!-- CTA Button -->
@@ -189,7 +202,7 @@ async function sendEmailNotification(
                   <td align="center">
                     <a href="${process.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/DonGiulioSelectBot'}" 
                        style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 50px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-                      Completa l'Ordine
+                      Оформить заказ
                     </a>
                   </td>
                 </tr>
@@ -201,8 +214,8 @@ async function sendEmailNotification(
           <tr>
             <td style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e9ecef;">
               <p style="margin: 0; font-size: 12px; color: #6c757d; line-height: 1.5;">
-                Don Giulio Select - Delicatezze Italiane Premium<br>
-                Questo è un messaggio automatico, per favore non rispondere.
+                Don Giulio Select - Премиальные итальянские деликатесы<br>
+                Это автоматическое сообщение, пожалуйста, не отвечайте на него.
               </p>
             </td>
           </tr>
