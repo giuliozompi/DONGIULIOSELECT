@@ -860,3 +860,36 @@ export const insertAnalyticsTopProductSchema = createInsertSchema(analyticsTopPr
 });
 export type InsertAnalyticsTopProduct = z.infer<typeof insertAnalyticsTopProductSchema>;
 export type AnalyticsTopProduct = typeof analyticsTopProducts.$inferSelect;
+
+// Marketing Settings (single-row config per abandoned cart system)
+export const marketingSettings = pgTable("marketing_settings", {
+  id: integer("id").primaryKey(), // Single-row config (always id=1)
+  enableAbandonedCartReminders: boolean("enable_abandoned_cart_reminders").notNull().default(true),
+  minDelayHours: integer("min_delay_hours").notNull().default(20),
+  maxDelayHours: integer("max_delay_hours").notNull().default(36),
+  minDiscountPercent: integer("min_discount_percent").notNull().default(5),
+  maxDiscountPercent: integer("max_discount_percent").notNull().default(10),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  // Enforce single-row constraint
+  checkSingleRow: sql`CHECK (${table.id} = 1)`,
+  // Enforce min < max constraints
+  checkDelayHours: sql`CHECK (${table.minDelayHours} < ${table.maxDelayHours})`,
+  checkDiscountPercent: sql`CHECK (${table.minDiscountPercent} < ${table.maxDiscountPercent} AND ${table.maxDiscountPercent} <= 100)`,
+}));
+
+export const insertMarketingSettingsSchema = createInsertSchema(marketingSettings).omit({ 
+  id: true,
+  updatedAt: true 
+}).refine(
+  (data) => data.minDelayHours < data.maxDelayHours,
+  { message: "minDelayHours must be less than maxDelayHours" }
+).refine(
+  (data) => data.minDiscountPercent < data.maxDiscountPercent,
+  { message: "minDiscountPercent must be less than maxDiscountPercent" }
+).refine(
+  (data) => data.maxDiscountPercent <= 100,
+  { message: "maxDiscountPercent must be <= 100" }
+);
+export type InsertMarketingSettings = z.infer<typeof insertMarketingSettingsSchema>;
+export type MarketingSettings = typeof marketingSettings.$inferSelect;

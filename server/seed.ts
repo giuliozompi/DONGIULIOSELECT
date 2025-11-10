@@ -1,5 +1,22 @@
 import { db } from './db';
-import { categories, products } from '@shared/schema';
+import { categories, products, marketingSettings } from '@shared/schema';
+
+async function seedMarketingSettings() {
+  try {
+    await db.insert(marketingSettings)
+      .values({
+        id: 1,
+        enableAbandonedCartReminders: true,
+        minDelayHours: 20,
+        maxDelayHours: 36,
+        minDiscountPercent: 5,
+        maxDiscountPercent: 10,
+      })
+      .onConflictDoNothing();
+  } catch (error) {
+    console.error('❌ Failed to seed marketing settings:', error);
+  }
+}
 
 export async function seedDatabase() {
   console.log('🌱 Seeding database...');
@@ -9,6 +26,7 @@ export async function seedDatabase() {
     const existingCategories = await db.select().from(categories).limit(1);
     if (existingCategories.length > 0) {
       console.log('✅ Database already seeded');
+      await seedMarketingSettings();
       return;
     }
   } catch (error) {
@@ -129,5 +147,9 @@ export async function seedDatabase() {
 
   await db.insert(products).values(productData);
   console.log('✅ Products seeded');
+  
+  await seedMarketingSettings();
+  console.log('✅ Marketing settings seeded');
+  
   console.log('🎉 Database seeding complete!');
 }
