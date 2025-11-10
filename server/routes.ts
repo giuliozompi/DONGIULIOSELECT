@@ -689,6 +689,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentMethod: z.enum(['yookassa', 'cash_on_delivery']).default('yookassa'),
         saveAddress: z.boolean().optional(),
         addressLabel: z.string().optional(),
+        abandonedCartCode: z.string().optional(),
       });
       
       const customerData = customerDataSchema.parse(req.body);
@@ -722,38 +723,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         0
       );
       
-      // Ottieni bonuses disponibili (FIFO: ordinati per createdAt)
-      const availableBonuses = await storage.getUnusedBonusesByUserId(req.userId!);
-      
-      // Applica bonuses automaticamente (FIFO)
-      let remainingAmount = initialAmount;
-      const usedBonuses: string[] = [];
-      let totalBonusApplied = 0;
-      
-      for (const bonus of availableBonuses) {
-        if (remainingAmount <= 0) break;
-        
-        const bonusAmount = parseFloat(bonus.amount);
-        const appliedAmount = Math.min(bonusAmount, remainingAmount);
-        
-        totalBonusApplied += appliedAmount;
-        remainingAmount -= appliedAmount;
-        usedBonuses.push(bonus.id);
-        
-        // Se il bonus è completamente usato, procedi al prossimo
-        if (appliedAmount >= bonusAmount) {
-          continue;
-        } else {
-          // Il bonus copre completamente il resto, ferma
-          break;
-        }
-      }
-      
-      const finalAmount = Math.max(0, initialAmount - totalBonusApplied).toFixed(2);
-      
-      // Salva indirizzo se richiesto
+      // Salva indirizzo se richiesto (BEFORE transaction)
       if (customerData.saveAddress && customerData.addressLabel) {
-        // Verifica se l'indirizzo esiste già
         const existingAddresses = await storage.getUserAddresses(req.userId!);
         const addressExists = existingAddresses.some(addr => 
           addr.fullAddress === customerData.deliveryAddress
@@ -768,43 +739,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
             dadataFiasId: customerData.dadataFiasId,
             latitude: customerData.deliveryLatitude,
             longitude: customerData.deliveryLongitude,
-            isDefault: existingAddresses.length === 0, // Primo indirizzo diventa default
+            isDefault: existingAddresses.length === 0,
           });
         }
       }
       
-      // Crea ordine con importo finale scontato e dati cliente
-      const order = await storage.createOrder({
+      // ATOMIC CHECKOUT: discount validation, order creation, bonus marking, cart clearing
+      const checkoutResult = await storage.checkoutWithDiscount({
         userId: req.userId!,
-        items: orderItems,
-        amount: finalAmount,
-        customerName: customerData.customerName,
-        customerPhone: normalizePhoneNumber(customerData.customerPhone),
-        customerEmail: customerData.customerEmail,
-        deliveryAddress: customerData.deliveryAddress,
-        deliveryPostalCode: customerData.deliveryPostalCode,
-        dadataFiasId: customerData.dadataFiasId,
-        deliveryLatitude: customerData.deliveryLatitude,
-        deliveryLongitude: customerData.deliveryLongitude,
-        deliveryNotes: customerData.deliveryNotes,
-        deliveryMethod: customerData.deliveryMethod,
-        paymentMethod: customerData.paymentMethod,
+        orderItems,
+        initialAmount,
+        abandonedCartCode: customerData.abandonedCartCode,
+        orderData: {
+          userId: req.userId!,
+          items: orderItems,
+          amount: '0', // Will be overwritten by orchestrator
+          customerName: customerData.customerName,
+          customerPhone: normalizePhoneNumber(customerData.customerPhone),
+          customerEmail: customerData.customerEmail,
+          deliveryAddress: customerData.deliveryAddress,
+          deliveryPostalCode: customerData.deliveryPostalCode,
+          dadataFiasId: customerData.dadataFiasId,
+          deliveryLatitude: customerData.deliveryLatitude,
+          deliveryLongitude: customerData.deliveryLongitude,
+          deliveryNotes: customerData.deliveryNotes,
+          deliveryMethod: customerData.deliveryMethod,
+          paymentMethod: customerData.paymentMethod,
+        },
       });
       
-      // Salva dati utente (nome, phone, email) per riproporli nel prossimo ordine
+      const order = checkoutResult.order;
+      const totalDiscountApplied = checkoutResult.discountApplied;
+      const usedBonuses = checkoutResult.bonusesUsed;
+      
+      // Salva dati utente (AFTER transaction)
       await storage.updateUser(req.userId!, {
         customerName: customerData.customerName,
         phone: normalizePhoneNumber(customerData.customerPhone),
         email: customerData.customerEmail || undefined,
       });
-      
-      // Marca bonuses come usati
-      for (const bonusId of usedBonuses) {
-        await storage.markBonusAsUsed(bonusId, order.id);
-      }
-      
-      // Svuota carrello
-      await storage.clearCart(req.userId!);
       
       // Invia notifica Telegram al cliente per conferma ordine
       try {
@@ -971,10 +944,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bonusApplied: totalBonusApplied.toFixed(2),
         bonusesUsed: usedBonuses.length,
       });
-    } catch (error) {
+    } catch (error: any) {
+      // Zod validation errors
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
+      
+      // Checkout orchestrator domain errors
+      if (error.message === 'DISCOUNT_ALREADY_USED') {
+        return res.status(409).json({ error: 'Codice sconto già utilizzato da un altro ordine' });
+      }
+      if (error.message === 'INVALID_DISCOUNT_CODE') {
+        return res.status(400).json({ error: 'Codice sconto non valido' });
+      }
+      if (error.message === 'DISCOUNT_NOT_YOURS') {
+        return res.status(403).json({ error: 'Codice sconto non appartiene a questo utente' });
+      }
+      if (error.message === 'DISCOUNT_EXPIRED') {
+        return res.status(400).json({ error: 'Codice sconto scaduto' });
+      }
+      
       console.error('Error creating order:', error);
       res.status(500).json({ error: 'Internal server error' });
     }

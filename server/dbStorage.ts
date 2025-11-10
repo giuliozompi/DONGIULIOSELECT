@@ -24,6 +24,7 @@ import {
   orderPoints,
   webhookEvents,
   courierTracking,
+  abandonedCartNotifications,
   PAID_ORDER_STATUSES,
   type User,
   type InsertUser,
@@ -66,6 +67,8 @@ import {
   type InsertWebhookEvent,
   type CourierTracking,
   type InsertCourierTracking,
+  type AbandonedCartNotification,
+  type InsertAbandonedCartNotification,
 } from '@shared/schema';
 import type { IStorage } from './storage';
 
@@ -981,7 +984,8 @@ export class DbStorage implements IStorage {
   }
 
   async getWebhookEvents(filters?: { orderId?: string; source?: string; processed?: boolean; limit?: number }): Promise<WebhookEvent[]> {
-    let query = db.select().from(webhookEvents);
+    const baseQuery = db.select().from(webhookEvents);
+    let query = baseQuery;
 
     const conditions: any[] = [];
     if (filters?.orderId) {
@@ -995,13 +999,13 @@ export class DbStorage implements IStorage {
     }
 
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      query = query.where(and(...conditions)) as typeof baseQuery;
     }
 
-    query = query.orderBy(desc(webhookEvents.createdAt));
+    query = query.orderBy(desc(webhookEvents.createdAt)) as typeof baseQuery;
 
     if (filters?.limit) {
-      query = query.limit(filters.limit);
+      query = query.limit(filters.limit) as typeof baseQuery;
     }
 
     return await query;
@@ -1046,5 +1050,242 @@ export class DbStorage implements IStorage {
       .orderBy(desc(courierTracking.reportedAt))
       .limit(1);
     return result[0];
+  }
+
+  // Abandoned Cart Notifications
+  async createAbandonedCartNotification(notification: InsertAbandonedCartNotification): Promise<AbandonedCartNotification> {
+    const result = await db
+      .insert(abandonedCartNotifications)
+      .values(notification as any)
+      .returning();
+    return result[0]!;
+  }
+
+  async getAbandonedCartNotificationByCode(discountCode: string): Promise<AbandonedCartNotification | undefined> {
+    const result = await db
+      .select()
+      .from(abandonedCartNotifications)
+      .where(eq(abandonedCartNotifications.discountCode, discountCode));
+    return result[0];
+  }
+
+  async getAbandonedCartNotificationsByUserId(userId: string): Promise<AbandonedCartNotification[]> {
+    return await db
+      .select()
+      .from(abandonedCartNotifications)
+      .where(eq(abandonedCartNotifications.userId, userId))
+      .orderBy(desc(abandonedCartNotifications.createdAt));
+  }
+
+  async updateAbandonedCartNotificationStatus(
+    id: string, 
+    status: string, 
+    usedInOrderId?: string
+  ): Promise<AbandonedCartNotification | undefined> {
+    const result = await db
+      .update(abandonedCartNotifications)
+      .set({ 
+        status, 
+        ...(usedInOrderId && { usedInOrderId }) 
+      })
+      .where(eq(abandonedCartNotifications.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async atomicClaimAbandonedCartNotification(
+    tx: any,
+    id: string,
+    orderId: string
+  ): Promise<AbandonedCartNotification | null> {
+    const result = await tx
+      .update(abandonedCartNotifications)
+      .set({ 
+        status: 'used', 
+        usedInOrderId: orderId 
+      })
+      .where(and(
+        eq(abandonedCartNotifications.id, id),
+        eq(abandonedCartNotifications.status, 'sent')
+      ))
+      .returning();
+    
+    return result.length > 0 ? result[0] : null;
+  }
+
+  async getCartsReadyForReminder(): Promise<Cart[]> {
+    const now = new Date();
+    return await db
+      .select()
+      .from(carts)
+      .where(
+        and(
+          eq(carts.reminderSent, false),
+          sql`${carts.nextReminderCheckAt} <= ${now}`,
+          sql`jsonb_array_length(${carts.items}) > 0`
+        )
+      );
+  }
+
+  async markCartReminderSent(userId: string): Promise<void> {
+    await db
+      .update(carts)
+      .set({ reminderSent: true })
+      .where(eq(carts.userId, userId));
+  }
+
+  async checkoutWithDiscount(params: {
+    userId: string;
+    orderItems: Array<{
+      productId: string;
+      productName: string;
+      quantity: number;
+      price: string;
+      unit: string;
+    }>;
+    initialAmount: number;
+    abandonedCartCode?: string;
+    orderData: InsertOrder;
+  }): Promise<{
+    order: Order;
+    discountApplied: number;
+    bonusesUsed: string[];
+    abandonedCartUsed: boolean;
+  }> {
+    return await db.transaction(async (tx) => {
+      let totalDiscountApplied = 0;
+      const usedBonuses: string[] = [];
+      let abandonedCartUsed = false;
+      
+      // Normalize abandonedCartCode: treat empty strings as undefined
+      const normalizedCode = params.abandonedCartCode?.trim() || undefined;
+      
+      // Flag to enforce mutual exclusivity between discount and bonuses
+      let discountPathActive = false;
+
+      // Handle abandoned cart discount (non-cumulative with bonuses)
+      if (normalizedCode) {
+        // Validate notification exists
+        const notification = await tx
+          .select()
+          .from(abandonedCartNotifications)
+          .where(eq(abandonedCartNotifications.discountCode, normalizedCode));
+        
+        if (notification.length === 0) {
+          throw new Error('INVALID_DISCOUNT_CODE');
+        }
+
+        const notif = notification[0];
+
+        // Validate ownership
+        if (notif.userId !== params.userId) {
+          throw new Error('DISCOUNT_NOT_YOURS');
+        }
+
+        // Validate not expired
+        if (new Date() > notif.expiresAt) {
+          throw new Error('DISCOUNT_EXPIRED');
+        }
+
+        // ATOMIC CLAIM: Try to mark as 'used' (only succeeds if status='sent')
+        const claimed = await tx
+          .update(abandonedCartNotifications)
+          .set({ 
+            status: 'used', 
+            usedInOrderId: 'pending' // Will update after order created
+          })
+          .where(and(
+            eq(abandonedCartNotifications.id, notif.id),
+            eq(abandonedCartNotifications.status, 'sent')
+          ))
+          .returning();
+
+        if (claimed.length === 0) {
+          throw new Error('DISCOUNT_ALREADY_USED');
+        }
+
+        // Apply discount percentage (NON-CUMULATIVE: will skip bonuses via flag)
+        totalDiscountApplied = (params.initialAmount * notif.discountPercent) / 100;
+        abandonedCartUsed = true;
+        discountPathActive = true; // Flag to prevent bonus application
+      }
+      
+      // Apply bonuses ONLY if NO abandoned cart discount was claimed
+      if (!discountPathActive) {
+        // No abandoned cart code: apply bonuses (FIFO)
+        const availableBonuses = await tx
+          .select()
+          .from(bonuses)
+          .where(and(
+            eq(bonuses.userId, params.userId),
+            eq(bonuses.used, false)
+          ))
+          .orderBy(asc(bonuses.createdAt));
+
+        let remainingAmount = params.initialAmount;
+
+        for (const bonus of availableBonuses) {
+          if (remainingAmount <= 0) break;
+
+          const bonusAmount = parseFloat(bonus.amount);
+          const appliedAmount = Math.min(bonusAmount, remainingAmount);
+
+          totalDiscountApplied += appliedAmount;
+          remainingAmount -= appliedAmount;
+          usedBonuses.push(bonus.id);
+
+          if (appliedAmount >= bonusAmount) {
+            continue;
+          } else {
+            break;
+          }
+        }
+      }
+
+      // Calculate final amount
+      const finalAmount = Math.max(0, params.initialAmount - totalDiscountApplied).toFixed(2);
+
+      // Create order
+      const orderResult = await tx
+        .insert(orders)
+        .values({
+          ...params.orderData,
+          amount: finalAmount,
+        })
+        .returning();
+
+      const order = orderResult[0];
+
+      // Update abandoned cart notification with actual order ID
+      if (abandonedCartUsed && normalizedCode) {
+        await tx
+          .update(abandonedCartNotifications)
+          .set({ usedInOrderId: order.id })
+          .where(eq(abandonedCartNotifications.discountCode, normalizedCode));
+      }
+
+      // Mark bonuses as used (ONLY if no discount was applied)
+      if (!discountPathActive) {
+        for (const bonusId of usedBonuses) {
+          await tx
+            .update(bonuses)
+            .set({ used: true, usedInOrderId: order.id })
+            .where(eq(bonuses.id, bonusId));
+        }
+      }
+
+      // Clear cart
+      await tx
+        .update(carts)
+        .set({ items: [] })
+        .where(eq(carts.userId, params.userId));
+
+      return {
+        order,
+        discountApplied: totalDiscountApplied,
+        bonusesUsed: usedBonuses,
+        abandonedCartUsed,
+      };
+    });
   }
 }

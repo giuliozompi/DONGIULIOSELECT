@@ -634,7 +634,7 @@ export const adminActionLogs = pgTable("admin_action_logs", {
 });
 
 export const insertAdminActionLogSchema = createInsertSchema(adminActionLogs).omit({ id: true, createdAt: true });
-export type InsertAdminActionLog = z.infer<typeof insertAdminActionLogSchema>;
+export type InsertAdminActionLog = typeof adminActionLogs.$inferInsert;
 export type AdminActionLog = typeof adminActionLogs.$inferSelect;
 
 // Log маркировки продуктов (Product marking codes for regulatory compliance)
