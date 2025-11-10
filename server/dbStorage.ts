@@ -296,8 +296,50 @@ export class DbStorage implements IStorage {
 
   // Корзина (PERSISTENTE!)
   async getCart(userId: string): Promise<Cart | undefined> {
-    const result = await db.select().from(carts).where(eq(carts.userId, userId));
-    return result[0];
+    const result = await db
+      .select({
+        userId: carts.userId,
+        items: carts.items,
+        updatedAt: carts.updatedAt,
+        nextReminderCheckAt: carts.nextReminderCheckAt,
+        reminderSent: carts.reminderSent,
+        discountCode: abandonedCartNotifications.discountCode,
+        discountPercent: abandonedCartNotifications.discountPercent,
+        expiresAt: abandonedCartNotifications.expiresAt,
+      })
+      .from(carts)
+      .leftJoin(
+        abandonedCartNotifications,
+        and(
+          eq(carts.userId, abandonedCartNotifications.userId),
+          eq(abandonedCartNotifications.status, 'sent'),
+          sql`${abandonedCartNotifications.expiresAt} > NOW()`
+        )
+      )
+      .where(eq(carts.userId, userId))
+      .orderBy(desc(abandonedCartNotifications.sentAt))
+      .limit(1);
+
+    if (!result[0]) return undefined;
+
+    const row = result[0];
+    const cart: Cart = {
+      userId: row.userId,
+      items: row.items,
+      updatedAt: row.updatedAt,
+      nextReminderCheckAt: row.nextReminderCheckAt,
+      reminderSent: row.reminderSent,
+    };
+
+    if (row.discountCode && row.discountPercent && row.expiresAt) {
+      cart.activeDiscount = {
+        discountCode: row.discountCode,
+        discountPercent: row.discountPercent,
+        expiresAt: row.expiresAt,
+      };
+    }
+
+    return cart;
   }
 
   async setCart(userId: string, items: Cart['items']): Promise<Cart> {

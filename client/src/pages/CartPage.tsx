@@ -6,6 +6,7 @@ import { hapticFeedback } from '@/lib/telegram';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import CartItem from '@/components/CartItem';
+import CountdownTimer from '@/components/CountdownTimer';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ShoppingCart, ArrowLeft, Gift } from 'lucide-react';
@@ -161,6 +162,14 @@ export default function CartPage() {
       </div>
 
       <div className="p-4 space-y-4">
+        {cart?.activeDiscount && (
+          <CountdownTimer
+            expiresAt={cart.activeDiscount.expiresAt}
+            discountCode={cart.activeDiscount.discountCode}
+            discountPercent={cart.activeDiscount.discountPercent}
+          />
+        )}
+
         {enrichedItems.map((item) => (
           <CartItem
             key={item.id}

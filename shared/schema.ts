@@ -116,7 +116,13 @@ export const carts = pgTable("carts", {
 
 export const insertCartSchema = createInsertSchema(carts);
 export type InsertCart = z.infer<typeof insertCartSchema>;
-export type Cart = typeof carts.$inferSelect;
+export type Cart = typeof carts.$inferSelect & {
+  activeDiscount?: {
+    discountCode: string;
+    discountPercent: number;
+    expiresAt: Date;
+  };
+};
 
 // Notifiche carrello abbandonato (anti-gaming con delay e sconto random)
 export const abandonedCartNotifications = pgTable("abandoned_cart_notifications", {
