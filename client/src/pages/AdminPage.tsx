@@ -28,7 +28,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
-import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
+import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, ORDER_STATUSES, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
 import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
@@ -1706,20 +1706,21 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
 
 // ========== ORDERS MANAGER ==========
 
-const ORDER_STATUSES = ['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', 'ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН'] as const;
+// Array locale per logica indexOf (ORDER_STATUSES è l'oggetto importato da schema)
+const ORDER_STATUSES_ARRAY = ['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', 'ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН'] as const;
 
 // Helper function per determinare se un ordine è modificabile
 function isOrderEditable(status: string): boolean {
-  const statusIndex = ORDER_STATUSES.indexOf(status as any);
-  const paymentLinkSentIndex = ORDER_STATUSES.indexOf('ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ');
+  const statusIndex = ORDER_STATUSES_ARRAY.indexOf(status as any);
+  const paymentLinkSentIndex = ORDER_STATUSES_ARRAY.indexOf('ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ');
   return statusIndex < paymentLinkSentIndex;
 }
 
 // Helper function per determinare se lo stato può essere cambiato
 function canChangeOrderStatus(status: string, isMasterAdmin: boolean): boolean {
   if (isMasterAdmin) return true; // Master admin può sempre cambiare
-  const statusIndex = ORDER_STATUSES.indexOf(status as any);
-  const paidIndex = ORDER_STATUSES.indexOf('ОПЛАЧЕН');
+  const statusIndex = ORDER_STATUSES_ARRAY.indexOf(status as any);
+  const paidIndex = ORDER_STATUSES_ARRAY.indexOf('ОПЛАЧЕН');
   return statusIndex < paidIndex; // Admin normali solo prima di "ОПЛАЧЕН"
 }
 
@@ -2003,7 +2004,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Все заказы</SelectItem>
-              {ORDER_STATUSES.map((status) => (
+              {Object.values(ORDER_STATUSES).map((status) => (
                 <SelectItem key={status} value={status}>{status}</SelectItem>
               ))}
             </SelectContent>
@@ -2068,7 +2069,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {ORDER_STATUSES.map((status) => (
+                        {Object.values(ORDER_STATUSES).map((status) => (
                           <SelectItem key={status} value={status}>{status}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2156,7 +2157,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                     </Button>
                     {!isOrderEditable(order.status) && (
                       <p className="text-xs text-muted-foreground">
-                        {ORDER_STATUSES.indexOf(order.status as any) >= ORDER_STATUSES.indexOf('ОПЛАЧЕН')
+                        {ORDER_STATUSES_ARRAY.indexOf(order.status as any) >= ORDER_STATUSES_ARRAY.indexOf('ОПЛАЧЕН')
                           ? 'Оплаченные заказы не могут быть изменены'
                           : 'Заказ не может быть изменен после отправки ссылки на оплату'}
                       </p>
