@@ -320,50 +320,6 @@ export async function cancelYooKassaPayment(paymentId: string): Promise<YooKassa
 }
 
 /**
- * Crea un rimborso
- * 
- * @param paymentId - ID del pagamento originale
- * @param amount - Importo da rimborsare
- * @param description - Motivo del rimborso (opzionale)
- */
-export async function createYooKassaRefund(
-  paymentId: string,
-  amount: YooKassaAmount,
-  description?: string
-): Promise<any> {
-  const idempotencyKey = randomUUID();
-  
-  const payload = {
-    payment_id: paymentId,
-    amount,
-    description: description || 'Refund',
-  };
-
-  try {
-    const response = await fetch(`${YOOKASSA_API_URL}/refunds`, {
-      method: 'POST',
-      headers: {
-        'Authorization': getAuthHeader(),
-        'Idempotence-Key': idempotencyKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`YooKassa API error: ${response.status} - ${JSON.stringify(errorData)}`);
-    }
-
-    const refund = await response.json();
-    return refund;
-  } catch (error) {
-    console.error('[YooKassa] Error creating refund:', error);
-    throw error;
-  }
-}
-
-/**
  * Lista IP ufficiali YooKassa (CIDR notation)
  * Fonte: https://yookassa.ru/developers/using-api/webhooks
  */
@@ -672,4 +628,149 @@ export function createReceipt(
     items,
     tax_system_code: taxSystemCode,
   };
+}
+
+// ============================================================================
+// REFUNDS (Rimborsi)
+// ============================================================================
+
+/**
+ * Interfaccia per oggetto Refund di YooKassa
+ */
+export interface YooKassaRefund {
+  id: string; // ID del rimborso
+  status: 'pending' | 'succeeded' | 'canceled';
+  amount: YooKassaAmount;
+  description?: string; // Motivazione del rimborso
+  created_at: string;
+  payment_id: string; // ID del pagamento originale
+  receipt?: YooKassaReceiptResponse; // Scontrino fiscale per rimborso (se applicabile)
+}
+
+/**
+ * Parametri per creare un rimborso
+ */
+export interface CreateRefundParams {
+  payment_id: string; // ID del pagamento YooKassa da rimborsare
+  amount: YooKassaAmount; // Importo da rimborsare (può essere parziale)
+  description?: string; // Motivazione del rimborso (opzionale, ma consigliato)
+  receipt?: YooKassaReceipt; // Dati per scontrino fiscale (obbligatorio per rimborsi parziali con 54-ФЗ)
+}
+
+/**
+ * Crea un rimborso YooKassa
+ * 
+ * @param params - Parametri del rimborso
+ * @param idempotencyKey - Chiave di idempotenza (UUID) per evitare duplicati
+ * @returns Refund object da YooKassa
+ * 
+ * Note:
+ * - Il pagamento deve essere in status 'succeeded'
+ * - Sberbank: pagamenti < 1 anno
+ * - Altri metodi: pagamenti < 3 anni
+ * - Il rimborso va allo stesso metodo di pagamento originale (stessa carta/wallet)
+ * - Nessuna commissione sul rimborso (ma la commissione del pagamento originale non viene restituita)
+ */
+export async function createYooKassaRefund(
+  params: CreateRefundParams,
+  idempotencyKey?: string
+): Promise<YooKassaRefund> {
+  const key = idempotencyKey || randomUUID();
+  
+  const payload: any = {
+    payment_id: params.payment_id,
+    amount: params.amount,
+  };
+  
+  // Aggiungi descrizione se fornita
+  if (params.description) {
+    payload.description = params.description;
+  }
+  
+  // Aggiungi dati per scontrino fiscale se forniti (per rimborsi parziali)
+  if (params.receipt) {
+    payload.receipt = params.receipt;
+  }
+
+  try {
+    console.log('[YooKassa Refund] Creating refund with idempotency key:', key);
+    console.log('[YooKassa Refund] Payload:', JSON.stringify(payload, null, 2));
+    
+    const response = await fetch(`${YOOKASSA_API_URL}/refunds`, {
+      method: 'POST',
+      headers: {
+        'Authorization': getAuthHeader(),
+        'Idempotence-Key': key,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    console.log('[YooKassa Refund] API Response status:', response.status, response.statusText);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { raw: errorText };
+      }
+      
+      console.error('[YooKassa Refund] API Error Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData
+      });
+      
+      throw new Error(`YooKassa Refund API error: ${response.status} - ${JSON.stringify(errorData)}`);
+    }
+
+    const refund: YooKassaRefund = await response.json();
+    console.log('[YooKassa Refund] Refund created successfully:', refund.id);
+    console.log('[YooKassa Refund] Status:', refund.status);
+    console.log('[YooKassa Refund] Amount:', refund.amount.value, refund.amount.currency);
+    
+    return refund;
+  } catch (error) {
+    console.error('[YooKassa Refund] Error creating refund:', error);
+    throw error;
+  }
+}
+
+/**
+ * Ottieni informazioni su un rimborso esistente
+ * 
+ * @param refundId - ID del rimborso YooKassa
+ * @returns Refund object
+ */
+export async function getYooKassaRefund(refundId: string): Promise<YooKassaRefund> {
+  try {
+    console.log('[YooKassa Refund] Fetching refund:', refundId);
+    
+    const response = await fetch(`${YOOKASSA_API_URL}/refunds/${refundId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': getAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('[YooKassa Refund] API Error:', {
+        status: response.status,
+        data: errorData
+      });
+      throw new Error(`YooKassa Refund API error: ${response.status} - ${JSON.stringify(errorData)}`);
+    }
+
+    const refund: YooKassaRefund = await response.json();
+    console.log('[YooKassa Refund] Refund fetched:', refund.id, '- Status:', refund.status);
+    
+    return refund;
+  } catch (error) {
+    console.error('[YooKassa Refund] Error fetching refund:', error);
+    throw error;
+  }
 }
