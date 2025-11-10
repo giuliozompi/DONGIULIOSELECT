@@ -31,7 +31,9 @@ export function verifyTelegramInitData(req: Request, res: Response, next: NextFu
     // In development, permetti bypass per test usando il Master Admin
     if (process.env.NODE_ENV === 'development' && !initData) {
       console.log('[Telegram Auth] Development mode bypass - using MASTER ADMIN user');
-      const adminUserId = process.env.MASTER_ADMIN_USER_ID || '999999999'; // Master Admin per test
+      // Supporta lista di Master Admin separati da virgole
+      const masterAdminUserIds = process.env.MASTER_ADMIN_USER_IDS || process.env.MASTER_ADMIN_USER_ID || '999999999';
+      const adminUserId = masterAdminUserIds.split(',')[0].trim(); // Usa il primo admin della lista
       
       // Crea o ottieni l'utente admin in dev mode
       storage.getUser(adminUserId).then(user => {
@@ -193,7 +195,9 @@ export function optionalTelegramAuth(req: Request, res: Response, next: NextFunc
   if (!initData) {
     // In development mode, usa il bypass MASTER ADMIN
     if (process.env.NODE_ENV === 'development') {
-      const adminUserId = process.env.MASTER_ADMIN_USER_ID || '999999999';
+      // Supporta lista di Master Admin separati da virgole
+      const masterAdminUserIds = process.env.MASTER_ADMIN_USER_IDS || process.env.MASTER_ADMIN_USER_ID || '999999999';
+      const adminUserId = masterAdminUserIds.split(',')[0].trim(); // Usa il primo admin della lista
       
       storage.getUser(adminUserId).then(user => {
         if (!user) {

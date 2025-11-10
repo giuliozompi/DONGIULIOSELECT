@@ -875,8 +875,10 @@ export class DbStorage implements IStorage {
   // ==================== ADMIN ACTION LOGS ====================
 
   async isMasterAdmin(userId: string): Promise<boolean> {
-    const masterAdminUserId = process.env.MASTER_ADMIN_USER_ID;
-    return userId === masterAdminUserId;
+    // Supporta fino a 3 Master Admin tramite lista separata da virgole
+    const masterAdminUserIds = process.env.MASTER_ADMIN_USER_IDS || process.env.MASTER_ADMIN_USER_ID || '';
+    const adminList = masterAdminUserIds.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    return adminList.includes(userId);
   }
 
   async createAdminActionLog(log: InsertAdminActionLog): Promise<AdminActionLog> {
