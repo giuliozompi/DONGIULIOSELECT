@@ -1,9 +1,17 @@
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Printer, Package, Loader2, AlertTriangle } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { Order } from '@shared/schema';
 import { DELIVERY_METHOD_LABELS } from '@shared/schema';
 
@@ -23,11 +31,62 @@ interface OrderViewDialogProps {
 }
 
 export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogProps) {
+  const { toast } = useToast();
+  const [showRefundDialog, setShowRefundDialog] = useState<boolean>(false);
+  
   // Fetch marking codes if order has products requiring marking
   const { data: markingLogs = [], isLoading: isLoadingMarking, isError: isErrorMarking } = useQuery<MarkingLog[]>({
     queryKey: [`/api/admin/marking-logs/${order.id}`],
     enabled: open,
   });
+
+  // Refund form schema
+  const refundFormSchema = z.object({
+    reason: z.string().trim().min(10, 'Причина возврата должна содержать минимум 10 символов'),
+  });
+  
+  // Refund form
+  const refundForm = useForm<z.infer<typeof refundFormSchema>>({
+    resolver: zodResolver(refundFormSchema),
+    mode: 'onChange',
+    defaultValues: {
+      reason: '',
+    },
+  });
+  
+  // Refund order mutation
+  const refundOrderMutation = useMutation({
+    mutationFn: async (values: z.infer<typeof refundFormSchema>) => {
+      const res = await apiRequest('POST', `/api/admin/orders/${order.id}/refund`, { reason: values.reason });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to process refund');
+      }
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
+      setShowRefundDialog(false);
+      refundForm.reset();
+      toast({ 
+        title: 'Возврат оформлен', 
+        description: `Возврат средств успешно инициирован. ID: ${data.refund.id}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка возврата', 
+        description: error.message || 'Не удалось оформить возврат',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Determina se il rimborso è possibile
+  const canRefund = order.paymentMethod === 'yookassa' && 
+                    (order.status === 'ОПЛАЧЕН' || order.status === 'ВЫЗВАН КУРЬЕР' || order.status === 'ПОЛУЧЕН') &&
+                    !order.refundStatus;
 
   const handlePrint = () => {
     window.print();
@@ -230,6 +289,87 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
             <p>ID заказа: <span className="font-mono">{order.id}</span></p>
             <p>Создан: {new Date(order.createdAt).toLocaleString('ru-RU')}</p>
           </div>
+
+          {/* Refund section - only for YooKassa paid orders */}
+          {canRefund && (
+            <div className="border-t pt-4 print:hidden">
+              {!showRefundDialog ? (
+                <Button
+                  variant="destructive"
+                  onClick={() => setShowRefundDialog(true)}
+                  className="w-full"
+                  data-testid="button-request-refund"
+                >
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  Оформить возврат средств
+                </Button>
+              ) : (
+                <div className="space-y-3 bg-muted p-4 rounded-md">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">Подтверждение возврата</p>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Полный возврат средств для заказа на сумму {order.amount}₽ через YooKassa.
+                      </p>
+                      <Form {...refundForm}>
+                        <form className="space-y-2">
+                          <FormField
+                            control={refundForm.control}
+                            name="reason"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Причина возврата (минимум 10 символов)</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    {...field}
+                                    placeholder="Укажите причину возврата средств..."
+                                    className="min-h-[100px] resize-none"
+                                    data-testid="textarea-refund-reason"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </form>
+                      </Form>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="destructive"
+                      onClick={refundForm.handleSubmit((values) => refundOrderMutation.mutate(values))}
+                      disabled={refundOrderMutation.isPending || !refundForm.formState.isValid}
+                      className="flex-1"
+                      data-testid="button-confirm-refund"
+                    >
+                      {refundOrderMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Обработка...
+                        </>
+                      ) : (
+                        'Да, оформить возврат'
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowRefundDialog(false);
+                        refundForm.reset();
+                      }}
+                      disabled={refundOrderMutation.isPending}
+                      className="flex-1"
+                      data-testid="button-cancel-refund"
+                    >
+                      Отмена
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
