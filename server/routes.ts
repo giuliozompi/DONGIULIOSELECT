@@ -2739,14 +2739,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         console.log(`✅ [Order ${orderId}] Loaded ${allProducts.length} products, ${markingLogs.length} marking codes`);
         
-        // Aggiungi requiresMarking agli order items
-        const enrichedOrderItems = order.items.map(item => {
-          const product = productsMap.get(item.productId);
-          return {
-            ...item,
-            requiresMarking: product?.requiresMarking || false,
-          };
-        });
+        // Calcola totale originale dagli items
+        const itemsSubtotal = order.items.reduce((sum, item) => {
+          return sum + (parseFloat(item.price) * item.quantity);
+        }, 0);
+        
+        // Calcola sconto applicato (bonus, coupon, etc.)
+        const orderDiscount = parseFloat(order.discount || '0');
+        const totalToPay = parseFloat(order.amount);
+        
+        console.log(`💰 [Order ${orderId}] Pricing breakdown:`);
+        console.log(`   Items subtotal: ${itemsSubtotal.toFixed(2)}₽`);
+        console.log(`   Discount applied: ${orderDiscount.toFixed(2)}₽`);
+        console.log(`   Total to pay: ${totalToPay.toFixed(2)}₽`);
+        
+        // Applica sconto proporzionalmente agli items per la ricevuta fiscale
+        let enrichedOrderItems;
+        
+        if (orderDiscount > 0.01) {
+          // C'è uno sconto - distribuiscilo proporzionalmente
+          console.log(`🎁 [Order ${orderId}] Applying discount proportionally to items...`);
+          const discountRatio = 1 - (orderDiscount / itemsSubtotal);
+          
+          enrichedOrderItems = order.items.map(item => {
+            const product = productsMap.get(item.productId);
+            const originalPrice = parseFloat(item.price);
+            const discountedPrice = originalPrice * discountRatio;
+            
+            console.log(`   ${item.productName}: ${originalPrice.toFixed(2)}₽ → ${discountedPrice.toFixed(2)}₽`);
+            
+            return {
+              ...item,
+              price: discountedPrice.toFixed(2), // Usa prezzo scontato nella ricevuta
+              requiresMarking: product?.requiresMarking || false,
+            };
+          });
+        } else {
+          // Nessuno sconto
+          enrichedOrderItems = order.items.map(item => {
+            const product = productsMap.get(item.productId);
+            return {
+              ...item,
+              requiresMarking: product?.requiresMarking || false,
+            };
+          });
+        }
         
         // Crea receipt per scontrino fiscale (54-ФЗ) con маркировка
         console.log(`🧾 [Order ${orderId}] Step 4/8: Creating fiscal receipt with ${enrichedOrderItems.length} items...`);
@@ -2760,26 +2797,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
         console.log(`✅ [Order ${orderId}] Receipt created with ${receipt.items.length} line items`);
         
-        // Calcola totale dagli items per garantire coerenza con la ricevuta
-        const calculatedTotal = enrichedOrderItems.reduce((sum, item) => {
-          return sum + (parseFloat(item.price) * item.quantity);
-        }, 0);
-        const totalAmount = formatYooKassaAmount(calculatedTotal);
-        
-        console.log(`💰 [Order ${orderId}] Amount verification:`);
-        console.log(`   Order.amount: ${order.amount}₽`);
-        console.log(`   Calculated from items: ${totalAmount}₽`);
-        
-        if (Math.abs(parseFloat(order.amount) - calculatedTotal) > 0.01) {
-          console.warn(`⚠️ [Order ${orderId}] MISMATCH: Order amount (${order.amount}₽) differs from items total (${totalAmount}₽)`);
-          console.warn(`   Using calculated total to ensure receipt consistency`);
-        }
-        
         console.log(`💳 [Order ${orderId}] Step 5/8: Calling YooKassa API...`);
         try {
           const yookassaPayment = await createYooKassaPayment({
             amount: {
-              value: totalAmount, // Usa il totale calcolato dagli items
+              value: formatYooKassaAmount(totalToPay), // Usa order.amount (totale REALE da pagare)
               currency: 'RUB',
             },
             description: `Заказ №${orderId.slice(0, 8)}`,
