@@ -3191,6 +3191,163 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // POST /api/admin/orders/:id/refund - Richiedi rimborso per ordine pagato (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/refund", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const adminUserId = req.userId!;
+      
+      // Valida body
+      const schema = z.object({
+        reason: z.string().trim().min(10, 'Refund reason must be at least 10 characters'),
+      });
+      
+      const { reason } = schema.parse(req.body);
+      
+      // 1. Carica ordine
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      console.log(`🔄 [Refund] Processing refund request for order ${orderId}...`);
+      console.log(`   Admin: ${adminUserId}`);
+      console.log(`   Reason: ${reason}`);
+      
+      // 2. Valida che sia pagamento YooKassa
+      if (order.paymentMethod !== 'yookassa') {
+        return res.status(400).json({ 
+          error: 'Only YooKassa payments can be refunded',
+          code: 'invalid_payment_method'
+        });
+      }
+      
+      // 3. Valida che l'ordine sia pagato
+      const isPaid = PAID_ORDER_STATUSES.includes(order.status as any);
+      if (!isPaid) {
+        return res.status(409).json({ 
+          error: 'Order must be paid to request refund',
+          code: 'order_not_paid',
+          currentStatus: order.status
+        });
+      }
+      
+      // 4. Valida che non sia già stato rimborsato
+      if (order.refundStatus === 'pending' || order.refundStatus === 'succeeded') {
+        return res.status(409).json({ 
+          error: 'Order has already been refunded or refund is pending',
+          code: 'already_refunded',
+          refundStatus: order.refundStatus,
+          refundId: order.refundId
+        });
+      }
+      
+      // 5. Ottieni payment ID YooKassa
+      if (!order.paymentId) {
+        return res.status(400).json({ 
+          error: 'Payment ID not found for this order',
+          code: 'payment_id_missing'
+        });
+      }
+      
+      console.log(`💳 [Refund] YooKassa Payment ID: ${order.paymentId}`);
+      console.log(`💰 [Refund] Refund amount: ${order.amount} RUB`);
+      
+      // 6. Chiama API YooKassa per creare rimborso
+      const { createYooKassaRefund, formatYooKassaAmount } = await import('./services/yookassa-payment');
+      
+      // Usa idempotency key DETERMINISTICO basato su orderId per evitare duplicati
+      // Se l'admin riprova la richiesta, YooKassa restituirà lo stesso rimborso
+      const idempotencyKey = `refund-${orderId}`;
+      
+      let refund;
+      try {
+        refund = await createYooKassaRefund({
+          payment_id: order.paymentId,
+          amount: {
+            value: formatYooKassaAmount(parseFloat(order.amount)),
+            currency: 'RUB',
+          },
+          description: `Refund for order ${orderId.slice(0, 8)}: ${reason}`,
+        }, idempotencyKey);
+        
+        console.log(`✅ [Refund] YooKassa refund created: ${refund.id}`);
+        console.log(`   Status: ${refund.status}`);
+      } catch (yookassaError: any) {
+        console.error(`❌ [Refund] YooKassa API error:`, yookassaError);
+        
+        // Parse YooKassa error
+        const errorMessage = yookassaError.message || String(yookassaError);
+        
+        // Map YooKassa errors to HTTP status codes
+        if (errorMessage.includes('404')) {
+          return res.status(502).json({ 
+            error: 'Payment not found in YooKassa',
+            code: 'payment_not_found',
+            details: errorMessage
+          });
+        } else if (errorMessage.includes('422')) {
+          return res.status(409).json({ 
+            error: 'Invalid refund amount',
+            code: 'invalid_amount',
+            details: errorMessage
+          });
+        } else if (errorMessage.includes('400')) {
+          return res.status(409).json({ 
+            error: 'Payment cannot be refunded (too old or invalid status)',
+            code: 'payment_not_refundable',
+            details: errorMessage
+          });
+        } else {
+          return res.status(503).json({ 
+            error: 'Payment gateway unavailable',
+            code: 'gateway_error',
+            details: errorMessage
+          });
+        }
+      }
+      
+      // 7. Aggiorna ordine nel database
+      const updatedOrder = await storage.updateOrder(orderId, {
+        refundId: refund.id,
+        refundStatus: refund.status,
+        refundReason: reason,
+        refundedAmount: order.amount, // Full refund
+        refundedAt: refund.status === 'succeeded' ? new Date() : null,
+      });
+      
+      console.log(`💾 [Refund] Order updated with refund data`);
+      console.log(`✅ [Refund] Refund request completed successfully!`);
+      
+      res.json({
+        success: true,
+        refund: {
+          id: refund.id,
+          status: refund.status,
+          amount: refund.amount.value,
+          currency: refund.amount.currency,
+          reason,
+          createdAt: refund.created_at,
+        },
+        order: updatedOrder,
+      });
+    } catch (error) {
+      console.error(`❌ [Refund] Error processing refund for order ${req.params.id}:`, error);
+      
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: 'Validation error', 
+          details: error.errors 
+        });
+      }
+      
+      res.status(500).json({ 
+        error: 'Failed to process refund',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+  
   // ==================== ORDER EDITING (ADMIN) ====================
   
   // Helper function per calcolare totale ordine considerando sconto
