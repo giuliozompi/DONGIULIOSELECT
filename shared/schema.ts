@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -108,11 +108,57 @@ export const carts = pgTable("carts", {
     priceAtAdd: string;
   }>>().notNull().default([]),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  
+  // Sistema anti-gaming per notifiche carrello abbandonato
+  nextReminderCheckAt: timestamp("next_reminder_check_at", { withTimezone: true }), // Timestamp RANDOM (updatedAt + 20-36h)
+  reminderSent: boolean("reminder_sent").notNull().default(false), // Previene duplicati
 });
 
 export const insertCartSchema = createInsertSchema(carts);
 export type InsertCart = z.infer<typeof insertCartSchema>;
 export type Cart = typeof carts.$inferSelect;
+
+// Notifiche carrello abbandonato (anti-gaming con delay e sconto random)
+export const abandonedCartNotifications = pgTable("abandoned_cart_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  
+  // Snapshot del carrello al momento dell'invio (per tracking)
+  cartSnapshot: jsonb("cart_snapshot").$type<Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    priceAtAdd: string;
+  }>>().notNull(),
+  
+  // Sconto RANDOM 5-10% (non cumulabile)
+  discountPercent: integer("discount_percent").notNull(), // 5, 6, 7, 8, 9, o 10
+  discountCode: varchar("discount_code").notNull().unique(), // Codice univoco (es: CART7-ABC123)
+  
+  // Canale notifica
+  channel: text("channel").notNull(), // 'telegram' | 'email'
+  
+  // Validità sconto: 24h dalla ricezione
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // sentAt + 24h
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull(),
+  
+  // Status tracking
+  status: text("status").notNull().default('sent'), // 'sent' | 'used' | 'expired' | 'failed'
+  usedInOrderId: varchar("used_in_order_id").references(() => orders.id), // Ordine dove è stato usato
+  
+  // Error handling
+  error: text("error"), // Messaggio errore se invio fallito
+  retryCount: integer("retry_count").notNull().default(0),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertAbandonedCartNotificationSchema = createInsertSchema(abandonedCartNotifications).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertAbandonedCartNotification = z.infer<typeof insertAbandonedCartNotificationSchema>;
+export type AbandonedCartNotification = typeof abandonedCartNotifications.$inferSelect;
 
 // Заказы
 export const orders = pgTable("orders", {
@@ -720,3 +766,91 @@ export const favoriteProducts = pgTable("favorite_products", {
 export const insertFavoriteProductSchema = createInsertSchema(favoriteProducts).omit({ createdAt: true });
 export type InsertFavoriteProduct = z.infer<typeof insertFavoriteProductSchema>;
 export type FavoriteProduct = typeof favoriteProducts.$inferSelect;
+
+// Analytics snapshots (cache giornaliero per metriche - timezone Europe/Moscow)
+export const analyticsSnapshots = pgTable("analytics_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  snapshotDate: date("snapshot_date").notNull(), // DATE (Moscow timezone, normalized in ETL)
+  granularity: text("granularity").notNull().default('daily'), // 'daily' | 'weekly' | 'monthly'
+  
+  // Metriche ordini base
+  totalOrders: integer("total_orders").notNull().default(0),
+  completedOrders: integer("completed_orders").notNull().default(0), // ПОЛУЧЕН status
+  paidOrders: integer("paid_orders").notNull().default(0), // ОПЛАЧЕН + post-payment
+  pendingOrders: integer("pending_orders").notNull().default(0), // ОФОРМЛЕН status
+  canceledOrders: integer("canceled_orders").notNull().default(0), // УДАЛЕНО status
+  
+  // Revenue tracking (raw inputs)
+  grossRevenue: decimal("gross_revenue", { precision: 12, scale: 2 }).notNull().default('0'), // Total amount before discounts/refunds
+  totalDiscounts: decimal("total_discounts", { precision: 12, scale: 2 }).notNull().default('0'),
+  totalRefunds: decimal("total_refunds", { precision: 12, scale: 2 }).notNull().default('0'),
+  netRevenue: decimal("net_revenue", { precision: 12, scale: 2 }).notNull().default('0'), // gross - discounts - refunds
+  
+  // Delivery & Shipping (revenue and cost)
+  shippingRevenue: decimal("shipping_revenue", { precision: 10, scale: 2 }).notNull().default('0'),
+  shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 }).notNull().default('0'),
+  
+  // Cost of Goods Sold (per calcolare gross margin)
+  cogs: decimal("cogs", { precision: 12, scale: 2 }).notNull().default('0'),
+  
+  // Metriche clienti
+  newCustomers: integer("new_customers").notNull().default(0),
+  returningCustomers: integer("returning_customers").notNull().default(0),
+  totalCustomers: integer("total_customers").notNull().default(0),
+  
+  // Carrelli abbandonati
+  abandonedCarts: integer("abandoned_carts").notNull().default(0),
+  cartRemindersSent: integer("cart_reminders_sent").notNull().default(0),
+  cartRecoveryOrders: integer("cart_recovery_orders").notNull().default(0), // Ordini da notifiche
+  
+  // Payment methods breakdown
+  yookassaOrders: integer("yookassa_orders").notNull().default(0),
+  cashOrders: integer("cash_orders").notNull().default(0),
+  
+  // Derivate metrics (cached for performance, ma ricalcolabili)
+  averageOrderValue: decimal("average_order_value", { precision: 10, scale: 2 }).notNull().default('0'),
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  // Composite unique constraint per supportare multiple granularit\u00e0
+  uniqueSnapshotDateGranularity: sql`UNIQUE (${table.snapshotDate}, ${table.granularity})`,
+  // Index per query performance
+  snapshotDateGranularityIdx: sql`CREATE INDEX IF NOT EXISTS snapshot_date_granularity_idx ON ${table} (${table.snapshotDate}, ${table.granularity})`,
+}));
+
+export const insertAnalyticsSnapshotSchema = createInsertSchema(analyticsSnapshots).omit({ 
+  id: true, 
+  createdAt: true,
+  updatedAt: true 
+});
+export type InsertAnalyticsSnapshot = z.infer<typeof insertAnalyticsSnapshotSchema>;
+export type AnalyticsSnapshot = typeof analyticsSnapshots.$inferSelect;
+
+// Top products per snapshot (per grafici "prodotti più venduti")
+export const analyticsTopProducts = pgTable("analytics_top_products", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  snapshotId: varchar("snapshot_id").notNull().references(() => analyticsSnapshots.id, { onDelete: 'cascade' }),
+  snapshotDate: date("snapshot_date").notNull(), // DATE (denormalized per query performance)
+  productId: varchar("product_id").notNull().references(() => products.id),
+  productName: text("product_name").notNull(),
+  
+  unitsSold: integer("units_sold").notNull().default(0),
+  revenue: decimal("revenue", { precision: 10, scale: 2 }).notNull().default('0'),
+  rank: integer("rank").notNull(), // 1 = best seller
+  
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  // Unique constraint: un prodotto appare solo una volta per snapshot (supporta multiple granularità)
+  uniqueSnapshotIdProduct: sql`UNIQUE (${table.snapshotId}, ${table.productId})`,
+  // Indexes per query performance
+  snapshotDateRankIdx: sql`CREATE INDEX IF NOT EXISTS snapshot_date_rank_idx ON ${table} (${table.snapshotDate}, ${table.rank})`,
+  snapshotIdProductIdx: sql`CREATE INDEX IF NOT EXISTS snapshot_id_product_idx ON ${table} (${table.snapshotId}, ${table.productId})`,
+}));
+
+export const insertAnalyticsTopProductSchema = createInsertSchema(analyticsTopProducts).omit({ 
+  id: true, 
+  createdAt: true 
+});
+export type InsertAnalyticsTopProduct = z.infer<typeof insertAnalyticsTopProductSchema>;
+export type AnalyticsTopProduct = typeof analyticsTopProducts.$inferSelect;
