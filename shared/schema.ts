@@ -215,6 +215,13 @@ export const orders = pgTable("orders", {
   customerPaysShipping: boolean("customer_pays_shipping").notNull().default(true), // Se true, il cliente paga la spedizione al corriere
   shippingPaymentMethod: text("shipping_payment_method"), // 'card' | 'cash' - metodo di pagamento per la spedizione
   
+  // Refund (Rimborso)
+  refundId: varchar("refund_id"), // ID del rimborso YooKassa
+  refundStatus: text("refund_status"), // 'pending' | 'succeeded' | 'canceled'
+  refundReason: text("refund_reason"), // Motivazione inserita dall'operatore
+  refundedAmount: decimal("refunded_amount", { precision: 10, scale: 2 }), // Importo rimborsato
+  refundedAt: timestamp("refunded_at"), // Data e ora del rimborso
+  
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
