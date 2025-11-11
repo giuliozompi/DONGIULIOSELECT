@@ -1,0 +1,133 @@
+2025-11-11 14:28:31.24
+f01a7850
+User
+[Telegram Auth] Request to: POST /api/admin/orders/4ae82c4e-d529-449d-92f8-203a4dff589f/refund
+2025-11-11 14:28:31.24
+f01a7850
+User
+[Telegram Auth] Has initData: true
+2025-11-11 14:28:31.24
+f01a7850
+User
+[Telegram Auth] InitData params: [ 'user', 'chat_instance', 'chat_type', 'auth_date', 'signature' ]
+2025-11-11 14:28:31.24
+f01a7850
+User
+[Telegram Auth] Hash verification: {
+2025-11-11 14:28:31.24
+f01a7850
+User
+provided: '89274032ad...',
+2025-11-11 14:28:31.24
+f01a7850
+User
+calculated: '89274032ad...',
+2025-11-11 14:28:31.24
+f01a7850
+User
+matches: true
+2025-11-11 14:28:31.24
+f01a7850
+User
+}
+2025-11-11 14:28:31.24
+f01a7850
+User
+[Telegram Auth] Auth date check: {
+2025-11-11 14:28:31.24
+f01a7850
+User
+authTimestamp: 1762858107,
+2025-11-11 14:28:31.24
+f01a7850
+User
+now: 1762860511,
+2025-11-11 14:28:31.24
+f01a7850
+User
+ageInSeconds: 2404,
+2025-11-11 14:28:31.24
+f01a7850
+User
+maxAge: 86400,
+2025-11-11 14:28:31.24
+f01a7850
+User
+expired: false
+2025-11-11 14:28:31.24
+f01a7850
+User
+}
+2025-11-11 14:28:31.24
+f01a7850
+User
+[Telegram Auth] User data extracted: { id: '201331998', username: 'DonGiulioMoscow', firstName: 'Giulio' }
+2025-11-11 14:28:31.38
+f01a7850
+User
+[Telegram Auth] User found: 201331998
+2025-11-11 14:28:31.38
+f01a7850
+User
+[Telegram Auth] SUCCESS: User authenticated: 201331998
+2025-11-11 14:28:31.45
+f01a7850
+User
+🔄 [Refund] Processing refund request for order 4ae82c4e-d529-449d-92f8-203a4dff589f...
+2025-11-11 14:28:31.45
+f01a7850
+User
+Admin: 201331998
+2025-11-11 14:28:31.45
+f01a7850
+User
+Reason: курьер не пришел
+2025-11-11 14:28:31.45
+f01a7850
+User
+💳 [Refund] YooKassa Payment ID: 1e9fbb88-a130-443d-92eb-97ff014da1fd
+2025-11-11 14:28:31.45
+f01a7850
+User
+💰 [Refund] Refund amount: 460.00 RUB
+2025-11-11 14:28:31.45
+f01a7850
+User
+🔍 [Refund] Fetching payment status from YooKassa...
+2025-11-11 14:28:32.08
+f01a7850
+User
+[YooKassa] Error fetching payment: Error: YooKassa API error: 404 - {"type":"error","id":"019a72ac-b2fd-7a48-807c-83feefd4f055","description":"Incorrect payment_id. Payment doesn't exist or access denied. Specify the payment ID created in your store.","parameter":"payment_id","code":"not_found"}
+2025-11-11 14:28:32.08
+f01a7850
+User
+at getYooKassaPayment (file:///home/runner/workspace/dist/index.js:1958:13)
+2025-11-11 14:28:32.08
+f01a7850
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-11 14:28:32.08
+f01a7850
+User
+at async file:///home/runner/workspace/dist/index.js:7821:19
+2025-11-11 14:28:32.08
+f01a7850
+User
+❌ [Refund] Failed to fetch payment from YooKassa: Error: YooKassa API error: 404 - {"type":"error","id":"019a72ac-b2fd-7a48-807c-83feefd4f055","description":"Incorrect payment_id. Payment doesn't exist or access denied. Specify the payment ID created in your store.","parameter":"payment_id","code":"not_found"}
+
+2025-11-11 14:28:32.08
+f01a7850
+User
+at getYooKassaPayment (file:///home/runner/workspace/dist/index.js:1958:13)
+2025-11-11 14:28:32.08
+f01a7850
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-11 14:28:32.08
+f01a7850
+User
+at async file:///home/runner/workspace/dist/index.js:7821:19
+2025-11-11 14:28:32.08
+f01a7850
+User
+2:28:32 PM [express] POST /api/admin/orders/4ae82c4e-d529-449d-92f8-203a4dff589f/refund 502 in 843ms…
