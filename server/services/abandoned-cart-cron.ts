@@ -1,13 +1,35 @@
 import { db } from '../db';
 import { carts, users, abandonedCartNotifications, products } from '@shared/schema';
 import { and, lte, eq, sql, gt, inArray } from 'drizzle-orm';
-import { generateRandomDiscountCode } from './abandoned-cart';
+import { generateRandomDiscountCode, isAllowedNotificationTime, getNextAllowedCheckTime } from './abandoned-cart';
 import { sendAbandonedCartReminder } from './abandoned-cart-notifications';
 
 export async function checkAndSendAbandonedCartReminders(): Promise<void> {
   console.log('[Abandoned Cart Cron] Starting check for abandoned carts...');
 
   try {
+    // Verifica se siamo in orario consentito (08:00-22:30 Moscow time)
+    if (!isAllowedNotificationTime()) {
+      const nextCheck = getNextAllowedCheckTime();
+      console.log('[Abandoned Cart Cron] Outside allowed hours (22:30-08:00 Moscow). Next check:', nextCheck);
+      
+      // Posticipa tutti i carrelli che avevano un check previsto ora
+      const now = new Date();
+      await db
+        .update(carts)
+        .set({ nextReminderCheckAt: nextCheck })
+        .where(
+          and(
+            lte(carts.nextReminderCheckAt, now),
+            eq(carts.reminderSent, false),
+            gt(sql`jsonb_array_length(${carts.items})`, 0)
+          )
+        );
+      
+      console.log('[Abandoned Cart Cron] Carts postponed to next allowed time window');
+      return;
+    }
+
     const now = new Date();
 
     const eligibleCarts = await db
