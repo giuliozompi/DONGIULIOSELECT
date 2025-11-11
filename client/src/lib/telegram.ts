@@ -58,6 +58,7 @@ declare global {
             username?: string;
             language_code?: string;
           };
+          start_param?: string;
         };
         initData: string;
       };
@@ -130,4 +131,13 @@ export function getTelegramInitData(): string | undefined {
   
   // Fallback: development mode senza initData
   return undefined;
+}
+
+/**
+ * Ottieni il parametro di deep linking per navigazione automatica
+ * Formato link: https://t.me/BotName/AppName?startapp=PARAM
+ * Esempio: startapp=cart → naviga al carrello
+ */
+export function getTelegramStartParam(): string | undefined {
+  return tg?.initDataUnsafe?.start_param;
 }

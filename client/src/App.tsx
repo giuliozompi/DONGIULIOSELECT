@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
-import { Switch, Route } from 'wouter';
+import { Switch, Route, useLocation } from 'wouter';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { initTelegramApp } from '@/lib/telegram';
+import { initTelegramApp, getTelegramStartParam } from '@/lib/telegram';
 import { TelegramThemeProvider } from '@/components/TelegramThemeProvider';
 import BottomNav from '@/components/BottomNav';
 import HomePage from '@/pages/HomePage';
@@ -62,6 +62,31 @@ function Router() {
   );
 }
 
+function DeepLinkHandler() {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    // Handle deep linking from Telegram Mini App
+    const startParam = getTelegramStartParam();
+    
+    if (startParam) {
+      console.log('[Deep Link] Start param:', startParam);
+      
+      // Navigate based on start parameter
+      switch (startParam) {
+        case 'cart':
+          console.log('[Deep Link] Navigating to cart...');
+          setLocation('/cart');
+          break;
+        default:
+          console.log('[Deep Link] Unknown start param:', startParam);
+      }
+    }
+  }, [setLocation]);
+
+  return null;
+}
+
 export default function App() {
   useEffect(() => {
     initTelegramApp();
@@ -71,6 +96,7 @@ export default function App() {
     <TelegramThemeProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <DeepLinkHandler />
           <Router />
           <Toaster />
         </TooltipProvider>

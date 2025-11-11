@@ -89,6 +89,10 @@ async function sendTelegramNotification(
 ): Promise<boolean> {
   const { chatId, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining } = params;
 
+  // Telegram Mini App link with deep link to cart
+  // Format: https://t.me/BotUsername/AppShortName?startapp=cart
+  const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/DonGiulioSelectBot/dongiulioselect?startapp=cart';
+
   const text = `
 <b>Вы забыли что-то в корзине!</b>
 
@@ -104,7 +108,7 @@ async function sendTelegramNotification(
 
 Не упустите эту возможность! Оформите заказ сейчас и сэкономьте.
 
-<a href="${process.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/DonGiulioSelectBot'}">Оформить заказ</a>
+<a href="${miniAppUrl}">Оформить заказ</a>
 `.trim();
 
   return sendTelegramMessage({
@@ -127,6 +131,9 @@ async function sendEmailNotification(
   params: EmailNotificationParams
 ): Promise<boolean> {
   const { email, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining } = params;
+
+  // Telegram Mini App link with deep link to cart
+  const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/DonGiulioSelectBot/dongiulioselect?startapp=cart';
 
   const subject = `Вы забыли что-то! Скидка ${discountPercent}% ждёт вас`;
 
@@ -200,7 +207,7 @@ async function sendEmailNotification(
               <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
                 <tr>
                   <td align="center">
-                    <a href="${process.env.VITE_TELEGRAM_BOT_URL || 'https://t.me/DonGiulioSelectBot'}" 
+                    <a href="${miniAppUrl}" 
                        style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 50px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
                       Оформить заказ
                     </a>
