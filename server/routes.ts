@@ -5,11 +5,11 @@ import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts, orders, paymentIntents } from "@shared/schema";
 import { backfillHistoricalData } from "./services/analytics-aggregation";
 import { z } from "zod";
 import { db } from "./db";
-import { sql as sqlDrizzle, sum, count, gte, lte, desc, and } from "drizzle-orm";
+import { sql as sqlDrizzle, sum, count, gte, lte, desc, and, eq, isNotNull } from "drizzle-orm";
 import { getDaDataService } from "./services/dadata";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import multer from "multer";
@@ -3633,6 +3633,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(500).json({ 
         error: 'Failed to process refund',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+  
+  // POST /api/admin/orders/fix-payment-ids - Correggi payment_id sbagliati negli ordini (MASTER ADMIN ONLY)
+  app.post("/api/admin/orders/fix-payment-ids", verifyTelegramInitData, requireMasterAdmin, async (req, res) => {
+    try {
+      console.log(`🔧 [Fix Payment IDs] Starting payment ID correction process...`);
+      console.log(`🔑 [Fix Payment IDs] Requested by admin: ${req.userId}`);
+      
+      // Query per trovare ordini con payment_id che non è un vero YooKassa ID
+      // I veri YooKassa IDs iniziano con pattern come "30a..." (UUID format)
+      // Gli ID interni sono UUID standard senza questo pattern
+      const ordersToFix = await db
+        .select({
+          orderId: orders.id,
+          currentPaymentId: orders.paymentId,
+          status: orders.status,
+          amount: orders.amount,
+          customerName: orders.customerName,
+        })
+        .from(orders)
+        .leftJoin(paymentIntents, eq(paymentIntents.orderId, orders.id))
+        .where(
+          and(
+            isNotNull(orders.paymentId),
+            eq(paymentIntents.provider, 'YooKassa')
+          )
+        );
+      
+      console.log(`📊 [Fix Payment IDs] Found ${ordersToFix.length} orders with payment_id to check`);
+      
+      let fixedCount = 0;
+      let skippedCount = 0;
+      const fixedOrders: any[] = [];
+      
+      for (const orderData of ordersToFix) {
+        const orderId = orderData.orderId;
+        const currentPaymentId = orderData.currentPaymentId;
+        
+        // Ottieni il vero YooKassa payment ID dal payment intent
+        const paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
+        
+        if (!paymentIntent) {
+          console.warn(`⚠️ [Fix Payment IDs] No payment intent found for order ${orderId}`);
+          skippedCount++;
+          continue;
+        }
+        
+        const trueYookassaId = (paymentIntent.raw as any)?.yookassaPaymentId;
+        
+        if (!trueYookassaId) {
+          console.warn(`⚠️ [Fix Payment IDs] No YooKassa payment ID in payment intent for order ${orderId}`);
+          skippedCount++;
+          continue;
+        }
+        
+        // Se il payment_id è già corretto, skip
+        if (currentPaymentId === trueYookassaId) {
+          console.log(`✅ [Fix Payment IDs] Order ${orderId} already has correct payment ID`);
+          skippedCount++;
+          continue;
+        }
+        
+        // Correggi il payment_id
+        console.log(`🔧 [Fix Payment IDs] Fixing order ${orderId}:`);
+        console.log(`   Old: ${currentPaymentId}`);
+        console.log(`   New: ${trueYookassaId}`);
+        
+        await storage.updateOrder(orderId, {
+          paymentId: trueYookassaId,
+        });
+        
+        fixedCount++;
+        fixedOrders.push({
+          orderId,
+          oldPaymentId: currentPaymentId,
+          newPaymentId: trueYookassaId,
+          status: orderData.status,
+          amount: orderData.amount,
+          customerName: orderData.customerName,
+        });
+      }
+      
+      console.log(`✅ [Fix Payment IDs] Process completed!`);
+      console.log(`   Fixed: ${fixedCount} orders`);
+      console.log(`   Skipped: ${skippedCount} orders`);
+      
+      res.json({
+        success: true,
+        summary: {
+          totalChecked: ordersToFix.length,
+          fixed: fixedCount,
+          skipped: skippedCount,
+        },
+        fixedOrders,
+      });
+    } catch (error) {
+      console.error(`❌ [Fix Payment IDs] Error:`, error);
+      
+      res.status(500).json({ 
+        error: 'Failed to fix payment IDs',
         details: error instanceof Error ? error.message : 'Unknown error',
       });
     }
