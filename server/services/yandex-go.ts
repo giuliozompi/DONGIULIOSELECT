@@ -429,16 +429,12 @@ export class YandexGoService {
     };
     
     // Costruisci il payload finale con la struttura corretta per Yandex
-    // IMPORTANTE: Il campo si chiama "offer_payload" secondo la documentazione ufficiale!
+    // NON passiamo offer_payload per evitare "destination_points_not_matched"
+    // Lasciamo che Yandex ricalcoli il prezzo con le coordinate correnti
     const { offer_id, selected_offer, ...cleanedRequest } = request;
     const finalPayload: any = {
       ...cleanedRequest,
     };
-    
-    // Se c'è un offer_id, passalo come "offer_payload"
-    if (offer_id) {
-      finalPayload.offer_payload = offer_id;
-    }
 
     // Aggiungi callback URL e webhook secret (seguendo doc ufficiale)
     const webhookSecret = process.env.YANDEX_WEBHOOK_SECRET;

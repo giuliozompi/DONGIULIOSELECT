@@ -4771,11 +4771,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         skip_door_to_door: false  // Consegna porta a porta
       };
       
-      // PASSA l'offer_id salvato da checkPrice() se disponibile
-      // Questo conferma a Yandex che vogliamo usare esattamente quel prezzo calcolato
-      if (order.yandexGoOfferId) {
-        claimRequest.offer_id = order.yandexGoOfferId;
-      }
+      // NON passare offer_id per evitare "destination_points_not_matched"
+      // Lascia che Yandex ricalcoli il prezzo con le coordinate correnti
       
       // Crea claim
       const claim = await yandexGoService.createClaim(claimRequest, requestId);
