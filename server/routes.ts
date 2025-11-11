@@ -1567,7 +1567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Aggiorna stato ordine a "link inviato" solo se non è già in uno stato più avanzato
       if (order.status === 'ОФОРМЛЕН' || order.status === 'СОБРАН') {
-        await storage.updateOrderStatus(orderId, 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', paymentIntent.id);
+        await storage.updateOrderStatus(orderId, 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', yookassaPayment.id);
       }
       
       res.json({
@@ -1730,8 +1730,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (payment.status === 'succeeded') {
         console.log(`💳 [YooKassa Webhook] Payment succeeded for order ${paymentIntent.orderId}`);
         console.log(`📝 [YooKassa Webhook] Updating order status to ОПЛАЧЕН...`);
+        console.log(`💳 [YooKassa Webhook] Saving YooKassa payment ID: ${payment.id}`);
         
-        await storage.updateOrderStatus(paymentIntent.orderId, 'ОПЛАЧЕН');
+        await storage.updateOrderStatus(paymentIntent.orderId, 'ОПЛАЧЕН', payment.id);
         console.log(`✅ [YooKassa Webhook] Order status updated successfully`);
         
         // Invia notifica pagamento ai manager via Email
