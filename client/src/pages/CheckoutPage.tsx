@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -20,10 +20,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { FallbackMainButton } from '@/components/FallbackMainButton';
-import { ShoppingBag, Gift, MapPin, X, Truck, Wallet } from 'lucide-react';
+import { ShoppingBag, Gift, MapPin, X, Truck, Wallet, Tag } from 'lucide-react';
 import type { Cart, Product, Bonus, UserAddress } from '@shared/schema';
 import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@shared/schema';
 import { normalizePhoneNumber } from '@/lib/utils';
+import CountdownTimer from '@/components/CountdownTimer';
 
 const checkoutFormSchema = z.object({
   customerName: z.string().min(2, 'Введите имя (минимум 2 символа)'),
@@ -73,6 +74,15 @@ export default function CheckoutPage() {
   const [structuredAddress, setStructuredAddress] = useState<StructuredAddress>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [addressToDelete, setAddressToDelete] = useState<string | null>(null);
+  
+  // Discount code states
+  const [discountCode, setDiscountCode] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validatedDiscount, setValidatedDiscount] = useState<{
+    code: string;
+    percent: number;
+    expiresAt: Date;
+  } | null>(null);
 
   const { data: cart, isLoading } = useQuery<Cart>({
     queryKey: ['/api/cart'],
@@ -191,12 +201,47 @@ export default function CheckoutPage() {
     },
   });
 
+  const validateDiscountMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await apiRequest('GET', `/api/cart/validate-discount/${code.trim().toUpperCase()}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Ошибка проверки кода' }));
+        throw new Error(errorData.error || 'Неверный код скидки');
+      }
+      return await res.json();
+    },
+    onSuccess: (data: { discountCode: string; discountPercent: number; expiresAt: string }) => {
+      hapticFeedback('success');
+      setValidatedDiscount({
+        code: data.discountCode,
+        percent: data.discountPercent,
+        expiresAt: new Date(data.expiresAt),
+      });
+      setValidationError(null);
+      setDiscountCode('');
+      toast({
+        title: 'Промокод применён!',
+        description: `Скидка ${data.discountPercent}% активирована`,
+      });
+    },
+    onError: (error: Error) => {
+      hapticFeedback('error');
+      setValidationError(error.message);
+      toast({
+        title: 'Неверный промокод',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const createOrderMutation = useMutation({
     mutationFn: async (data: CheckoutFormData) => {
       const orderData = {
         ...data,
         customerPhone: normalizePhoneNumber(data.customerPhone),
         ...structuredAddress,
+        abandonedCartCode: validatedDiscount?.code || null,
       };
       const res = await apiRequest('POST', '/api/orders', orderData);
       return await res.json();
@@ -205,6 +250,8 @@ export default function CheckoutPage() {
       hapticFeedback('success');
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
       queryClient.invalidateQueries({ queryKey: ['/api/fortune'] });
+      setValidatedDiscount(null);
+      setDiscountCode('');
       toast({
         title: 'Заказ создан!',
         description: `Заказ #${data.id.slice(0, 8)} успешно оформлен`,
@@ -287,10 +334,57 @@ export default function CheckoutPage() {
     };
   });
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.total, 0);
-  const availableBonusAmount = parseFloat(fortuneData?.totalBonusAmount || '0');
-  const bonusDiscount = Math.min(availableBonusAmount, subtotal);
-  const finalTotal = Math.max(0, subtotal - bonusDiscount);
+  // Calculate totals with abandoned cart / bonus mutual exclusivity
+  const { subtotal, abandonedCartDiscount, bonusDiscount, finalTotal } = useMemo(() => {
+    const sub = cartItems.reduce((sum, item) => sum + item.total, 0);
+    const availableBonusAmount = parseFloat(fortuneData?.totalBonusAmount || '0');
+    
+    // Mutual exclusivity: abandoned cart discount OR bonuses, never both
+    const abandonedDiscount = validatedDiscount 
+      ? (sub * validatedDiscount.percent) / 100 
+      : 0;
+    const bonusDisc = abandonedDiscount > 0 
+      ? 0 
+      : Math.min(availableBonusAmount, sub);
+    
+    const final = Math.max(0, sub - abandonedDiscount - bonusDisc);
+    
+    return {
+      subtotal: sub,
+      abandonedCartDiscount: abandonedDiscount,
+      bonusDiscount: bonusDisc,
+      finalTotal: final,
+    };
+  }, [cartItems, validatedDiscount, fortuneData?.totalBonusAmount]);
+  
+  // Handlers
+  const handleValidateDiscount = () => {
+    if (!discountCode.trim()) return;
+    validateDiscountMutation.mutate(discountCode.trim());
+  };
+  
+  const handleRemoveDiscount = () => {
+    setValidatedDiscount(null);
+    setDiscountCode('');
+    setValidationError(null);
+  };
+  
+  const handleDiscountExpired = () => {
+    setValidatedDiscount(null);
+    toast({
+      title: 'Промокод истёк',
+      description: 'Время действия скидки закончилось',
+      variant: 'destructive',
+    });
+  };
+  
+  // Reset discount when cart changes
+  useEffect(() => {
+    if (validatedDiscount && cart?.items) {
+      setValidatedDiscount(null);
+      setValidationError(null);
+    }
+  }, [cart?.items]);
 
   if (isLoading) {
     return (
@@ -337,6 +431,78 @@ export default function CheckoutPage() {
           )}
         </div>
 
+        {/* Промокод */}
+        <Card className="p-4 space-y-3">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Tag className="w-5 h-5" />
+            Промокод
+          </h3>
+          
+          {!validatedDiscount ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  value={discountCode}
+                  onChange={(e) => {
+                    setDiscountCode(e.target.value.toUpperCase());
+                    setValidationError(null);
+                  }}
+                  placeholder="Введите код скидки"
+                  disabled={validateDiscountMutation.isPending}
+                  maxLength={20}
+                  data-testid="input-discount-code"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleValidateDiscount();
+                    }
+                  }}
+                />
+                <Button
+                  onClick={handleValidateDiscount}
+                  disabled={!discountCode.trim() || validateDiscountMutation.isPending}
+                  data-testid="button-apply-discount"
+                >
+                  {validateDiscountMutation.isPending ? 'Проверка...' : 'Применить'}
+                </Button>
+              </div>
+              {validationError && (
+                <p className="text-sm text-destructive" data-testid="text-discount-error">
+                  {validationError}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <Badge variant="default" className="text-sm" data-testid="badge-active-discount">
+                  Скидка {validatedDiscount.percent}% ({validatedDiscount.code})
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveDiscount}
+                  data-testid="button-remove-discount"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <CountdownTimer
+                expiresAt={validatedDiscount.expiresAt}
+                onExpired={handleDiscountExpired}
+                labels={{
+                  prefix: 'Действует ещё',
+                  expired: 'Промокод истёк',
+                  days: 'д',
+                  hours: 'ч',
+                  minutes: 'м',
+                  seconds: 'с',
+                }}
+              />
+            </div>
+          )}
+        </Card>
+
         {/* Riepilogo ordine */}
         <Card className="p-4 space-y-3">
           <h3 className="font-semibold">Ваш заказ</h3>
@@ -358,6 +524,16 @@ export default function CheckoutPage() {
               <span className="font-medium">{formatPrice(subtotal)}</span>
             </div>
             
+            {abandonedCartDiscount > 0 && (
+              <div className="flex justify-between text-sm text-primary" data-testid="row-discount-applied">
+                <span className="flex items-center gap-1">
+                  <Tag className="w-4 h-4" />
+                  Промокод ({validatedDiscount?.percent}%):
+                </span>
+                <span className="font-medium">-{formatPrice(abandonedCartDiscount)}</span>
+              </div>
+            )}
+            
             {bonusDiscount > 0 && (
               <div className="flex justify-between text-sm text-green-600">
                 <span className="flex items-center gap-1">
@@ -370,7 +546,7 @@ export default function CheckoutPage() {
 
             <div className="flex justify-between text-lg font-bold pt-2 border-t">
               <span>Итого:</span>
-              <span>{formatPrice(finalTotal)}</span>
+              <span data-testid="text-final-total">{formatPrice(finalTotal)}</span>
             </div>
           </div>
         </Card>

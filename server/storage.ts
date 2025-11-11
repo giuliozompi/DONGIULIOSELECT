@@ -257,6 +257,13 @@ export interface IStorage {
   createCourierTracking(tracking: InsertCourierTracking): Promise<CourierTracking>;
   getCourierTracking(orderId: string, limit?: number): Promise<CourierTracking[]>;
   getLatestCourierPosition(orderId: string): Promise<CourierTracking | undefined>;
+  
+  // Abandoned Cart Discount Validation
+  validateAbandonedCartDiscount(userId: string, code: string): Promise<{
+    discountCode: string;
+    discountPercent: number;
+    expiresAt: Date;
+  } | null>;
 }
 
 export class MemStorage implements IStorage {
@@ -929,6 +936,14 @@ export class MemStorage implements IStorage {
 
   async deleteMarkingLog(logId: string): Promise<void> {
     this.markingLogs.delete(logId);
+  }
+  
+  async validateAbandonedCartDiscount(_userId: string, _code: string): Promise<{
+    discountCode: string;
+    discountPercent: number;
+    expiresAt: Date;
+  } | null> {
+    return null; // MemStorage stub - not supported in memory
   }
 }
 

@@ -102,6 +102,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // GET /api/cart/validate-discount/:code - Valida codice sconto carrello abbandonato
+  app.get("/api/cart/validate-discount/:code", verifyTelegramInitData, async (req, res) => {
+    try {
+      const code = req.params.code.trim().toUpperCase();
+      
+      const discount = await storage.validateAbandonedCartDiscount(req.userId!, code);
+      
+      if (!discount) {
+        return res.status(404).json({ 
+          valid: false,
+          error: 'Код скидки недействителен или истёк'
+        });
+      }
+      
+      res.json({
+        valid: true,
+        code: discount.discountCode,
+        percent: discount.discountPercent,
+        expiresAt: discount.expiresAt,
+      });
+    } catch (error) {
+      console.error('Error validating discount code:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   // POST /api/cart/items - Aggiungi prodotto al carrello
   app.post("/api/cart/items", verifyTelegramInitData, async (req, res) => {
     try {

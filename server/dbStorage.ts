@@ -1199,6 +1199,47 @@ export class DbStorage implements IStorage {
       .where(eq(carts.userId, userId));
   }
 
+  async validateAbandonedCartDiscount(userId: string, code: string): Promise<{
+    discountCode: string;
+    discountPercent: number;
+    expiresAt: Date;
+  } | null> {
+    const normalizedCode = code.trim().toUpperCase();
+    
+    const notification = await db
+      .select()
+      .from(abandonedCartNotifications)
+      .where(eq(abandonedCartNotifications.discountCode, normalizedCode))
+      .limit(1);
+    
+    if (notification.length === 0) {
+      return null; // Code not found
+    }
+    
+    const notif = notification[0];
+    
+    // Validate ownership
+    if (notif.userId !== userId) {
+      return null; // Not user's code
+    }
+    
+    // Validate not expired
+    if (new Date() > notif.expiresAt) {
+      return null; // Expired
+    }
+    
+    // Validate not already used
+    if (notif.status !== 'sent') {
+      return null; // Already used
+    }
+    
+    return {
+      discountCode: notif.discountCode,
+      discountPercent: notif.discountPercent,
+      expiresAt: notif.expiresAt,
+    };
+  }
+
   async checkoutWithDiscount(params: {
     userId: string;
     orderItems: Array<{
