@@ -4746,7 +4746,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cost_currency: 'RUB',
         title: 'Don Giulio Select - Food Order',
         pickup_point: 1,   // Required: ID of pickup route_point
-        dropoff_point: 2   // Required: ID of delivery route_point
+        dropoff_point: 2,  // Required: ID of delivery route_point
+        fiscalization: {
+          excise: '0.00',
+          vat_code_str: 'nds_20', // ⚠️ IMPORTANTE: usa "nds_20" NON "vat_20" (formato Yandex)
+          supplier_inn: process.env.YANDEX_SUPPLIER_INN || '772863212942', // INN del fornitore
+          article: 'FOOD-ORDER', // Codice articolo
+        }
       };
       
       const claimRequest: any = {

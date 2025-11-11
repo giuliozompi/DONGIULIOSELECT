@@ -1,0 +1,173 @@
+2025-11-11 19:32:30.13
+ed45c8e1
+User
+"supplier_inn": "772863212942",
+2025-11-11 19:32:30.13
+ed45c8e1
+User
+"article": "FOOD-ORDER",
+2025-11-11 19:32:30.13
+ed45c8e1
+User
+}
+2025-11-11 19:32:30.13
+ed45c8e1
+User
+],
+2025-11-11 19:32:30.13
+ed45c8e1
+User
+],
+2025-11-11 19:32:30.13
+ed45c8e1
+User
+"address": {
+2025-11-11 19:32:30.13
+ed45c8e1
+User
+"phone": "+79268429284",
+2025-11-11 19:32:30.13
+ed45c8e1
+User
+},
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+[ERROR] [yandex-go:createClaim] [corr:corr-1762878750131-5_PACuQqatAgHTq5] API Error {
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+status: 400,
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+statusText: 'Bad Request',
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+response: `{"code":"validation_error","message":"Wrong vat_code_str 'vat_20' in fiscalization"}`
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+}
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+[INFO] [yandex-go:createClaim] [corr:corr-1762878750131-5_PACuQqatAgHTq5] API Response { status: 400, statusText: 'Bad Request' }
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+[Retry Failed] corr-1762878750131-5_PACuQqatAgHTq5: Not retryable or no retries left {
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+attempt: 1,
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+isRetryable: false,
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+hasRetriesLeft: true,
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+error: `Yandex API error: 400 - {"code":"validation_error","message":"Wrong vat_code_str 'vat_20' in fiscalization"}`
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+}
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+[ERROR] [yandex-go:createClaim] [corr:corr-1762878750131-5_PACuQqatAgHTq5] Create claim failed {
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+error: Error: Yandex API error: 400 - {"code":"validation_error","message":"Wrong vat_code_str 'vat_20' in fiscalization"}
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at yandexFetch (file:///home/runner/workspace/dist/index.js:2659:19)
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at async file:///home/runner/workspace/dist/index.js:3335:30
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at async withRetry (file:///home/runner/workspace/dist/index.js:2565:22)
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at async YandexGoService.createClaim (file:///home/runner/workspace/dist/index.js:3327:24)
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at async file:///home/runner/workspace/dist/index.js:8834:21 {
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+status: 400,
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+originalError: `{"code":"validation_error","message":"Wrong vat_code_str 'vat_20' in fiscalization"}`
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+}
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+}
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+Error creating Yandex Go delivery: Error: Yandex API error: 400 - {"code":"validation_error","message":"Wrong vat_code_str 'vat_20' in fiscalization"}
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at yandexFetch (file:///home/runner/workspace/dist/index.js:2659:19)
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at async file:///home/runner/workspace/dist/index.js:3335:30
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at async withRetry (file:///home/runner/workspace/dist/index.js:2565:22)
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at async YandexGoService.createClaim (file:///home/runner/workspace/dist/index.js:3327:24)
+
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+at async file:///home/runner/workspace/dist/index.js:8834:21 {
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+status: 400,
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+originalError: `{"code":"validation_error","message":"Wrong vat_code_str 'vat_20' in fiscalization"}`
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+}
+2025-11-11 19:32:30.85
+ed45c8e1
+User
+7:32:30 PM [express] POST /api/admin/orders/4ae82c4e-d529-449d-92f8-203a4dff589f/yandex-go 500 in 98…
