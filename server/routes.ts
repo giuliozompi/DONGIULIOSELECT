@@ -4286,6 +4286,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Usa l'offer_id salvato nel database se non viene passato nel body
       const offerId = data.offerId || order.yandexDeliveryOfferId;
       
+      // VALIDATION: L'offer_id è OBBLIGATORIO per confermare il prezzo con Yandex
+      // Se manca, l'admin deve ricalcolare il prezzo prima di chiamare il corriere
+      if (!offerId) {
+        console.error(`❌ [Yandex Delivery] Missing offer_id for order ${orderId}`);
+        return res.status(400).json({ 
+          error: 'Missing delivery offer',
+          code: 'missing_offer_id',
+          message: 'Il preventivo della consegna è scaduto o mancante. Ricalcola il prezzo prima di chiamare il corriere.',
+          action: 'Clicca su "Calcola Prezzo" per ottenere un nuovo preventivo'
+        });
+      }
+      
+      console.log(`📦 [Yandex Delivery] Using offer_id: ${offerId}`);
+      
       // Prepara items per Yandex Delivery (dimensioni in METRI, non cm!)
       const orderItem: any = {
         extra_id: order.id, // Nostro numero d'ordine per riferimento
@@ -4437,8 +4451,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
-      console.error('Error creating Yandex delivery:', error);
-      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+      
+      // Enhanced error logging con dettagli dall'API Yandex
+      console.error('❌ [Yandex Delivery] Error creating delivery:', error);
+      
+      // Se è un errore dall'API Yandex, estrai dettagli utili
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorBody = (error as any)?.responseBody || (error as any)?.response?.data;
+      
+      if (errorBody) {
+        console.error('📄 [Yandex Delivery] API Error Details:', JSON.stringify(errorBody, null, 2));
+      }
+      
+      // Rileva errori specifici per dare feedback migliore all'admin
+      if (errorMessage.includes('offer_payload') || errorMessage.includes('offer')) {
+        return res.status(409).json({ 
+          error: 'Delivery offer expired',
+          code: 'offer_expired',
+          message: 'Il preventivo della consegna è scaduto. Ricalcola il prezzo prima di chiamare il corriere.',
+          details: errorMessage
+        });
+      }
+      
+      if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
+        return res.status(400).json({ 
+          error: 'Invalid delivery request',
+          code: 'invalid_request',
+          message: 'Dati di consegna non validi. Verifica indirizzo, coordinate e dati di contatto.',
+          details: errorMessage
+        });
+      }
+      
+      res.status(500).json({ 
+        error: 'Internal server error', 
+        message: errorMessage,
+        code: 'yandex_api_error'
+      });
     }
   });
   
