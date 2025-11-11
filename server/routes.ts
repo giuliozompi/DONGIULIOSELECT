@@ -4734,6 +4734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Crea ordine Yandex Go (solo consegna, nessun incasso)
       // I pagamenti vengono gestiti tramite YooKassa, non alla consegna
+      // ⚠️ IMPORTANTE: NON aggiungere fiscalization - la fiscalizzazione è gestita da YooKassa
       const orderItem: any = {
         quantity: 1,
         weight: 2,
@@ -4746,13 +4747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cost_currency: 'RUB',
         title: 'Don Giulio Select - Food Order',
         pickup_point: 1,   // Required: ID of pickup route_point
-        dropoff_point: 2,  // Required: ID of delivery route_point
-        fiscalization: {
-          excise: '0.00',
-          vat_code_str: 'nds_20', // ⚠️ IMPORTANTE: usa "nds_20" NON "vat_20" (formato Yandex)
-          supplier_inn: process.env.YANDEX_SUPPLIER_INN || '772863212942', // INN del fornitore
-          article: 'FOOD-ORDER', // Codice articolo
-        }
+        dropoff_point: 2   // Required: ID of delivery route_point
       };
       
       const claimRequest: any = {
