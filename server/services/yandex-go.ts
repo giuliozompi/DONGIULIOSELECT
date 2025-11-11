@@ -429,12 +429,16 @@ export class YandexGoService {
     };
     
     // Costruisci il payload finale con la struttura corretta per Yandex
-    // NON passiamo offer_payload per evitare "destination_points_not_matched"
-    // Lasciamo che Yandex ricalcoli il prezzo con le coordinate correnti
+    // IMPORTANTE: Il campo si chiama "offer_payload" secondo la documentazione ufficiale!
     const { offer_id, selected_offer, ...cleanedRequest } = request;
     const finalPayload: any = {
       ...cleanedRequest,
     };
+    
+    // Se c'è un offer_id, passalo come "offer_payload"
+    if (offer_id) {
+      finalPayload.offer_payload = offer_id;
+    }
 
     // Aggiungi callback URL e webhook secret (seguendo doc ufficiale)
     const webhookSecret = process.env.YANDEX_WEBHOOK_SECRET;
@@ -521,13 +525,9 @@ export class YandexGoService {
       return await response.json();
     }, {}, corrId);
 
-    // Log della risposta COMPLETA per debugging
-    console.log('🔍 YANDEX GO CLAIM INFO - Full Response:', JSON.stringify(data, null, 2));
-
     logger.info('Claim info retrieved', {
       status: data.status,
-      performer: data.performer_info,
-      error_messages: data.error_messages || null
+      performer: data.performer_info
     });
     
     return data;

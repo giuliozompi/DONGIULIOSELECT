@@ -29,7 +29,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, ORDER_STATUSES, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3, RefreshCw } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3 } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { DeliveryDialog } from '@/components/DeliveryDialog';
@@ -2064,18 +2064,8 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
 
       {/* Orders list */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-4">
+        <CardHeader>
           <CardTitle>Заказы ({filteredOrders.length}{statusFilter !== 'all' || searchQuery ? ` из ${orders.length}` : ''})</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] })}
-            disabled={isLoading}
-            data-testid="button-refresh-orders"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            <span className="ml-2">Обновить</span>
-          </Button>
         </CardHeader>
         <CardContent>
           {/* Search field */}

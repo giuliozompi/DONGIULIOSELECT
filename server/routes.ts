@@ -4734,7 +4734,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Crea ordine Yandex Go (solo consegna, nessun incasso)
       // I pagamenti vengono gestiti tramite YooKassa, non alla consegna
-      // ⚠️ IMPORTANTE: NON aggiungere fiscalization - la fiscalizzazione è gestita da YooKassa
       const orderItem: any = {
         quantity: 1,
         weight: 2,
@@ -4772,8 +4771,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         skip_door_to_door: false  // Consegna porta a porta
       };
       
-      // NON passare offer_id per evitare "destination_points_not_matched"
-      // Lascia che Yandex ricalcoli il prezzo con le coordinate correnti
+      // PASSA l'offer_id salvato da checkPrice() se disponibile
+      // Questo conferma a Yandex che vogliamo usare esattamente quel prezzo calcolato
+      if (order.yandexGoOfferId) {
+        claimRequest.offer_id = order.yandexGoOfferId;
+      }
       
       // Crea claim
       const claim = await yandexGoService.createClaim(claimRequest, requestId);
