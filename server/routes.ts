@@ -118,8 +118,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         valid: true,
-        code: discount.discountCode,
-        percent: discount.discountPercent,
+        discountCode: discount.discountCode,
+        discountPercent: discount.discountPercent,
         expiresAt: discount.expiresAt,
       });
     } catch (error) {

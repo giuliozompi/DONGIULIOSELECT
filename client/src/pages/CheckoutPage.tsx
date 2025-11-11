@@ -225,7 +225,7 @@ export default function CheckoutPage() {
       });
     },
     onError: (error: Error) => {
-      hapticFeedback('error');
+      hapticFeedback('light');
       setValidationError(error.message);
       toast({
         title: 'Неверный промокод',
@@ -489,14 +489,13 @@ export default function CheckoutPage() {
               </div>
               <CountdownTimer
                 expiresAt={validatedDiscount.expiresAt}
-                onExpired={handleDiscountExpired}
+                discountCode={validatedDiscount.code}
+                discountPercent={validatedDiscount.percent}
                 labels={{
-                  prefix: 'Действует ещё',
-                  expired: 'Промокод истёк',
-                  days: 'д',
-                  hours: 'ч',
-                  minutes: 'м',
-                  seconds: 'с',
+                  title: `Скидка ${validatedDiscount.percent}% действует!`,
+                  expiresLabel: 'Истекает через:',
+                  expiredTitle: 'Промокод истёк',
+                  expiredMessage: 'Время действия скидки закончилось',
                 }}
               />
             </div>
