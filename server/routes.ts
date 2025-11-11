@@ -6,6 +6,7 @@ import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verif
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
 import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts } from "@shared/schema";
+import { backfillHistoricalData } from "./services/analytics-aggregation";
 import { z } from "zod";
 import { db } from "./db";
 import { sql as sqlDrizzle, sum, count, gte, lte, desc, and } from "drizzle-orm";
@@ -2113,6 +2114,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Invalid query parameters', details: error.errors });
       }
       console.error('Error fetching top products:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  // POST /api/admin/analytics/backfill - Backfill dati storici (ADMIN ONLY)
+  app.post("/api/admin/analytics/backfill", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const backfillSchema = z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      });
+      
+      const { startDate, endDate } = backfillSchema.parse(req.body);
+      
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      if (start > end) {
+        return res.status(400).json({ error: 'startDate must be before endDate' });
+      }
+      
+      const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysDiff > 365) {
+        return res.status(400).json({ error: 'Cannot backfill more than 365 days at once' });
+      }
+      
+      console.log(`[Analytics Backfill] Starting backfill from ${startDate} to ${endDate} (${daysDiff} days)...`);
+      
+      await backfillHistoricalData(startDate, endDate);
+      
+      res.json({ 
+        success: true, 
+        message: `Analytics backfill completed for ${daysDiff} days (${startDate} to ${endDate})` 
+      });
+      
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid request data', details: error.errors });
+      }
+      console.error('Error during analytics backfill:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
