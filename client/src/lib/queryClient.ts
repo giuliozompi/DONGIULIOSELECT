@@ -60,15 +60,51 @@ export async function apiRequest(
   return res;
 }
 
+function buildQueryUrl(queryKey: readonly unknown[]): string {
+  if (queryKey.length === 0) {
+    throw new Error('QueryKey cannot be empty');
+  }
+
+  const basePath = String(queryKey[0]);
+  const segments: string[] = [basePath];
+  const queryParams = new URLSearchParams();
+
+  for (let i = 1; i < queryKey.length; i++) {
+    const segment = queryKey[i];
+    
+    if (segment === null || segment === undefined) {
+      continue;
+    }
+    
+    if (typeof segment === 'object' && !Array.isArray(segment)) {
+      for (const [key, value] of Object.entries(segment)) {
+        if (value !== null && value !== undefined) {
+          queryParams.append(key, String(value));
+        }
+      }
+    } else {
+      segments.push(String(segment));
+    }
+  }
+
+  let url = segments.join('/');
+  const queryString = queryParams.toString();
+  
+  if (queryString) {
+    url += `?${queryString}`;
+  }
+
+  return url;
+}
+
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const url = queryKey.join("/") as string;
+    const url = buildQueryUrl(queryKey);
     
-    // Disabilita cache del browser per route admin mutabili
     const isAdminRoute = url.includes('/api/admin');
     
     const res = await fetch(url, {
