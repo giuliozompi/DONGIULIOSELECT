@@ -706,20 +706,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customerDataSchema = z.object({
         customerName: z.string().min(2),
         customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/),
-        customerEmail: z.string().email().optional(),
+        customerEmail: z.string().email().optional().or(z.literal('')),
         deliveryAddress: z.string().min(10),
-        deliveryPostalCode: z.string().optional(),
-        dadataFiasId: z.string().optional(),
-        deliveryLatitude: z.coerce.string().optional(),
-        deliveryLongitude: z.coerce.string().optional(),
-        deliveryNotes: z.string().optional(),
+        deliveryPostalCode: z.string().optional().or(z.literal('')),
+        dadataFiasId: z.string().optional().or(z.literal('')),
+        deliveryLatitude: z.coerce.string().optional().or(z.literal('')),
+        deliveryLongitude: z.coerce.string().optional().or(z.literal('')),
+        deliveryNotes: z.string().optional().or(z.literal('')),
         deliveryMethod: z.enum(['yandex_go', 'cdek', 'don_giulio_courier', 'pickup']).optional(),
         paymentMethod: z.enum(['yookassa', 'cash_on_delivery']).default('yookassa'),
         saveAddress: z.boolean().optional(),
-        addressLabel: z.string().optional(),
-        abandonedCartCode: z.string().optional(),
+        addressLabel: z.string().optional().or(z.literal('')),
+        abandonedCartCode: z.string().optional().or(z.literal('')),
       });
       
+      console.log('📦 Order request body:', JSON.stringify(req.body, null, 2));
       const customerData = customerDataSchema.parse(req.body);
       
       // Ottieni carrello utente
