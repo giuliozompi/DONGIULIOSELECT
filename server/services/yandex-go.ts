@@ -525,9 +525,13 @@ export class YandexGoService {
       return await response.json();
     }, {}, corrId);
 
+    // Log della risposta COMPLETA per debugging
+    console.log('🔍 YANDEX GO CLAIM INFO - Full Response:', JSON.stringify(data, null, 2));
+
     logger.info('Claim info retrieved', {
       status: data.status,
-      performer: data.performer_info
+      performer: data.performer_info,
+      error_messages: data.error_messages || null
     });
     
     return data;
