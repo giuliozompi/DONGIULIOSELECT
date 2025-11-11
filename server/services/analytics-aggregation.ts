@@ -6,6 +6,7 @@ import {
   analyticsSnapshots,
   analyticsTopProducts,
   users,
+  products,
   ORDER_STATUSES
 } from "@shared/schema";
 import { eq, and, gte, lte, sql as sqlDrizzle, desc } from "drizzle-orm";
@@ -220,33 +221,72 @@ async function aggregateTopProducts(dateRange: DateRange) {
   
   const productStats = new Map<string, { productName: string; unitsSold: number; revenue: number }>();
   
-  ordersData.forEach(order => {
-    const items = order.items as Array<{ productId: string; productName: string; quantity: number; price: string }>;
+  for (const order of ordersData) {
+    const items = order.items as Array<{ productId: string; productName?: string; quantity: number; price: string }>;
     
-    items.forEach(item => {
+    for (const item of items) {
+      if (!item.productId) {
+        console.warn(`[Analytics] Skipping item with missing productId in order ${order.id}`);
+        continue;
+      }
+      
+      const quantity = Math.round(Number(item.quantity) || 0);
+      if (quantity <= 0) {
+        console.warn(`[Analytics] Skipping item with invalid quantity ${item.quantity} in order ${order.id}`);
+        continue;
+      }
+      
+      const price = parseFloat(item.price);
+      if (isNaN(price) || price < 0) {
+        console.warn(`[Analytics] Skipping item with invalid price ${item.price} in order ${order.id}`);
+        continue;
+      }
+      
+      const itemRevenue = quantity * price;
+      if (isNaN(itemRevenue)) {
+        console.warn(`[Analytics] Skipping item with NaN revenue in order ${order.id}`);
+        continue;
+      }
+      
+      let productName = item.productName;
+      if (!productName) {
+        const productLookup = await db
+          .select({ name: products.name })
+          .from(products)
+          .where(eq(products.id, item.productId))
+          .limit(1);
+        
+        if (productLookup.length > 0) {
+          productName = productLookup[0].name;
+        } else {
+          console.warn(`[Analytics] Product ${item.productId} not found, skipping`);
+          continue;
+        }
+      }
+      
       const existing = productStats.get(item.productId);
-      const itemRevenue = item.quantity * parseFloat(item.price);
       
       if (existing) {
-        existing.unitsSold += item.quantity;
+        existing.unitsSold += quantity;
         existing.revenue += itemRevenue;
       } else {
         productStats.set(item.productId, {
-          productName: item.productName,
-          unitsSold: item.quantity,
+          productName,
+          unitsSold: quantity,
           revenue: itemRevenue
         });
       }
-    });
-  });
+    }
+  }
   
   const topProducts = Array.from(productStats.entries())
     .map(([productId, stats]) => ({
       productId,
       productName: stats.productName,
-      unitsSold: stats.unitsSold,
-      revenue: stats.revenue.toFixed(2)
+      unitsSold: Math.round(stats.unitsSold),
+      revenue: Number.isFinite(stats.revenue) ? stats.revenue.toFixed(2) : '0.00'
     }))
+    .filter(p => p.unitsSold > 0 && p.productName)
     .sort((a, b) => b.unitsSold - a.unitsSold)
     .slice(0, 50);
   
