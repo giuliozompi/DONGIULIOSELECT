@@ -3,6 +3,8 @@
 ## Overview
 Don Giulio Select is a Telegram Mini App that functions as an e-commerce platform for a premium Italian delicatessen. It offers a mobile-first shopping experience within Telegram, encompassing product browsing, cart management, payments, AI-driven recommendations, and gamification. The project aims to deliver a seamless and engaging e-commerce solution deeply integrated with Telegram's ecosystem.
 
+**Telegram Mini App URL**: https://t.me/dongiuliocatalog_bot/DGSCatalog
+
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
