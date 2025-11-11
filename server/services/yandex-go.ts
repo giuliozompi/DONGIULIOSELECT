@@ -511,15 +511,16 @@ export class YandexGoService {
       claimId,
     });
 
-    // Yandex Go Cargo usa GLI STESSI endpoint di Yandex Dostavka
-    const url = `${this.baseUrl}/claims/info?claim_id=${claimId}`;
+    // Yandex Go Cargo richiede POST invece di GET per /claims/info
+    const url = `${this.baseUrl}/claims/info`;
     
     logger.info('Getting claim info');
 
     const data = await withRetry(async () => {
       const response = await yandexFetch(url, {
-        method: 'GET',
+        method: 'POST',
         headers: await this.getHeaders(),
+        body: JSON.stringify({ claim_id: claimId }),
       }, logger, corrId);
 
       return await response.json();
