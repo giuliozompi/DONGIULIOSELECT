@@ -4321,7 +4321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // OBBLIGATORIO per Yandex quando si usa payment_on_delivery in Russia
       if (order.customerPaysShipping && order.yandexDeliveryPrice) {
         orderItem.fiscalization = {
-          vat_code_str: 'vat_20',  // IVA 20% (standard in Russia per prodotti alimentari)
+          vat_code_str: 'vat20',  // IVA 20% (standard in Russia per prodotti alimentari)
           supplier_inn: '772863212942',  // Partita IVA Don Giulio
           article: 'FOOD-ORDER',  // SKU prodotto
           item_type: 'product'  // Tipo: prodotto (non servizio)
@@ -4802,7 +4802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // OBBLIGATORIO per Yandex quando si usa payment_on_delivery in Russia
       if (order.customerPaysShipping) {
         orderItem.fiscalization = {
-          vat_code_str: 'vat_20',  // IVA 20% (standard in Russia per prodotti alimentari)
+          vat_code_str: 'vat20',  // IVA 20% (standard in Russia per prodotti alimentari)
           supplier_inn: '772863212942',  // Partita IVA Don Giulio
           article: 'FOOD-ORDER',  // SKU prodotto
           item_type: 'product'  // Tipo: prodotto (non servizio)
