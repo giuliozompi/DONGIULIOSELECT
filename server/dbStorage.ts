@@ -1297,8 +1297,8 @@ export class DbStorage implements IStorage {
         const claimed = await tx
           .update(abandonedCartNotifications)
           .set({ 
-            status: 'used', 
-            usedInOrderId: 'pending' // Will update after order created
+            status: 'used'
+            // usedInOrderId will be set after order is created
           })
           .where(and(
             eq(abandonedCartNotifications.id, notif.id),
