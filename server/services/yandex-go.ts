@@ -511,8 +511,8 @@ export class YandexGoService {
       claimId,
     });
 
-    // Yandex Go Cargo richiede POST invece di GET per /claims/info
-    const url = `${this.baseUrl}/claims/info`;
+    // Yandex Go Cargo richiede POST con claim_id come query parameter
+    const url = `${this.baseUrl}/claims/info?claim_id=${claimId}`;
     
     logger.info('Getting claim info');
 
@@ -520,7 +520,6 @@ export class YandexGoService {
       const response = await yandexFetch(url, {
         method: 'POST',
         headers: await this.getHeaders(),
-        body: JSON.stringify({ claim_id: claimId }),
       }, logger, corrId);
 
       return await response.json();
