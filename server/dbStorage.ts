@@ -302,7 +302,7 @@ export class DbStorage implements IStorage {
         items: carts.items,
         updatedAt: carts.updatedAt,
         nextReminderCheckAt: carts.nextReminderCheckAt,
-        reminderSent: carts.reminderSent,
+        reminderCount: carts.reminderCount,
         discountCode: abandonedCartNotifications.discountCode,
         discountPercent: abandonedCartNotifications.discountPercent,
         expiresAt: abandonedCartNotifications.expiresAt,
@@ -328,7 +328,7 @@ export class DbStorage implements IStorage {
       items: row.items,
       updatedAt: row.updatedAt,
       nextReminderCheckAt: row.nextReminderCheckAt,
-      reminderSent: row.reminderSent,
+      reminderCount: row.reminderCount || 0,
     };
 
     if (row.discountCode && row.discountPercent && row.expiresAt) {
@@ -356,15 +356,15 @@ export class DbStorage implements IStorage {
     
     // Anti-gaming logic: set reminder check time only for FIRST item
     if (isFirstItem) {
-      // Only set nextReminderCheckAt if no reminder was already sent (max 1 reminder)
-      const alreadySentReminder = existing?.reminderSent === true;
-      if (!alreadySentReminder) {
+      // Only set nextReminderCheckAt if reminder count < 2 (max 2 reminders)
+      const reminderCount = existing?.reminderCount || 0;
+      if (reminderCount < 2) {
         updateFields.nextReminderCheckAt = generateRandomReminderDelay();
       }
     } else if (isNowEmpty) {
       // Reset anti-gaming fields when cart becomes empty
       updateFields.nextReminderCheckAt = null;
-      updateFields.reminderSent = false;
+      updateFields.reminderCount = 0;
     }
     // If NOT first item and NOT now empty → don't modify nextReminderCheckAt (anti-gaming)
     
@@ -1185,17 +1185,17 @@ export class DbStorage implements IStorage {
       .from(carts)
       .where(
         and(
-          eq(carts.reminderSent, false),
+          sql`${carts.reminderCount} < 2`, // Max 2 reminders
           sql`${carts.nextReminderCheckAt} <= ${now}`,
           sql`jsonb_array_length(${carts.items}) > 0`
         )
       );
   }
 
-  async markCartReminderSent(userId: string): Promise<void> {
+  async markCartReminderSent(userId: string, reminderNumber: number): Promise<void> {
     await db
       .update(carts)
-      .set({ reminderSent: true })
+      .set({ reminderCount: reminderNumber })
       .where(eq(carts.userId, userId));
   }
 

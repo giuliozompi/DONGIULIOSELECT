@@ -10,6 +10,7 @@ export interface AbandonedCartReminderParams {
   discountCode: string;
   discountPercent: number;
   expiresAt: Date;
+  reminderNumber?: number; // 1 o 2 (per personalizzare il messaggio)
 }
 
 function calculateTimeRemaining(expiresAt: Date): string {
@@ -46,7 +47,7 @@ function calculateTimeRemaining(expiresAt: Date): string {
 export async function sendAbandonedCartReminder(
   params: AbandonedCartReminderParams
 ): Promise<{ telegram: boolean; email: boolean }> {
-  const { telegramChatId, email, firstName, discountCode, discountPercent, expiresAt } = params;
+  const { telegramChatId, email, firstName, discountCode, discountPercent, expiresAt, reminderNumber = 1 } = params;
 
   const formattedExpiry = formatMoscowDateForNotification(expiresAt);
   const timeRemaining = calculateTimeRemaining(expiresAt);
@@ -58,6 +59,7 @@ export async function sendAbandonedCartReminder(
     discountPercent,
     formattedExpiry,
     timeRemaining,
+    reminderNumber,
   });
 
   const emailSuccess = await sendEmailNotification({
@@ -67,6 +69,7 @@ export async function sendAbandonedCartReminder(
     discountPercent,
     formattedExpiry,
     timeRemaining,
+    reminderNumber,
   });
 
   return {
@@ -82,31 +85,42 @@ interface TelegramNotificationParams {
   discountPercent: number;
   formattedExpiry: string;
   timeRemaining: string;
+  reminderNumber: number;
 }
 
 async function sendTelegramNotification(
   params: TelegramNotificationParams
 ): Promise<boolean> {
-  const { chatId, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining } = params;
+  const { chatId, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining, reminderNumber } = params;
 
   // Telegram Mini App link with deep link to cart
   // Format: https://t.me/BotUsername/AppShortName?startapp=cart
   const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/DonGiulioSelectBot/dongiulioselect?startapp=cart';
 
+  // Personalizza messaggio in base al numero di reminder
+  const header = reminderNumber === 1 
+    ? '<b>Вы забыли что-то в корзине!</b>'
+    : '<b>Последний шанс! Ваша скидка истекает</b>';
+    
+  const intro = reminderNumber === 1
+    ? `Привет, ${firstName}!\n\nМы заметили, что вы оставили несколько товаров в корзине.\nВ благодарность за ваш интерес мы предлагаем вам <b>специальную скидку ${discountPercent}%</b>!`
+    : `${firstName}, товары в вашей корзине всё ещё ждут!\n\nЭто последнее напоминание — ваша <b>персональная скидка ${discountPercent}%</b> скоро истечёт.`;
+    
+  const urgency = reminderNumber === 1
+    ? 'Не упустите эту возможность! Оформите заказ сейчас и сэкономьте.'
+    : '⚡ <b>Успейте оформить заказ!</b> Скидка действует ограниченное время.';
+
   const text = `
-<b>Вы забыли что-то в корзине!</b>
+${header}
 
-Привет, ${firstName}!
-
-Мы заметили, что вы оставили несколько товаров в корзине.
-В благодарность за ваш интерес мы предлагаем вам <b>специальную скидку ${discountPercent}%</b>!
+${intro}
 
 <b>Код скидки:</b> <code>${discountCode}</code>
 
 <b>Истекает через:</b> ${timeRemaining}
 <b>Действителен до:</b> ${formattedExpiry}
 
-Не упустите эту возможность! Оформите заказ сейчас и сэкономьте.
+${urgency}
 
 <a href="${miniAppUrl}">Оформить заказ</a>
 `.trim();
@@ -125,17 +139,20 @@ interface EmailNotificationParams {
   discountPercent: number;
   formattedExpiry: string;
   timeRemaining: string;
+  reminderNumber: number;
 }
 
 async function sendEmailNotification(
   params: EmailNotificationParams
 ): Promise<boolean> {
-  const { email, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining } = params;
+  const { email, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining, reminderNumber } = params;
 
   // Telegram Mini App link with deep link to cart
   const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/DonGiulioSelectBot/dongiulioselect?startapp=cart';
 
-  const subject = `Вы забыли что-то! Скидка ${discountPercent}% ждёт вас`;
+  const subject = reminderNumber === 1
+    ? `Вы забыли что-то! Скидка ${discountPercent}% ждёт вас`
+    : `⚡ Последний шанс! Скидка ${discountPercent}% истекает`;
 
   const html = `
 <!DOCTYPE html>

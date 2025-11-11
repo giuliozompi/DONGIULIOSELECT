@@ -22,9 +22,25 @@ export function generateRandomDiscountCode(): GenerateDiscountCodeResult {
   };
 }
 
-export function generateRandomReminderDelay(): Date {
-  // PRODUZIONE: Random delay tra 8-24 ore per anti-gaming
+/**
+ * Genera delay random per la 1ª notifica (8-16 ore)
+ */
+export function generateFirstReminderDelay(): Date {
   const minHours = 8;
+  const maxHours = 16;
+  const hoursDelay = Math.floor(Math.random() * (maxHours - minHours + 1)) + minHours;
+  
+  const checkAt = new Date();
+  checkAt.setHours(checkAt.getHours() + hoursDelay);
+  
+  return checkAt;
+}
+
+/**
+ * Genera delay random per la 2ª notifica (16-24 ore dalla 1ª)
+ */
+export function generateSecondReminderDelay(): Date {
+  const minHours = 16;
   const maxHours = 24;
   const hoursDelay = Math.floor(Math.random() * (maxHours - minHours + 1)) + minHours;
   
@@ -32,6 +48,13 @@ export function generateRandomReminderDelay(): Date {
   checkAt.setHours(checkAt.getHours() + hoursDelay);
   
   return checkAt;
+}
+
+/**
+ * Legacy alias per backward compatibility
+ */
+export function generateRandomReminderDelay(): Date {
+  return generateFirstReminderDelay();
 }
 
 /**

@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { carts, users, abandonedCartNotifications, products } from '@shared/schema';
-import { and, lte, eq, sql, gt, inArray } from 'drizzle-orm';
-import { generateRandomDiscountCode, isAllowedNotificationTime, getNextAllowedCheckTime } from './abandoned-cart';
+import { and, lte, eq, sql, gt, inArray, lt } from 'drizzle-orm';
+import { generateRandomDiscountCode, isAllowedNotificationTime, getNextAllowedCheckTime, generateFirstReminderDelay, generateSecondReminderDelay } from './abandoned-cart';
 import { sendAbandonedCartReminder } from './abandoned-cart-notifications';
 
 export async function checkAndSendAbandonedCartReminders(): Promise<void> {
@@ -21,7 +21,7 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
         .where(
           and(
             lte(carts.nextReminderCheckAt, now),
-            eq(carts.reminderSent, false),
+            lt(carts.reminderCount, 2), // Max 2 reminder
             gt(sql`jsonb_array_length(${carts.items})`, 0)
           )
         );
@@ -42,7 +42,7 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
       .where(
         and(
           lte(carts.nextReminderCheckAt, now),
-          eq(carts.reminderSent, false),
+          lt(carts.reminderCount, 2), // Max 2 reminder
           gt(sql`jsonb_array_length(${carts.items})`, 0)
         )
       );
@@ -51,6 +51,7 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
 
     for (const { cart, user } of eligibleCarts) {
       try {
+        const reminderNumber = cart.reminderCount + 1; // 1 o 2
         const discountData = generateRandomDiscountCode();
         const sentAt = new Date();
 
@@ -76,6 +77,7 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
             cartSnapshot,
             discountCode: discountData.code,
             discountPercent: discountData.percent,
+            reminderNumber, // 1 o 2
             channel: 'telegram',
             expiresAt: discountData.expiresAt,
             sentAt,
@@ -108,6 +110,7 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
           discountCode: discountData.code,
           discountPercent: discountData.percent,
           expiresAt: discountData.expiresAt,
+          reminderNumber, // 1 o 2
         });
 
         if (!result.telegram && !result.email) {
@@ -124,16 +127,26 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
           continue;
         }
 
+        // Aggiorna contatore e pianifica prossimo reminder (se < 2)
+        const updateData: any = {
+          reminderCount: reminderNumber,
+        };
+        
+        if (reminderNumber === 1) {
+          // Dopo 1ª notifica: programma 2ª tra 16-24h
+          updateData.nextReminderCheckAt = generateSecondReminderDelay();
+        } else {
+          // Dopo 2ª notifica: stop (max 2 reminder)
+          updateData.nextReminderCheckAt = null;
+        }
+        
         await db
           .update(carts)
-          .set({
-            reminderSent: true,
-            nextReminderCheckAt: null,
-          })
+          .set(updateData)
           .where(eq(carts.userId, user.id));
 
         console.log(
-          `[Abandoned Cart Cron] Sent reminder to user ${user.id} - Telegram: ${result.telegram}, Email: ${result.email}`
+          `[Abandoned Cart Cron] Sent reminder #${reminderNumber} to user ${user.id} - Telegram: ${result.telegram}, Email: ${result.email}`
         );
       } catch (error) {
         console.error(

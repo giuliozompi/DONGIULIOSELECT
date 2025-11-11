@@ -109,9 +109,9 @@ export const carts = pgTable("carts", {
   }>>().notNull().default([]),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   
-  // Sistema anti-gaming per notifiche carrello abbandonato
-  nextReminderCheckAt: timestamp("next_reminder_check_at", { withTimezone: true }), // Timestamp RANDOM (updatedAt + 20-36h)
-  reminderSent: boolean("reminder_sent").notNull().default(false), // Previene duplicati
+  // Sistema anti-gaming per notifiche carrello abbandonato (max 2 reminder)
+  nextReminderCheckAt: timestamp("next_reminder_check_at", { withTimezone: true }), // Timestamp RANDOM per prossimo check
+  reminderCount: integer("reminder_count").notNull().default(0), // 0, 1, o 2 (max 2 reminder)
 });
 
 export const insertCartSchema = createInsertSchema(carts);
@@ -140,6 +140,9 @@ export const abandonedCartNotifications = pgTable("abandoned_cart_notifications"
   // Sconto RANDOM 5-10% (non cumulabile)
   discountPercent: integer("discount_percent").notNull(), // 5, 6, 7, 8, 9, o 10
   discountCode: varchar("discount_code").notNull().unique(), // Codice univoco (es: CART7-ABC123)
+  
+  // Numero reminder (1 o 2) per tracking notifiche sequenziali
+  reminderNumber: integer("reminder_number").notNull().default(1), // 1ª o 2ª notifica
   
   // Canale notifica
   channel: text("channel").notNull(), // 'telegram' | 'email'
