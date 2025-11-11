@@ -781,7 +781,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderData: {
           userId: req.userId!,
           items: orderItems,
-          amount: '0', // Will be overwritten by orchestrator
           customerName: customerData.customerName,
           customerPhone: normalizePhoneNumber(customerData.customerPhone),
           customerEmail: customerData.customerEmail,

@@ -1251,7 +1251,7 @@ export class DbStorage implements IStorage {
     }>;
     initialAmount: number;
     abandonedCartCode?: string;
-    orderData: InsertOrder;
+    orderData: Omit<typeof orders.$inferInsert, 'id' | 'createdAt' | 'amount'>;
   }): Promise<{
     order: Order;
     discountApplied: number;
@@ -1351,13 +1351,15 @@ export class DbStorage implements IStorage {
       // Calculate final amount
       const finalAmount = Math.max(0, params.initialAmount - totalDiscountApplied).toFixed(2);
 
-      // Create order
+      // Create order - construct complete insert payload with calculated amount
+      const orderInsertData: typeof orders.$inferInsert = {
+        ...params.orderData,
+        amount: finalAmount,
+      };
+      
       const orderResult = await tx
         .insert(orders)
-        .values({
-          ...params.orderData,
-          amount: finalAmount,
-        })
+        .values(orderInsertData)
         .returning();
 
       const order = orderResult[0];
