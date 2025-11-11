@@ -969,7 +969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({
         ...order,
-        bonusApplied: totalBonusApplied.toFixed(2),
+        bonusApplied: totalDiscountApplied.toFixed(2),
         bonusesUsed: usedBonuses.length,
       });
     } catch (error: any) {
