@@ -4317,20 +4317,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cost_currency: 'RUB',
       };
       
-      // Aggiungi fiscalizzazione se payment_on_delivery è attivo
-      // OBBLIGATORIO per Yandex quando si usa payment_on_delivery in Russia
-      if (order.customerPaysShipping && order.yandexDeliveryPrice) {
-        orderItem.fiscalization = {
-          vat_code_str: 'vat20',  // IVA 20% (standard in Russia per prodotti alimentari)
-          supplier_inn: '772863212942',  // Partita IVA Don Giulio
-          article: 'FOOD-ORDER',  // SKU prodotto
-          item_type: 'product'  // Tipo: prodotto (non servizio)
-        };
-      }
-      
       const items = [orderItem];
       
-      // Prepara destination point con payment on delivery se configurato
+      // Prepara destination point (solo consegna, nessun incasso)
+      // I pagamenti vengono gestiti tramite YooKassa, non alla consegna
       const destinationPoint: any = {
         point_id: 2,
         visit_order: 2,
@@ -4342,26 +4332,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         contact: data.deliveryContact,
       };
-      
-      // Aggiungi payment on delivery se il cliente paga la spedizione
-      // Usa il prezzo salvato nel database (order.yandexDeliveryPrice)
-      if (order.customerPaysShipping && order.yandexDeliveryPrice) {
-        const deliveryCost = order.yandexDeliveryPrice;
-        destinationPoint.external_order_cost = {
-          value: deliveryCost,
-          currency: 'RUB',
-          currency_sign: '₽',
-        };
-        destinationPoint.payment_on_delivery = {
-          payment_method: order.shippingPaymentMethod || 'card',
-          client_order_id: order.id,
-          customer: {
-            full_name: data.deliveryContact.name,
-            phone: data.deliveryContact.phone,
-            ...((data.deliveryContact as any).email && { email: (data.deliveryContact as any).email }),
-          },
-        };
-      }
       
       // Crea ordine Yandex Delivery
       const yandexOrder = await yandexDostavkaService.createOrder({
@@ -4748,7 +4718,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         //    perché richiederebbe di conoscere il costo in anticipo (circular dependency)
       }
       
-      // Prepara destination point con payment on delivery se configurato
+      // Prepara destination point (solo consegna, nessun incasso)
+      // I pagamenti vengono gestiti tramite YooKassa, non alla consegna
       const destinationPoint: any = {
         point_id: 2,
         coordinates: deliveryCoords,
@@ -4761,28 +4732,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         visit_order: 2
       };
       
-      // Aggiungi payment on delivery se il cliente paga la spedizione
-      if (order.customerPaysShipping && deliveryCost) {
-        // external_order_cost = totale che il cliente paga al corriere (solo spedizione in questo caso)
-        // Secondo la documentazione Yandex, questo è l'importo totale della transazione
-        const totalCostToCourier = deliveryCost;
-        
-        destinationPoint.external_order_cost = {
-          value: totalCostToCourier,
-          currency: 'RUB',
-          currency_sign: '₽',
-        };
-        destinationPoint.payment_on_delivery = {
-          payment_method: order.shippingPaymentMethod || 'card',
-          client_order_id: order.id,
-          customer: {
-            full_name: deliveryContactName,
-            phone: deliveryContactPhone,
-          },
-        };
-      }
-      
-      // Crea ordine Yandex Go
+      // Crea ordine Yandex Go (solo consegna, nessun incasso)
+      // I pagamenti vengono gestiti tramite YooKassa, non alla consegna
       const orderItem: any = {
         quantity: 1,
         weight: 2,
@@ -4797,17 +4748,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pickup_point: 1,   // Required: ID of pickup route_point
         dropoff_point: 2   // Required: ID of delivery route_point
       };
-      
-      // Aggiungi fiscalizzazione se payment_on_delivery è attivo
-      // OBBLIGATORIO per Yandex quando si usa payment_on_delivery in Russia
-      if (order.customerPaysShipping) {
-        orderItem.fiscalization = {
-          vat_code_str: 'vat20',  // IVA 20% (standard in Russia per prodotti alimentari)
-          supplier_inn: '772863212942',  // Partita IVA Don Giulio
-          article: 'FOOD-ORDER',  // SKU prodotto
-          item_type: 'product'  // Tipo: prodotto (non servizio)
-        };
-      }
       
       const claimRequest: any = {
         items: [orderItem],
