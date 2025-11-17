@@ -228,7 +228,6 @@ export default function CheckoutPage() {
       hapticFeedback('light');
       setValidationError(error.message);
       toast({
-        title: 'Неверный промокод',
         description: error.message,
         variant: 'destructive',
       });
