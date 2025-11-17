@@ -1203,7 +1203,7 @@ export class DbStorage implements IStorage {
     discountCode: string;
     discountPercent: number;
     expiresAt: Date;
-  } | null> {
+  }> {
     const normalizedCode = code.trim().toUpperCase();
     
     const notification = await db
@@ -1213,24 +1213,21 @@ export class DbStorage implements IStorage {
       .limit(1);
     
     if (notification.length === 0) {
-      return null; // Code not found
+      throw new Error('INVALID_DISCOUNT_CODE');
     }
     
     const notif = notification[0];
     
-    // Validate ownership
     if (notif.userId !== userId) {
-      return null; // Not user's code
+      throw new Error('NOT_YOUR_CODE');
     }
     
-    // Validate not expired
     if (new Date() > notif.expiresAt) {
-      return null; // Expired
+      throw new Error('DISCOUNT_EXPIRED');
     }
     
-    // Validate not already used
     if (notif.status !== 'sent') {
-      return null; // Already used
+      throw new Error('DISCOUNT_ALREADY_USED');
     }
     
     return {

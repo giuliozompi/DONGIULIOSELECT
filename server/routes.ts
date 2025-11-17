@@ -110,21 +110,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const discount = await storage.validateAbandonedCartDiscount(req.userId!, code);
       
-      if (!discount) {
-        return res.status(404).json({ 
-          valid: false,
-          error: 'Код скидки недействителен или истёк'
-        });
-      }
-      
       res.json({
         valid: true,
         discountCode: discount.discountCode,
         discountPercent: discount.discountPercent,
         expiresAt: discount.expiresAt,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error validating discount code:', error);
+      
+      if (error.message === 'DISCOUNT_ALREADY_USED') {
+        return res.status(400).json({ 
+          valid: false,
+          error: 'Ой! Этот промокод уже был использован 🎟️ Промокоды можно применить только один раз!'
+        });
+      }
+      
+      if (error.message === 'DISCOUNT_EXPIRED') {
+        return res.status(400).json({ 
+          valid: false,
+          error: 'Промокод истёк ⏰ Но не расстраивайтесь - возможно, скоро появится новый!'
+        });
+      }
+      
+      if (error.message === 'NOT_YOUR_CODE') {
+        return res.status(400).json({ 
+          valid: false,
+          error: 'Этот промокод предназначен для другого пользователя 🔒'
+        });
+      }
+      
+      if (error.message === 'INVALID_DISCOUNT_CODE') {
+        return res.status(404).json({ 
+          valid: false,
+          error: 'Промокод не найден 🔍 Проверьте правильность кода'
+        });
+      }
+      
       res.status(500).json({ error: 'Internal server error' });
     }
   });
