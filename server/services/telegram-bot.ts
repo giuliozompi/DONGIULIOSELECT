@@ -170,7 +170,8 @@ export async function sendOrderStatusNotification(
   chatId: string,
   orderId: string,
   status: string,
-  customerName: string
+  customerName: string,
+  deliveryCost?: string | number
 ): Promise<boolean> {
   const statusMessages: Record<string, { emoji: string; title: string; description: string }> = {
     'ОФОРМЛЕН': {
@@ -211,6 +212,19 @@ export async function sendOrderStatusNotification(
     description: `Статус вашего заказа изменен: ${status}`
   };
 
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numPrice);
+  };
+
+  let deliveryInfo = '';
+  if (status === 'ВЫЗВАН КУРЬЕР' && deliveryCost) {
+    deliveryInfo = `\n\n💰 Стоимость доставки: ${formatPrice(deliveryCost)} ₽`;
+  }
+
   const message = `
 ${statusInfo.emoji} <b>${statusInfo.title}</b>
 
@@ -218,7 +232,7 @@ ${statusInfo.emoji} <b>${statusInfo.title}</b>
 
 ${statusInfo.description}
 
-📦 Заказ: <code>${orderId.slice(0, 13)}</code>
+📦 Заказ: <code>${orderId.slice(0, 13)}</code>${deliveryInfo}
 
 Вы можете отследить ваш заказ в разделе "Мои заказы" нашего приложения.
   `.trim();

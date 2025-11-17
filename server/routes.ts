@@ -2858,11 +2858,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (shouldSendStatusNotification) {
         try {
           const { sendOrderStatusNotification } = await import('./services/telegram-bot');
+          
+          // Se stato è "ВЫЗВАН КУРЬЕР", passa il costo di spedizione
+          const deliveryCostValue = status === 'ВЫЗВАН КУРЬЕР' ? updatedOrder?.deliveryCost : undefined;
+          const deliveryCost = deliveryCostValue ?? undefined; // Converti null in undefined
+          
           const telegramSent = await sendOrderStatusNotification(
             order.userId,
             orderId,
             status,
-            order.customerName
+            order.customerName,
+            deliveryCost
           );
           if (telegramSent) {
             console.log(`✅ Status notification sent to user ${order.userId} for order ${orderId}: ${status}`);
@@ -4394,6 +4400,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       await storage.updateOrder(orderId, updateData);
       
+      // Invia notifica al cliente che il corriere è in arrivo
+      try {
+        const { sendOrderStatusNotification } = await import('./services/telegram-bot');
+        const deliveryCost = updateData.deliveryCost || updateData.yandexDeliveryPrice;
+        const telegramSent = await sendOrderStatusNotification(
+          order.userId,
+          orderId,
+          'ВЫЗВАН КУРЬЕР',
+          order.customerName,
+          deliveryCost
+        );
+        if (telegramSent) {
+          console.log(`✅ Courier notification sent to customer ${order.userId} for order ${orderId}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to send courier notification to customer:', error);
+      }
+      
       // Invia notifica kuryer ai manager via Email
       try {
         const { sendDeliveryStartedNotificationToManagers } = await import('./services/email');
@@ -4839,6 +4863,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       await storage.updateOrder(orderId, updateData);
+      
+      // Invia notifica al cliente che il corriere è in arrivo
+      try {
+        const { sendOrderStatusNotification } = await import('./services/telegram-bot');
+        const deliveryCost = updateData.deliveryCost || finalPrice;
+        const telegramSent = await sendOrderStatusNotification(
+          order.userId,
+          orderId,
+          'ВЫЗВАН КУРЬЕР',
+          order.customerName,
+          deliveryCost
+        );
+        if (telegramSent) {
+          console.log(`✅ Courier notification sent to customer ${order.userId} for order ${orderId}`);
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to send courier notification to customer:', error);
+      }
       
       // Invia notifica kuryer ai manager via Email
       try {
