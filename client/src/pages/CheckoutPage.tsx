@@ -203,12 +203,21 @@ export default function CheckoutPage() {
 
   const validateDiscountMutation = useMutation({
     mutationFn: async (code: string) => {
-      const res = await apiRequest('GET', `/api/cart/validate-discount/${code.trim().toUpperCase()}`);
+      const res = await fetch(`/api/cart/validate-discount/${code.trim().toUpperCase()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      
+      const data = await res.json();
+      
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Ошибка проверки кода' }));
-        throw new Error(errorData.error || 'Неверный код скидки');
+        throw new Error(data.error || 'Неверный код скидки');
       }
-      return await res.json();
+      
+      return data;
     },
     onSuccess: (data: { discountCode: string; discountPercent: number; expiresAt: string }) => {
       hapticFeedback('success');
