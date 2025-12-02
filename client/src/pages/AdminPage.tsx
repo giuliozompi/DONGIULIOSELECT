@@ -1434,8 +1434,8 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
             </div>
           )}
 
-          {/* CDEK PVZ Selector - Only for CDEK orders without PVZ or needing change */}
-          {displayOrder.deliveryMethod === DELIVERY_METHODS.CDEK && editable && (
+          {/* CDEK PVZ Selector - For CDEK orders: editable OR paid without CDEK order created */}
+          {displayOrder.deliveryMethod === DELIVERY_METHODS.CDEK && (editable || (displayOrder.status === 'ОПЛАЧЕН' && !displayOrder.cdekOrderUuid)) && (
             <div className="space-y-3 border rounded-md p-4 border-dashed border-2">
               <div className="flex items-center gap-2">
                 <Package className="w-5 h-5 text-primary" />
