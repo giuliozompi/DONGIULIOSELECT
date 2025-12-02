@@ -586,6 +586,15 @@ export const orderChangeLogs = pgTable("order_change_logs", {
     location?: any;
     eta?: any;
     
+    // Per CDEK delivery integration
+    cdekOrderUuid?: string;
+    cdekOrderNumber?: string;
+    tariffCode?: number;
+    deliveryMode?: string;
+    pvzCode?: string;
+    previousStatus?: string;
+    statusName?: string;
+    
     // Note dell'admin
     notes?: string;
   }>().notNull(),

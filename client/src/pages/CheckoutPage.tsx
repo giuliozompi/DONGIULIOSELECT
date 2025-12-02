@@ -20,7 +20,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { FallbackMainButton } from '@/components/FallbackMainButton';
-import { ShoppingBag, Gift, MapPin, X, Truck, Wallet, Tag } from 'lucide-react';
+import { CdekPvzSelector } from '@/components/CdekPvzSelector';
+import { ShoppingBag, Gift, MapPin, X, Truck, Wallet, Tag, Package } from 'lucide-react';
 import type { Cart, Product, Bonus, UserAddress } from '@shared/schema';
 import { DELIVERY_METHODS, DELIVERY_METHOD_LABELS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@shared/schema';
 import { normalizePhoneNumber } from '@/lib/utils';
@@ -83,6 +84,11 @@ export default function CheckoutPage() {
     percent: number;
     expiresAt: Date;
   } | null>(null);
+  
+  // CDEK delivery states
+  const [cdekPvz, setCdekPvz] = useState<any>(null);
+  const [cdekTariff, setCdekTariff] = useState<any>(null);
+  const [cdekCityCode, setCdekCityCode] = useState<number | null>(null);
 
   const { data: cart, isLoading } = useQuery<Cart>({
     queryKey: ['/api/cart'],
@@ -245,12 +251,24 @@ export default function CheckoutPage() {
 
   const createOrderMutation = useMutation({
     mutationFn: async (data: CheckoutFormData) => {
-      const orderData = {
+      const orderData: any = {
         ...data,
         customerPhone: normalizePhoneNumber(data.customerPhone),
         ...structuredAddress,
         abandonedCartCode: validatedDiscount?.code || null,
       };
+      
+      // Add CDEK data if CDEK delivery is selected
+      if (data.deliveryMethod === DELIVERY_METHODS.CDEK) {
+        orderData.cdekPvzCode = cdekPvz?.code || null;
+        orderData.cdekPvzAddress = cdekPvz?.location?.address_full || cdekPvz?.location?.address || null;
+        orderData.cdekTariffCode = cdekTariff?.tariff_code || null;
+        orderData.cdekTariffName = cdekTariff?.tariff_name || null;
+        orderData.cdekPrice = cdekTariff?.delivery_sum?.toString() || null;
+        orderData.cdekCityCode = cdekCityCode;
+        orderData.cdekDeliveryMode = cdekPvz ? 'office' : 'door';
+      }
+      
       const res = await apiRequest('POST', '/api/orders', orderData);
       return await res.json();
     },
@@ -279,6 +297,15 @@ export default function CheckoutPage() {
   useTelegramBackButton(() => setLocation('/cart'), true);
 
   const onSubmit = (data: CheckoutFormData) => {
+    // Validate CDEK PVZ selection
+    if (data.deliveryMethod === DELIVERY_METHODS.CDEK && !cdekPvz) {
+      toast({
+        description: 'Выберите пункт выдачи СДЭК для оформления заказа',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     setIsSubmitting(true);
     createOrderMutation.mutate(data);
   };
@@ -791,6 +818,40 @@ export default function CheckoutPage() {
                   </FormItem>
                 )}
               />
+
+              {/* CDEK PVZ selector - shown when CDEK is selected */}
+              {form.watch('deliveryMethod') === DELIVERY_METHODS.CDEK && (
+                <Card className="p-4 border-dashed border-2">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Package className="w-5 h-5 text-primary" />
+                    <h3 className="font-medium">Выберите пункт выдачи СДЭК</h3>
+                  </div>
+                  <CdekPvzSelector
+                    onSelect={(pvz, tariff, cityCode) => {
+                      setCdekPvz(pvz);
+                      setCdekTariff(tariff);
+                      setCdekCityCode(cityCode);
+                      if (pvz) {
+                        form.setValue('deliveryAddress', pvz.location.address_full || pvz.location.address, { shouldValidate: true });
+                      }
+                    }}
+                    selectedPvzCode={cdekPvz?.code}
+                  />
+                  {cdekTariff && (
+                    <div className="mt-4 p-3 bg-muted rounded-md flex items-center justify-between">
+                      <span className="text-sm">Стоимость доставки СДЭК:</span>
+                      <Badge variant="secondary" className="text-base">
+                        {Math.round(cdekTariff.delivery_sum)} ₽
+                      </Badge>
+                    </div>
+                  )}
+                  {!cdekPvz && cdekCityCode && (
+                    <p className="text-sm text-amber-600 mt-2">
+                      Выберите пункт выдачи для оформления заказа
+                    </p>
+                  )}
+                </Card>
+              )}
 
               {/* Payment method selection */}
               <FormField
