@@ -31,7 +31,7 @@ const checkoutFormSchema = z.object({
   customerName: z.string().min(2, 'Введите имя (минимум 2 символа)'),
   customerPhone: z.string().regex(/^\+?[0-9]{10,15}$/, 'Введите корректный номер телефона'),
   customerEmail: z.string().email('Введите корректный адрес электронной почты'),
-  deliveryAddress: z.string().min(10, 'Введите полный адрес доставки'),
+  deliveryAddress: z.string().optional(), // Made optional - validated conditionally below
   deliveryNotes: z.string().optional(),
   deliveryMethod: z.enum([
     DELIVERY_METHODS.YANDEX_GO,
@@ -49,6 +49,27 @@ const checkoutFormSchema = z.object({
   }),
   saveAddress: z.boolean().default(false),
   addressLabel: z.string().optional(),
+  // CDEK-specific fields
+  cdekPvzCode: z.string().optional(),
+  cdekPvzAddress: z.string().optional(),
+}).refine((data) => {
+  // Require deliveryAddress for non-CDEK delivery methods
+  if (data.deliveryMethod !== DELIVERY_METHODS.CDEK) {
+    return data.deliveryAddress && data.deliveryAddress.length >= 10;
+  }
+  return true;
+}, {
+  message: 'Введите полный адрес доставки',
+  path: ['deliveryAddress'],
+}).refine((data) => {
+  // Require PVZ selection for CDEK delivery
+  if (data.deliveryMethod === DELIVERY_METHODS.CDEK) {
+    return !!data.cdekPvzCode;
+  }
+  return true;
+}, {
+  message: 'Выберите пункт выдачи СДЭК',
+  path: ['cdekPvzCode'],
 }).refine((data) => {
   if (data.saveAddress && !data.addressLabel) {
     return false;
@@ -135,8 +156,24 @@ export default function CheckoutPage() {
       paymentMethod: PAYMENT_METHODS.YOOKASSA,
       saveAddress: false,
       addressLabel: '',
+      cdekPvzCode: '',
+      cdekPvzAddress: '',
     },
   });
+  
+  // Watch delivery method to clear CDEK data when switching away
+  const watchedDeliveryMethod = form.watch('deliveryMethod');
+  
+  useEffect(() => {
+    if (watchedDeliveryMethod !== DELIVERY_METHODS.CDEK) {
+      // Clear CDEK-specific data when switching to other delivery methods
+      setCdekPvz(null);
+      setCdekTariff(null);
+      setCdekCityCode(null);
+      form.setValue('cdekPvzCode', '');
+      form.setValue('cdekPvzAddress', '');
+    }
+  }, [watchedDeliveryMethod, form]);
 
   // Pre-compila form con dati utente salvati
   useEffect(() => {
@@ -660,7 +697,7 @@ export default function CheckoutPage() {
                       <FormLabel>Адрес доставки *</FormLabel>
                       <FormControl>
                         <AddressAutocomplete
-                          value={field.value}
+                          value={field.value || ''}
                           onChange={(value, suggestion) => {
                             field.onChange(value);
                             if (suggestion) {
@@ -837,10 +874,19 @@ export default function CheckoutPage() {
                       setCdekTariff(tariff);
                       setCdekCityCode(cityCode);
                       if (pvz) {
-                        form.setValue('deliveryAddress', pvz.location.address_full || pvz.location.address, { shouldValidate: true });
+                        // Set CDEK-specific form fields
+                        const pvzAddress = pvz.location.address_full || pvz.location.address;
+                        form.setValue('cdekPvzCode', pvz.code, { shouldValidate: true });
+                        form.setValue('cdekPvzAddress', pvzAddress, { shouldValidate: true });
+                        form.setValue('deliveryAddress', pvzAddress, { shouldValidate: true });
+                      } else {
+                        // Clear when PVZ is deselected (e.g., city changed)
+                        form.setValue('cdekPvzCode', '', { shouldValidate: true });
+                        form.setValue('cdekPvzAddress', '', { shouldValidate: true });
+                        form.setValue('deliveryAddress', '', { shouldValidate: false });
                       }
                     }}
-                    selectedPvzCode={cdekPvz?.code}
+                    selectedPvzCode={form.watch('cdekPvzCode') || cdekPvz?.code}
                   />
                   {cdekTariff && (
                     <div className="mt-4 p-3 bg-muted rounded-md flex items-center justify-between">
@@ -853,6 +899,13 @@ export default function CheckoutPage() {
                   {!cdekPvz && cdekCityCode && (
                     <p className="text-sm text-amber-600 mt-2">
                       Выберите пункт выдачи для оформления заказа
+                    </p>
+                  )}
+                  
+                  {/* Show validation error for PVZ selection */}
+                  {form.formState.errors.cdekPvzCode && (
+                    <p className="text-sm text-destructive mt-2">
+                      {form.formState.errors.cdekPvzCode.message}
                     </p>
                   )}
                 </Card>
