@@ -5156,9 +5156,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const status = await cdekService.getOrderByUuid(order.cdekOrderUuid);
       
+      // Log per debug
+      console.log('[CDEK] Order status response:', JSON.stringify(status, null, 2));
+      
       // Estrai tracking number e status dall'ordine CDEK
       const cdekStatus = status?.entity?.statuses?.[0]?.code || order.cdekStatus;
       const trackingNumber = status?.entity?.cdek_number || order.cdekTrackingNumber;
+      
+      console.log('[CDEK] Extracted status:', cdekStatus, 'tracking:', trackingNumber);
       
       // Aggiorna ordine con status aggiornato
       await storage.updateOrder(orderId, {
