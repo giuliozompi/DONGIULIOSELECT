@@ -650,39 +650,42 @@ export default function CheckoutPage() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="deliveryAddress"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Адрес доставки *</FormLabel>
-                    <FormControl>
-                      <AddressAutocomplete
-                        value={field.value}
-                        onChange={(value, suggestion) => {
-                          field.onChange(value);
-                          if (suggestion) {
-                            setStructuredAddress({
-                              deliveryPostalCode: suggestion.postalCode || undefined,
-                              dadataFiasId: suggestion.fiasId,
-                              deliveryLatitude: suggestion.geoLat || undefined,
-                              deliveryLongitude: suggestion.geoLon || undefined,
-                            });
-                          } else {
-                            setStructuredAddress({});
-                          }
-                        }}
-                        placeholder="Начните вводить адрес: город, улица, дом..."
-                        testId="input-delivery-address"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Address field - hidden when CDEK is selected (address comes from PVZ selector) */}
+              {form.watch('deliveryMethod') !== DELIVERY_METHODS.CDEK && (
+                <FormField
+                  control={form.control}
+                  name="deliveryAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Адрес доставки *</FormLabel>
+                      <FormControl>
+                        <AddressAutocomplete
+                          value={field.value}
+                          onChange={(value, suggestion) => {
+                            field.onChange(value);
+                            if (suggestion) {
+                              setStructuredAddress({
+                                deliveryPostalCode: suggestion.postalCode || undefined,
+                                dadataFiasId: suggestion.fiasId,
+                                deliveryLatitude: suggestion.geoLat || undefined,
+                                deliveryLongitude: suggestion.geoLon || undefined,
+                              });
+                            } else {
+                              setStructuredAddress({});
+                            }
+                          }}
+                          placeholder="Начните вводить адрес: город, улица, дом..."
+                          testId="input-delivery-address"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
-              {/* Indirizzi salvati */}
-              {!isLoadingAddresses && savedAddresses.length > 0 && (
+              {/* Indirizzi salvati - hidden when CDEK is selected */}
+              {form.watch('deliveryMethod') !== DELIVERY_METHODS.CDEK && !isLoadingAddresses && savedAddresses.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-medium flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
@@ -731,33 +734,35 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              {/* Save address checkbox */}
-              <FormField
-                control={form.control}
-                name="saveAddress"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="checkbox-save-address"
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>
-                        Сохранить этот адрес
-                      </FormLabel>
-                      <p className="text-sm text-muted-foreground">
-                        Адрес будет доступен для быстрого выбора в следующих заказах
-                      </p>
-                    </div>
-                  </FormItem>
-                )}
-              />
+              {/* Save address checkbox - hidden when CDEK is selected */}
+              {form.watch('deliveryMethod') !== DELIVERY_METHODS.CDEK && (
+                <FormField
+                  control={form.control}
+                  name="saveAddress"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="checkbox-save-address"
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>
+                          Сохранить этот адрес
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Адрес будет доступен для быстрого выбора в следующих заказах
+                        </p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              )}
 
-              {/* Address label input (shown when saveAddress is checked) */}
-              {saveAddress && (
+              {/* Address label input (shown when saveAddress is checked and not CDEK) */}
+              {form.watch('deliveryMethod') !== DELIVERY_METHODS.CDEK && saveAddress && (
                 <FormField
                   control={form.control}
                   name="addressLabel"
