@@ -5708,6 +5708,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return sum + (weight * item.quantity);
       }, 0);
       
+      // Get default pickup address for sender
+      const senderAddress = await storage.getDefaultPickupAddress();
+      if (!senderAddress) {
+        return res.status(400).json({ error: 'Не настроен адрес отправителя. Добавьте адрес забора в настройках.' });
+      }
+      
       // Prepare items for CDEK
       const cdekItems = order.items.map((item: any) => ({
         name: item.name,
@@ -5718,7 +5724,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         markingCode: item.markingCode,
       }));
       
-      // Create CDEK order
+      // Create CDEK order with door-to-door pickup
       const cdekResult = await cdekService.createDonGiulioOrder({
         orderId: order.id,
         recipientName: recipient_name || order.customerName,
@@ -5731,6 +5737,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items: cdekItems,
         totalWeight,
         comment: comment || `Заказ ${order.id} от Don Giulio Select`,
+        senderAddress: {
+          fullAddress: senderAddress.fullAddress,
+          city: senderAddress.city || 'Москва',
+          postalCode: senderAddress.postalCode || undefined,
+          contactName: senderAddress.contactName || 'Don Giulio Select',
+          contactPhone: senderAddress.contactPhone || '+79268429284',
+          latitude: senderAddress.latitude || undefined,
+          longitude: senderAddress.longitude || undefined,
+        },
       });
       
       if (!cdekResult.entity?.uuid) {

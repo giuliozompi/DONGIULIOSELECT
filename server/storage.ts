@@ -219,6 +219,7 @@ export interface IStorage {
   updatePickupAddress(id: string, updates: Partial<PickupAddress>): Promise<PickupAddress | undefined>;
   deletePickupAddress(id: string): Promise<boolean>;
   setDefaultPickupAddress(addressId: string): Promise<void>;
+  getDefaultPickupAddress(): Promise<PickupAddress | undefined>;
 
   // Log modifiche ordini
   createOrderChangeLog(log: InsertOrderChangeLog): Promise<OrderChangeLog>;

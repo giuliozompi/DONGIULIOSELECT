@@ -838,6 +838,15 @@ export class DbStorage implements IStorage {
       .where(eq(pickupAddresses.id, addressId));
   }
 
+  async getDefaultPickupAddress(): Promise<PickupAddress | undefined> {
+    const result = await db
+      .select()
+      .from(pickupAddresses)
+      .where(eq(pickupAddresses.isDefault, true))
+      .limit(1);
+    return result[0];
+  }
+
   // Log modifiche ordini
   async createOrderChangeLog(insertLog: InsertOrderChangeLog): Promise<OrderChangeLog> {
     const result = await db.insert(orderChangeLogs).values(insertLog as any).returning();

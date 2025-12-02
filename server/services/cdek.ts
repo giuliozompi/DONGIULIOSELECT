@@ -771,6 +771,7 @@ class CdekService {
   
   /**
    * Helper: Create a standard e-commerce order for Don Giulio
+   * Uses door-to-door pickup (CDEK comes to collect packages)
    */
   async createDonGiulioOrder(params: {
     orderId: string;
@@ -791,6 +792,16 @@ class CdekService {
     }>;
     totalWeight: number; // grams
     comment?: string;
+    // Sender/Pickup address (from database)
+    senderAddress: {
+      fullAddress: string;
+      city: string;
+      postalCode?: string;
+      contactName: string;
+      contactPhone: string;
+      latitude?: string;
+      longitude?: string;
+    };
   }): Promise<CdekOrderResponse> {
     const isPvzDelivery = !!params.deliveryPvzCode;
     
@@ -821,8 +832,16 @@ class CdekService {
         phones: [{ number: params.recipientPhone }],
       },
       sender: {
-        name: 'Don Giulio Select',
-        phones: [{ number: '+79851234567' }], // TODO: Use actual shop phone
+        name: params.senderAddress.contactName,
+        phones: [{ number: params.senderAddress.contactPhone }],
+      },
+      // Use from_location for door-to-door pickup (CDEK comes to collect)
+      from_location: {
+        city: params.senderAddress.city,
+        address: params.senderAddress.fullAddress,
+        postal_code: params.senderAddress.postalCode,
+        longitude: params.senderAddress.longitude ? parseFloat(params.senderAddress.longitude) : undefined,
+        latitude: params.senderAddress.latitude ? parseFloat(params.senderAddress.latitude) : undefined,
       },
       packages,
     };
@@ -836,6 +855,12 @@ class CdekService {
         address: params.deliveryAddress,
       };
     }
+    
+    console.log(`[CDEK] Creating order with from_location (door pickup):`, {
+      city: params.senderAddress.city,
+      address: params.senderAddress.fullAddress,
+      contact: params.senderAddress.contactName,
+    });
     
     return this.createOrder(orderRequest);
   }
