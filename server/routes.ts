@@ -5078,7 +5078,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Prepara dati per ordine CDEK
       const cdekOrderData = {
         number: order.id.slice(0, 24),
-        tariff_code: parseInt(order.cdekTariffCode || '136'),
+        tariff_code: order.cdekTariffCode ? parseInt(String(order.cdekTariffCode)) : 136,
         comment: order.deliveryNotes || `Заказ ${order.id.slice(0, 8)}`,
         shipment_point: process.env.CDEK_SHIPMENT_POINT || 'MSK100',
         delivery_point: order.cdekPvzCode,
@@ -5154,7 +5154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No CDEK order associated with this order' });
       }
       
-      const status = await cdekService.getOrderInfo(order.cdekOrderUuid);
+      const status = await cdekService.getOrderByUuid(order.cdekOrderUuid);
       
       // Estrai tracking number e status dall'ordine CDEK
       const cdekStatus = status?.entity?.statuses?.[0]?.code || order.cdekStatus;
@@ -5211,11 +5211,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         adminUserId: req.userId!,
         changeType: 'cdek_order_cancelled',
         changeData: {
-          oldOrderStatus: order.status,
-          newOrderStatus: ORDER_STATUSES.PAID,
-          oldCdekStatus: order.cdekStatus,
+          oldStatus: order.status,
           cdekOrderUuid: order.cdekOrderUuid,
-        },
+        } as Record<string, unknown>,
       });
       
       res.json(result);
@@ -5236,7 +5234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Valid city_code is required' });
       }
       
-      const pvzList = await cdekService.getPickupPoints(cityCode);
+      const pvzList = await cdekService.getPickupPoints({ city_code: cityCode });
       
       res.json(pvzList);
     } catch (error) {
@@ -5257,7 +5255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Valid to_city_code is required' });
       }
       
-      const tariffs = await cdekService.calculateTariff({
+      const tariffs = await cdekService.calculateByTariffs({
         from_location: { code: parseInt(process.env.CDEK_FROM_CITY_CODE || '44') },
         to_location: { code: toCityCode },
         packages: [{
