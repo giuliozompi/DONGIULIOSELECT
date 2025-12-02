@@ -5194,7 +5194,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No CDEK order associated with this order' });
       }
       
-      const result = await cdekService.deleteOrder(order.cdekOrderUuid);
+      let result: any = { success: true };
+      let apiCancelSuccess = true;
+      
+      try {
+        result = await cdekService.deleteOrder(order.cdekOrderUuid);
+      } catch (deleteError: any) {
+        // In test environment, CDEK API may return 404 for delete operations
+        // We still want to reset local data in this case
+        console.log('[CDEK] Delete order failed (may be test environment limitation):', deleteError.message);
+        apiCancelSuccess = false;
+        result = { 
+          success: false, 
+          message: 'CDEK API delete failed, local data reset',
+          apiError: deleteError.message 
+        };
+      }
       
       // Riporta l'ordine allo stato PAID e rimuove dati CDEK
       await storage.updateOrder(orderId, {
@@ -5213,6 +5228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         changeData: {
           oldStatus: order.status,
           cdekOrderUuid: order.cdekOrderUuid,
+          apiCancelSuccess,
         } as Record<string, unknown>,
       });
       
