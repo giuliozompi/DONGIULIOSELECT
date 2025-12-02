@@ -35,6 +35,7 @@ import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { DeliveryDialog } from '@/components/DeliveryDialog';
 import { OrderViewDialog } from '@/components/OrderViewDialog';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
+import { CdekPvzSelector } from '@/components/CdekPvzSelector';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
 import { normalizePhoneNumber } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -961,6 +962,11 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
   }>({});
   const [showRefundDialog, setShowRefundDialog] = useState<boolean>(false);
   
+  // CDEK PVZ selection state
+  const [selectedCdekPvz, setSelectedCdekPvz] = useState<any>(null);
+  const [selectedCdekTariff, setSelectedCdekTariff] = useState<any>(null);
+  const [selectedCdekCityCode, setSelectedCdekCityCode] = useState<number | null>(null);
+  
   // Refund form schema
   const refundFormSchema = z.object({
     reason: z.string().trim().min(10, 'Причина возврата должна содержать минимум 10 символов'),
@@ -1107,6 +1113,32 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
       queryClient.invalidateQueries({ queryKey: ['/api/user-addresses', order.userId] });
       setAddressStructured({}); // Reset dati strutturati
       toast({ title: '✅ Адрес обновлен' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  // Update CDEK PVZ mutation
+  const updateCdekPvzMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedCdekPvz) throw new Error('PVZ не выбран');
+      const payload = {
+        cdekPvzCode: selectedCdekPvz.code,
+        cdekPvzAddress: selectedCdekPvz.location.address_full || selectedCdekPvz.location.address,
+        cdekTariffCode: selectedCdekTariff?.tariff_code || 136,
+        deliveryAddress: selectedCdekPvz.location.address_full || selectedCdekPvz.location.address,
+      };
+      return await apiRequest('POST', `/api/admin/orders/${order.id}/change-address`, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id, 'logs'] });
+      setSelectedCdekPvz(null);
+      setSelectedCdekTariff(null);
+      setSelectedCdekCityCode(null);
+      toast({ title: '✅ Пункт выдачи СДЭК обновлен' });
     },
     onError: (error: any) => {
       toast({ title: 'Ошибка', description: error.message, variant: 'destructive' });
@@ -1390,10 +1422,69 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
               <p className="text-sm" data-testid="order-delivery-method-admin">
                 {DELIVERY_METHOD_LABELS[displayOrder.deliveryMethod as keyof typeof DELIVERY_METHOD_LABELS] || displayOrder.deliveryMethod}
               </p>
+              {/* Show current CDEK PVZ info */}
+              {displayOrder.deliveryMethod === DELIVERY_METHODS.CDEK && displayOrder.cdekPvzCode && (
+                <div className="mt-2 pt-2 border-t">
+                  <p className="text-sm font-medium">Текущий ПВЗ: {displayOrder.cdekPvzCode}</p>
+                  {displayOrder.cdekPvzAddress && (
+                    <p className="text-sm text-muted-foreground">{displayOrder.cdekPvzAddress}</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Change Address */}
+          {/* CDEK PVZ Selector - Only for CDEK orders without PVZ or needing change */}
+          {displayOrder.deliveryMethod === DELIVERY_METHODS.CDEK && editable && (
+            <div className="space-y-3 border rounded-md p-4 border-dashed border-2">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold">
+                  {displayOrder.cdekPvzCode ? 'Изменить пункт выдачи СДЭК' : 'Выберите пункт выдачи СДЭК'}
+                </h3>
+              </div>
+              {!displayOrder.cdekPvzCode && (
+                <p className="text-sm text-amber-600">
+                  Для создания заказа СДЭК необходимо выбрать пункт выдачи
+                </p>
+              )}
+              <CdekPvzSelector
+                onSelect={(pvz, tariff, cityCode) => {
+                  setSelectedCdekPvz(pvz);
+                  setSelectedCdekTariff(tariff);
+                  setSelectedCdekCityCode(cityCode);
+                }}
+                selectedPvzCode={selectedCdekPvz?.code || displayOrder.cdekPvzCode}
+              />
+              {selectedCdekTariff && (
+                <div className="mt-2 p-3 bg-muted rounded-md flex items-center justify-between">
+                  <span className="text-sm">Стоимость доставки СДЭК:</span>
+                  <Badge variant="secondary" className="text-base">
+                    {Math.round(selectedCdekTariff.delivery_sum)} ₽
+                  </Badge>
+                </div>
+              )}
+              {selectedCdekPvz && selectedCdekPvz.code !== displayOrder.cdekPvzCode && (
+                <Button 
+                  className="w-full"
+                  onClick={() => updateCdekPvzMutation.mutate()}
+                  disabled={updateCdekPvzMutation.isPending}
+                  data-testid="button-update-cdek-pvz"
+                >
+                  {updateCdekPvzMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Сохранение...
+                    </>
+                  ) : (
+                    'Сохранить пункт выдачи'
+                  )}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Change Address - Hidden for CDEK orders */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Изменить адрес доставки</h3>

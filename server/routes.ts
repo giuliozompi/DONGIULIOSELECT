@@ -4095,6 +4095,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         longitude: z.string().optional(),
         saveToCustomer: z.boolean().optional(),
         notes: z.string().optional(),
+        // CDEK-specific fields
+        cdekPvzCode: z.string().optional(),
+        cdekPvzAddress: z.string().optional(),
+        cdekTariffCode: z.number().optional(),
       });
       
       const data = schema.parse(req.body);
@@ -4107,9 +4111,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const oldAddress = order.deliveryAddress;
+      const oldCdekPvzCode = order.cdekPvzCode;
       
-      // Se richiesto, salva il nuovo indirizzo nella lista indirizzi del cliente
-      if (data.saveToCustomer && order.userId) {
+      // Se richiesto, salva il nuovo indirizzo nella lista indirizzi del cliente (skip for CDEK PVZ)
+      if (data.saveToCustomer && order.userId && !data.cdekPvzCode) {
         // Verifica se l'indirizzo esiste già
         const existingAddresses = await storage.getUserAddresses(order.userId);
         const addressExists = existingAddresses.some(addr => addr.fullAddress === data.deliveryAddress);
@@ -4130,26 +4135,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Aggiorna ordine
-      const updatedOrder = await storage.updateOrder(orderId, {
+      // Build update object
+      const updateData: any = {
         deliveryAddress: data.deliveryAddress,
         deliveryPostalCode: data.deliveryPostalCode || null,
         deliveryLatitude: data.latitude || null,
         deliveryLongitude: data.longitude || null,
         dadataFiasId: data.dadataFiasId || null,
-      });
+      };
+      
+      // Add CDEK-specific fields if provided
+      if (data.cdekPvzCode) {
+        updateData.cdekPvzCode = data.cdekPvzCode;
+        updateData.cdekPvzAddress = data.cdekPvzAddress || null;
+        updateData.cdekTariffCode = data.cdekTariffCode || 136;
+        // Reset CDEK order status when PVZ changes (need to create new CDEK order)
+        if (order.cdekOrderUuid && data.cdekPvzCode !== oldCdekPvzCode) {
+          updateData.cdekOrderUuid = null;
+          updateData.cdekStatus = null;
+          updateData.cdekTrackingNumber = null;
+        }
+      }
+      
+      // Aggiorna ordine
+      const updatedOrder = await storage.updateOrder(orderId, updateData);
       
       // Crea log
+      const changeData: any = {
+        oldAddress,
+        newAddress: data.deliveryAddress,
+        savedToCustomer: data.saveToCustomer || false,
+        notes: data.notes,
+      };
+      
+      // Add CDEK info to log
+      if (data.cdekPvzCode) {
+        changeData.cdekPvzCode = data.cdekPvzCode;
+        changeData.cdekPvzAddress = data.cdekPvzAddress;
+        changeData.oldCdekPvzCode = oldCdekPvzCode;
+      }
+      
       await storage.createOrderChangeLog({
         orderId,
         adminUserId,
-        changeType: 'address_changed',
-        changeData: {
-          oldAddress,
-          newAddress: data.deliveryAddress,
-          savedToCustomer: data.saveToCustomer || false,
-          notes: data.notes,
-        },
+        changeType: data.cdekPvzCode ? 'cdek_pvz_changed' : 'address_changed',
+        changeData,
       });
       
       res.json(updatedOrder);
