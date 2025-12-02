@@ -257,6 +257,22 @@ export const orders = pgTable("orders", {
     carNumber?: string;
   }>(), // Info sul corriere Yandex Go
   
+  // CDEK (СДЭК) Delivery specifics
+  cdekOrderUuid: text("cdek_order_uuid"), // UUID dell'ordine CDEK
+  cdekOrderNumber: text("cdek_order_number"), // Numero ordine interno CDEK
+  cdekTrackingNumber: text("cdek_tracking_number"), // Numero di tracciamento (barcode)
+  cdekDispatchNumber: text("cdek_dispatch_number"), // Numero spedizione CDEK
+  cdekPrice: decimal("cdek_price", { precision: 10, scale: 2 }), // Prezzo consegna CDEK
+  cdekTariffCode: integer("cdek_tariff_code"), // Codice tariffa CDEK usata
+  cdekTariffName: text("cdek_tariff_name"), // Nome della tariffa (es: "Посылка склад-склад")
+  cdekDeliveryMode: text("cdek_delivery_mode"), // 'door' | 'office' | 'postamat'
+  cdekPvzCode: text("cdek_pvz_code"), // Codice punto ritiro se scelto
+  cdekPvzAddress: text("cdek_pvz_address"), // Indirizzo punto ritiro
+  cdekStatus: text("cdek_status"), // Status dell'ordine CDEK
+  cdekStatusDate: timestamp("cdek_status_date"), // Data ultimo aggiornamento status
+  cdekEstimatedDelivery: timestamp("cdek_estimated_delivery"), // Data consegna stimata
+  cdekActualDelivery: timestamp("cdek_actual_delivery"), // Data consegna effettiva
+  
   // Coordinate per Yandex Dostavka (pickup e delivery)
   pickupCoordinates: text("pickup_coordinates").array(), // [longitude, latitude]
   deliveryCoordinates: text("delivery_coordinates").array(), // [longitude, latitude]
@@ -762,6 +778,102 @@ export const courierTracking = pgTable("courier_tracking", {
 export const insertCourierTrackingSchema = createInsertSchema(courierTracking).omit({ id: true, createdAt: true });
 export type InsertCourierTracking = z.infer<typeof insertCourierTrackingSchema>;
 export type CourierTracking = typeof courierTracking.$inferSelect;
+
+// CDEK Pickup Points (PVZ) - Cached list of delivery points
+export const cdekPickupPoints = pgTable("cdek_pickup_points", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // CDEK identifiers
+  code: text("code").notNull().unique(), // Codice unico punto CDEK (es: "MSK123")
+  name: text("name").notNull(), // Nome del punto (es: "СДЭК Москва-Центр")
+  type: text("type").notNull(), // 'PVZ' | 'POSTAMAT' (punto ritiro / постамат)
+  
+  // Location
+  city: text("city").notNull(),
+  cityCode: integer("city_code"), // Codice città CDEK
+  postalCode: text("postal_code"),
+  countryCode: text("country_code").notNull().default('RU'),
+  region: text("region"),
+  regionCode: integer("region_code"),
+  
+  // Address
+  addressFull: text("address_full").notNull(), // Indirizzo completo
+  addressShort: text("address_short"), // Indirizzo breve
+  
+  // Coordinates
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+  
+  // Work schedule
+  workTime: text("work_time"), // es: "Пн-Пт 09:00-21:00, Сб-Вс 10:00-18:00"
+  workTimeList: jsonb("work_time_list").$type<Array<{
+    day: number; // 1-7 (Mon-Sun)
+    time: string; // "09:00/21:00"
+  }>>(),
+  
+  // Features
+  isHandout: boolean("is_handout").notNull().default(true), // Выдача заказов
+  isReception: boolean("is_reception").notNull().default(false), // Прием посылок
+  isDressingRoom: boolean("is_dressing_room").notNull().default(false), // Примерочная
+  haveCashless: boolean("have_cashless").notNull().default(false), // Безналичный расчет
+  haveCash: boolean("have_cash").notNull().default(false), // Наличный расчет
+  allowedCod: boolean("allowed_cod").notNull().default(false), // Наложенный платеж
+  
+  // Weight limits
+  weightMin: decimal("weight_min", { precision: 8, scale: 3 }), // Min weight in kg
+  weightMax: decimal("weight_max", { precision: 8, scale: 3 }), // Max weight in kg
+  
+  // Contact
+  phone: text("phone"),
+  email: text("email"),
+  note: text("note"), // Istruzioni aggiuntive
+  
+  // Metro stations (for Moscow/SPB)
+  nearestMetroStation: text("nearest_metro_station"),
+  metroStationColor: text("metro_station_color"), // Colore linea metro
+  
+  // Dimensions limits (for packages)
+  dimensionsMin: jsonb("dimensions_min").$type<{ width: number; height: number; depth: number }>(),
+  dimensionsMax: jsonb("dimensions_max").$type<{ width: number; height: number; depth: number }>(),
+  
+  // Images
+  images: text("images").array(), // Array of image URLs
+  
+  // Active status
+  isActive: boolean("is_active").notNull().default(true),
+  
+  // Cache timestamps
+  lastSyncedAt: timestamp("last_synced_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertCdekPickupPointSchema = createInsertSchema(cdekPickupPoints).omit({ id: true, createdAt: true, lastSyncedAt: true });
+export type InsertCdekPickupPoint = z.infer<typeof insertCdekPickupPointSchema>;
+export type CdekPickupPoint = typeof cdekPickupPoints.$inferSelect;
+
+// CDEK Tariffs cache (optional - for quick tariff lookups)
+export const cdekTariffs = pgTable("cdek_tariffs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  tariffCode: integer("tariff_code").notNull().unique(), // Codice tariffa CDEK
+  tariffName: text("tariff_name").notNull(), // Nome tariffa
+  tariffDescription: text("tariff_description"), // Descrizione
+  
+  deliveryMode: text("delivery_mode").notNull(), // 'door' | 'office' | 'postamat'
+  deliveryType: text("delivery_type").notNull(), // 'parcel' | 'cargo' | 'document'
+  
+  // Time estimates
+  minDays: integer("min_days"), // Tempo minimo consegna
+  maxDays: integer("max_days"), // Tempo massimo consegna
+  
+  isActive: boolean("is_active").notNull().default(true),
+  lastSyncedAt: timestamp("last_synced_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertCdekTariffSchema = createInsertSchema(cdekTariffs).omit({ id: true, createdAt: true, lastSyncedAt: true });
+export type InsertCdekTariff = z.infer<typeof insertCdekTariffSchema>;
+export type CdekTariff = typeof cdekTariffs.$inferSelect;
 
 // Prodotti preferiti (favorites)
 export const favoriteProducts = pgTable("favorite_products", {
