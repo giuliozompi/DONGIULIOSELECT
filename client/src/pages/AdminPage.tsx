@@ -1750,6 +1750,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   // States for cancel confirmation dialogs
   const [cancelDostavkaOrder, setCancelDostavkaOrder] = useState<Order | null>(null);
   const [cancelGoOrder, setCancelGoOrder] = useState<Order | null>(null);
+  const [cancelCdekOrder, setCancelCdekOrder] = useState<Order | null>(null);
   
   // State for courier warning dialog (when order has pickup or don_giulio_courier delivery)
   const [courierWarningOrder, setCourierWarningOrder] = useState<Order | null>(null);
@@ -1857,6 +1858,70 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       toast({ 
         title: 'Ошибка', 
         description: error.message || 'Не удалось отменить доставку',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Create CDEK delivery order mutation
+  const createCdekOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest('POST', `/api/admin/cdek/orders`, { orderId });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({ 
+        title: '✅ Заказ СДЭК создан',
+        description: 'Заказ успешно передан в СДЭК'
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось создать заказ СДЭК',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Check CDEK order status mutation
+  const checkCdekStatusMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest('GET', `/api/admin/cdek/orders/${orderId}/status`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      toast({ title: '✅ Статус СДЭК обновлен' });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось проверить статус СДЭК',
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  // Cancel CDEK order mutation
+  const cancelCdekMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const res = await apiRequest('POST', `/api/admin/cdek/orders/${orderId}/cancel`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      setCancelCdekOrder(null);
+      toast({ 
+        title: '✅ Заказ СДЭК отменен',
+        description: 'Доставка СДЭК успешно отменена'
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка', 
+        description: error.message || 'Не удалось отменить заказ СДЭК',
         variant: 'destructive' 
       });
     },
@@ -2277,6 +2342,59 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                       </div>
                     )}
                     
+                    {/* CDEK delivery - show status if order created, or create button if method is cdek and order paid */}
+                    {order.cdekOrderUuid ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="flex items-center gap-1" data-testid={`badge-cdek-status-${order.id}`}>
+                          <Package className="w-3 h-3" />
+                          СДЭК: {order.cdekStatus || 'создан'}
+                          {order.cdekTrackingNumber && ` • ${order.cdekTrackingNumber}`}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => checkCdekStatusMutation.mutate(order.id)}
+                          disabled={checkCdekStatusMutation.isPending}
+                          data-testid={`button-refresh-cdek-${order.id}`}
+                        >
+                          {checkCdekStatusMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-4 h-4" />
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => setCancelCdekOrder(order)}
+                          data-testid={`button-cancel-cdek-${order.id}`}
+                        >
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Отменить доставку
+                        </Button>
+                      </div>
+                    ) : order.deliveryMethod === DELIVERY_METHODS.CDEK && order.status === 'ОПЛАЧЕН' && order.cdekPvzCode && (
+                      <Button 
+                        size="sm"
+                        variant="default"
+                        onClick={() => createCdekOrderMutation.mutate(order.id)}
+                        disabled={createCdekOrderMutation.isPending}
+                        data-testid={`button-create-cdek-${order.id}`}
+                      >
+                        {createCdekOrderMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Создание...
+                          </>
+                        ) : (
+                          <>
+                            <Package className="w-4 h-4 mr-2" />
+                            Отправить в СДЭК
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
                     {/* Button to view/acquire marking codes */}
                     {orderRequiresMarking(order) && (
                       <Button 
@@ -2396,6 +2514,44 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
               data-testid="button-cancel-go-confirm-yes"
             >
               {cancelGoMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Отмена...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 mr-2" />
+                  Да, отменить доставку
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel CDEK Confirmation Dialog */}
+      <AlertDialog open={!!cancelCdekOrder} onOpenChange={(open) => !open && setCancelCdekOrder(null)}>
+        <AlertDialogContent data-testid="dialog-cancel-cdek-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Отменить доставку СДЭК?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите отменить заказ на доставку через СДЭК для заказа {cancelCdekOrder?.id.slice(0, 8)}?
+              <br />
+              <br />
+              Это действие необратимо. Вам нужно будет создать новый заказ на доставку, если потребуется.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-cdek-confirm-no">
+              Отмена
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancelCdekOrder && cancelCdekMutation.mutate(cancelCdekOrder.id)}
+              disabled={cancelCdekMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-cancel-cdek-confirm-yes"
+            >
+              {cancelCdekMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Отмена...

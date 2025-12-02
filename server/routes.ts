@@ -5043,6 +5043,238 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========== CDEK DELIVERY ENDPOINTS ==========
+  
+  // POST /api/admin/cdek/orders - Crea ordine CDEK (ADMIN ONLY)
+  app.post("/api/admin/cdek/orders", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { cdekService } = await import("./services/cdek");
+      const { DELIVERY_METHODS, ORDER_STATUSES } = await import("@shared/schema");
+      
+      const { orderId } = req.body;
+      
+      if (!orderId) {
+        return res.status(400).json({ error: 'Order ID is required' });
+      }
+      
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      if (order.deliveryMethod !== DELIVERY_METHODS.CDEK) {
+        return res.status(400).json({ error: 'Order delivery method is not CDEK' });
+      }
+      
+      if (!order.cdekPvzCode) {
+        return res.status(400).json({ error: 'Order has no CDEK PVZ selected' });
+      }
+      
+      if (order.cdekOrderUuid) {
+        return res.status(400).json({ error: 'CDEK order already created' });
+      }
+      
+      // Prepara dati per ordine CDEK
+      const cdekOrderData = {
+        number: order.id.slice(0, 24),
+        tariff_code: parseInt(order.cdekTariffCode || '136'),
+        comment: order.deliveryNotes || `Заказ ${order.id.slice(0, 8)}`,
+        shipment_point: process.env.CDEK_SHIPMENT_POINT || 'MSK100',
+        delivery_point: order.cdekPvzCode,
+        sender: {
+          name: process.env.CDEK_SENDER_NAME || 'Don Giulio Select',
+          phones: [{ number: process.env.CDEK_SENDER_PHONE || '+79999999999' }],
+        },
+        recipient: {
+          name: order.customerName,
+          phones: [{ number: order.customerPhone }],
+          email: order.customerEmail || undefined,
+        },
+        packages: [{
+          number: order.id.slice(0, 16),
+          weight: 1000,
+          length: 30,
+          width: 20,
+          height: 15,
+          comment: 'Продукты питания',
+          items: order.items.map(item => ({
+            name: item.productName.slice(0, 255),
+            ware_key: item.productId.slice(0, 16),
+            payment: { value: 0 },
+            cost: parseFloat(item.price),
+            weight: Math.round(item.unit === 'кг' ? item.quantity * 1000 : 200),
+            amount: Math.ceil(item.quantity),
+          })),
+        }],
+      };
+      
+      const result = await cdekService.createOrder(cdekOrderData);
+      
+      // Aggiorna ordine con dati CDEK
+      await storage.updateOrder(orderId, {
+        cdekOrderUuid: result.entity?.uuid || null,
+        cdekStatus: 'CREATED',
+        status: ORDER_STATUSES.COURIER_CALLED,
+        courierService: 'cdek',
+      });
+      
+      // Log dell'azione
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId: req.userId!,
+        changeType: 'cdek_order_created',
+        changeData: {
+          cdekOrderUuid: result.entity?.uuid,
+          pvzCode: order.cdekPvzCode,
+          tariffCode: order.cdekTariffCode,
+        },
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error creating CDEK order:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // GET /api/admin/cdek/orders/:id/status - Verifica status ordine CDEK (ADMIN ONLY)
+  app.get("/api/admin/cdek/orders/:id/status", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { cdekService } = await import("./services/cdek");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      if (!order.cdekOrderUuid) {
+        return res.status(400).json({ error: 'No CDEK order associated with this order' });
+      }
+      
+      const status = await cdekService.getOrderInfo(order.cdekOrderUuid);
+      
+      // Estrai tracking number e status dall'ordine CDEK
+      const cdekStatus = status?.entity?.statuses?.[0]?.code || order.cdekStatus;
+      const trackingNumber = status?.entity?.cdek_number || order.cdekTrackingNumber;
+      
+      // Aggiorna ordine con status aggiornato
+      await storage.updateOrder(orderId, {
+        cdekStatus,
+        cdekTrackingNumber: trackingNumber,
+      });
+      
+      res.json({ 
+        status: cdekStatus, 
+        trackingNumber,
+        rawStatus: status 
+      });
+    } catch (error) {
+      console.error('Error fetching CDEK order status:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // POST /api/admin/cdek/orders/:id/cancel - Cancella ordine CDEK (ADMIN ONLY)
+  app.post("/api/admin/cdek/orders/:id/cancel", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { cdekService } = await import("./services/cdek");
+      const { ORDER_STATUSES } = await import("@shared/schema");
+      
+      const orderId = req.params.id;
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      if (!order.cdekOrderUuid) {
+        return res.status(400).json({ error: 'No CDEK order associated with this order' });
+      }
+      
+      const result = await cdekService.deleteOrder(order.cdekOrderUuid);
+      
+      // Riporta l'ordine allo stato PAID e rimuove dati CDEK
+      await storage.updateOrder(orderId, {
+        status: ORDER_STATUSES.PAID,
+        cdekOrderUuid: null,
+        cdekStatus: null,
+        cdekTrackingNumber: null,
+        courierService: null,
+      });
+      
+      // Log dell'azione
+      await storage.createOrderChangeLog({
+        orderId,
+        adminUserId: req.userId!,
+        changeType: 'cdek_order_cancelled',
+        changeData: {
+          oldOrderStatus: order.status,
+          newOrderStatus: ORDER_STATUSES.PAID,
+          oldCdekStatus: order.cdekStatus,
+          cdekOrderUuid: order.cdekOrderUuid,
+        },
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error cancelling CDEK order:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // GET /api/admin/cdek/pvz - Lista PVZ CDEK per città (ADMIN ONLY)
+  app.get("/api/admin/cdek/pvz", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { cdekService } = await import("./services/cdek");
+      
+      const cityCode = parseInt(req.query.city_code as string);
+      
+      if (!cityCode || isNaN(cityCode)) {
+        return res.status(400).json({ error: 'Valid city_code is required' });
+      }
+      
+      const pvzList = await cdekService.getPickupPoints(cityCode);
+      
+      res.json(pvzList);
+    } catch (error) {
+      console.error('Error fetching CDEK PVZ list:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
+  // GET /api/admin/cdek/calculate - Calcola tariffa CDEK (ADMIN ONLY)
+  app.get("/api/admin/cdek/calculate", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const { cdekService } = await import("./services/cdek");
+      
+      const toCityCode = parseInt(req.query.to_city_code as string);
+      const weight = parseInt(req.query.weight as string) || 1000;
+      
+      if (!toCityCode || isNaN(toCityCode)) {
+        return res.status(400).json({ error: 'Valid to_city_code is required' });
+      }
+      
+      const tariffs = await cdekService.calculateTariff({
+        from_location: { code: parseInt(process.env.CDEK_FROM_CITY_CODE || '44') },
+        to_location: { code: toCityCode },
+        packages: [{
+          weight,
+          length: 30,
+          width: 20,
+          height: 15,
+        }],
+      });
+      
+      res.json(tariffs);
+    } catch (error) {
+      console.error('Error calculating CDEK tariff:', error);
+      res.status(500).json({ error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   // POST /api/webhooks/yandex-go - Webhook per notifiche Yandex Go (PUBBLICO - verifica tramite firma)
   // IMPORTANTE: Express deve catturare raw body PRIMA del parsing JSON per verifica HMAC
   app.post("/api/webhooks/yandex-go", express.raw({ type: 'application/json' }), async (req, res) => {
