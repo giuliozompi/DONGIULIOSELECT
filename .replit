@@ -107,4 +107,3 @@ defaultBucketID = "replit-objstore-e22f613f-faf0-45be-9139-831883b92596"
 [userenv]
 
 [userenv.shared]
-CDEK_TEST_MODE = "true"
