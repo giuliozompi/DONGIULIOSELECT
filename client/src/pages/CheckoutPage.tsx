@@ -152,8 +152,8 @@ export default function CheckoutPage() {
       customerEmail: '',
       deliveryAddress: '',
       deliveryNotes: '',
-      deliveryMethod: DELIVERY_METHODS.YANDEX_GO,
-      paymentMethod: PAYMENT_METHODS.YOOKASSA,
+      deliveryMethod: undefined as unknown as string,
+      paymentMethod: undefined as unknown as string,
       saveAddress: false,
       addressLabel: '',
       cdekPvzCode: '',
@@ -833,7 +833,7 @@ export default function CheckoutPage() {
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value || ''}
                         className="space-y-2"
                       >
                         {Object.entries(DELIVERY_METHOD_LABELS).map(([value, label]) => (
@@ -924,7 +924,7 @@ export default function CheckoutPage() {
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
-                        defaultValue={field.value}
+                        value={field.value || ''}
                         className="space-y-2"
                       >
                         {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
