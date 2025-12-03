@@ -544,6 +544,74 @@ class CdekService {
   }
   
   /**
+   * Calculate distance between two coordinates using Haversine formula
+   */
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+  
+  /**
+   * Find nearest PVZ to given coordinates
+   * @param latitude User's latitude
+   * @param longitude User's longitude
+   * @param cityCode Optional city code to limit search
+   * @param limit Maximum number of results (default 5)
+   */
+  async findNearestPvz(params: {
+    latitude: number;
+    longitude: number;
+    cityCode?: number;
+    postalCode?: string;
+    limit?: number;
+  }): Promise<Array<CdekPickupPointInfo & { distance: number }>> {
+    const { latitude, longitude, cityCode, postalCode, limit = 5 } = params;
+    
+    console.log(`[CDEK] Finding nearest PVZ to coordinates: ${latitude}, ${longitude}`);
+    
+    // Get pickup points for the city or by postal code
+    const searchParams: any = { type: 'PVZ' };
+    if (cityCode) {
+      searchParams.city_code = cityCode;
+    } else if (postalCode) {
+      searchParams.postal_code = postalCode;
+    }
+    
+    const allPvz = await this.getPickupPoints(searchParams);
+    
+    if (allPvz.length === 0) {
+      console.log(`[CDEK] No PVZ found for search params:`, searchParams);
+      return [];
+    }
+    
+    // Calculate distance for each PVZ and sort by distance
+    const pvzWithDistance = allPvz.map(pvz => ({
+      ...pvz,
+      distance: this.calculateDistance(
+        latitude, 
+        longitude, 
+        pvz.location.latitude, 
+        pvz.location.longitude
+      )
+    }));
+    
+    // Sort by distance and return top N
+    pvzWithDistance.sort((a, b) => a.distance - b.distance);
+    
+    const nearest = pvzWithDistance.slice(0, limit);
+    
+    console.log(`[CDEK] Found ${nearest.length} nearest PVZ, closest at ${nearest[0]?.distance.toFixed(2)} km`);
+    
+    return nearest;
+  }
+  
+  /**
    * Create a new delivery order
    */
   async createOrder(request: CdekOrderRequest): Promise<CdekOrderResponse> {

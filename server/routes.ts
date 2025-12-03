@@ -5587,6 +5587,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Ошибка поиска городов', message: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
+  
+  // GET /api/cdek/pvz/nearest - Find nearest CDEK pickup points to coordinates (PUBLIC for checkout)
+  app.get("/api/cdek/pvz/nearest", async (req, res) => {
+    try {
+      const { cdekService } = await import("./services/cdek");
+      
+      const { latitude, longitude, city_code, postal_code, limit } = req.query;
+      
+      // Validate coordinates
+      const lat = parseFloat(latitude as string);
+      const lon = parseFloat(longitude as string);
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        return res.status(400).json({ error: 'Укажите корректные координаты (latitude, longitude)' });
+      }
+      
+      // At least city_code or postal_code is required for CDEK API
+      if (!city_code && !postal_code) {
+        return res.status(400).json({ error: 'Укажите city_code или postal_code для поиска ПВЗ' });
+      }
+      
+      const nearestPvz = await cdekService.findNearestPvz({
+        latitude: lat,
+        longitude: lon,
+        cityCode: city_code ? parseInt(city_code as string) : undefined,
+        postalCode: postal_code as string | undefined,
+        limit: limit ? parseInt(limit as string) : 3,
+      });
+      
+      res.json(nearestPvz);
+    } catch (error) {
+      console.error('Error finding nearest CDEK PVZ:', error);
+      res.status(500).json({ error: 'Ошибка поиска ближайших ПВЗ', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
 
   // POST /api/cdek/calculate - Calculate CDEK delivery price (PUBLIC for checkout)
   app.post("/api/cdek/calculate", async (req, res) => {
