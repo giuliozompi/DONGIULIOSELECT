@@ -4,8 +4,12 @@ interface DaDataSuggestion {
   data: {
     postal_code: string | null;
     country: string;
-    region: string;
+    region: string | null;
+    region_type: string | null;
     city: string | null;
+    city_type: string | null;
+    settlement: string | null;
+    settlement_type: string | null;
     street: string | null;
     house: string | null;
     flat: string | null;
@@ -65,17 +69,24 @@ export class DaDataService {
 
       const data: DaDataResponse = await response.json();
       
-      return data.suggestions.map(s => ({
-        fullAddress: s.value,
-        city: s.data.city,
-        street: s.data.street,
-        building: s.data.house,
-        flat: s.data.flat,
-        postalCode: s.data.postal_code,
-        fiasId: s.data.fias_id,
-        geoLat: s.data.geo_lat,
-        geoLon: s.data.geo_lon,
-      }));
+      return data.suggestions.map(s => {
+        // For federal cities (Moscow, St. Petersburg, Sevastopol), the city might be in region
+        // DaData returns region_type = "г" for federal cities
+        const isFederalCity = s.data.region_type === 'г';
+        const city = s.data.city || s.data.settlement || (isFederalCity ? s.data.region : null);
+        
+        return {
+          fullAddress: s.value,
+          city,
+          street: s.data.street,
+          building: s.data.house,
+          flat: s.data.flat,
+          postalCode: s.data.postal_code,
+          fiasId: s.data.fias_id,
+          geoLat: s.data.geo_lat,
+          geoLon: s.data.geo_lon,
+        };
+      });
     } catch (error) {
       console.error('DaData API error:', error);
       return [];
