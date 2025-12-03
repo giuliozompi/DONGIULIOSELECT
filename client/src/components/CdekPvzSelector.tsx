@@ -64,12 +64,24 @@ interface CdekPvzSelectorProps {
   totalWeight?: number;
 }
 
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 }: CdekPvzSelectorProps) {
   const [citySearch, setCitySearch] = useState('');
   const [selectedCity, setSelectedCity] = useState<CdekCity | null>(null);
   const [selectedPvz, setSelectedPvz] = useState<CdekPickupPoint | null>(null);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [expandedPvz, setExpandedPvz] = useState<string | null>(null);
+  const [showAllPvz, setShowAllPvz] = useState(false);
 
   const { data: cities = [], isLoading: isLoadingCities } = useQuery<CdekCity[]>({
     queryKey: ['/api/cdek/cities', citySearch],
@@ -124,8 +136,21 @@ export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 
     setCitySearch(city.city);
     setShowCityDropdown(false);
     setSelectedPvz(null);
+    setShowAllPvz(false);
     onSelect(null, null, city.code);
   };
+  
+  const sortedPickupPoints = selectedCity ? pickupPoints.map(pvz => ({
+    ...pvz,
+    distance: calculateDistance(
+      selectedCity.latitude, 
+      selectedCity.longitude,
+      pvz.location.latitude, 
+      pvz.location.longitude
+    )
+  })).sort((a, b) => a.distance - b.distance) : [];
+  
+  const displayedPvz = showAllPvz ? sortedPickupPoints : sortedPickupPoints.slice(0, 3);
 
   const handlePvzSelect = (pvz: CdekPickupPoint) => {
     setSelectedPvz(pvz);
@@ -219,10 +244,15 @@ export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 
         </div>
       )}
 
-      {selectedCity && pickupPoints.length > 0 && (
+      {selectedCity && sortedPickupPoints.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Пункты выдачи СДЭК ({pickupPoints.length})</span>
+            <span className="text-sm font-medium">
+              {showAllPvz 
+                ? `Все пункты выдачи (${sortedPickupPoints.length})`
+                : `Ближайшие пункты выдачи (${displayedPvz.length} из ${sortedPickupPoints.length})`
+              }
+            </span>
             {selectedPvz && (
               <Badge variant="default" className="flex items-center gap-1">
                 <Check className="w-3 h-3" />
@@ -231,9 +261,9 @@ export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 
             )}
           </div>
           
-          <ScrollArea className="h-[300px] rounded-md border">
+          <ScrollArea className={cn("rounded-md border", showAllPvz ? "h-[300px]" : "h-auto max-h-[300px]")}>
             <div className="p-2 space-y-2">
-              {pickupPoints.map((pvz) => {
+              {displayedPvz.map((pvz) => {
                 const isSelected = selectedPvz?.code === pvz.code;
                 const isExpanded = expandedPvz === pvz.code;
                 
@@ -250,11 +280,17 @@ export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm truncate">{pvz.name}</span>
                           {pvz.type === 'POSTAMAT' && (
                             <Badge variant="outline" className="text-xs">Постамат</Badge>
                           )}
+                          <Badge variant="secondary" className="text-xs">
+                            {pvz.distance < 1 
+                              ? `${Math.round(pvz.distance * 1000)} м` 
+                              : `${pvz.distance.toFixed(1)} км`
+                            }
+                          </Badge>
                           {isSelected && (
                             <Check className="w-4 h-4 text-primary flex-shrink-0" />
                           )}
@@ -335,6 +371,32 @@ export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 
               })}
             </div>
           </ScrollArea>
+          
+          {!showAllPvz && sortedPickupPoints.length > 3 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full mt-2"
+              onClick={() => setShowAllPvz(true)}
+              data-testid="button-show-all-pvz"
+            >
+              Показать все пункты выдачи ({sortedPickupPoints.length})
+            </Button>
+          )}
+          
+          {showAllPvz && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full mt-2"
+              onClick={() => setShowAllPvz(false)}
+              data-testid="button-show-nearest-pvz"
+            >
+              Показать только ближайшие
+            </Button>
+          )}
         </div>
       )}
 
