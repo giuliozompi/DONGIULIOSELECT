@@ -2464,7 +2464,7 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                           Отменить доставку
                         </Button>
                       </div>
-                    ) : order.deliveryMethod === DELIVERY_METHODS.CDEK && order.status === 'ОПЛАЧЕН' && order.cdekPvzCode && (
+                    ) : order.deliveryMethod === DELIVERY_METHODS.CDEK && order.status === 'ОПЛАЧЕН' && order.cdekPvzCode ? (
                       <Button 
                         size="sm"
                         variant="default"
@@ -2484,7 +2484,18 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                           </>
                         )}
                       </Button>
-                    )}
+                    ) : order.deliveryMethod === DELIVERY_METHODS.CDEK && order.status === 'ОПЛАЧЕН' && !order.cdekPvzCode ? (
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingOrder(order)}
+                        className="border-amber-500 text-amber-600"
+                        data-testid={`button-select-cdek-pvz-${order.id}`}
+                      >
+                        <MapPin className="w-4 h-4 mr-2" />
+                        Выберите ПВЗ СДЭК
+                      </Button>
+                    ) : null}
                     
                     {/* Button to view/acquire marking codes */}
                     {orderRequiresMarking(order) && (
