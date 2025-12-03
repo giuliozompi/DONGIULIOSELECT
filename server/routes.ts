@@ -741,6 +741,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         saveAddress: z.boolean().optional(),
         addressLabel: z.string().optional().or(z.literal('')).nullable().transform(val => val || undefined),
         abandonedCartCode: z.string().optional().or(z.literal('')).nullable().transform(val => val || undefined),
+        // CDEK fields
+        cdekPvzCode: z.string().optional().or(z.literal('')).nullable().transform(val => val || undefined),
+        cdekPvzAddress: z.string().optional().or(z.literal('')).nullable().transform(val => val || undefined),
+        cdekTariffCode: z.coerce.number().optional().nullable(),
+        cdekTariffName: z.string().optional().or(z.literal('')).nullable().transform(val => val || undefined),
+        cdekPrice: z.string().optional().or(z.literal('')).nullable().transform(val => val || undefined),
+        cdekCityCode: z.coerce.number().optional().nullable(),
+        cdekDeliveryMode: z.enum(['office', 'door']).optional().nullable(),
       });
       
       const customerData = customerDataSchema.parse(req.body);
@@ -815,6 +823,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deliveryNotes: customerData.deliveryNotes,
           deliveryMethod: customerData.deliveryMethod,
           paymentMethod: customerData.paymentMethod,
+          // CDEK data
+          cdekPvzCode: customerData.cdekPvzCode,
+          cdekPvzAddress: customerData.cdekPvzAddress,
+          cdekTariffCode: customerData.cdekTariffCode,
+          cdekTariffName: customerData.cdekTariffName,
+          cdekPrice: customerData.cdekPrice,
+          cdekCityCode: customerData.cdekCityCode,
+          cdekDeliveryMode: customerData.cdekDeliveryMode,
         },
       });
       

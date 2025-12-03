@@ -268,6 +268,7 @@ export const orders = pgTable("orders", {
   cdekDeliveryMode: text("cdek_delivery_mode"), // 'door' | 'office' | 'postamat'
   cdekPvzCode: text("cdek_pvz_code"), // Codice punto ritiro se scelto
   cdekPvzAddress: text("cdek_pvz_address"), // Indirizzo punto ritiro
+  cdekCityCode: integer("cdek_city_code"), // Codice città CDEK per creazione ordine
   cdekStatus: text("cdek_status"), // Status dell'ordine CDEK
   cdekStatusDate: timestamp("cdek_status_date"), // Data ultimo aggiornamento status
   cdekEstimatedDelivery: timestamp("cdek_estimated_delivery"), // Data consegna stimata

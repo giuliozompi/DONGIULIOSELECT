@@ -295,13 +295,14 @@ export default function CheckoutPage() {
       
       // Add CDEK data if CDEK delivery is selected
       if (data.deliveryMethod === DELIVERY_METHODS.CDEK) {
-        orderData.cdekPvzCode = cdekPvz?.code || null;
-        orderData.cdekPvzAddress = cdekPvz?.location?.address_full || cdekPvz?.location?.address || null;
+        // Use form values (they are set when PVZ is selected)
+        orderData.cdekPvzCode = data.cdekPvzCode || null;
+        orderData.cdekPvzAddress = data.cdekPvzAddress || null;
         orderData.cdekTariffCode = cdekTariff?.tariff_code || null;
         orderData.cdekTariffName = cdekTariff?.tariff_name || null;
         orderData.cdekPrice = cdekTariff?.delivery_sum?.toString() || null;
         orderData.cdekCityCode = cdekCityCode;
-        orderData.cdekDeliveryMode = cdekPvz ? 'office' : 'door';
+        orderData.cdekDeliveryMode = data.cdekPvzCode ? 'office' : 'door';
       }
       
       const res = await apiRequest('POST', '/api/orders', orderData);
@@ -332,8 +333,8 @@ export default function CheckoutPage() {
   useTelegramBackButton(() => setLocation('/cart'), true);
 
   const onSubmit = (data: CheckoutFormData) => {
-    // Validate CDEK PVZ selection
-    if (data.deliveryMethod === DELIVERY_METHODS.CDEK && !cdekPvz) {
+    // Validate CDEK PVZ selection - use form value instead of state
+    if (data.deliveryMethod === DELIVERY_METHODS.CDEK && !data.cdekPvzCode) {
       toast({
         description: 'Выберите пункт выдачи СДЭК для оформления заказа',
         variant: 'destructive',
