@@ -5133,10 +5133,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return sum + (itemWeight * (item.unit === 'кг' ? 1 : item.quantity));
       }, 0);
       
+      // For door pickup (from_location), we must use tariff 138 (door-to-warehouse)
+      // Tariff 136/797 requires shipment_point (CDEK warehouse), not from_location
+      const doorToWarehouseTariff = 138; // Дверь-склад (для ИМ)
+      
       // Prepara dati per ordine CDEK - using from_location for door pickup
       const cdekOrderData = {
         number: order.id.slice(0, 24),
-        tariff_code: order.cdekTariffCode ? parseInt(String(order.cdekTariffCode)) : 136, // 136 = warehouse-to-warehouse for ecommerce
+        tariff_code: doorToWarehouseTariff, // Must be 138 for door pickup to PVZ delivery
         comment: order.deliveryNotes || `Заказ ${order.id.slice(0, 8)} от Don Giulio Select`,
         // Use from_location for door pickup from store address
         from_location: {
