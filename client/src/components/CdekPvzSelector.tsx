@@ -96,7 +96,10 @@ export function CdekPvzSelector({
     ? { lat: parseFloat(customerLatitude), lon: parseFloat(customerLongitude) }
     : null;
 
-  const hasCustomerAddress = !!(customerAddress && customerCity && customerCoords);
+  // Allow CDEK selector to work if we have either city or coordinates
+  // Coordinates are optional - if present, we sort by distance to customer
+  // If only city is available, we sort by distance to city center
+  const hasCustomerAddress = !!(customerCity || customerCoords);
 
   const { data: citiesForAddress = [], isLoading: isLoadingCities } = useQuery<CdekCity[]>({
     queryKey: ['/api/cdek/cities', customerCity],
@@ -202,10 +205,10 @@ export function CdekPvzSelector({
           <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-              Сначала введите ваш адрес
+              Выберите адрес из списка подсказок
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              Заполните поле "Адрес доставки" выше, чтобы мы показали ближайшие пункты выдачи СДЭК
+              Введите адрес в поле выше и выберите его из появившегося списка, чтобы мы определили ваш город и показали ближайшие пункты выдачи
             </p>
           </div>
         </div>
