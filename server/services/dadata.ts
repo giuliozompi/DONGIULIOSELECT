@@ -38,9 +38,45 @@ interface AddressSuggestion {
 export class DaDataService {
   private apiToken: string;
   private apiUrl = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address';
+  private geolocateUrl = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/geolocate/address';
 
   constructor(apiToken: string) {
     this.apiToken = apiToken;
+  }
+
+  async getCityFromCoordinates(lat: number, lon: number): Promise<string | null> {
+    try {
+      const response = await fetch(this.geolocateUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Token ${this.apiToken}`,
+        },
+        body: JSON.stringify({ 
+          lat,
+          lon,
+          count: 1,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`DaData Geolocate API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.suggestions && data.suggestions.length > 0) {
+        const suggestion = data.suggestions[0];
+        const isFederalCity = suggestion.data?.region_type === 'г';
+        return suggestion.data?.city || suggestion.data?.settlement || (isFederalCity ? suggestion.data?.region : null);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('DaData Geolocate API error:', error);
+      return null;
+    }
   }
 
   async suggestAddress(query: string, count: number = 5): Promise<AddressSuggestion[]> {

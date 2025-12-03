@@ -214,6 +214,7 @@ export default function CheckoutPage() {
           dadataFiasId: defaultAddress.dadataFiasId || undefined,
           deliveryLatitude: defaultAddress.latitude || undefined,
           deliveryLongitude: defaultAddress.longitude || undefined,
+          deliveryCity: defaultAddress.city || undefined,
         });
       }
     }

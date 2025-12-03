@@ -6903,6 +6903,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/address/reverse - Get city from coordinates via DaData
+  app.get("/api/address/reverse", async (req, res) => {
+    try {
+      const lat = parseFloat(req.query.lat as string);
+      const lon = parseFloat(req.query.lon as string);
+      
+      if (isNaN(lat) || isNaN(lon)) {
+        return res.json({ city: null });
+      }
+
+      const dadataService = getDaDataService();
+      
+      if (!dadataService) {
+        return res.json({ city: null });
+      }
+
+      const city = await dadataService.getCityFromCoordinates(lat, lon);
+      res.json({ city });
+    } catch (error) {
+      console.error('Error reverse geocoding:', error);
+      res.json({ city: null });
+    }
+  });
+
   // ==================== OBJECT STORAGE ====================
   // Referenced from blueprint: javascript_object_storage
   

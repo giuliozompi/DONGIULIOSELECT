@@ -101,22 +101,38 @@ export function CdekPvzSelector({
   // If only city is available, we sort by distance to city center
   const hasCustomerAddress = !!(customerCity || customerCoords);
 
-  const { data: citiesForAddress = [], isLoading: isLoadingCities } = useQuery<CdekCity[]>({
-    queryKey: ['/api/cdek/cities', customerCity],
+  // If we have coordinates but no city, try to get city from coordinates
+  const { data: cityFromCoords } = useQuery<{ city?: string }>({
+    queryKey: ['/api/address/reverse', customerLatitude, customerLongitude],
     queryFn: async () => {
-      if (!customerCity) return [];
-      const response = await fetch(`/api/cdek/cities?city=${encodeURIComponent(customerCity)}&size=5`);
+      if (!customerCoords) return {};
+      const response = await fetch(`/api/address/reverse?lat=${customerCoords.lat}&lon=${customerCoords.lon}`);
+      if (!response.ok) return {};
+      return response.json();
+    },
+    enabled: !!customerCoords && !customerCity,
+    staleTime: 300000,
+  });
+
+  // Use city from props, or fallback to city from coordinates
+  const effectiveCity = customerCity || cityFromCoords?.city;
+
+  const { data: citiesForAddress = [], isLoading: isLoadingCities } = useQuery<CdekCity[]>({
+    queryKey: ['/api/cdek/cities', effectiveCity],
+    queryFn: async () => {
+      if (!effectiveCity) return [];
+      const response = await fetch(`/api/cdek/cities?city=${encodeURIComponent(effectiveCity)}&size=5`);
       if (!response.ok) throw new Error('Failed to fetch cities');
       return response.json();
     },
-    enabled: !!customerCity,
+    enabled: !!effectiveCity,
     staleTime: 60000,
   });
 
   useEffect(() => {
-    if (citiesForAddress.length > 0 && customerCity) {
+    if (citiesForAddress.length > 0 && effectiveCity) {
       const exactMatch = citiesForAddress.find(c => 
-        c.city.toLowerCase() === customerCity.toLowerCase()
+        c.city.toLowerCase() === effectiveCity.toLowerCase()
       );
       const cityToSelect = exactMatch || citiesForAddress[0];
       if (!selectedCity || selectedCity.code !== cityToSelect.code) {
@@ -126,7 +142,7 @@ export function CdekPvzSelector({
         onSelect(null, null, cityToSelect.code);
       }
     }
-  }, [citiesForAddress, customerCity]);
+  }, [citiesForAddress, effectiveCity]);
 
   const { data: pickupPoints = [], isLoading: isLoadingPvz } = useQuery<CdekPickupPoint[]>({
     queryKey: ['/api/cdek/pvz', selectedCity?.code],
