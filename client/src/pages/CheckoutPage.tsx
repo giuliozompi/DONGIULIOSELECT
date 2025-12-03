@@ -53,13 +53,10 @@ const checkoutFormSchema = z.object({
   cdekPvzCode: z.string().optional(),
   cdekPvzAddress: z.string().optional(),
 }).refine((data) => {
-  // Require deliveryAddress for non-CDEK delivery methods
-  if (data.deliveryMethod !== DELIVERY_METHODS.CDEK) {
-    return data.deliveryAddress && data.deliveryAddress.length >= 10;
-  }
-  return true;
+  // Require deliveryAddress for all delivery methods (for CDEK it's used to find nearest PVZ)
+  return data.deliveryAddress && data.deliveryAddress.length >= 10;
 }, {
-  message: 'Введите полный адрес доставки',
+  message: 'Введите полный адрес',
   path: ['deliveryAddress'],
 }).refine((data) => {
   // Require PVZ selection for CDEK delivery
@@ -87,6 +84,7 @@ interface StructuredAddress {
   dadataFiasId?: string;
   deliveryLatitude?: string;
   deliveryLongitude?: string;
+  deliveryCity?: string;
 }
 
 export default function CheckoutPage() {
@@ -355,6 +353,7 @@ export default function CheckoutPage() {
       dadataFiasId: address.dadataFiasId || undefined,
       deliveryLatitude: address.latitude || undefined,
       deliveryLongitude: address.longitude || undefined,
+      deliveryCity: address.city || undefined,
     });
   };
 
@@ -687,42 +686,46 @@ export default function CheckoutPage() {
                 )}
               />
 
-              {/* Address field - hidden when CDEK is selected (address comes from PVZ selector) */}
-              {form.watch('deliveryMethod') !== DELIVERY_METHODS.CDEK && (
-                <FormField
-                  control={form.control}
-                  name="deliveryAddress"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Адрес доставки *</FormLabel>
-                      <FormControl>
-                        <AddressAutocomplete
-                          value={field.value || ''}
-                          onChange={(value, suggestion) => {
-                            field.onChange(value);
-                            if (suggestion) {
-                              setStructuredAddress({
-                                deliveryPostalCode: suggestion.postalCode || undefined,
-                                dadataFiasId: suggestion.fiasId,
-                                deliveryLatitude: suggestion.geoLat || undefined,
-                                deliveryLongitude: suggestion.geoLon || undefined,
-                              });
-                            } else {
-                              setStructuredAddress({});
-                            }
-                          }}
-                          placeholder="Начните вводить адрес: город, улица, дом..."
-                          testId="input-delivery-address"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+              {/* Address field - always visible, used for all delivery methods */}
+              <FormField
+                control={form.control}
+                name="deliveryAddress"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {form.watch('deliveryMethod') === DELIVERY_METHODS.CDEK 
+                        ? 'Ваш адрес (для поиска ближайших ПВЗ) *'
+                        : 'Адрес доставки *'
+                      }
+                    </FormLabel>
+                    <FormControl>
+                      <AddressAutocomplete
+                        value={field.value || ''}
+                        onChange={(value, suggestion) => {
+                          field.onChange(value);
+                          if (suggestion) {
+                            setStructuredAddress({
+                              deliveryPostalCode: suggestion.postalCode || undefined,
+                              dadataFiasId: suggestion.fiasId,
+                              deliveryLatitude: suggestion.geoLat || undefined,
+                              deliveryLongitude: suggestion.geoLon || undefined,
+                              deliveryCity: suggestion.city || undefined,
+                            });
+                          } else {
+                            setStructuredAddress({});
+                          }
+                        }}
+                        placeholder="Начните вводить адрес: город, улица, дом..."
+                        testId="input-delivery-address"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-              {/* Indirizzi salvati - hidden when CDEK is selected */}
-              {form.watch('deliveryMethod') !== DELIVERY_METHODS.CDEK && !isLoadingAddresses && savedAddresses.length > 0 && (
+              {/* Indirizzi salvati */}
+              {!isLoadingAddresses && savedAddresses.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-medium flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
@@ -771,10 +774,9 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              {/* Save address checkbox - hidden when CDEK is selected */}
-              {form.watch('deliveryMethod') !== DELIVERY_METHODS.CDEK && (
-                <FormField
-                  control={form.control}
+              {/* Save address checkbox */}
+              <FormField
+                control={form.control}
                   name="saveAddress"
                   render={({ field }) => (
                     <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
@@ -796,10 +798,9 @@ export default function CheckoutPage() {
                     </FormItem>
                   )}
                 />
-              )}
 
-              {/* Address label input (shown when saveAddress is checked and not CDEK) */}
-              {form.watch('deliveryMethod') !== DELIVERY_METHODS.CDEK && saveAddress && (
+              {/* Address label input (shown when saveAddress is checked) */}
+              {saveAddress && (
                 <FormField
                   control={form.control}
                   name="addressLabel"
@@ -874,19 +875,19 @@ export default function CheckoutPage() {
                       setCdekTariff(tariff);
                       setCdekCityCode(cityCode);
                       if (pvz) {
-                        // Set CDEK-specific form fields
                         const pvzAddress = pvz.location.address_full || pvz.location.address;
                         form.setValue('cdekPvzCode', pvz.code, { shouldValidate: true });
                         form.setValue('cdekPvzAddress', pvzAddress, { shouldValidate: true });
-                        form.setValue('deliveryAddress', pvzAddress, { shouldValidate: true });
                       } else {
-                        // Clear when PVZ is deselected (e.g., city changed)
                         form.setValue('cdekPvzCode', '', { shouldValidate: true });
                         form.setValue('cdekPvzAddress', '', { shouldValidate: true });
-                        form.setValue('deliveryAddress', '', { shouldValidate: false });
                       }
                     }}
                     selectedPvzCode={form.watch('cdekPvzCode') || cdekPvz?.code}
+                    customerAddress={form.watch('deliveryAddress')}
+                    customerLatitude={structuredAddress.deliveryLatitude}
+                    customerLongitude={structuredAddress.deliveryLongitude}
+                    customerCity={structuredAddress.deliveryCity}
                   />
                   {cdekTariff && (
                     <div className="mt-4 p-3 bg-muted rounded-md flex items-center justify-between">

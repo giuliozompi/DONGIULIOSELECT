@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, MapPin, Clock, Phone, ChevronDown, ChevronUp, Package, CreditCard, Banknote, Check, Navigation } from 'lucide-react';
+import { Loader2, MapPin, Clock, Phone, ChevronDown, ChevronUp, Package, CreditCard, Banknote, Check, Navigation, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CdekCity {
@@ -58,22 +57,14 @@ interface CdekTariff {
   period_max: number;
 }
 
-interface AddressSuggestion {
-  fullAddress: string;
-  city: string | null;
-  street: string | null;
-  building: string | null;
-  flat: string | null;
-  postalCode: string | null;
-  fiasId: string;
-  geoLat: string | null;
-  geoLon: string | null;
-}
-
 interface CdekPvzSelectorProps {
   onSelect: (pvz: CdekPickupPoint | null, tariff: CdekTariff | null, cityCode: number | null) => void;
   selectedPvzCode?: string | null;
   totalWeight?: number;
+  customerAddress?: string;
+  customerLatitude?: string;
+  customerLongitude?: string;
+  customerCity?: string;
 }
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -87,76 +78,52 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 }: CdekPvzSelectorProps) {
-  const [addressSearch, setAddressSearch] = useState('');
-  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
-  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
-  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
-  const [selectedAddress, setSelectedAddress] = useState<AddressSuggestion | null>(null);
-  const [customerCoords, setCustomerCoords] = useState<{ lat: number; lon: number } | null>(null);
-  
+export function CdekPvzSelector({ 
+  onSelect, 
+  selectedPvzCode, 
+  totalWeight = 1000,
+  customerAddress,
+  customerLatitude,
+  customerLongitude,
+  customerCity
+}: CdekPvzSelectorProps) {
   const [selectedCity, setSelectedCity] = useState<CdekCity | null>(null);
   const [selectedPvz, setSelectedPvz] = useState<CdekPickupPoint | null>(null);
   const [expandedPvz, setExpandedPvz] = useState<string | null>(null);
   const [showAllPvz, setShowAllPvz] = useState(false);
+  
+  const customerCoords = (customerLatitude && customerLongitude) 
+    ? { lat: parseFloat(customerLatitude), lon: parseFloat(customerLongitude) }
+    : null;
 
-  const fetchAddressSuggestions = useCallback(async (query: string) => {
-    if (query.length < 3) {
-      setAddressSuggestions([]);
-      return;
-    }
+  const hasCustomerAddress = !!(customerAddress && customerCity && customerCoords);
 
-    setIsLoadingAddress(true);
-    try {
-      const response = await fetch(`/api/address/suggest?query=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      setAddressSuggestions(data.suggestions || []);
-      setShowAddressSuggestions(true);
-    } catch (error) {
-      console.error('Error fetching address suggestions:', error);
-      setAddressSuggestions([]);
-    } finally {
-      setIsLoadingAddress(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      if (addressSearch && !selectedAddress) {
-        fetchAddressSuggestions(addressSearch);
-      }
-    }, 300);
-    return () => clearTimeout(handler);
-  }, [addressSearch, fetchAddressSuggestions, selectedAddress]);
-
-  const { data: citiesForAddress = [] } = useQuery<CdekCity[]>({
-    queryKey: ['/api/cdek/cities', selectedAddress?.city],
+  const { data: citiesForAddress = [], isLoading: isLoadingCities } = useQuery<CdekCity[]>({
+    queryKey: ['/api/cdek/cities', customerCity],
     queryFn: async () => {
-      if (!selectedAddress?.city) return [];
-      const response = await fetch(`/api/cdek/cities?city=${encodeURIComponent(selectedAddress.city)}&size=5`);
+      if (!customerCity) return [];
+      const response = await fetch(`/api/cdek/cities?city=${encodeURIComponent(customerCity)}&size=5`);
       if (!response.ok) throw new Error('Failed to fetch cities');
       return response.json();
     },
-    enabled: !!selectedAddress?.city,
+    enabled: !!customerCity,
     staleTime: 60000,
   });
 
   useEffect(() => {
-    if (citiesForAddress.length > 0 && selectedAddress) {
+    if (citiesForAddress.length > 0 && customerCity) {
       const exactMatch = citiesForAddress.find(c => 
-        c.city.toLowerCase() === selectedAddress.city?.toLowerCase()
+        c.city.toLowerCase() === customerCity.toLowerCase()
       );
       const cityToSelect = exactMatch || citiesForAddress[0];
-      setSelectedCity(cityToSelect);
-      
-      if (selectedAddress.geoLat && selectedAddress.geoLon) {
-        setCustomerCoords({
-          lat: parseFloat(selectedAddress.geoLat),
-          lon: parseFloat(selectedAddress.geoLon)
-        });
+      if (!selectedCity || selectedCity.code !== cityToSelect.code) {
+        setSelectedCity(cityToSelect);
+        setSelectedPvz(null);
+        setShowAllPvz(false);
+        onSelect(null, null, cityToSelect.code);
       }
     }
-  }, [citiesForAddress, selectedAddress]);
+  }, [citiesForAddress, customerCity]);
 
   const { data: pickupPoints = [], isLoading: isLoadingPvz } = useQuery<CdekPickupPoint[]>({
     queryKey: ['/api/cdek/pvz', selectedCity?.code],
@@ -193,33 +160,6 @@ export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 
   const warehouseTariff = tariffs?.tariffs?.find(
     (t) => t.delivery_mode === 4 || t.delivery_mode === 6
   );
-
-  const handleAddressSelect = (suggestion: AddressSuggestion) => {
-    setSelectedAddress(suggestion);
-    setAddressSearch(suggestion.fullAddress);
-    setShowAddressSuggestions(false);
-    setAddressSuggestions([]);
-    setSelectedPvz(null);
-    setShowAllPvz(false);
-    onSelect(null, null, null);
-    
-    if (suggestion.geoLat && suggestion.geoLon) {
-      setCustomerCoords({
-        lat: parseFloat(suggestion.geoLat),
-        lon: parseFloat(suggestion.geoLon)
-      });
-    }
-  };
-
-  const handleClearAddress = () => {
-    setAddressSearch('');
-    setSelectedAddress(null);
-    setCustomerCoords(null);
-    setSelectedCity(null);
-    setSelectedPvz(null);
-    setShowAllPvz(false);
-    onSelect(null, null, null);
-  };
   
   const sortedPickupPoints = customerCoords ? pickupPoints.map(pvz => ({
     ...pvz,
@@ -255,58 +195,27 @@ export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 
     }
   }, [selectedPvzCode, pickupPoints]);
 
+  if (!hasCustomerAddress) {
+    return (
+      <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              Сначала введите ваш адрес
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              Заполните поле "Адрес доставки" выше, чтобы мы показали ближайшие пункты выдачи СДЭК
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <div className="relative">
-          <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={addressSearch}
-            onChange={(e) => {
-              setAddressSearch(e.target.value);
-              if (selectedAddress) {
-                setSelectedAddress(null);
-                setCustomerCoords(null);
-                setSelectedCity(null);
-              }
-            }}
-            placeholder="Введите ваш адрес для поиска ближайших ПВЗ..."
-            className="pl-10 pr-10"
-            data-testid="input-cdek-address"
-          />
-          {isLoadingAddress && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
-          )}
-          {selectedAddress && !isLoadingAddress && (
-            <button
-              type="button"
-              onClick={handleClearAddress}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              ×
-            </button>
-          )}
-        </div>
-
-        {showAddressSuggestions && addressSuggestions.length > 0 && (
-          <Card className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto shadow-lg">
-            {addressSuggestions.map((suggestion, index) => (
-              <button
-                key={`${suggestion.fiasId}-${index}`}
-                type="button"
-                onClick={() => handleAddressSelect(suggestion)}
-                className="w-full px-4 py-2 text-left hover:bg-muted transition-colors flex items-start gap-2"
-                data-testid={`cdek-address-suggestion-${index}`}
-              >
-                <MapPin className="w-4 h-4 mt-1 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm">{suggestion.fullAddress}</span>
-              </button>
-            ))}
-          </Card>
-        )}
-      </div>
-
-      {selectedAddress && selectedCity && (
+      {selectedCity && (
         <div className="flex items-center justify-between bg-muted/50 rounded-md px-3 py-2">
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-primary" />
@@ -327,23 +236,25 @@ export function CdekPvzSelector({ onSelect, selectedPvzCode, totalWeight = 1000 
         </div>
       )}
 
-      {selectedAddress && customerCoords && (
+      {customerCoords && (
         <div className="text-xs text-muted-foreground flex items-center gap-1 px-1">
           <Navigation className="w-3 h-3" />
-          ПВЗ отсортированы по расстоянию от вашего адреса
+          ПВЗ отсортированы по расстоянию от: {customerAddress?.substring(0, 50)}...
         </div>
       )}
 
-      {isLoadingPvz && (
+      {(isLoadingCities || isLoadingPvz) && (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-muted-foreground">Загрузка пунктов выдачи...</span>
+          <span className="ml-2 text-muted-foreground">
+            {isLoadingCities ? 'Поиск города...' : 'Загрузка пунктов выдачи...'}
+          </span>
         </div>
       )}
 
       {selectedCity && !isLoadingPvz && pickupPoints.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
-          Пунктов выдачи не найдено для выбранного города
+          Пунктов выдачи не найдено для города {selectedCity.city}
         </div>
       )}
 
