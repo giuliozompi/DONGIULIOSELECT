@@ -5121,16 +5121,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'CDEK order already created' });
       }
       
-      // Prepara dati per ordine CDEK
+      // Get pickup address from database
+      const pickupAddress = await storage.getDefaultPickupAddress();
+      if (!pickupAddress) {
+        return res.status(400).json({ error: 'Не настроен адрес отправителя. Добавьте адрес забора в настройках.' });
+      }
+      
+      // Calculate total weight from order items
+      const totalWeight = order.items.reduce((sum: number, item: any) => {
+        const itemWeight = item.unit === 'кг' ? item.quantity * 1000 : (item.weight || 200);
+        return sum + (itemWeight * (item.unit === 'кг' ? 1 : item.quantity));
+      }, 0);
+      
+      // Prepara dati per ordine CDEK - using from_location for door pickup
       const cdekOrderData = {
         number: order.id.slice(0, 24),
-        tariff_code: order.cdekTariffCode ? parseInt(String(order.cdekTariffCode)) : 136,
-        comment: order.deliveryNotes || `Заказ ${order.id.slice(0, 8)}`,
-        shipment_point: process.env.CDEK_SHIPMENT_POINT || 'MSK100',
+        tariff_code: order.cdekTariffCode ? parseInt(String(order.cdekTariffCode)) : 136, // 136 = warehouse-to-warehouse for ecommerce
+        comment: order.deliveryNotes || `Заказ ${order.id.slice(0, 8)} от Don Giulio Select`,
+        // Use from_location for door pickup from store address
+        from_location: {
+          city: pickupAddress.city || 'Москва',
+          address: pickupAddress.fullAddress,
+          postal_code: pickupAddress.postalCode || undefined,
+          latitude: pickupAddress.latitude ? parseFloat(pickupAddress.latitude) : undefined,
+          longitude: pickupAddress.longitude ? parseFloat(pickupAddress.longitude) : undefined,
+        },
         delivery_point: order.cdekPvzCode,
         sender: {
-          name: process.env.CDEK_SENDER_NAME || 'Don Giulio Select',
-          phones: [{ number: process.env.CDEK_SENDER_PHONE || '+79999999999' }],
+          name: pickupAddress.contactName || 'Don Giulio Select',
+          phones: [{ number: pickupAddress.contactPhone || '+79268429284' }],
         },
         recipient: {
           name: order.customerName,
@@ -5139,21 +5158,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         packages: [{
           number: order.id.slice(0, 16),
-          weight: 1000,
+          weight: Math.max(totalWeight, 500), // Minimum 500g
           length: 30,
           width: 20,
           height: 15,
           comment: 'Продукты питания',
-          items: order.items.map(item => ({
+          items: order.items.map((item: any) => ({
             name: item.productName.slice(0, 255),
             ware_key: item.productId.slice(0, 16),
-            payment: { value: 0 },
+            payment: { value: 0 }, // Prepaid
             cost: parseFloat(item.price),
-            weight: Math.round(item.unit === 'кг' ? item.quantity * 1000 : 200),
+            weight: Math.round(item.unit === 'кг' ? item.quantity * 1000 : (item.weight || 200)),
             amount: Math.ceil(item.quantity),
           })),
         }],
       };
+      
+      console.log('[CDEK] Creating order with data:', JSON.stringify(cdekOrderData, null, 2));
       
       const result = await cdekService.createOrder(cdekOrderData);
       
