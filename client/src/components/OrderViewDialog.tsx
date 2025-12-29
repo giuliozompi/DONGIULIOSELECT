@@ -242,7 +242,7 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
             </div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground print:text-gray-600">Способ оплаты:</span>
-              <span className="font-medium">{order.paymentMethod === 'cash' ? 'Наличные' : 'Онлайн'}</span>
+              <span className="font-medium">{order.paymentMethod === 'cash' || order.paymentMethod === 'cash_on_delivery' ? 'Наличные' : 'Онлайн'}</span>
             </div>
             {order.deliveryMethod && (
               <div className="flex justify-between items-center text-sm">

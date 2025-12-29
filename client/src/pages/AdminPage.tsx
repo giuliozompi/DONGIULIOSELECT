@@ -1603,14 +1603,19 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
             </div>
           </div>
 
-          {/* Generate Payment Link Button (Only for СОБРАН status with online payment) */}
-          {displayOrder.status === 'СОБРАН' && displayOrder.paymentMethod !== 'cash_on_delivery' && (
+          {/* Generate Payment Link Button - Show for online payment orders in relevant statuses */}
+          {/* Show when: status is СОБРАН or ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ AND payment is online (not cash) */}
+          {(displayOrder.status === 'СОБРАН' || displayOrder.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ') && 
+           displayOrder.paymentMethod !== 'cash_on_delivery' && 
+           displayOrder.paymentMethod !== 'cash' && (
             <div className="border rounded-md p-4 bg-primary/5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <h4 className="font-semibold text-sm mb-1">💳 Генерация ссылки на оплату</h4>
+                  <h4 className="font-semibold text-sm mb-1">💳 {displayOrder.status === 'СОБРАН' ? 'Генерация ссылки на оплату' : 'Повторная отправка ссылки'}</h4>
                   <p className="text-sm text-muted-foreground">
-                    Заказ готов к отправке. Создайте и отправьте ссылку на оплату клиенту.
+                    {displayOrder.status === 'СОБРАН' 
+                      ? 'Заказ готов к отправке. Создайте и отправьте ссылку на оплату клиенту.'
+                      : 'Ссылка уже была отправлена. Вы можете отправить её повторно.'}
                   </p>
                 </div>
                 <Button
@@ -1622,12 +1627,12 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
                   {generatePaymentLinkMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Создание...
+                      {displayOrder.status === 'СОБРАН' ? 'Создание...' : 'Отправка...'}
                     </>
                   ) : (
                     <>
                       <Link className="w-4 h-4 mr-2" />
-                      Создать ссылку
+                      {displayOrder.status === 'СОБРАН' ? 'Создать ссылку' : 'Отправить снова'}
                     </>
                   )}
                 </Button>
