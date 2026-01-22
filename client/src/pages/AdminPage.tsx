@@ -29,7 +29,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, ORDER_STATUSES, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3 } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3, CreditCard } from 'lucide-react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { DeliveryDialog } from '@/components/DeliveryDialog';
@@ -1199,6 +1199,33 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
     },
   });
 
+  // Convert cash to online payment mutation
+  const convertToOnlinePaymentMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/admin/orders/${order.id}/convert-to-online-payment`, {});
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.details || error.error || 'Failed to convert payment');
+      }
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
+      toast({ 
+        title: '✅ Оплата изменена на онлайн', 
+        description: 'Способ оплаты изменен на онлайн и ссылка отправлена клиенту.',
+      });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Ошибка конвертации', 
+        description: error.message || 'Не удалось изменить способ оплаты',
+        variant: 'destructive' 
+      });
+    },
+  });
+
   // Refund order mutation
   const refundOrderMutation = useMutation({
     mutationFn: async (values: z.infer<typeof refundFormSchema>) => {
@@ -1633,6 +1660,39 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
                     <>
                       <Link className="w-4 h-4 mr-2" />
                       {displayOrder.status === 'СОБРАН' ? 'Создать ссылку' : 'Отправить снова'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Convert Cash to Online Payment Button - Show for cash payment orders in СОБРАН status */}
+          {displayOrder.status === 'СОБРАН' && 
+           (displayOrder.paymentMethod === 'cash_on_delivery' || displayOrder.paymentMethod === 'cash') && (
+            <div className="border rounded-md p-4 bg-amber-500/10 border-amber-500/30">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h4 className="font-semibold text-sm mb-1">Изменить на онлайн-оплату</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Клиент хочет оплатить онлайн вместо наличных? Нажмите для создания ссылки на оплату.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => convertToOnlinePaymentMutation.mutate()}
+                  disabled={convertToOnlinePaymentMutation.isPending}
+                  variant="default"
+                  data-testid="button-convert-to-online"
+                >
+                  {convertToOnlinePaymentMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Конвертация...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Перевести на онлайн
                     </>
                   )}
                 </Button>

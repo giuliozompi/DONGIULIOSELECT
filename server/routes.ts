@@ -2958,6 +2958,217 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // POST /api/admin/orders/:id/convert-to-online-payment - Converte ordine da contanti a online e genera link (ADMIN ONLY)
+  app.post("/api/admin/orders/:id/convert-to-online-payment", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const userId = req.userId || 'unknown';
+      
+      console.log(`\n🔄 [Order ${orderId}] [User ${userId}] Converting cash order to online payment...`);
+      
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        console.error(`❌ [Order ${orderId}] Order not found in database`);
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      
+      // Verifica che l'ordine non sia già pagato
+      if (order.status === 'ОПЛАЧЕН' || order.status === 'ПОЛУЧЕН') {
+        console.warn(`⚠️ [Order ${orderId}] Cannot convert - order already paid/completed`);
+        return res.status(400).json({ error: 'Order is already paid or completed' });
+      }
+      
+      // Verifica che sia un ordine con pagamento contanti
+      if (order.paymentMethod !== 'cash_on_delivery' && order.paymentMethod !== 'cash') {
+        console.warn(`⚠️ [Order ${orderId}] Order is not cash payment, current method: ${order.paymentMethod}`);
+        return res.status(400).json({ error: 'Order is not a cash payment order' });
+      }
+      
+      console.log(`📋 [Order ${orderId}] Converting from ${order.paymentMethod} to online payment...`);
+      
+      // Aggiorna il metodo di pagamento a "yookassa" (online)
+      await storage.updateOrder(orderId, {
+        paymentMethod: 'yookassa',
+      });
+      
+      console.log(`✅ [Order ${orderId}] Payment method converted to yookassa`);
+      
+      // Ora genera e invia il link di pagamento
+      // Step 0: Check YooKassa credentials
+      const { checkYooKassaCredentials, createYooKassaPayment, formatYooKassaAmount, createReceipt } = await import('./services/yookassa-payment');
+      const credCheck = checkYooKassaCredentials();
+      if (!credCheck.ok) {
+        console.error(`❌ [Order ${orderId}] YooKassa not configured: ${credCheck.error}`);
+        return res.status(500).json({ 
+          error: 'YooKassa not configured', 
+          details: credCheck.error 
+        });
+      }
+      
+      // Verifica se esiste già un payment intent per questo ordine
+      let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
+      let confirmationUrl: string;
+      
+      if (!paymentIntent || paymentIntent.status !== 'pending') {
+        // Crea nuovo payment con YooKassa
+        const baseUrl = process.env.REPLIT_DOMAINS 
+          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
+          : (process.env.APP_URL || 'http://localhost:5000');
+        
+        const returnUrl = `${baseUrl}/payment-return`;
+        
+        // Recupera informazioni sui prodotti
+        const allProducts = await storage.getAllProducts();
+        const productsMap = new Map(allProducts.map(p => [p.id, p]));
+        
+        // Recupera codici маркировка per questo ordine
+        const markingLogs = await storage.getMarkingLogsByOrder(orderId);
+        const markingCodesMap = new Map<string, string[]>();
+        
+        for (const log of markingLogs) {
+          const codes = markingCodesMap.get(log.productId) || [];
+          codes.push(log.markingCode);
+          markingCodesMap.set(log.productId, codes);
+        }
+        
+        // Calcola totale e sconti
+        const itemsSubtotal = order.items.reduce((sum, item) => {
+          return sum + (parseFloat(item.price) * item.quantity);
+        }, 0);
+        
+        const totalToPay = parseFloat(order.amount);
+        const calculatedDiscount = itemsSubtotal - totalToPay;
+        
+        let enrichedOrderItems;
+        
+        if (calculatedDiscount > 0.01) {
+          const discountRatio = 1 - (calculatedDiscount / itemsSubtotal);
+          enrichedOrderItems = order.items.map(item => {
+            const product = productsMap.get(item.productId);
+            const originalPrice = parseFloat(item.price);
+            const discountedPrice = originalPrice * discountRatio;
+            return {
+              ...item,
+              price: discountedPrice.toFixed(2),
+              requiresMarking: product?.requiresMarking || false,
+            };
+          });
+        } else {
+          enrichedOrderItems = order.items.map(item => {
+            const product = productsMap.get(item.productId);
+            return {
+              ...item,
+              requiresMarking: product?.requiresMarking || false,
+            };
+          });
+        }
+        
+        // Crea receipt per scontrino fiscale
+        const receipt = createReceipt(
+          enrichedOrderItems,
+          order.customerEmail,
+          order.customerPhone,
+          markingCodesMap,
+          1, // tax_system_code
+          1  // vat_code
+        );
+        
+        try {
+          const yookassaPayment = await createYooKassaPayment({
+            amount: {
+              value: formatYooKassaAmount(totalToPay),
+              currency: 'RUB',
+            },
+            description: `Заказ №${orderId.slice(0, 8)}`,
+            return_url: returnUrl,
+            metadata: {
+              orderId,
+              userId: order.userId,
+            },
+            capture: true,
+            receipt,
+          });
+          
+          confirmationUrl = yookassaPayment.confirmation?.confirmation_url || '';
+          console.log(`✅ [Order ${orderId}] YooKassa payment created: ${yookassaPayment.id}`);
+          
+          // Salva payment intent
+          paymentIntent = await storage.createPaymentIntent({
+            orderId,
+            provider: 'YooKassa',
+            status: 'pending',
+            amount: order.amount,
+            redirectUrl: confirmationUrl,
+            raw: {
+              yookassaPaymentId: yookassaPayment.id,
+              yookassaStatus: yookassaPayment.status,
+              createdAt: yookassaPayment.created_at,
+            },
+          });
+        } catch (error) {
+          console.error(`❌ [Order ${orderId}] YooKassa API call failed:`, error instanceof Error ? error.message : error);
+          throw error;
+        }
+      } else {
+        confirmationUrl = paymentIntent.redirectUrl || '';
+      }
+      
+      // Invia link pagamento via Telegram
+      let notificationsSent = { telegram: false, email: false };
+      
+      try {
+        const { sendPaymentLink } = await import('./services/telegram-bot');
+        const telegramSent = await sendPaymentLink(
+          order.userId,
+          orderId,
+          order.amount,
+          confirmationUrl
+        );
+        if (telegramSent) {
+          console.log(`✅ [Order ${orderId}] Payment link sent via Telegram`);
+          notificationsSent.telegram = true;
+        }
+      } catch (error) {
+        console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via Telegram:`, error instanceof Error ? error.message : error);
+      }
+      
+      // Invia link pagamento via email
+      if (order.customerEmail) {
+        try {
+          const { sendPaymentLinkEmail } = await import('./services/email');
+          await sendPaymentLinkEmail(
+            order.customerEmail,
+            orderId,
+            order.customerName,
+            order.amount,
+            confirmationUrl
+          );
+          console.log(`✅ [Order ${orderId}] Payment link sent via email`);
+          notificationsSent.email = true;
+        } catch (error) {
+          console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via email:`, error instanceof Error ? error.message : error);
+        }
+      }
+      
+      // Aggiorna stato ordine
+      await storage.updateOrderStatus(orderId, 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', (paymentIntent?.raw as any)?.yookassaPaymentId);
+      
+      console.log(`✅ [Order ${orderId}] Successfully converted to online payment and sent link`);
+      
+      res.json({
+        success: true,
+        paymentMethod: 'yookassa',
+        paymentLink: confirmationUrl,
+        notificationsSent,
+        message: 'Order converted to online payment and link sent',
+      });
+      
+    } catch (error) {
+      console.error('Error converting order to online payment:', error);
+      res.status(500).json({ error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+  
   // POST /api/admin/orders/:id/generate-payment-link - Genera e invia link pagamento manualmente (ADMIN ONLY)
   app.post("/api/admin/orders/:id/generate-payment-link", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {
