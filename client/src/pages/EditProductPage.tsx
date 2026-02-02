@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { insertProductSchema, type Product, type Category } from '@shared/schema';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Copy, Check } from 'lucide-react';
+import { useState } from 'react';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import type { SubmitHandler } from 'react-hook-form';
 
@@ -30,6 +31,57 @@ type FormValues = Omit<ProductFormData, 'images' | 'tasteVariations' | 'nutritio
   nutritionComposition: string;
   nutritionAdditionalInfo: string;
 };
+
+// Component to copy product URL to clipboard
+function CopyProductUrlButton({ slug }: { slug: string }) {
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+  
+  const productUrl = `https://t.me/dongiuliocatalog_bot/DGSCatalog?startapp=product_${slug}`;
+  
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(productUrl);
+      setCopied(true);
+      toast({ title: 'Ссылка скопирована в буфер обмена' });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast({ 
+        title: 'Ошибка копирования', 
+        description: 'Не удалось скопировать ссылку',
+        variant: 'destructive' 
+      });
+    }
+  };
+  
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleCopy}
+        data-testid="button-copy-product-url"
+        className="text-xs"
+      >
+        {copied ? (
+          <>
+            <Check className="w-3 h-3 mr-1" />
+            Скопировано
+          </>
+        ) : (
+          <>
+            <Copy className="w-3 h-3 mr-1" />
+            Скопировать ссылку
+          </>
+        )}
+      </Button>
+      <span className="text-xs text-muted-foreground truncate max-w-[200px]" title={productUrl}>
+        {productUrl}
+      </span>
+    </div>
+  );
+}
 
 export default function EditProductPage() {
   const [, params] = useRoute('/admin/products/:id');
@@ -224,6 +276,9 @@ export default function EditProductPage() {
                         <Input {...field} data-testid="input-product-slug" />
                       </FormControl>
                       <FormMessage />
+                      {field.value && (
+                        <CopyProductUrlButton slug={field.value} />
+                      )}
                     </FormItem>
                   )}
                 />
