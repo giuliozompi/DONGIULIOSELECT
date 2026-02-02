@@ -72,6 +72,14 @@ function DeepLinkHandler() {
     if (startParam) {
       console.log('[Deep Link] Start param:', startParam);
       
+      // Handle product deep links (format: product_{slug})
+      if (startParam.startsWith('product_')) {
+        const productSlug = startParam.substring(8); // Remove 'product_' prefix
+        console.log('[Deep Link] Navigating to product:', productSlug);
+        setLocation(`/product/${productSlug}`);
+        return;
+      }
+      
       // Navigate based on start parameter
       switch (startParam) {
         case 'cart':

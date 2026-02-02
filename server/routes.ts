@@ -73,10 +73,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // GET /api/products/:id - Ottieni un prodotto per ID
+  // GET /api/products/:id - Ottieni un prodotto per ID o slug (per deep linking)
   app.get("/api/products/:id", async (req, res) => {
     try {
-      const product = await storage.getProductById(req.params.id);
+      // Try to find by ID first, then by slug (for deep linking support)
+      let product = await storage.getProductById(req.params.id);
+      if (!product) {
+        product = await storage.getProductBySlug(req.params.id);
+      }
       if (!product) {
         return res.status(404).json({ error: 'Product not found' });
       }
