@@ -29,7 +29,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, ORDER_STATUSES, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3, CreditCard } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3, CreditCard, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { DeliveryDialog } from '@/components/DeliveryDialog';
@@ -777,6 +778,56 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
     },
   });
 
+  const exportToExcel = () => {
+    const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+    
+    const sorted = [...products].sort((a, b) => {
+      const catA = categoryMap.get(a.categoryId) || '';
+      const catB = categoryMap.get(b.categoryId) || '';
+      if (catA !== catB) return catA.localeCompare(catB, 'ru');
+      return (a.sortPriority || 0) - (b.sortPriority || 0);
+    });
+
+    const rows = sorted.map(p => ({
+      'Категория': categoryMap.get(p.categoryId) || p.categoryId,
+      'Название': p.name,
+      'Slug': p.slug,
+      'Цена': p.price,
+      'Старая цена': p.priceOld || '',
+      'Единица': p.unit,
+      'В наличии': p.inStock ? 'Да' : 'Нет',
+      'Видимый': p.isVisible ? 'Да' : 'Нет',
+      'Приоритет сортировки': p.sortPriority,
+      'Требует маркировки': p.requiresMarking ? 'Да' : 'Нет',
+      'Краткое описание': p.descriptionShort || '',
+      'Полное описание': p.descriptionFull || '',
+      'Вкусовые вариации': (p.tasteVariations || []).join(', '),
+      'Белки': p.nutrition?.proteins || '',
+      'Жиры': p.nutrition?.fats || '',
+      'Углеводы': p.nutrition?.carbs || '',
+      'Калории': p.nutrition?.calories || '',
+      'Состав': (p.nutrition?.composition || []).join(', '),
+      'Доп. информация': (p.nutrition?.additionalInfo || []).join(', '),
+      'Изображения': (p.images || []).join(', '),
+      'ID': p.id,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const colWidths = [
+      { wch: 20 }, { wch: 35 }, { wch: 25 }, { wch: 10 }, { wch: 12 },
+      { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 14 },
+      { wch: 40 }, { wch: 50 }, { wch: 30 },
+      { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
+      { wch: 40 }, { wch: 40 }, { wch: 50 }, { wch: 36 },
+    ];
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Продукты');
+    XLSX.writeFile(wb, `products_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast({ title: 'Файл Excel скачан' });
+  };
+
   if (isLoadingProducts) {
     return <div className="py-4">Загрузка продуктов...</div>;
   }
@@ -786,15 +837,25 @@ function ProductsManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
       {/* Lista prodotti */}
       <Card data-testid="products-list">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <CardTitle>Продукты ({products.length})</CardTitle>
-            <Button
-              onClick={() => setLocation('/admin/products/new')}
-              data-testid="button-new-product"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Новый продукт
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={exportToExcel}
+                data-testid="button-export-products-excel"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Скачать Excel
+              </Button>
+              <Button
+                onClick={() => setLocation('/admin/products/new')}
+                data-testid="button-new-product"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Новый продукт
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
