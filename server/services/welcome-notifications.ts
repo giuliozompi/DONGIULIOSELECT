@@ -17,14 +17,20 @@ export interface WelcomeParams {
 export async function sendWelcomeNotification(
   params: WelcomeParams
 ): Promise<{ telegram: boolean; email: boolean }> {
-  const [telegram, email] = await Promise.allSettled([
+  const hasEmail = typeof params.email === 'string' && params.email.trim().length > 0;
+
+  if (!hasEmail) {
+    console.log(`[Welcome] No email for user ${params.userId} — Telegram only`);
+  }
+
+  const [telegram, emailResult] = await Promise.allSettled([
     sendTelegramWelcome(params),
-    params.email ? sendEmailWelcome(params) : Promise.resolve(false),
+    hasEmail ? sendEmailWelcome(params) : Promise.resolve(false),
   ]);
 
   return {
     telegram: telegram.status === 'fulfilled' ? telegram.value : false,
-    email: email.status === 'fulfilled' ? email.value : false,
+    email: emailResult.status === 'fulfilled' ? emailResult.value : false,
   };
 }
 
@@ -62,7 +68,7 @@ async function sendTelegramWelcome(params: WelcomeParams): Promise<boolean> {
 
 async function sendEmailWelcome(params: WelcomeParams): Promise<boolean> {
   const { email, firstName, discountCode, expiresAt } = params;
-  if (!email) return false;
+  if (!email || typeof email !== 'string' || !email.trim()) return false;
 
   const expiryStr = expiresAt.toLocaleDateString('ru-RU', {
     day: '2-digit',

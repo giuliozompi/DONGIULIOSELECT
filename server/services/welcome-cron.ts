@@ -95,10 +95,19 @@ export async function checkAndSendWelcomeNotifications(): Promise<void> {
           expiresAt,
         });
 
+        // Normalize email: only pass if it's a non-empty string
+        const userEmail = typeof user.email === 'string' && user.email.trim()
+          ? user.email.trim()
+          : null;
+
+        if (!userEmail) {
+          console.log(`[Welcome Cron] User ${user.id}: no email registered — will send Telegram only (expected for new users)`);
+        }
+
         const params: WelcomeParams = {
           userId: user.id,
           telegramChatId: user.id,
-          email: user.email || null,
+          email: userEmail,
           firstName: user.firstName || 'Дорогой гость',
           discountCode,
           expiresAt,
@@ -106,18 +115,23 @@ export async function checkAndSendWelcomeNotifications(): Promise<void> {
 
         const result = await sendWelcomeNotification(params);
 
-        // Update the notification with actual send results
+        // Status: 'sent' if at least Telegram was delivered (email is optional)
+        // A user without email but with successful Telegram is a success, not a failure
+        const finalStatus = result.telegram
+          ? 'sent'
+          : (result.email ? 'sent' : 'failed');
+
         await db
           .update(welcomeNotifications)
           .set({
             telegramSent: result.telegram,
             emailSent: result.email,
-            status: result.telegram || result.email ? 'sent' : 'failed',
+            status: finalStatus,
           })
           .where(eq(welcomeNotifications.userId, user.id));
 
         console.log(
-          `[Welcome Cron] User ${user.id} (${user.firstName}): code=${discountCode}, Telegram=${result.telegram}, Email=${result.email}`
+          `[Welcome Cron] User ${user.id} (${user.firstName || '—'}): code=${discountCode}, Telegram=${result.telegram}, Email=${result.email}${!userEmail ? ' (no email registered)' : ''}`
         );
 
         await new Promise(resolve => setTimeout(resolve, 1200));
