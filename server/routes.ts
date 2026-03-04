@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts, orders, paymentIntents, orderNotificationLogs, abandonedCartNotifications, reengagementNotifications, welcomeNotifications, users } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts, orders, paymentIntents, orderNotificationLogs, abandonedCartNotifications, reengagementNotifications, welcomeNotifications, users, bonuses } from "@shared/schema";
 import { backfillHistoricalData } from "./services/analytics-aggregation";
 import { z } from "zod";
 import { db } from "./db";
@@ -3777,6 +3777,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // GET /api/admin/orders/:id/discounts-info - Sconti, promokod e bonus applicati all'ordine
+  app.get("/api/admin/orders/:id/discounts-info", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const orderId = req.params.id;
+
+      const [cartCodes, welcomeCodes, usedBonuses, orderRows] = await Promise.all([
+        db.select({
+          discountCode: abandonedCartNotifications.discountCode,
+          discountPercent: abandonedCartNotifications.discountPercent,
+          reminderNumber: abandonedCartNotifications.reminderNumber,
+          sentAt: abandonedCartNotifications.sentAt,
+        })
+          .from(abandonedCartNotifications)
+          .where(eq(abandonedCartNotifications.usedInOrderId, orderId)),
+
+        db.select({
+          discountCode: welcomeNotifications.discountCode,
+          discountPercent: welcomeNotifications.discountPercent,
+          minOrderAmount: welcomeNotifications.minOrderAmount,
+        })
+          .from(welcomeNotifications)
+          .where(eq(welcomeNotifications.usedInOrderId, orderId)),
+
+        db.select({
+          id: bonuses.id,
+          amount: bonuses.amount,
+          percentage: bonuses.percentage,
+          fromOrderId: bonuses.fromOrderId,
+        })
+          .from(bonuses)
+          .where(eq(bonuses.usedInOrderId, orderId)),
+
+        db.select({
+          discount: orders.discount,
+          discountType: orders.discountType,
+          discountValue: orders.discountValue,
+        })
+          .from(orders)
+          .where(eq(orders.id, orderId)),
+      ]);
+
+      const order = orderRows[0];
+
+      res.json({
+        cartPromoCode: cartCodes[0] || null,
+        welcomePromoCode: welcomeCodes[0] || null,
+        bonuses: usedBonuses,
+        adminDiscount: order && order.discount && parseFloat(order.discount) > 0
+          ? {
+              amount: order.discount,
+              type: order.discountType,
+              value: order.discountValue,
+            }
+          : null,
+      });
+    } catch (error) {
+      console.error('[Discounts Info] Error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // POST /api/admin/orders/:id/refund - Richiedi rimborso per ordine pagato (ADMIN ONLY)
   app.post("/api/admin/orders/:id/refund", verifyTelegramInitData, requireAdmin, async (req, res) => {
     try {

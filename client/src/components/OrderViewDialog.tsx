@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Printer, Package, Loader2, AlertTriangle } from 'lucide-react';
+import { Printer, Package, Loader2, AlertTriangle, Tag, Gift, Percent } from 'lucide-react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -39,6 +39,43 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
     queryKey: [`/api/admin/marking-logs/${order.id}`],
     enabled: open,
   });
+
+  // Fetch discounts / bonuses applied to this order
+  interface DiscountsInfo {
+    cartPromoCode: {
+      discountCode: string;
+      discountPercent: number;
+      reminderNumber: number;
+      sentAt: string;
+    } | null;
+    welcomePromoCode: {
+      discountCode: string;
+      discountPercent: number;
+      minOrderAmount: number;
+    } | null;
+    bonuses: Array<{
+      id: string;
+      amount: string;
+      percentage: number;
+      fromOrderId: string | null;
+    }>;
+    adminDiscount: {
+      amount: string;
+      type: string | null;
+      value: string | null;
+    } | null;
+  }
+  const { data: discountsInfo } = useQuery<DiscountsInfo>({
+    queryKey: [`/api/admin/orders/${order.id}/discounts-info`],
+    enabled: open,
+  });
+
+  const hasAnyDiscount = discountsInfo && (
+    discountsInfo.cartPromoCode ||
+    discountsInfo.welcomePromoCode ||
+    (discountsInfo.bonuses && discountsInfo.bonuses.length > 0) ||
+    discountsInfo.adminDiscount
+  );
 
   // Refund form schema
   const refundFormSchema = z.object({
@@ -253,6 +290,121 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
               </div>
             )}
           </div>
+
+          {/* Discounts, Promo Codes & Bonuses */}
+          {hasAnyDiscount && (
+            <>
+              <Separator className="print:border-t print:border-gray-300" />
+              <div className="space-y-3">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <Tag className="w-5 h-5" />
+                  Скидки и бонусы
+                </h3>
+                <div className="space-y-2">
+                  {/* Abandoned cart promo code */}
+                  {discountsInfo?.cartPromoCode && (
+                    <div className="p-3 border rounded-md bg-muted/30 print:border-gray-300 print:p-2">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-2 flex-1">
+                          <Tag className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <div>
+                            <p className="font-medium text-sm">Промокод за брошенную корзину</p>
+                            <p className="font-mono text-sm mt-0.5" data-testid="text-cart-promo-code">
+                              {discountsInfo.cartPromoCode.discountCode}
+                            </p>
+                            {discountsInfo.cartPromoCode.sentAt && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Выдан: {new Date(discountsInfo.cartPromoCode.sentAt).toLocaleDateString('ru-RU')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant="secondary" data-testid="badge-cart-discount-percent">
+                          -{discountsInfo.cartPromoCode.discountPercent}%
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Welcome promo code */}
+                  {discountsInfo?.welcomePromoCode && (
+                    <div className="p-3 border rounded-md bg-muted/30 print:border-gray-300 print:p-2">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-2 flex-1">
+                          <Gift className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <div>
+                            <p className="font-medium text-sm">Приветственный промокод</p>
+                            <p className="font-mono text-sm mt-0.5" data-testid="text-welcome-promo-code">
+                              {discountsInfo.welcomePromoCode.discountCode}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Мин. заказ: {Number(discountsInfo.welcomePromoCode.minOrderAmount).toLocaleString('ru-RU')} ₽
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" data-testid="badge-welcome-discount-percent">
+                          -{discountsInfo.welcomePromoCode.discountPercent}%
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fortune wheel bonuses */}
+                  {discountsInfo?.bonuses && discountsInfo.bonuses.length > 0 && (
+                    <div className="p-3 border rounded-md bg-muted/30 print:border-gray-300 print:p-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Gift className="w-4 h-4 text-muted-foreground" />
+                        <p className="font-medium text-sm">Бонусы с колеса фортуны</p>
+                      </div>
+                      <div className="space-y-1">
+                        {discountsInfo.bonuses.map((bonus, i) => (
+                          <div key={bonus.id} className="flex justify-between items-center text-sm" data-testid={`row-bonus-${i}`}>
+                            <span className="text-muted-foreground">
+                              Бонус {bonus.percentage}%
+                              {bonus.fromOrderId && (
+                                <span className="text-xs ml-1">(заказ {bonus.fromOrderId.slice(0, 8)})</span>
+                              )}
+                            </span>
+                            <Badge variant="secondary" data-testid={`badge-bonus-amount-${i}`}>
+                              -{parseFloat(bonus.amount).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+                            </Badge>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-center text-sm font-medium pt-1 border-t">
+                          <span>Итого бонусами:</span>
+                          <span data-testid="text-total-bonuses">
+                            -{discountsInfo.bonuses.reduce((s, b) => s + parseFloat(b.amount), 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Admin-applied discount */}
+                  {discountsInfo?.adminDiscount && (
+                    <div className="p-3 border rounded-md bg-muted/30 print:border-gray-300 print:p-2">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-2 flex-1">
+                          <Percent className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <div>
+                            <p className="font-medium text-sm">Скидка от администратора</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {discountsInfo.adminDiscount.type === 'percentage'
+                                ? `${discountsInfo.adminDiscount.value}% от суммы заказа`
+                                : `Фиксированная скидка`}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" data-testid="badge-admin-discount">
+                          -{parseFloat(discountsInfo.adminDiscount.amount).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Delivery Information */}
           {(order.yandexClaimId || order.yandexGoClaimId) && (
