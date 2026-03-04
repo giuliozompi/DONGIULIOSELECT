@@ -86,26 +86,15 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
           .returning();
 
         const telegramChatId = user.id;
-        const email = user.email;
-
-        if (!telegramChatId && !email) {
-          console.warn(
-            `[Abandoned Cart Cron] User ${user.id} has no contact info - skipping notification`
-          );
-          await db
-            .update(abandonedCartNotifications)
-            .set({
-              status: 'failed',
-              error: 'No contact info available',
-            })
-            .where(eq(abandonedCartNotifications.id, notification[0].id));
-          continue;
-        }
+        // Normalize email: only pass if it's a valid email address
+        const userEmail = typeof user.email === 'string' && user.email.trim() && user.email.includes('@') && user.email.includes('.')
+          ? user.email.trim()
+          : null;
 
         const result = await sendAbandonedCartReminder({
           userId: user.id,
           telegramChatId,
-          email: email || '',
+          email: userEmail,
           firstName: user.firstName || 'Cliente',
           discountCode: discountData.code,
           discountPercent: discountData.percent,
@@ -115,15 +104,25 @@ export async function checkAndSendAbandonedCartReminders(): Promise<void> {
 
         if (!result.telegram && !result.email) {
           console.error(
-            `[Abandoned Cart Cron] Both channels failed for user ${user.id} - will retry later`
+            `[Abandoned Cart Cron] Both channels failed for user ${user.id} (Telegram unreachable, email: ${userEmail ? 'failed' : 'not set'}) — stopping retries`
           );
-          await db
-            .update(abandonedCartNotifications)
-            .set({
-              status: 'failed',
-              error: 'Both Telegram and Email failed',
-            })
-            .where(eq(abandonedCartNotifications.id, notification[0].id));
+          // Mark notification as failed and clear nextReminderCheckAt to prevent infinite retry loop
+          await Promise.all([
+            db
+              .update(abandonedCartNotifications)
+              .set({
+                status: 'failed',
+                error: userEmail
+                  ? 'Both Telegram and Email failed'
+                  : 'Telegram unreachable and no valid email on account',
+              })
+              .where(eq(abandonedCartNotifications.id, notification[0].id)),
+            // Stop retrying: clear the reminder schedule so this cart is not picked up again
+            db
+              .update(carts)
+              .set({ nextReminderCheckAt: null })
+              .where(eq(carts.userId, user.id)),
+          ]);
           continue;
         }
 

@@ -5,12 +5,18 @@ import { formatMoscowDateForNotification } from '../utils/date-formatter';
 export interface AbandonedCartReminderParams {
   userId: string;
   telegramChatId: string;
-  email: string;
+  email: string | null;
   firstName: string;
   discountCode: string;
   discountPercent: number;
   expiresAt: Date;
   reminderNumber?: number; // 1 o 2 (per personalizzare il messaggio)
+}
+
+function isValidEmail(email: string | null | undefined): email is string {
+  if (!email || typeof email !== 'string') return false;
+  const trimmed = email.trim();
+  return trimmed.length > 0 && trimmed.includes('@') && trimmed.includes('.');
 }
 
 function calculateTimeRemaining(expiresAt: Date): string {
@@ -52,29 +58,37 @@ export async function sendAbandonedCartReminder(
   const formattedExpiry = formatMoscowDateForNotification(expiresAt);
   const timeRemaining = calculateTimeRemaining(expiresAt);
 
-  const telegramSuccess = await sendTelegramNotification({
-    chatId: telegramChatId,
-    firstName,
-    discountCode,
-    discountPercent,
-    formattedExpiry,
-    timeRemaining,
-    reminderNumber,
-  });
+  const hasValidEmail = isValidEmail(email);
+  if (!hasValidEmail) {
+    console.log(`[Abandoned Cart] No valid email for user ${params.userId} — Telegram only`);
+  }
 
-  const emailSuccess = await sendEmailNotification({
-    email,
-    firstName,
-    discountCode,
-    discountPercent,
-    formattedExpiry,
-    timeRemaining,
-    reminderNumber,
-  });
+  const [telegramResult, emailResult] = await Promise.allSettled([
+    sendTelegramNotification({
+      chatId: telegramChatId,
+      firstName,
+      discountCode,
+      discountPercent,
+      formattedExpiry,
+      timeRemaining,
+      reminderNumber,
+    }),
+    hasValidEmail
+      ? sendEmailNotification({
+          email: email as string,
+          firstName,
+          discountCode,
+          discountPercent,
+          formattedExpiry,
+          timeRemaining,
+          reminderNumber,
+        })
+      : Promise.resolve(false),
+  ]);
 
   return {
-    telegram: telegramSuccess,
-    email: emailSuccess,
+    telegram: telegramResult.status === 'fulfilled' ? telegramResult.value : false,
+    email: emailResult.status === 'fulfilled' ? emailResult.value : false,
   };
 }
 
@@ -146,6 +160,8 @@ async function sendEmailNotification(
   params: EmailNotificationParams
 ): Promise<boolean> {
   const { email, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining, reminderNumber } = params;
+
+  if (!isValidEmail(email)) return false;
 
   // Telegram Mini App link with deep link to cart
   const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/dongiuliocatalog_bot/DGSCatalog?startapp=cart';
