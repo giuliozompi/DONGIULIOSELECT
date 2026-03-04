@@ -26,6 +26,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, ORDER_STATUSES, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
@@ -3234,11 +3235,33 @@ function PickupAddressesManager() {
 // ========== LOGS MANAGER ==========
 
 function LogsManager() {
-  const { data: logs = [], isLoading } = useQuery<AdminActionLog[]>({
+  const { data: adminLogs = [], isLoading: isLoadingAdminLogs } = useQuery<AdminActionLog[]>({
     queryKey: ['/api/admin/action-logs'],
     queryFn: async () => {
       const response = await fetch('/api/admin/action-logs?limit=50');
       if (!response.ok) throw new Error('Failed to fetch logs');
+      return response.json();
+    },
+  });
+
+  const { data: orderNotifData = [], isLoading: isLoadingOrderNotifs } = useQuery<any[]>({
+    queryKey: ['/api/admin/notification-logs/order'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/notification-logs/order?limit=200', {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch order notification logs');
+      return response.json();
+    },
+  });
+
+  const { data: commercialData, isLoading: isLoadingCommercial } = useQuery<{ cartLogs: any[]; reengagementLogs: any[] }>({
+    queryKey: ['/api/admin/notification-logs/commercial'],
+    queryFn: async () => {
+      const response = await fetch('/api/admin/notification-logs/commercial?limit=200', {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) throw new Error('Failed to fetch commercial notification logs');
       return response.json();
     },
   });
@@ -3264,9 +3287,7 @@ function LogsManager() {
 
   const formatActionData = (actionData: any, actionType: string, entityType: string): string => {
     if (!actionData || Object.keys(actionData).length === 0) return '-';
-
     const parts: string[] = [];
-
     if (entityType === 'category' && actionData.categoryName) {
       parts.push(`"${actionData.categoryName}"`);
       if (actionData.categorySlug) parts.push(`(${actionData.categorySlug})`);
@@ -3280,11 +3301,7 @@ function LogsManager() {
     } else if (entityType === 'admin' && actionData.affectedUsername) {
       parts.push(`@${actionData.affectedUsername}`);
     }
-
-    if (actionData.notes) {
-      parts.push(`(${actionData.notes})`);
-    }
-
+    if (actionData.notes) parts.push(`(${actionData.notes})`);
     if (actionType === 'updated' && actionData.oldData && actionData.newData) {
       const changes = Object.keys(actionData.newData)
         .filter(key => actionData.oldData[key] !== actionData.newData[key])
@@ -3292,65 +3309,242 @@ function LogsManager() {
         .join(', ');
       if (changes) parts.push(`[${changes}]`);
     }
-
     return parts.join(' ') || '-';
   };
 
-  if (isLoading) {
-    return <div className="py-4" data-testid="loading-logs">Загрузка логов...</div>;
-  }
+  const eventTypeLabel: Record<string, string> = {
+    order_created: 'Заказ создан',
+    order_paid: 'Оплачен',
+    payment_link: 'Ссылка оплаты',
+    status_change: 'Смена статуса',
+  };
+
+  const channelLabel: Record<string, string> = {
+    telegram: 'Telegram',
+    email: 'Email',
+    whatsapp: 'WhatsApp',
+  };
+
+  const recipientLabel: Record<string, string> = {
+    customer: 'Клиент',
+    manager: 'Менеджер',
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === 'sent' || status === 'success') return <Badge variant="default" className="text-xs">Отправлено</Badge>;
+    if (status === 'failed' || status === 'error') return <Badge variant="destructive" className="text-xs">Ошибка</Badge>;
+    if (status === 'skipped') return <Badge variant="secondary" className="text-xs">Пропущено</Badge>;
+    return <Badge variant="outline" className="text-xs">{status}</Badge>;
+  };
+
+  const cartLogs = commercialData?.cartLogs ?? [];
+  const reengagementLogs = commercialData?.reengagementLogs ?? [];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Журнал действий администраторов</CardTitle>
-        <CardDescription>Последние 50 действий</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead data-testid="header-datetime">Дата/Время</TableHead>
-                <TableHead data-testid="header-admin">Администратор</TableHead>
-                <TableHead data-testid="header-action">Действие</TableHead>
-                <TableHead data-testid="header-entity">Тип сущности</TableHead>
-                <TableHead data-testid="header-details">Детали</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground" data-testid="no-logs">
-                    Нет записей
-                  </TableCell>
-                </TableRow>
+    <div className="space-y-4" data-testid="logs-manager">
+      <Tabs defaultValue="admin-actions">
+        <TabsList className="mb-4">
+          <TabsTrigger value="admin-actions" data-testid="tab-admin-actions">Действия адм.</TabsTrigger>
+          <TabsTrigger value="order-notifs" data-testid="tab-order-notifs">По заказам</TabsTrigger>
+          <TabsTrigger value="commercial" data-testid="tab-commercial">Коммерческие</TabsTrigger>
+        </TabsList>
+
+        {/* -------- TAB 1: Admin action logs -------- */}
+        <TabsContent value="admin-actions">
+          <Card>
+            <CardHeader>
+              <CardTitle>Журнал действий администраторов</CardTitle>
+              <CardDescription>Последние 50 действий</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingAdminLogs ? (
+                <div className="py-4 text-center text-muted-foreground">Загрузка...</div>
               ) : (
-                logs.map((log) => (
-                  <TableRow key={log.id} data-testid={`log-row-${log.id}`}>
-                    <TableCell data-testid={`log-datetime-${log.id}`}>
-                      {format(new Date(log.createdAt), 'dd.MM.yyyy HH:mm:ss')}
-                    </TableCell>
-                    <TableCell data-testid={`log-admin-${log.id}`}>
-                      {log.telegramUsername ? `@${log.telegramUsername}` : log.adminUserId}
-                    </TableCell>
-                    <TableCell data-testid={`log-action-${log.id}`}>
-                      <Badge variant="outline">{translateActionType(log.actionType)}</Badge>
-                    </TableCell>
-                    <TableCell data-testid={`log-entity-${log.id}`}>
-                      <Badge variant="secondary">{translateEntityType(log.entityType)}</Badge>
-                    </TableCell>
-                    <TableCell data-testid={`log-details-${log.id}`} className="max-w-md truncate">
-                      {formatActionData(log.actionData, log.actionType, log.entityType)}
-                    </TableCell>
-                  </TableRow>
-                ))
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Дата/Время</TableHead>
+                        <TableHead>Администратор</TableHead>
+                        <TableHead>Действие</TableHead>
+                        <TableHead>Тип</TableHead>
+                        <TableHead>Детали</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {adminLogs.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground">Нет записей</TableCell>
+                        </TableRow>
+                      ) : adminLogs.map((log) => (
+                        <TableRow key={log.id} data-testid={`log-row-${log.id}`}>
+                          <TableCell className="text-sm whitespace-nowrap">{format(new Date(log.createdAt), 'dd.MM.yyyy HH:mm:ss')}</TableCell>
+                          <TableCell className="text-sm">{log.telegramUsername ? `@${log.telegramUsername}` : log.adminUserId}</TableCell>
+                          <TableCell><Badge variant="outline" className="text-xs">{translateActionType(log.actionType)}</Badge></TableCell>
+                          <TableCell><Badge variant="secondary" className="text-xs">{translateEntityType(log.entityType)}</Badge></TableCell>
+                          <TableCell className="max-w-xs text-sm truncate">{formatActionData(log.actionData, log.actionType, log.entityType)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* -------- TAB 2: Order notification logs -------- */}
+        <TabsContent value="order-notifs">
+          <Card>
+            <CardHeader>
+              <CardTitle>Уведомления по заказам</CardTitle>
+              <CardDescription>Последние 200 событий (клиент + менеджер, все каналы)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingOrderNotifs ? (
+                <div className="py-4 text-center text-muted-foreground">Загрузка...</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Дата/Время</TableHead>
+                        <TableHead>Заказ</TableHead>
+                        <TableHead>Событие</TableHead>
+                        <TableHead>Кому</TableHead>
+                        <TableHead>Канал</TableHead>
+                        <TableHead>Статус</TableHead>
+                        <TableHead>Детали</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orderNotifData.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground">Нет записей</TableCell>
+                        </TableRow>
+                      ) : orderNotifData.map((log: any) => (
+                        <TableRow key={log.id} data-testid={`order-notif-row-${log.id}`}>
+                          <TableCell className="text-sm whitespace-nowrap">{log.sentAt ? format(new Date(log.sentAt), 'dd.MM.yy HH:mm') : '-'}</TableCell>
+                          <TableCell className="text-sm font-medium">#{log.orderId}</TableCell>
+                          <TableCell><Badge variant="outline" className="text-xs">{eventTypeLabel[log.eventType] ?? log.eventType}</Badge></TableCell>
+                          <TableCell className="text-sm">{recipientLabel[log.recipientType] ?? log.recipientType}</TableCell>
+                          <TableCell><Badge variant="secondary" className="text-xs">{channelLabel[log.channel] ?? log.channel}</Badge></TableCell>
+                          <TableCell>{statusBadge(log.status)}</TableCell>
+                          <TableCell className="max-w-xs text-xs text-muted-foreground truncate">{log.errorMessage ?? log.details ?? '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* -------- TAB 3: Commercial (cart + re-engagement) -------- */}
+        <TabsContent value="commercial">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Брошенные корзины</CardTitle>
+                <CardDescription>Напоминания клиентам о незавершённых заказах</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingCommercial ? (
+                  <div className="py-4 text-center text-muted-foreground">Загрузка...</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Дата</TableHead>
+                          <TableHead>Клиент</TableHead>
+                          <TableHead>Напоминание</TableHead>
+                          <TableHead>Канал</TableHead>
+                          <TableHead>Промокод</TableHead>
+                          <TableHead>Скидка</TableHead>
+                          <TableHead>Статус</TableHead>
+                          <TableHead>Истекает</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {cartLogs.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center text-muted-foreground">Нет записей</TableCell>
+                          </TableRow>
+                        ) : cartLogs.map((log: any) => (
+                          <TableRow key={log.id} data-testid={`cart-log-row-${log.id}`}>
+                            <TableCell className="text-sm whitespace-nowrap">{log.sentAt ? format(new Date(log.sentAt), 'dd.MM.yy HH:mm') : '-'}</TableCell>
+                            <TableCell className="text-sm">
+                              {log.userUsername ? `@${log.userUsername}` : log.userId}
+                              {log.userName && <span className="text-muted-foreground ml-1">({log.userName})</span>}
+                            </TableCell>
+                            <TableCell className="text-sm text-center">#{log.reminderNumber}</TableCell>
+                            <TableCell><Badge variant="secondary" className="text-xs">{channelLabel[log.channel] ?? log.channel ?? '-'}</Badge></TableCell>
+                            <TableCell className="text-sm font-mono">{log.discountCode ?? '-'}</TableCell>
+                            <TableCell className="text-sm">{log.discountPercent != null ? `${log.discountPercent}%` : '-'}</TableCell>
+                            <TableCell>{statusBadge(log.status)}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{log.expiresAt ? format(new Date(log.expiresAt), 'dd.MM.yy HH:mm') : '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Реактивация клиентов</CardTitle>
+                <CardDescription>Напоминания клиентам, не делавшим заказов 21+ дней</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingCommercial ? (
+                  <div className="py-4 text-center text-muted-foreground">Загрузка...</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Дата</TableHead>
+                          <TableHead>Клиент</TableHead>
+                          <TableHead>Дней без заказа</TableHead>
+                          <TableHead>Telegram</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Статус</TableHead>
+                          <TableHead>Ошибка</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {reengagementLogs.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground">Нет записей</TableCell>
+                          </TableRow>
+                        ) : reengagementLogs.map((log: any) => (
+                          <TableRow key={log.id} data-testid={`reengagement-log-row-${log.id}`}>
+                            <TableCell className="text-sm whitespace-nowrap">{log.sentAt ? format(new Date(log.sentAt), 'dd.MM.yy HH:mm') : '-'}</TableCell>
+                            <TableCell className="text-sm">
+                              {log.userUsername ? `@${log.userUsername}` : log.userId}
+                              {log.userName && <span className="text-muted-foreground ml-1">({log.userName})</span>}
+                            </TableCell>
+                            <TableCell className="text-sm text-center">{log.daysSinceLastOrder ?? '-'}</TableCell>
+                            <TableCell>{log.telegramSent ? <Badge variant="default" className="text-xs">Отправлен</Badge> : <Badge variant="secondary" className="text-xs">Нет</Badge>}</TableCell>
+                            <TableCell>{log.emailSent ? <Badge variant="default" className="text-xs">Отправлен</Badge> : <Badge variant="secondary" className="text-xs">Нет</Badge>}</TableCell>
+                            <TableCell>{statusBadge(log.status)}</TableCell>
+                            <TableCell className="max-w-xs text-xs text-muted-foreground truncate">{log.error ?? '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
 

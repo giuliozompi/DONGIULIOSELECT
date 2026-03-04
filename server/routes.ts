@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts, orders, paymentIntents } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts, orders, paymentIntents, orderNotificationLogs, abandonedCartNotifications, reengagementNotifications, users } from "@shared/schema";
 import { backfillHistoricalData } from "./services/analytics-aggregation";
 import { z } from "zod";
 import { db } from "./db";
@@ -16,6 +16,7 @@ import multer from "multer";
 import { randomUUID } from "crypto";
 import path from "path";
 import { normalizePhoneNumber } from "./utils";
+import { logOrderNotification } from "./services/notification-logger";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== NO-CACHE MIDDLEWARE FOR ADMIN ROUTES ====================
@@ -876,8 +877,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           console.warn('⚠️ Telegram bot not configured - order confirmation not sent');
         }
+        await logOrderNotification({ event: 'order_created', channel: 'telegram', recipient: 'customer', userId: req.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: telegramSent ? 'sent' : 'failed' });
       } catch (error) {
         console.warn('⚠️ Failed to send order confirmation via Telegram:', error);
+        await logOrderNotification({ event: 'order_created', channel: 'telegram', recipient: 'customer', userId: req.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(error) });
       }
       
       // Invia email di conferma al cliente
@@ -910,8 +913,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             console.warn('⚠️ Failed to send order confirmation email to customer');
           }
+          await logOrderNotification({ event: 'order_created', channel: 'email', recipient: 'customer', userId: order.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: customerEmailSent ? 'sent' : 'failed', details: order.customerEmail });
         } catch (error) {
           console.warn('⚠️ Failed to send order confirmation email to customer:', error);
+          await logOrderNotification({ event: 'order_created', channel: 'email', recipient: 'customer', userId: order.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(error) });
         }
       }
       
@@ -940,8 +945,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           console.warn('⚠️ WhatsApp not configured or failed to send');
         }
+        await logOrderNotification({ event: 'order_created', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: whatsappSent ? 'sent' : 'failed' });
       } catch (error) {
         console.warn('⚠️ Failed to send order confirmation via WhatsApp:', error);
+        await logOrderNotification({ event: 'order_created', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(error) });
       }
       
       // Invia notifica email ai manager per nuovo ordine
@@ -973,8 +980,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           console.warn('⚠️ Manager emails not configured or email service unavailable');
         }
+        await logOrderNotification({ event: 'order_created', channel: 'email', recipient: 'managers', orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: emailSent ? 'sent' : 'failed' });
       } catch (error) {
         console.warn('⚠️ Failed to send order notification to managers:', error);
+        await logOrderNotification({ event: 'order_created', channel: 'email', recipient: 'managers', orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(error) });
       }
       
       // Invia notifica Telegram ai manager per nuovo ordine
@@ -1005,8 +1014,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           console.warn('⚠️ Manager Telegram chat IDs not configured - manager notifications disabled');
         }
+        await logOrderNotification({ event: 'order_created', channel: 'telegram', recipient: 'managers', orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: telegramManagerSent ? 'sent' : 'failed' });
       } catch (error) {
         console.warn('⚠️ Failed to send order notification to managers via Telegram:', error);
+        await logOrderNotification({ event: 'order_created', channel: 'telegram', recipient: 'managers', orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(error) });
       }
       
       res.json({
@@ -1788,8 +1799,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             order.paymentMethod
           );
           console.log(`✅ Payment notification email sent to managers for order ${order.id}`);
+          await logOrderNotification({ event: 'order_paid', channel: 'email', recipient: 'managers', userId: order.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'sent', details: order.amount });
         } catch (error) {
           console.warn('⚠️ Failed to send payment notification email to managers:', error);
+          await logOrderNotification({ event: 'order_paid', channel: 'email', recipient: 'managers', userId: order.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(error) });
         }
         
         // Invia notifica pagamento ai manager via Telegram
@@ -1803,8 +1816,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             order.paymentMethod
           );
           console.log(`✅ Payment notification sent to managers via Telegram for order ${order.id}`);
+          await logOrderNotification({ event: 'order_paid', channel: 'telegram', recipient: 'managers', userId: order.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'sent', details: order.amount });
         } catch (error) {
           console.warn('⚠️ Failed to send payment notification to managers via Telegram:', error);
+          await logOrderNotification({ event: 'order_paid', channel: 'telegram', recipient: 'managers', userId: order.userId, orderId: order.id, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(error) });
         }
         
         // Assegna 1 spin token (atomicamente)
@@ -2012,6 +2027,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error checking admin status:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ==================== NOTIFICATION LOGS ROUTES (ADMIN ONLY) ====================
+
+  // GET /api/admin/notification-logs/order - Log notifiche ordini
+  app.get("/api/admin/notification-logs/order", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 200;
+      const logs = await db.select().from(orderNotificationLogs).orderBy(desc(orderNotificationLogs.sentAt)).limit(limit);
+      res.json(logs);
+    } catch (error) {
+      console.error('Error fetching order notification logs:', error);
+      res.status(500).json({ error: 'Failed to fetch logs' });
+    }
+  });
+
+  // GET /api/admin/notification-logs/commercial - Log notifiche commerciali (carrello + re-engagement)
+  app.get("/api/admin/notification-logs/commercial", verifyTelegramInitData, requireAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 200;
+
+      const cartLogs = await db
+        .select({
+          id: abandonedCartNotifications.id,
+          type: sqlDrizzle<string>`'abandoned_cart'`,
+          userId: abandonedCartNotifications.userId,
+          userName: users.firstName,
+          userUsername: users.username,
+          discountCode: abandonedCartNotifications.discountCode,
+          discountPercent: abandonedCartNotifications.discountPercent,
+          reminderNumber: abandonedCartNotifications.reminderNumber,
+          channel: abandonedCartNotifications.channel,
+          status: abandonedCartNotifications.status,
+          sentAt: abandonedCartNotifications.sentAt,
+          expiresAt: abandonedCartNotifications.expiresAt,
+          details: sqlDrizzle<string>`null`,
+        })
+        .from(abandonedCartNotifications)
+        .leftJoin(users, eq(abandonedCartNotifications.userId, users.id))
+        .orderBy(desc(abandonedCartNotifications.sentAt))
+        .limit(limit);
+
+      const reengagementLogs = await db
+        .select({
+          id: reengagementNotifications.id,
+          type: sqlDrizzle<string>`'reengagement'`,
+          userId: reengagementNotifications.userId,
+          userName: users.firstName,
+          userUsername: users.username,
+          daysSinceLastOrder: reengagementNotifications.daysSinceLastOrder,
+          telegramSent: reengagementNotifications.telegramSent,
+          emailSent: reengagementNotifications.emailSent,
+          status: reengagementNotifications.status,
+          sentAt: reengagementNotifications.sentAt,
+          error: reengagementNotifications.error,
+        })
+        .from(reengagementNotifications)
+        .leftJoin(users, eq(reengagementNotifications.userId, users.id))
+        .orderBy(desc(reengagementNotifications.sentAt))
+        .limit(limit);
+
+      res.json({ cartLogs, reengagementLogs });
+    } catch (error) {
+      console.error('Error fetching commercial notification logs:', error);
+      res.status(500).json({ error: 'Failed to fetch logs' });
     }
   });
 
@@ -2834,8 +2915,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (whatsappSent) {
               console.log('✅ Payment link sent via WhatsApp');
             }
+            await logOrderNotification({ event: 'payment_link', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId: orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: whatsappSent ? 'sent' : 'failed', details: order.amount });
           } catch (error) {
             console.warn('⚠️ Failed to send payment link via WhatsApp:', error);
+            await logOrderNotification({ event: 'payment_link', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId: orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(error) });
           }
           
           // Aggiorna ordine con info pagamento e timestamp invio link
@@ -2895,8 +2978,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             console.warn('⚠️ Telegram bot not configured - status notification not sent');
           }
+          await logOrderNotification({ event: 'status_change', channel: 'telegram', recipient: 'customer', userId: order.userId, orderId: orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: telegramSent ? 'sent' : 'failed', details: status });
         } catch (error) {
           console.warn('⚠️ Failed to send status notification via Telegram:', error);
+          await logOrderNotification({ event: 'status_change', channel: 'telegram', recipient: 'customer', userId: order.userId, orderId: orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: status });
         }
         
         // Invia anche notifica WhatsApp
@@ -2911,8 +2996,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (whatsappSent) {
             console.log(`✅ Status notification sent via WhatsApp to ${order.customerPhone} for order ${orderId}: ${status}`);
           }
+          await logOrderNotification({ event: 'status_change', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId: orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: whatsappSent ? 'sent' : 'failed', details: status });
         } catch (error) {
           console.warn('⚠️ Failed to send status notification via WhatsApp:', error);
+          await logOrderNotification({ event: 'status_change', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId: orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: status });
         }
       }
       

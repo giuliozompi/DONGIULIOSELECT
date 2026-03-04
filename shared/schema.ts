@@ -1019,6 +1019,25 @@ export const insertMarketingSettingsSchema = createInsertSchema(marketingSetting
 export type InsertMarketingSettings = z.infer<typeof insertMarketingSettingsSchema>;
 export type MarketingSettings = typeof marketingSettings.$inferSelect;
 
+// Log notifiche ordine (ordine creato, pagato, cambio stato, link pagamento)
+export const orderNotificationLogs = pgTable("order_notification_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  event: text("event").notNull(),     // 'order_created' | 'order_paid' | 'status_change' | 'payment_link'
+  channel: text("channel").notNull(), // 'telegram' | 'email' | 'whatsapp'
+  recipient: text("recipient").notNull(), // 'customer' | 'managers'
+  userId: varchar("user_id"),
+  orderId: varchar("order_id"),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  status: text("status").notNull().default('sent'), // 'sent' | 'failed'
+  details: text("details"), // e.g. new status value, amount
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+});
+
+export const insertOrderNotificationLogSchema = createInsertSchema(orderNotificationLogs).omit({ id: true, sentAt: true });
+export type InsertOrderNotificationLog = z.infer<typeof insertOrderNotificationLogSchema>;
+export type OrderNotificationLog = typeof orderNotificationLogs.$inferSelect;
+
 // Notifiche di re-engagement (clienti inattivi da 21+ giorni)
 export const reengagementNotifications = pgTable("reengagement_notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
