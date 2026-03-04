@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BarChart3, TrendingUp, ShoppingCart, Target } from "lucide-react";
+import { BarChart3, TrendingUp, ShoppingCart, Target, RefreshCw, AlertCircle } from "lucide-react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   LineChart,
   Line,
@@ -48,6 +50,7 @@ interface TopProduct {
 }
 
 export default function AnalyticsManager() {
+  const { toast } = useToast();
   const today = new Date();
   const lastWeek = new Date(today);
   lastWeek.setDate(today.getDate() - 7);
@@ -55,32 +58,59 @@ export default function AnalyticsManager() {
   const [startDate, setStartDate] = useState(lastWeek.toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(today.toISOString().split('T')[0]);
 
-  const { data: summary, isLoading: summaryLoading } = useQuery<AnalyticsSummary>({
+  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery<AnalyticsSummary>({
     queryKey: ['/api/admin/analytics/summary', { startDate, endDate }],
     enabled: !!startDate && !!endDate,
   });
 
-  const { data: timeseries, isLoading: timeseriesLoading } = useQuery<TimeseriesData[]>({
+  const { data: timeseries, isLoading: timeseriesLoading, refetch: refetchTimeseries } = useQuery<TimeseriesData[]>({
     queryKey: ['/api/admin/analytics/timeseries', { startDate, endDate }],
     enabled: !!startDate && !!endDate,
   });
 
-  const { data: topProducts, isLoading: topProductsLoading } = useQuery<TopProduct[]>({
+  const { data: topProducts, isLoading: topProductsLoading, refetch: refetchTopProducts } = useQuery<TopProduct[]>({
     queryKey: ['/api/admin/analytics/top-products', { startDate, endDate, limit: '10' }],
     enabled: !!startDate && !!endDate,
   });
 
+  const backfillMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/admin/analytics/backfill', {
+        method: 'POST',
+        body: JSON.stringify({ startDate, endDate }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'Данные обновлены', description: 'Статистика за выбранный период пересчитана.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/analytics/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/analytics/timeseries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/analytics/top-products'] });
+    },
+    onError: () => {
+      toast({ title: 'Ошибка', description: 'Не удалось обновить данные.', variant: 'destructive' });
+    },
+  });
+
   const isLoading = summaryLoading || timeseriesLoading || topProductsLoading;
+  const hasNoData = !isLoading && summary?.totalOrders === 0 && (!timeseries || timeseries.length === 0);
 
   return (
     <div className="flex flex-col gap-6 p-6" data-testid="analytics-manager">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold">Аналитика</h1>
           <p className="text-muted-foreground">
             Метрики продаж и конверсии
           </p>
         </div>
+        <Button
+          onClick={() => backfillMutation.mutate()}
+          disabled={backfillMutation.isPending}
+          data-testid="button-refresh-analytics"
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${backfillMutation.isPending ? 'animate-spin' : ''}`} />
+          {backfillMutation.isPending ? 'Обновление...' : 'Обновить данные'}
+        </Button>
       </div>
 
       <Card>
@@ -89,7 +119,7 @@ export default function AnalyticsManager() {
           <CardDescription>Выберите диапазон дат для отчета</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label htmlFor="start-date">Дата начала</Label>
               <Input
@@ -124,6 +154,19 @@ export default function AnalyticsManager() {
                 Последние 30 дней
               </Button>
             </div>
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const jan1 = new Date(today.getFullYear(), 0, 1);
+                  setStartDate(jan1.toISOString().split('T')[0]);
+                  setEndDate(today.toISOString().split('T')[0]);
+                }}
+                data-testid="button-this-year"
+              >
+                С начала года
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -134,9 +177,28 @@ export default function AnalyticsManager() {
         </div>
       ) : (
         <>
+          {hasNoData && (
+            <Card className="border-dashed" data-testid="card-no-data-warning">
+              <CardContent className="flex flex-col items-center gap-3 py-8">
+                <AlertCircle className="h-8 w-8 text-muted-foreground" />
+                <p className="text-muted-foreground text-center">
+                  Нет данных за выбранный период. Нажмите «Обновить данные», чтобы рассчитать статистику.
+                </p>
+                <Button
+                  onClick={() => backfillMutation.mutate()}
+                  disabled={backfillMutation.isPending}
+                  data-testid="button-refresh-analytics-empty"
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${backfillMutation.isPending ? 'animate-spin' : ''}`} />
+                  {backfillMutation.isPending ? 'Обновление...' : 'Обновить данные'}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card data-testid="card-total-orders">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Всего заказов</CardTitle>
                 <ShoppingCart className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -149,7 +211,7 @@ export default function AnalyticsManager() {
             </Card>
 
             <Card data-testid="card-revenue">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Выручка</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -164,7 +226,7 @@ export default function AnalyticsManager() {
             </Card>
 
             <Card data-testid="card-abandoned-carts">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Напоминания</CardTitle>
                 <BarChart3 className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -177,13 +239,13 @@ export default function AnalyticsManager() {
             </Card>
 
             <Card data-testid="card-conversion">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Конверсия</CardTitle>
                 <Target className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {typeof summary?.conversionRate === 'number' 
+                  {typeof summary?.conversionRate === 'number'
                     ? `${summary.conversionRate.toFixed(1)}%`
                     : `${summary?.conversionRate || 0}%`
                   }
