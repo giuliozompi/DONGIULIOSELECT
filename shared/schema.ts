@@ -1018,3 +1018,19 @@ export const insertMarketingSettingsSchema = createInsertSchema(marketingSetting
 );
 export type InsertMarketingSettings = z.infer<typeof insertMarketingSettingsSchema>;
 export type MarketingSettings = typeof marketingSettings.$inferSelect;
+
+// Notifiche di re-engagement (clienti inattivi da 21+ giorni)
+export const reengagementNotifications = pgTable("reengagement_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+  status: text("status").notNull().default('sent'), // 'sent' | 'failed'
+  telegramSent: boolean("telegram_sent").notNull().default(false),
+  emailSent: boolean("email_sent").notNull().default(false),
+  error: text("error"),
+  daysSinceLastOrder: integer("days_since_last_order"),
+});
+
+export const insertReengagementNotificationSchema = createInsertSchema(reengagementNotifications).omit({ id: true, sentAt: true });
+export type InsertReengagementNotification = z.infer<typeof insertReengagementNotificationSchema>;
+export type ReengagementNotification = typeof reengagementNotifications.$inferSelect;

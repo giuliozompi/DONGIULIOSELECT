@@ -484,3 +484,72 @@ export async function sendDeliveryStartedNotificationToManagers(
 
   return successCount > 0;
 }
+
+export async function sendMediaGroup(
+  chatId: string,
+  photoUrls: string[],
+  caption?: string
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error('TELEGRAM_BOT_TOKEN not configured');
+    return false;
+  }
+  if (photoUrls.length === 0) return false;
+
+  try {
+    const media = photoUrls.slice(0, 10).map((url, idx) => ({
+      type: 'photo',
+      media: url,
+      ...(idx === 0 && caption ? { caption, parse_mode: 'HTML' } : {}),
+    }));
+
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMediaGroup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, media }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      console.error('Telegram sendMediaGroup error:', data);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error sending Telegram media group:', error);
+    return false;
+  }
+}
+
+export async function sendPhotoMessage(
+  chatId: string,
+  photoUrl: string,
+  caption?: string
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error('TELEGRAM_BOT_TOKEN not configured');
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: photoUrl,
+        ...(caption ? { caption, parse_mode: 'HTML' } : {}),
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      console.error('Telegram sendPhoto error:', data);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Error sending Telegram photo:', error);
+    return false;
+  }
+}

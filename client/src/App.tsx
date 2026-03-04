@@ -86,6 +86,10 @@ function DeepLinkHandler() {
           console.log('[Deep Link] Navigating to cart...');
           setLocation('/cart');
           break;
+        case 'fortune':
+          console.log('[Deep Link] Navigating to fortune wheel...');
+          setLocation('/fortune');
+          break;
         default:
           console.log('[Deep Link] Unknown start param:', startParam);
       }
