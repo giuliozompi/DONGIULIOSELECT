@@ -95,7 +95,7 @@ async function sendTelegramNotification(
 
   // Telegram Mini App link with deep link to cart
   // Format: https://t.me/BotUsername/AppShortName?startapp=cart
-  const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/DonGiulioSelectBot/dongiulioselect?startapp=cart';
+  const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/dongiuliocatalog_bot/DGSCatalog?startapp=cart';
 
   // Personalizza messaggio in base al numero di reminder
   const header = reminderNumber === 1 
@@ -148,7 +148,7 @@ async function sendEmailNotification(
   const { email, firstName, discountCode, discountPercent, formattedExpiry, timeRemaining, reminderNumber } = params;
 
   // Telegram Mini App link with deep link to cart
-  const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/DonGiulioSelectBot/dongiulioselect?startapp=cart';
+  const miniAppUrl = process.env.TELEGRAM_MINI_APP_URL || 'https://t.me/dongiuliocatalog_bot/DGSCatalog?startapp=cart';
 
   const subject = reminderNumber === 1
     ? `Вы забыли что-то! Скидка ${discountPercent}% ждёт вас`
