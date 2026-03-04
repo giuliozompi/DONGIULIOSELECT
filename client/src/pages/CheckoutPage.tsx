@@ -102,6 +102,8 @@ export default function CheckoutPage() {
     code: string;
     percent: number;
     expiresAt: Date;
+    minOrderAmount?: number | null;
+    codeType?: 'cart' | 'welcome';
   } | null>(null);
   
   // CDEK delivery states
@@ -261,18 +263,22 @@ export default function CheckoutPage() {
       
       return data;
     },
-    onSuccess: (data: { discountCode: string; discountPercent: number; expiresAt: string }) => {
+    onSuccess: (data: { discountCode: string; discountPercent: number; expiresAt: string; minOrderAmount?: number | null; codeType?: 'cart' | 'welcome' }) => {
       hapticFeedback('success');
       setValidatedDiscount({
         code: data.discountCode,
         percent: data.discountPercent,
         expiresAt: new Date(data.expiresAt),
+        minOrderAmount: data.minOrderAmount,
+        codeType: data.codeType,
       });
       setValidationError(null);
       setDiscountCode('');
       toast({
         title: 'Промокод применён!',
-        description: `Скидка ${data.discountPercent}% активирована`,
+        description: data.minOrderAmount
+          ? `Скидка ${data.discountPercent}% на заказ от ${data.minOrderAmount.toLocaleString('ru-RU')} ₽`
+          : `Скидка ${data.discountPercent}% активирована`,
       });
     },
     onError: (error: Error) => {
@@ -571,6 +577,11 @@ export default function CheckoutPage() {
                   expiredMessage: 'Время действия скидки закончилось',
                 }}
               />
+              {validatedDiscount.minOrderAmount && (
+                <p className="text-xs text-muted-foreground" data-testid="text-welcome-discount-condition">
+                  Скидка действует при заказе от {validatedDiscount.minOrderAmount.toLocaleString('ru-RU')} ₽ · Одноразовый · Не суммируется с другими скидками
+                </p>
+              )}
             </div>
           )}
         </Card>

@@ -5,6 +5,7 @@ import { seedDatabase } from "./seed";
 import { startAbandonedCartCron } from "./services/abandoned-cart-cron";
 import { startAnalyticsCron } from "./services/analytics-cron";
 import { startReengagementCron } from "./services/reengagement-cron";
+import { startWelcomeCron } from "./services/welcome-cron";
 
 // Configura timezone UTC+3 (Mosca) per tutto il server
 process.env.TZ = 'Europe/Moscow';
@@ -94,5 +95,6 @@ app.use((req, res, next) => {
     startAbandonedCartCron(60);
     startAnalyticsCron(15);
     startReengagementCron(24);
+    startWelcomeCron(24);
   });
 })();

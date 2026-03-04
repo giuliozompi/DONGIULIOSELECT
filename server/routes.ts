@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { verifyTelegramInitData, optionalTelegramAuth } from "./middleware/verifyTelegramInitData";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireMasterAdmin } from "./middleware/requireMasterAdmin";
-import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts, orders, paymentIntents, orderNotificationLogs, abandonedCartNotifications, reengagementNotifications, users } from "@shared/schema";
+import { insertProductSchema, insertOrderSchema, insertCategorySchema, ORDER_STATUSES, PAID_ORDER_STATUSES, type Product, type Prize, analyticsSnapshots, analyticsTopProducts, orders, paymentIntents, orderNotificationLogs, abandonedCartNotifications, reengagementNotifications, welcomeNotifications, users } from "@shared/schema";
 import { backfillHistoricalData } from "./services/analytics-aggregation";
 import { z } from "zod";
 import { db } from "./db";
@@ -108,7 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // GET /api/cart/validate-discount/:code - Valida codice sconto carrello abbandonato
+  // GET /api/cart/validate-discount/:code - Valida codice sconto (carrello abbandonato o benvenuto)
   app.get("/api/cart/validate-discount/:code", verifyTelegramInitData, async (req, res) => {
     try {
       const code = req.params.code.trim().toUpperCase();
@@ -120,6 +120,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         discountCode: discount.discountCode,
         discountPercent: discount.discountPercent,
         expiresAt: discount.expiresAt,
+        minOrderAmount: discount.minOrderAmount ?? null,
+        codeType: discount.codeType,
       });
     } catch (error: any) {
       console.error('Error validating discount code:', error);
@@ -1043,6 +1045,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (error.message === 'DISCOUNT_EXPIRED') {
         return res.status(400).json({ error: 'Codice sconto scaduto' });
+      }
+      if (error.message?.startsWith('MIN_ORDER_NOT_MET:')) {
+        const minAmount = error.message.split(':')[1];
+        return res.status(400).json({ error: `Промокод действует при заказе от ${parseInt(minAmount).toLocaleString('ru-RU')} ₽` });
       }
       
       console.error('Error creating order:', error);
@@ -2089,7 +2095,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(desc(reengagementNotifications.sentAt))
         .limit(limit);
 
-      res.json({ cartLogs, reengagementLogs });
+      const welcomeLogs = await db
+        .select({
+          id: welcomeNotifications.id,
+          userId: welcomeNotifications.userId,
+          userName: users.firstName,
+          userUsername: users.username,
+          discountCode: welcomeNotifications.discountCode,
+          discountPercent: welcomeNotifications.discountPercent,
+          minOrderAmount: welcomeNotifications.minOrderAmount,
+          status: welcomeNotifications.status,
+          telegramSent: welcomeNotifications.telegramSent,
+          emailSent: welcomeNotifications.emailSent,
+          sentAt: welcomeNotifications.sentAt,
+          expiresAt: welcomeNotifications.expiresAt,
+          usedInOrderId: welcomeNotifications.usedInOrderId,
+          error: welcomeNotifications.error,
+        })
+        .from(welcomeNotifications)
+        .leftJoin(users, eq(welcomeNotifications.userId, users.id))
+        .orderBy(desc(welcomeNotifications.sentAt))
+        .limit(limit);
+
+      res.json({ cartLogs, reengagementLogs, welcomeLogs });
     } catch (error) {
       console.error('Error fetching commercial notification logs:', error);
       res.status(500).json({ error: 'Failed to fetch logs' });

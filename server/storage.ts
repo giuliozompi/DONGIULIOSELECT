@@ -259,12 +259,14 @@ export interface IStorage {
   getCourierTracking(orderId: string, limit?: number): Promise<CourierTracking[]>;
   getLatestCourierPosition(orderId: string): Promise<CourierTracking | undefined>;
   
-  // Abandoned Cart Discount Validation
+  // Discount Code Validation (abandoned cart & welcome)
   validateAbandonedCartDiscount(userId: string, code: string): Promise<{
     discountCode: string;
     discountPercent: number;
     expiresAt: Date;
-  } | null>;
+    minOrderAmount?: number;
+    codeType: 'cart' | 'welcome';
+  }>;
 }
 
 export class MemStorage implements IStorage {
@@ -943,8 +945,10 @@ export class MemStorage implements IStorage {
     discountCode: string;
     discountPercent: number;
     expiresAt: Date;
-  } | null> {
-    return null; // MemStorage stub - not supported in memory
+    minOrderAmount?: number;
+    codeType: 'cart' | 'welcome';
+  }> {
+    throw new Error('INVALID_DISCOUNT_CODE'); // MemStorage stub - not supported in memory
   }
 }
 

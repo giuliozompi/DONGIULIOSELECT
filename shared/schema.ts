@@ -1053,3 +1053,25 @@ export const reengagementNotifications = pgTable("reengagement_notifications", {
 export const insertReengagementNotificationSchema = createInsertSchema(reengagementNotifications).omit({ id: true, sentAt: true });
 export type InsertReengagementNotification = z.infer<typeof insertReengagementNotificationSchema>;
 export type ReengagementNotification = typeof reengagementNotifications.$inferSelect;
+
+// ============================================================
+// Welcome notifications (for users who never ordered)
+// ============================================================
+export const welcomeNotifications = pgTable("welcome_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(), // one per user
+  discountCode: varchar("discount_code", { length: 32 }).notNull().unique(),
+  discountPercent: integer("discount_percent").notNull().default(10),
+  minOrderAmount: integer("min_order_amount").notNull().default(5000), // minimum rubles
+  status: text("status").notNull().default('sent'), // 'sent' | 'used' | 'expired'
+  telegramSent: boolean("telegram_sent").notNull().default(false),
+  emailSent: boolean("email_sent").notNull().default(false),
+  sentAt: timestamp("sent_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedInOrderId: varchar("used_in_order_id"),
+  error: text("error"),
+});
+
+export const insertWelcomeNotificationSchema = createInsertSchema(welcomeNotifications).omit({ id: true, sentAt: true });
+export type InsertWelcomeNotification = z.infer<typeof insertWelcomeNotificationSchema>;
+export type WelcomeNotification = typeof welcomeNotifications.$inferSelect;

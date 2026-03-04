@@ -3255,7 +3255,7 @@ function LogsManager() {
     },
   });
 
-  const { data: commercialData, isLoading: isLoadingCommercial } = useQuery<{ cartLogs: any[]; reengagementLogs: any[] }>({
+  const { data: commercialData, isLoading: isLoadingCommercial } = useQuery<{ cartLogs: any[]; reengagementLogs: any[]; welcomeLogs: any[] }>({
     queryKey: ['/api/admin/notification-logs/commercial'],
     queryFn: async () => {
       const response = await fetch('/api/admin/notification-logs/commercial?limit=200', {
@@ -3339,6 +3339,7 @@ function LogsManager() {
 
   const cartLogs = commercialData?.cartLogs ?? [];
   const reengagementLogs = commercialData?.reengagementLogs ?? [];
+  const welcomeLogs = commercialData?.welcomeLogs ?? [];
 
   return (
     <div className="space-y-4" data-testid="logs-manager">
@@ -3533,6 +3534,60 @@ function LogsManager() {
                             <TableCell>{log.emailSent ? <Badge variant="default" className="text-xs">Отправлен</Badge> : <Badge variant="secondary" className="text-xs">Нет</Badge>}</TableCell>
                             <TableCell>{statusBadge(log.status)}</TableCell>
                             <TableCell className="max-w-xs text-xs text-muted-foreground truncate">{log.error ?? '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Промокоды приветствия</CardTitle>
+                <CardDescription>Новые пользователи, которые ещё не сделали заказ — скидка 10% от 5 000 ₽</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingCommercial ? (
+                  <div className="py-4 text-center text-muted-foreground">Загрузка...</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Дата</TableHead>
+                          <TableHead>Клиент</TableHead>
+                          <TableHead>Промокод</TableHead>
+                          <TableHead>Скидка</TableHead>
+                          <TableHead>Мин. заказ</TableHead>
+                          <TableHead>Telegram</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Статус</TableHead>
+                          <TableHead>Использован в</TableHead>
+                          <TableHead>Истекает</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {welcomeLogs.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={10} className="text-center text-muted-foreground">Нет записей</TableCell>
+                          </TableRow>
+                        ) : welcomeLogs.map((log: any) => (
+                          <TableRow key={log.id} data-testid={`welcome-log-row-${log.id}`}>
+                            <TableCell className="text-sm whitespace-nowrap">{log.sentAt ? format(new Date(log.sentAt), 'dd.MM.yy HH:mm') : '-'}</TableCell>
+                            <TableCell className="text-sm">
+                              {log.userUsername ? `@${log.userUsername}` : log.userId}
+                              {log.userName && <span className="text-muted-foreground ml-1">({log.userName})</span>}
+                            </TableCell>
+                            <TableCell className="text-sm font-mono">{log.discountCode}</TableCell>
+                            <TableCell className="text-sm">{log.discountPercent}%</TableCell>
+                            <TableCell className="text-sm">{log.minOrderAmount != null ? `${log.minOrderAmount.toLocaleString('ru-RU')} ₽` : '-'}</TableCell>
+                            <TableCell>{log.telegramSent ? <Badge variant="default" className="text-xs">Отправлен</Badge> : <Badge variant="secondary" className="text-xs">Нет</Badge>}</TableCell>
+                            <TableCell>{log.emailSent ? <Badge variant="default" className="text-xs">Отправлен</Badge> : <Badge variant="secondary" className="text-xs">Нет</Badge>}</TableCell>
+                            <TableCell>{statusBadge(log.status)}</TableCell>
+                            <TableCell className="text-sm">{log.usedInOrderId ? `#${log.usedInOrderId.slice(0,8)}` : '-'}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{log.expiresAt ? format(new Date(log.expiresAt), 'dd.MM.yy') : '-'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

@@ -25,6 +25,7 @@ import {
   webhookEvents,
   courierTracking,
   abandonedCartNotifications,
+  welcomeNotifications,
   PAID_ORDER_STATUSES,
   type User,
   type InsertUser,
@@ -1212,38 +1213,53 @@ export class DbStorage implements IStorage {
     discountCode: string;
     discountPercent: number;
     expiresAt: Date;
+    minOrderAmount?: number;
+    codeType: 'cart' | 'welcome';
   }> {
     const normalizedCode = code.trim().toUpperCase();
-    
-    const notification = await db
+
+    // First check abandonedCartNotifications
+    const cartNotif = await db
       .select()
       .from(abandonedCartNotifications)
       .where(eq(abandonedCartNotifications.discountCode, normalizedCode))
       .limit(1);
-    
-    if (notification.length === 0) {
-      throw new Error('INVALID_DISCOUNT_CODE');
+
+    if (cartNotif.length > 0) {
+      const notif = cartNotif[0];
+      if (notif.userId !== userId) throw new Error('NOT_YOUR_CODE');
+      if (new Date() > notif.expiresAt) throw new Error('DISCOUNT_EXPIRED');
+      if (notif.status !== 'sent') throw new Error('DISCOUNT_ALREADY_USED');
+      return {
+        discountCode: notif.discountCode,
+        discountPercent: notif.discountPercent,
+        expiresAt: notif.expiresAt,
+        codeType: 'cart',
+      };
     }
-    
-    const notif = notification[0];
-    
-    if (notif.userId !== userId) {
-      throw new Error('NOT_YOUR_CODE');
+
+    // Then check welcomeNotifications
+    const welcomeNotif = await db
+      .select()
+      .from(welcomeNotifications)
+      .where(eq(welcomeNotifications.discountCode, normalizedCode))
+      .limit(1);
+
+    if (welcomeNotif.length > 0) {
+      const notif = welcomeNotif[0];
+      if (notif.userId !== userId) throw new Error('NOT_YOUR_CODE');
+      if (new Date() > notif.expiresAt) throw new Error('DISCOUNT_EXPIRED');
+      if (notif.status !== 'sent') throw new Error('DISCOUNT_ALREADY_USED');
+      return {
+        discountCode: notif.discountCode,
+        discountPercent: notif.discountPercent,
+        expiresAt: notif.expiresAt,
+        minOrderAmount: notif.minOrderAmount,
+        codeType: 'welcome',
+      };
     }
-    
-    if (new Date() > notif.expiresAt) {
-      throw new Error('DISCOUNT_EXPIRED');
-    }
-    
-    if (notif.status !== 'sent') {
-      throw new Error('DISCOUNT_ALREADY_USED');
-    }
-    
-    return {
-      discountCode: notif.discountCode,
-      discountPercent: notif.discountPercent,
-      expiresAt: notif.expiresAt,
-    };
+
+    throw new Error('INVALID_DISCOUNT_CODE');
   }
 
   async checkoutWithDiscount(params: {
@@ -1268,6 +1284,7 @@ export class DbStorage implements IStorage {
       let totalDiscountApplied = 0;
       const usedBonuses: string[] = [];
       let abandonedCartUsed = false;
+      let welcomeCodeUsed = false;
       
       // Normalize abandonedCartCode: treat empty strings as undefined
       const normalizedCode = params.abandonedCartCode?.trim() || undefined;
@@ -1275,56 +1292,74 @@ export class DbStorage implements IStorage {
       // Flag to enforce mutual exclusivity between discount and bonuses
       let discountPathActive = false;
 
-      // Handle abandoned cart discount (non-cumulative with bonuses)
+      // Handle discount code (abandoned cart OR welcome) — non-cumulative with bonuses
       if (normalizedCode) {
-        // Validate notification exists
-        const notification = await tx
+        // Check abandonedCartNotifications first
+        const cartNotification = await tx
           .select()
           .from(abandonedCartNotifications)
           .where(eq(abandonedCartNotifications.discountCode, normalizedCode));
-        
-        if (notification.length === 0) {
-          throw new Error('INVALID_DISCOUNT_CODE');
+
+        if (cartNotification.length > 0) {
+          const notif = cartNotification[0];
+
+          if (notif.userId !== params.userId) throw new Error('DISCOUNT_NOT_YOURS');
+          if (new Date() > notif.expiresAt) throw new Error('DISCOUNT_EXPIRED');
+
+          const claimed = await tx
+            .update(abandonedCartNotifications)
+            .set({ status: 'used' })
+            .where(and(
+              eq(abandonedCartNotifications.id, notif.id),
+              eq(abandonedCartNotifications.status, 'sent')
+            ))
+            .returning();
+
+          if (claimed.length === 0) throw new Error('DISCOUNT_ALREADY_USED');
+
+          totalDiscountApplied = (params.initialAmount * notif.discountPercent) / 100;
+          abandonedCartUsed = true;
+          discountPathActive = true;
+        } else {
+          // Check welcomeNotifications
+          const welcomeNotif = await tx
+            .select()
+            .from(welcomeNotifications)
+            .where(eq(welcomeNotifications.discountCode, normalizedCode));
+
+          if (welcomeNotif.length > 0) {
+            const notif = welcomeNotif[0];
+
+            if (notif.userId !== params.userId) throw new Error('DISCOUNT_NOT_YOURS');
+            if (new Date() > notif.expiresAt) throw new Error('DISCOUNT_EXPIRED');
+
+            // Validate minimum order amount
+            if (params.initialAmount < notif.minOrderAmount) {
+              throw new Error(`MIN_ORDER_NOT_MET:${notif.minOrderAmount}`);
+            }
+
+            const claimed = await tx
+              .update(welcomeNotifications)
+              .set({ status: 'used' })
+              .where(and(
+                eq(welcomeNotifications.id, notif.id),
+                eq(welcomeNotifications.status, 'sent')
+              ))
+              .returning();
+
+            if (claimed.length === 0) throw new Error('DISCOUNT_ALREADY_USED');
+
+            totalDiscountApplied = (params.initialAmount * notif.discountPercent) / 100;
+            welcomeCodeUsed = true;
+            discountPathActive = true;
+          } else {
+            throw new Error('INVALID_DISCOUNT_CODE');
+          }
         }
-
-        const notif = notification[0];
-
-        // Validate ownership
-        if (notif.userId !== params.userId) {
-          throw new Error('DISCOUNT_NOT_YOURS');
-        }
-
-        // Validate not expired
-        if (new Date() > notif.expiresAt) {
-          throw new Error('DISCOUNT_EXPIRED');
-        }
-
-        // ATOMIC CLAIM: Try to mark as 'used' (only succeeds if status='sent')
-        const claimed = await tx
-          .update(abandonedCartNotifications)
-          .set({ 
-            status: 'used'
-            // usedInOrderId will be set after order is created
-          })
-          .where(and(
-            eq(abandonedCartNotifications.id, notif.id),
-            eq(abandonedCartNotifications.status, 'sent')
-          ))
-          .returning();
-
-        if (claimed.length === 0) {
-          throw new Error('DISCOUNT_ALREADY_USED');
-        }
-
-        // Apply discount percentage (NON-CUMULATIVE: will skip bonuses via flag)
-        totalDiscountApplied = (params.initialAmount * notif.discountPercent) / 100;
-        abandonedCartUsed = true;
-        discountPathActive = true; // Flag to prevent bonus application
       }
       
-      // Apply bonuses ONLY if NO abandoned cart discount was claimed
+      // Apply bonuses ONLY if NO discount code was claimed
       if (!discountPathActive) {
-        // No abandoned cart code: apply bonuses (FIFO)
         const availableBonuses = await tx
           .select()
           .from(bonuses)
@@ -1357,7 +1392,6 @@ export class DbStorage implements IStorage {
       // Calculate final amount
       const finalAmount = Math.max(0, params.initialAmount - totalDiscountApplied).toFixed(2);
 
-      // Create order - construct complete insert payload with calculated amount
       const orderInsertData: typeof orders.$inferInsert = {
         ...params.orderData,
         amount: finalAmount,
@@ -1376,6 +1410,14 @@ export class DbStorage implements IStorage {
           .update(abandonedCartNotifications)
           .set({ usedInOrderId: order.id })
           .where(eq(abandonedCartNotifications.discountCode, normalizedCode));
+      }
+
+      // Update welcome notification with actual order ID
+      if (welcomeCodeUsed && normalizedCode) {
+        await tx
+          .update(welcomeNotifications)
+          .set({ usedInOrderId: order.id })
+          .where(eq(welcomeNotifications.discountCode, normalizedCode));
       }
 
       // Mark bonuses as used (ONLY if no discount was applied)
