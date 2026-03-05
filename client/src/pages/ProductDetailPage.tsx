@@ -99,7 +99,7 @@ export default function ProductDetailPage() {
 
   const relatedProducts = allProducts
     .filter(p => p.categoryId === product?.categoryId && p.id !== id)
-    .slice(0, 3)
+    .slice(0, 2)
     .map(p => ({
       id: p.id,
       name: p.name,
