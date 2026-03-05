@@ -22,7 +22,7 @@ export default function RelatedProducts({ title, products, onProductClick }: Rel
         {products.map((product) => (
           <Card
             key={product.id}
-            className="min-w-[45px] w-[45px] flex-shrink-0 overflow-hidden cursor-pointer hover-elevate active-elevate-2"
+            className="min-w-[68px] w-[68px] flex-shrink-0 overflow-hidden cursor-pointer hover-elevate active-elevate-2"
             onClick={() => onProductClick?.(product.id)}
             data-testid={`card-related-${product.id}`}
           >
@@ -33,11 +33,11 @@ export default function RelatedProducts({ title, products, onProductClick }: Rel
                 className="w-full h-full object-cover"
               />
             </div>
-            <div className="p-1">
-              <p className="text-[9px] font-medium line-clamp-2 min-h-[1.5rem] mb-0.5 leading-tight">
+            <div className="p-1.5">
+              <p className="text-[10px] font-medium line-clamp-2 min-h-[2rem] mb-0.5 leading-tight">
                 {product.name}
               </p>
-              <p className="text-[9px] font-bold leading-tight">
+              <p className="text-[10px] font-bold leading-tight">
                 {product.price} ₽
               </p>
             </div>
