@@ -12,20 +12,12 @@ interface FavoriteButtonProps {
 export function FavoriteButton({ productId, className = '' }: FavoriteButtonProps) {
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // Verifica se è preferito
   const { data: favoriteCheck } = useQuery<{ isFavorite: boolean }>({
     queryKey: ['/api/favorites', productId, 'check'],
-    queryFn: async () => {
-      const response = await fetch(`/api/favorites/${productId}/check`, {
-        credentials: 'include',
-      });
-      return response.json();
-    },
   });
 
   const isFavorite = favoriteCheck?.isFavorite ?? false;
 
-  // Toggle preferito
   const toggleMutation = useMutation({
     mutationFn: async () => {
       if (isFavorite) {
@@ -34,17 +26,24 @@ export function FavoriteButton({ productId, className = '' }: FavoriteButtonProp
         return apiRequest('POST', `/api/favorites/${productId}`);
       }
     },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['/api/favorites', productId, 'check'] });
+      const previous = queryClient.getQueryData<{ isFavorite: boolean }>(['/api/favorites', productId, 'check']);
+      queryClient.setQueryData(['/api/favorites', productId, 'check'], { isFavorite: !isFavorite });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(['/api/favorites', productId, 'check'], context.previous);
+      }
+    },
     onSuccess: () => {
-      // Invalida query check
       queryClient.invalidateQueries({ queryKey: ['/api/favorites', productId, 'check'] });
-      // Invalida lista preferiti
       queryClient.invalidateQueries({ queryKey: ['/api/favorites'] });
-      
-      // Animazione
+
       setIsAnimating(true);
       setTimeout(() => setIsAnimating(false), 300);
-      
-      // Haptic feedback
+
       hapticFeedback(isFavorite ? 'light' : 'success');
     },
   });
@@ -63,8 +62,8 @@ export function FavoriteButton({ productId, className = '' }: FavoriteButtonProp
       data-testid={`button-favorite-${productId}`}
       aria-label={isFavorite ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
     >
-      <CheeseIcon 
-        filled={isFavorite} 
+      <CheeseIcon
+        filled={isFavorite}
         isAnimating={isAnimating}
       />
     </button>
