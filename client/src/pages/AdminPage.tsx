@@ -1685,11 +1685,33 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
           </div>
 
           {/* Order Total */}
-          <div className="border-t pt-4">
-            <div className="flex justify-between items-center font-semibold text-lg">
-              <span>Итого:</span>
-              <span>{displayOrder.amount}₽</span>
-            </div>
+          <div className="border-t pt-4 space-y-1.5">
+            {(() => {
+              const itemsSubtotal = displayOrder.items.reduce(
+                (sum: number, item: any) => sum + parseFloat(item.price) * parseFloat(item.quantity),
+                0
+              );
+              const finalAmount = parseFloat(displayOrder.amount);
+              const discountAmount = itemsSubtotal - finalAmount;
+              return (
+                <>
+                  <div className="flex justify-between items-center text-sm text-muted-foreground">
+                    <span>Сумма товаров:</span>
+                    <span>{itemsSubtotal.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
+                  </div>
+                  {discountAmount > 0.01 && (
+                    <div className="flex justify-between items-center text-sm text-muted-foreground">
+                      <span>Скидка:</span>
+                      <span>−{discountAmount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center font-semibold text-lg border-t pt-2 mt-1">
+                    <span>Итого к оплате:</span>
+                    <span>{finalAmount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* Generate Payment Link Button - Show for online payment orders in relevant statuses */}
@@ -1697,47 +1719,18 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
           {(displayOrder.status === 'СОБРАН' || displayOrder.status === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ') && 
            displayOrder.paymentMethod !== 'cash_on_delivery' && 
            displayOrder.paymentMethod !== 'cash' && (
-            <div className="border rounded-md p-4 bg-primary/5 space-y-3">
-              <h4 className="font-semibold text-sm">
-                💳 {displayOrder.status === 'СОБРАН' ? 'Генерация ссылки на оплату' : 'Повторная отправка ссылки'}
-              </h4>
-
-              {/* Payment breakdown */}
-              <div className="bg-background rounded-md p-3 space-y-1.5 text-sm border">
-                {(() => {
-                  const itemsSubtotal = displayOrder.items.reduce(
-                    (sum: number, item: any) => sum + parseFloat(item.price) * parseFloat(item.quantity),
-                    0
-                  );
-                  const finalAmount = parseFloat(displayOrder.amount);
-                  const discountAmount = itemsSubtotal - finalAmount;
-                  return (
-                    <>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Сумма товаров:</span>
-                        <span>{itemsSubtotal.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
-                      </div>
-                      {discountAmount > 0.01 && (
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Скидка:</span>
-                          <span>−{discountAmount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-bold text-base border-t pt-1.5 mt-1">
-                        <span>Клиенту будет выставлено:</span>
-                        <span className="text-primary">{finalAmount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽</span>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-sm text-muted-foreground">
-                  {displayOrder.status === 'СОБРАН' 
-                    ? 'Ссылка будет отправлена клиенту в Telegram.'
-                    : 'Ссылка уже была отправлена. Вы можете отправить её повторно.'}
-                </p>
+            <div className="border rounded-md p-4 bg-primary/5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <h4 className="font-semibold text-sm mb-1">
+                    💳 {displayOrder.status === 'СОБРАН' ? 'Генерация ссылки на оплату' : 'Повторная отправка ссылки'}
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {displayOrder.status === 'СОБРАН'
+                      ? `Клиенту будет выставлено ${parseFloat(displayOrder.amount).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽. Ссылка отправится в Telegram.`
+                      : `Ссылка уже была отправлена на сумму ${parseFloat(displayOrder.amount).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽. Вы можете отправить её повторно.`}
+                  </p>
+                </div>
                 <Button
                   onClick={() => generatePaymentLinkMutation.mutate()}
                   disabled={generatePaymentLinkMutation.isPending}
