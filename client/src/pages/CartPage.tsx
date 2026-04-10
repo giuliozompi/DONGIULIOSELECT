@@ -91,7 +91,8 @@ export default function CartPage() {
   });
 
   const totalAmount = enrichedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const totalBonusAmount = parseFloat(fortuneData?.totalBonusAmount || '0');
+  const firstBonus = fortuneData?.bonuses?.[0];
+  const totalBonusAmount = firstBonus ? parseFloat(firstBonus.amount) : 0;
   const finalAmount = Math.max(0, totalAmount - totalBonusAmount);
 
   useTelegramMainButton({

@@ -1359,6 +1359,7 @@ export class DbStorage implements IStorage {
       }
       
       // Apply bonuses ONLY if NO discount code was claimed
+      // RULE: only ONE bonus per order (non-cumulative)
       if (!discountPathActive) {
         const availableBonuses = await tx
           .select()
@@ -1369,23 +1370,13 @@ export class DbStorage implements IStorage {
           ))
           .orderBy(asc(bonuses.createdAt));
 
-        let remainingAmount = params.initialAmount;
-
-        for (const bonus of availableBonuses) {
-          if (remainingAmount <= 0) break;
-
+        if (availableBonuses.length > 0) {
+          const bonus = availableBonuses[0];
           const bonusAmount = parseFloat(bonus.amount);
-          const appliedAmount = Math.min(bonusAmount, remainingAmount);
+          const appliedAmount = Math.min(bonusAmount, params.initialAmount);
 
           totalDiscountApplied += appliedAmount;
-          remainingAmount -= appliedAmount;
           usedBonuses.push(bonus.id);
-
-          if (appliedAmount >= bonusAmount) {
-            continue;
-          } else {
-            break;
-          }
         }
       }
 

@@ -416,7 +416,8 @@ export default function CheckoutPage() {
   // Calculate totals with abandoned cart / bonus mutual exclusivity
   const { subtotal, abandonedCartDiscount, bonusDiscount, finalTotal } = useMemo(() => {
     const sub = cartItems.reduce((sum, item) => sum + item.total, 0);
-    const availableBonusAmount = parseFloat(fortuneData?.totalBonusAmount || '0');
+    const firstBonus = fortuneData?.bonuses?.[0];
+    const availableBonusAmount = firstBonus ? parseFloat(firstBonus.amount) : 0;
     
     // Mutual exclusivity: abandoned cart discount OR bonuses, never both
     const abandonedDiscount = validatedDiscount 
