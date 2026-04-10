@@ -199,7 +199,7 @@ export default function CartPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Gift className="w-4 h-4 text-primary" />
-                    <p className="text-base text-muted-foreground">Бонусы:</p>
+                    <p className="text-base text-muted-foreground">Бонус (колесо фортуны):</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <p className="text-lg font-semibold text-primary">
@@ -210,7 +210,9 @@ export default function CartPage() {
                     </Badge>
                   </div>
                 </div>
-                
+                <p className="text-xs text-muted-foreground" data-testid="text-bonus-rules">
+                  Применяется наибольшая скидка. Скидки не суммируются и не накапливаются.
+                </p>
                 <div className="h-px bg-border" />
               </>
             )}

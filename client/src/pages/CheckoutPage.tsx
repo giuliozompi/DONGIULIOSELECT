@@ -580,7 +580,7 @@ export default function CheckoutPage() {
               />
               {validatedDiscount.minOrderAmount && (
                 <p className="text-xs text-muted-foreground" data-testid="text-welcome-discount-condition">
-                  Скидка действует при заказе от {validatedDiscount.minOrderAmount.toLocaleString('ru-RU')} ₽ · Одноразовый · Не суммируется с другими скидками
+                  Минимальная сумма заказа: {validatedDiscount.minOrderAmount.toLocaleString('ru-RU')} ₽ · Одноразовый · Применяется наибольшая скидка, скидки не суммируются
                 </p>
               )}
             </div>
@@ -622,7 +622,7 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-sm text-green-600">
                 <span className="flex items-center gap-1">
                   <Gift className="w-4 h-4" />
-                  Бонусы:
+                  Бонус (колесо фортуны):
                 </span>
                 <span className="font-medium">-{formatPrice(bonusDiscount)}</span>
               </div>
@@ -632,6 +632,12 @@ export default function CheckoutPage() {
               <span>Итого:</span>
               <span data-testid="text-final-total">{formatPrice(finalTotal)}</span>
             </div>
+
+            {(abandonedCartDiscount > 0 || bonusDiscount > 0) && (
+              <p className="text-xs text-muted-foreground pt-1" data-testid="text-discount-rules">
+                Применяется наибольшая скидка. Скидки не суммируются и не накапливаются.
+              </p>
+            )}
           </div>
         </Card>
 
