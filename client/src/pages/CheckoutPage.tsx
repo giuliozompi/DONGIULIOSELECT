@@ -413,29 +413,38 @@ export default function CheckoutPage() {
     };
   });
 
-  // Calculate totals with abandoned cart / bonus mutual exclusivity
+  // Calculate totals with cascading discount logic:
+  // 1. Fortune wheel bonus applied FIRST on subtotal
+  // 2. Abandoned cart code applied SECOND on already-discounted price (cumulative)
+  // 3. Welcome code is NOT cumulative with bonus (alternative)
   const { subtotal, abandonedCartDiscount, bonusDiscount, finalTotal } = useMemo(() => {
     const sub = cartItems.reduce((sum, item) => sum + item.total, 0);
     const firstBonus = fortuneData?.bonuses?.[0];
     const availableBonusAmount = firstBonus ? parseFloat(firstBonus.amount) : 0;
-    
-    // Mutual exclusivity: abandoned cart discount OR bonuses, never both
-    const abandonedDiscount = validatedDiscount 
-      ? (sub * validatedDiscount.percent) / 100 
-      : 0;
-    const bonusDisc = abandonedDiscount > 0 
-      ? 0 
-      : Math.min(availableBonusAmount, sub);
-    
-    const final = Math.max(0, sub - abandonedDiscount - bonusDisc);
-    
+
+    const isCartCode = validatedDiscount?.codeType === 'cart';
+    const isWelcomeCode = validatedDiscount?.codeType === 'welcome';
+
+    // Bonus applies unless welcome code is active
+    const bonusDisc = isWelcomeCode ? 0 : Math.min(availableBonusAmount, sub);
+    const afterBonus = Math.max(0, sub - bonusDisc);
+
+    // Cart code cascades on after-bonus price; welcome applies on original subtotal (no bonus)
+    const abandonedDiscount = isCartCode
+      ? (afterBonus * validatedDiscount!.percent) / 100
+      : isWelcomeCode
+        ? (sub * validatedDiscount!.percent) / 100
+        : 0;
+
+    const final = Math.max(0, afterBonus - abandonedDiscount);
+
     return {
       subtotal: sub,
       abandonedCartDiscount: abandonedDiscount,
       bonusDiscount: bonusDisc,
       finalTotal: final,
     };
-  }, [cartItems, validatedDiscount, fortuneData?.totalBonusAmount]);
+  }, [cartItems, validatedDiscount, fortuneData?.bonuses]);
   
   // Handlers
   const handleValidateDiscount = () => {
@@ -580,7 +589,7 @@ export default function CheckoutPage() {
               />
               {validatedDiscount.minOrderAmount && (
                 <p className="text-xs text-muted-foreground" data-testid="text-welcome-discount-condition">
-                  Минимальная сумма заказа: {validatedDiscount.minOrderAmount.toLocaleString('ru-RU')} ₽ · Одноразовый · Применяется наибольшая скидка, скидки не суммируются
+                  Минимальная сумма заказа: {validatedDiscount.minOrderAmount.toLocaleString('ru-RU')} ₽ · Одноразовый · Не суммируется с бонусом колеса фортуны
                 </p>
               )}
             </div>
@@ -608,16 +617,6 @@ export default function CheckoutPage() {
               <span className="font-medium">{formatPrice(subtotal)}</span>
             </div>
             
-            {abandonedCartDiscount > 0 && (
-              <div className="flex justify-between text-sm text-primary" data-testid="row-discount-applied">
-                <span className="flex items-center gap-1">
-                  <Tag className="w-4 h-4" />
-                  Промокод ({validatedDiscount?.percent}%):
-                </span>
-                <span className="font-medium">-{formatPrice(abandonedCartDiscount)}</span>
-              </div>
-            )}
-            
             {bonusDiscount > 0 && (
               <div className="flex justify-between text-sm text-green-600">
                 <span className="flex items-center gap-1">
@@ -628,6 +627,16 @@ export default function CheckoutPage() {
               </div>
             )}
 
+            {abandonedCartDiscount > 0 && (
+              <div className="flex justify-between text-sm text-primary" data-testid="row-discount-applied">
+                <span className="flex items-center gap-1">
+                  <Tag className="w-4 h-4" />
+                  Промокод ({validatedDiscount?.percent}%):
+                </span>
+                <span className="font-medium">-{formatPrice(abandonedCartDiscount)}</span>
+              </div>
+            )}
+
             <div className="flex justify-between text-lg font-bold pt-2 border-t">
               <span>Итого:</span>
               <span data-testid="text-final-total">{formatPrice(finalTotal)}</span>
@@ -635,7 +644,13 @@ export default function CheckoutPage() {
 
             {(abandonedCartDiscount > 0 || bonusDiscount > 0) && (
               <p className="text-xs text-muted-foreground pt-1" data-testid="text-discount-rules">
-                Применяется наибольшая скидка. Скидки не суммируются и не накапливаются.
+                {bonusDiscount > 0 && abandonedCartDiscount > 0
+                  ? 'Бонус применён первым. Скидка за возвращение рассчитана от уже сниженной цены.'
+                  : validatedDiscount?.codeType === 'welcome'
+                    ? 'Приветственный промокод не суммируется с бонусом колеса фортуны.'
+                    : bonusDiscount > 0
+                      ? 'Бонус колеса фортуны суммируется со скидкой за возвращение.'
+                      : 'Скидка применена к итоговой сумме заказа.'}
               </p>
             )}
           </div>

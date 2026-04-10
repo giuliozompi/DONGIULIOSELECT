@@ -211,7 +211,7 @@ export default function CartPage() {
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground" data-testid="text-bonus-rules">
-                  Применяется наибольшая скидка. Скидки не суммируются и не накапливаются.
+                  Бонус применяется первым. Суммируется со скидкой за возвращение.
                 </p>
                 <div className="h-px bg-border" />
               </>

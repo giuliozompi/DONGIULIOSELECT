@@ -1281,20 +1281,21 @@ export class DbStorage implements IStorage {
     abandonedCartUsed: boolean;
   }> {
     return await db.transaction(async (tx) => {
-      let totalDiscountApplied = 0;
       const usedBonuses: string[] = [];
       let abandonedCartUsed = false;
       let welcomeCodeUsed = false;
-      
+
       // Normalize abandonedCartCode: treat empty strings as undefined
       const normalizedCode = params.abandonedCartCode?.trim() || undefined;
-      
-      // Flag to enforce mutual exclusivity between discount and bonuses
-      let discountPathActive = false;
 
-      // Handle discount code (abandoned cart OR welcome) — non-cumulative with bonuses
+      // Pending cart/welcome discount info (applied after bonus step)
+      let pendingCartPercent = 0;
+      let pendingWelcomePercent = 0;
+      let welcomeBlokesBonus = false;
+
+      // Step 1: Validate and claim discount code
       if (normalizedCode) {
-        // Check abandonedCartNotifications first
+        // Check abandonedCartNotifications first — CUMULATIVE with bonus (cascade)
         const cartNotification = await tx
           .select()
           .from(abandonedCartNotifications)
@@ -1317,11 +1318,10 @@ export class DbStorage implements IStorage {
 
           if (claimed.length === 0) throw new Error('DISCOUNT_ALREADY_USED');
 
-          totalDiscountApplied = (params.initialAmount * notif.discountPercent) / 100;
+          pendingCartPercent = notif.discountPercent;
           abandonedCartUsed = true;
-          discountPathActive = true;
         } else {
-          // Check welcomeNotifications
+          // Check welcomeNotifications — NOT cumulative with bonus
           const welcomeNotif = await tx
             .select()
             .from(welcomeNotifications)
@@ -1333,7 +1333,6 @@ export class DbStorage implements IStorage {
             if (notif.userId !== params.userId) throw new Error('DISCOUNT_NOT_YOURS');
             if (new Date() > notif.expiresAt) throw new Error('DISCOUNT_EXPIRED');
 
-            // Validate minimum order amount
             if (params.initialAmount < notif.minOrderAmount) {
               throw new Error(`MIN_ORDER_NOT_MET:${notif.minOrderAmount}`);
             }
@@ -1349,18 +1348,18 @@ export class DbStorage implements IStorage {
 
             if (claimed.length === 0) throw new Error('DISCOUNT_ALREADY_USED');
 
-            totalDiscountApplied = (params.initialAmount * notif.discountPercent) / 100;
+            pendingWelcomePercent = notif.discountPercent;
             welcomeCodeUsed = true;
-            discountPathActive = true;
+            welcomeBlokesBonus = true; // welcome code is NOT cumulative with bonus
           } else {
             throw new Error('INVALID_DISCOUNT_CODE');
           }
         }
       }
-      
-      // Apply bonuses ONLY if NO discount code was claimed
-      // RULE: only ONE bonus per order (non-cumulative)
-      if (!discountPathActive) {
+
+      // Step 2: Apply fortune wheel bonus (ONE per order) — skipped if welcome code is active
+      let bonusDiscount = 0;
+      if (!welcomeBlokesBonus) {
         const availableBonuses = await tx
           .select()
           .from(bonuses)
@@ -1372,13 +1371,23 @@ export class DbStorage implements IStorage {
 
         if (availableBonuses.length > 0) {
           const bonus = availableBonuses[0];
-          const bonusAmount = parseFloat(bonus.amount);
-          const appliedAmount = Math.min(bonusAmount, params.initialAmount);
-
-          totalDiscountApplied += appliedAmount;
+          bonusDiscount = Math.min(parseFloat(bonus.amount), params.initialAmount);
           usedBonuses.push(bonus.id);
         }
       }
+
+      // Step 3: Cascade calculation
+      // Bonus applied first → abandoned cart code applied on already-discounted price
+      const afterBonus = Math.max(0, params.initialAmount - bonusDiscount);
+      const cartDiscount = pendingCartPercent > 0
+        ? (afterBonus * pendingCartPercent) / 100
+        : 0;
+      // Welcome applies on initial amount (no bonus stacking)
+      const welcomeDiscount = pendingWelcomePercent > 0
+        ? (params.initialAmount * pendingWelcomePercent) / 100
+        : 0;
+
+      const totalDiscountApplied = bonusDiscount + cartDiscount + welcomeDiscount;
 
       // Calculate final amount
       const finalAmount = Math.max(0, params.initialAmount - totalDiscountApplied).toFixed(2);
@@ -1411,14 +1420,12 @@ export class DbStorage implements IStorage {
           .where(eq(welcomeNotifications.discountCode, normalizedCode));
       }
 
-      // Mark bonuses as used (ONLY if no discount was applied)
-      if (!discountPathActive) {
-        for (const bonusId of usedBonuses) {
-          await tx
-            .update(bonuses)
-            .set({ used: true, usedInOrderId: order.id })
-            .where(eq(bonuses.id, bonusId));
-        }
+      // Mark bonuses as used (bonus is now cumulative with cart code, so always mark if used)
+      for (const bonusId of usedBonuses) {
+        await tx
+          .update(bonuses)
+          .set({ used: true, usedInOrderId: order.id })
+          .where(eq(bonuses.id, bonusId));
       }
 
       // Clear cart
