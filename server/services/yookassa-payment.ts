@@ -182,15 +182,23 @@ export async function createYooKassaPayment(
   try {
     console.log('[YooKassa] Creating payment with idempotency key:', key);
     console.log('[YooKassa] Full payload:', JSON.stringify(payload, null, 2));
-    const response = await fetch(`${YOOKASSA_API_URL}/payments`, {
-      method: 'POST',
-      headers: {
-        'Authorization': getAuthHeader(),
-        'Idempotence-Key': key,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    let response: Response;
+    try {
+      response = await fetch(`${YOOKASSA_API_URL}/payments`, {
+        method: 'POST',
+        headers: {
+          'Authorization': getAuthHeader(),
+          'Idempotence-Key': key,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     console.log('[YooKassa] API Response status:', response.status, response.statusText);
 
@@ -203,11 +211,11 @@ export async function createYooKassaPayment(
         errorData = { raw: errorText };
       }
       
-      console.error('[YooKassa] API Error Response:', {
+      console.log('[YooKassa] API Error Response:', JSON.stringify({
         status: response.status,
         statusText: response.statusText,
         data: errorData
-      });
+      }));
       
       throw new Error(`YooKassa API error ${response.status}: ${JSON.stringify(errorData)}`);
     }
@@ -216,7 +224,7 @@ export async function createYooKassaPayment(
     console.log('[YooKassa] Payment created successfully:', payment.id);
     return payment;
   } catch (error) {
-    console.error('[YooKassa] Error creating payment:', error);
+    console.log('[YooKassa] Error creating payment:', error instanceof Error ? error.message : String(error));
     throw error;
   }
 }

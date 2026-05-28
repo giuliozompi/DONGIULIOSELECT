@@ -2966,9 +2966,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             paymentUrl: confirmationUrl,
           });
         } catch (error) {
-          console.error('❌ Error creating payment link:', error);
-          console.error('   Error details:', error instanceof Error ? error.message : 'Unknown error');
-          console.error('   Stack trace:', error instanceof Error ? error.stack : '');
+          console.log(`❌ [Auto-СОБРАН] Error creating payment link for order ${orderId}: ${error instanceof Error ? error.message : String(error)}`);
+          console.log(`   Auto-СОБРАН Stack: ${error instanceof Error ? error.stack?.split('\n')[1] : 'No stack'}`);
           
           // NON fallire completamente - lo stato СОБРАН è già salvato
           // Restituisci successo con warning che il link pagamento va generato manualmente
@@ -3308,21 +3307,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.log(`✅ [Order ${orderId}] Step 0/8: YooKassa credentials verified`);
       
+      console.log(`📥 [Order ${orderId}] Fetching order from DB...`);
       const order = await storage.getOrderById(orderId);
       if (!order) {
-        console.error(`❌ [Order ${orderId}] Order not found in database`);
+        console.log(`❌ [Order ${orderId}] Order not found in database`);
         return res.status(404).json({ error: 'Order not found' });
       }
+      console.log(`✅ [Order ${orderId}] Order fetched: status=${order.status}, method=${order.paymentMethod}, amount=${order.amount}`);
       
       // Verifica che l'ordine non sia già pagato
       if (order.status === 'ОПЛАЧЕН' || order.status === 'ПОЛУЧЕН') {
-        console.warn(`⚠️ [Order ${orderId}] Cannot generate link - order already paid/completed`);
+        console.log(`⚠️ [Order ${orderId}] Cannot generate link - order already paid/completed (status=${order.status})`);
         return res.status(400).json({ error: 'Order is already paid or completed' });
       }
       
       // Verifica che non sia pagamento in contanti
       if (order.paymentMethod === 'cash_on_delivery') {
-        console.warn(`⚠️ [Order ${orderId}] Cannot generate link - cash on delivery order`);
+        console.log(`⚠️ [Order ${orderId}] Cannot generate link - cash on delivery order`);
         return res.status(400).json({ error: 'Cannot generate payment link for cash on delivery orders' });
       }
       
@@ -3541,9 +3542,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLinkSent: true,
       });
     } catch (error) {
-      console.error(`❌ [Order ${req.params.id}] Payment link generation failed:`, error);
-      console.error(`   Error details:`, error instanceof Error ? error.message : 'Unknown error');
-      console.error(`   Stack:`, error instanceof Error ? error.stack : 'No stack trace');
+      console.log(`❌ [Order ${req.params.id}] Payment link generation FAILED: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(`   Stack: ${error instanceof Error ? error.stack?.split('\n')[1] : 'No stack'}`);
       res.status(500).json({ 
         error: 'Failed to generate payment link',
         details: error instanceof Error ? error.message : 'Unknown error',
