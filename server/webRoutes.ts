@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
-import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories } from '../shared/schema';
-import { eq, and, gt, or, ilike, desc, sql } from 'drizzle-orm';
+import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications } from '../shared/schema';
+import { eq, and, gt, or, ilike, desc, sql, lt } from 'drizzle-orm';
 import {
   hashPassword,
   verifyPassword,
@@ -433,6 +433,137 @@ export function registerWebRoutes(app: Express) {
         .where(and(eq(webAddresses.id, req.params.id), eq(webAddresses.userId, sub)));
       return res.json({ message: 'Адрес удалён' });
     } catch (err) {
+      return res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  });
+
+  // ── ORDERS ───────────────────────────────────────────────
+
+  const createOrderSchema = z.object({
+    customerName: z.string().min(1),
+    customerPhone: z.string().min(1),
+    customerEmail: z.string().email().optional().or(z.literal('')),
+    deliveryAddress: z.string().min(1),
+    deliveryNotes: z.string().optional(),
+    paymentMethod: z.enum(['yookassa', 'cash_on_delivery']),
+    items: z.array(z.object({
+      productId: z.string(),
+      productName: z.string(),
+      quantity: z.number().positive(),
+      price: z.string(),
+      unit: z.string(),
+    })).min(1),
+    amount: z.string(),
+    promoCode: z.string().optional(),
+    discountPercent: z.number().optional(),
+    discount: z.string().optional(),
+  });
+
+  // POST /web-api/orders
+  app.post('/web-api/orders', requireWebAuth, async (req: Request, res: Response) => {
+    try {
+      const { sub } = (req as any).webUser as JwtPayload;
+      const body = createOrderSchema.parse(req.body);
+
+      const [order] = await db.insert(orders).values({
+        id: randomUUID(),
+        userId: `web:${sub}`,
+        items: body.items,
+        amount: body.amount,
+        discount: body.discount || '0',
+        discountType: body.discountPercent ? 'percentage' : null,
+        discountValue: body.discountPercent ? `${body.discountPercent}%` : null,
+        customerName: body.customerName,
+        customerPhone: body.customerPhone,
+        customerEmail: body.customerEmail || null,
+        deliveryAddress: body.deliveryAddress,
+        deliveryNotes: body.deliveryNotes || null,
+        paymentMethod: body.paymentMethod,
+        status: 'ОФОРМЛЕН',
+        spinTokensAwarded: false,
+      }).returning();
+
+      // Mark promo code as used if provided
+      if (body.promoCode) {
+        const code = body.promoCode.toUpperCase();
+        if (code.startsWith('BENVENUTO-')) {
+          await db.update(welcomeNotifications)
+            .set({ status: 'used', usedInOrderId: order.id })
+            .where(eq(welcomeNotifications.discountCode, code));
+        } else {
+          await db.update(abandonedCartNotifications)
+            .set({ status: 'used', usedInOrderId: order.id })
+            .where(eq(abandonedCartNotifications.discountCode, code));
+        }
+      }
+
+      console.log(`[WebOrders] New order created: ${order.id} (user web:${sub}, amount: ${body.amount}₽)`);
+      return res.status(201).json(order);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
+      console.log('[WebOrders] Create error:', err instanceof Error ? err.message : err);
+      return res.status(500).json({ error: 'Ошибка создания заказа' });
+    }
+  });
+
+  // GET /web-api/orders
+  app.get('/web-api/orders', requireWebAuth, async (req: Request, res: Response) => {
+    try {
+      const { sub } = (req as any).webUser as JwtPayload;
+      const userOrders = await db.select().from(orders)
+        .where(eq(orders.userId, `web:${sub}`))
+        .orderBy(desc(orders.createdAt));
+      return res.json(userOrders);
+    } catch (err) {
+      return res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  });
+
+  // GET /web-api/orders/:id
+  app.get('/web-api/orders/:id', requireWebAuth, async (req: Request, res: Response) => {
+    try {
+      const { sub } = (req as any).webUser as JwtPayload;
+      const result = await db.select().from(orders)
+        .where(and(eq(orders.id, req.params.id), eq(orders.userId, `web:${sub}`)));
+      if (!result[0]) return res.status(404).json({ error: 'Заказ не найден' });
+      return res.json(result[0]);
+    } catch (err) {
+      return res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  });
+
+  // ── PROMO CODE VALIDATION ─────────────────────────────────
+
+  // POST /web-api/promo/validate
+  app.post('/web-api/promo/validate', requireWebAuth, async (req: Request, res: Response) => {
+    try {
+      const { code } = z.object({ code: z.string().min(1) }).parse(req.body);
+      const upperCode = code.toUpperCase().trim();
+      const now = new Date();
+
+      // Check welcome promo codes (BENVENUTO-XXXXXX)
+      if (upperCode.startsWith('BENVENUTO-')) {
+        const rows = await db.select().from(welcomeNotifications)
+          .where(eq(welcomeNotifications.discountCode, upperCode));
+        const promo = rows[0];
+        if (!promo) return res.json({ valid: false, message: 'Промокод не найден' });
+        if (promo.status === 'used') return res.json({ valid: false, message: 'Промокод уже использован' });
+        if (promo.status === 'expired' || promo.expiresAt < now) return res.json({ valid: false, message: 'Срок действия промокода истёк' });
+        return res.json({ valid: true, discountPercent: promo.discountPercent, type: 'welcome' });
+      }
+
+      // Check abandoned cart promo codes (CART7-XXXXXX style)
+      const cartRows = await db.select().from(abandonedCartNotifications)
+        .where(eq(abandonedCartNotifications.discountCode, upperCode));
+      const cartPromo = cartRows[0];
+      if (!cartPromo) return res.json({ valid: false, message: 'Промокод не найден' });
+      if (cartPromo.status === 'used') return res.json({ valid: false, message: 'Промокод уже использован' });
+      if (cartPromo.status === 'expired' || cartPromo.expiresAt < now) {
+        return res.json({ valid: false, message: 'Срок действия промокода истёк' });
+      }
+      return res.json({ valid: true, discountPercent: cartPromo.discountPercent, type: 'cart' });
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
       return res.status(500).json({ error: 'Ошибка сервера' });
     }
   });

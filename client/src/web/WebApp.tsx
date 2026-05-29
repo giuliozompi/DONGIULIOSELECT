@@ -10,12 +10,17 @@ import WebHomePage from './pages/WebHomePage';
 import WebCatalogPage from './pages/WebCatalogPage';
 import WebProductPage from './pages/WebProductPage';
 import WebCartPage from './pages/WebCartPage';
+import WebCheckoutPage from './pages/WebCheckoutPage';
+import WebOrderSuccessPage from './pages/WebOrderSuccessPage';
+import WebOrdersPage from './pages/WebOrdersPage';
+import WebWishlistPage from './pages/WebWishlistPage';
+import WebAddressesPage from './pages/WebAddressesPage';
 import WebAccountPage from './pages/WebAccountPage';
 import WebNotFoundPage from './pages/WebNotFoundPage';
 import { useWebAuth } from './hooks/useWebAuth';
 
 function WebAuthInit() {
-  const { refresh, isLoading } = useWebAuth();
+  const { refresh } = useWebAuth();
   useEffect(() => { refresh(); }, []);
   return null;
 }
@@ -32,6 +37,12 @@ function WebRouter() {
           <Route path="/web/search" component={WebCatalogPage} />
           <Route path="/web/product/:slug" component={WebProductPage} />
           <Route path="/web/cart" component={WebCartPage} />
+          <Route path="/web/checkout" component={WebCheckoutPage} />
+          <Route path="/web/order-success/:id" component={WebOrderSuccessPage} />
+          <Route path="/web/orders/:id" component={WebOrdersPage} />
+          <Route path="/web/account/orders" component={WebOrdersPage} />
+          <Route path="/web/account/addresses" component={WebAddressesPage} />
+          <Route path="/web/wishlist" component={WebWishlistPage} />
           <Route path="/web/account" component={WebAccountPage} />
           <Route path="/web/account/:section" component={WebAccountPage} />
           <Route component={WebNotFoundPage} />
