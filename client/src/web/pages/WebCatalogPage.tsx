@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import WebProductCard from '../components/WebProductCard';
 import { webApi } from '../lib/webApi';
+import { useWebMeta } from '../hooks/useWebMeta';
 
 interface Product {
   id: string; name: string; slug: string; price: string; priceOld?: string;
@@ -24,6 +25,12 @@ export default function WebCatalogPage() {
   const [activeCategory, setActiveCategory] = useState(params.get('category') || '');
   const [sortBy, setSortBy] = useState('default');
   const [page, setPage] = useState(1);
+
+  useWebMeta({
+    title: searchInput ? `Поиск: ${searchInput}` : 'Каталог товаров',
+    description: 'Весь ассортимент итальянских деликатесов Don Giulio Select: сыры, мясные деликатесы, паста, соусы с доставкой по России.',
+    type: 'website',
+  });
 
   const { data: categories } = useQuery({
     queryKey: ['/web-api/categories'],

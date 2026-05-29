@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useWebCart } from '../hooks/useWebCart';
 import { webApi } from '../lib/webApi';
+import { useWebMeta } from '../hooks/useWebMeta';
+import { ProductJsonLd, BreadcrumbJsonLd } from '../components/WebJsonLd';
 
 interface Product {
   id: string; name: string; slug: string; price: string; priceOld?: string;
@@ -29,6 +31,14 @@ export default function WebProductPage() {
     queryKey: ['/web-api/products', slug],
     queryFn: () => webApi.get<Product>(`/products/${slug}`),
     enabled: !!slug,
+  });
+
+  useWebMeta({
+    title: product?.name,
+    description: product?.descriptionShort || `Купить ${product?.name ?? ''} с доставкой по России. Don Giulio Select — итальянские деликатесы премиум качества.`,
+    image: product?.images?.[0],
+    type: 'product',
+    price: product?.price,
   });
 
   if (isLoading) {
@@ -84,6 +94,20 @@ export default function WebProductPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <ProductJsonLd
+        name={product.name}
+        description={product.descriptionShort}
+        image={product.images?.[0]}
+        price={product.price}
+        availability={product.inStock}
+        sku={product.id}
+        url={typeof window !== 'undefined' ? window.location.href : ''}
+      />
+      <BreadcrumbJsonLd items={[
+        { name: 'Главная', url: 'https://dongiulioselect.ru/web' },
+        { name: 'Каталог', url: 'https://dongiulioselect.ru/web/catalog' },
+        { name: product.name, url: `https://dongiulioselect.ru/web/product/${product.slug}` },
+      ]} />
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1 text-xs text-neutral-500 mb-6 flex-wrap">
         <button onClick={() => setLocation('/web')} className="hover:text-neutral-900">Главная</button>

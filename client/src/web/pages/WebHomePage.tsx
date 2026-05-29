@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import WebProductCard from '../components/WebProductCard';
 import { webApi } from '../lib/webApi';
+import { useWebMeta } from '../hooks/useWebMeta';
+import { OrganizationJsonLd } from '../components/WebJsonLd';
 
 interface Product {
   id: string;
@@ -31,6 +33,12 @@ interface Category {
 export default function WebHomePage() {
   const [, setLocation] = useLocation();
 
+  useWebMeta({
+    title: undefined,
+    description: 'Don Giulio Select — магазин премиальных итальянских деликатесов с доставкой по всей России. Сыры, мясные деликатесы, паста, трюфель и многое другое.',
+    type: 'website',
+  });
+
   const { data: productsData } = useQuery({
     queryKey: ['/web-api/products', { limit: 8 }],
     queryFn: () => webApi.get<{ products: Product[] }>('/products?limit=8'),
@@ -46,6 +54,7 @@ export default function WebHomePage() {
 
   return (
     <div className="min-h-screen">
+      <OrganizationJsonLd />
       {/* HERO */}
       <section className="relative overflow-hidden bg-neutral-900 text-white">
         <div
