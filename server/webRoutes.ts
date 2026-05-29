@@ -586,9 +586,19 @@ export function registerWebRoutes(app: Express) {
     }
   });
 
-  // POST /web-api/auth/link-telegram — called by Telegram bot webhook after user sends /start link_<code>
+  // POST /web-api/auth/link-telegram — called internally by Telegram bot webhook
+  // Requires X-Bot-Secret header: HMAC-SHA256("bot-link-v1", JWT_SECRET)
   app.post('/web-api/auth/link-telegram', async (req: Request, res: Response) => {
     try {
+      // Verify caller is our bot backend
+      const { createHmac: _hmac } = await import('crypto');
+      const jwtSecret = process.env.JWT_SECRET || 'web-jwt-secret-dev';
+      const expectedBotSecret = _hmac('sha256', jwtSecret).update('bot-link-v1').digest('hex');
+      const providedBotSecret = req.headers['x-bot-secret'];
+      if (!providedBotSecret || providedBotSecret !== expectedBotSecret) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
       const { code, telegramUserId } = z.object({
         code: z.string().min(1),
         telegramUserId: z.string().min(1),

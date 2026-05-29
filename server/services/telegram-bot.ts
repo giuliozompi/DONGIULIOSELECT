@@ -2,6 +2,60 @@ import { createHmac } from 'crypto';
 import { formatMoscowDateForNotification } from '../utils/date-formatter';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+/** Shared secret used by the bot to authenticate calls to /web-api/auth/link-telegram */
+export function getBotLinkSecret(): string {
+  const jwtSecret = process.env.JWT_SECRET || 'web-jwt-secret-dev';
+  return createHmac('sha256', jwtSecret).update('bot-link-v1').digest('hex');
+}
+
+/**
+ * Handle a Telegram Update object — currently processes /start link_<code> for web account linking.
+ * Called from the bot webhook route with a verified Telegram update.
+ */
+export async function handleTelegramUpdate(update: any): Promise<void> {
+  const message = update?.message;
+  if (!message?.text) return;
+
+  const text: string = message.text.trim();
+  const chatId = String(message.chat.id);
+  const telegramUserId = String(message.from?.id);
+
+  // /start link_<code>  — web account linking flow
+  if (text.startsWith('/start link_')) {
+    const code = text.replace('/start link_', '').trim();
+    if (!code) return;
+
+    try {
+      const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5000';
+      const resp = await fetch(`${baseUrl}/web-api/auth/link-telegram`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-bot-secret': getBotLinkSecret(),
+        },
+        body: JSON.stringify({ code, telegramUserId }),
+      });
+
+      if (resp.ok) {
+        await sendTelegramMessage({
+          chatId,
+          text: '✅ Telegram аккаунт успешно привязан к вашему профилю на сайте Don Giulio Select!',
+        });
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        const errText = (data as any).error || 'Неизвестная ошибка';
+        await sendTelegramMessage({
+          chatId,
+          text: `❌ Не удалось привязать аккаунт: ${errText}`,
+        });
+      }
+    } catch (err) {
+      console.error('[TelegramBot] link-telegram error:', err);
+    }
+    return;
+  }
+}
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
 export interface TelegramMessage {

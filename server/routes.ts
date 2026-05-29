@@ -6418,6 +6418,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/webhooks/telegram - Incoming Telegram bot updates (verified by secret token header)
+  app.post("/api/webhooks/telegram", async (req, res) => {
+    try {
+      // Telegram sends X-Telegram-Bot-Api-Secret-Token if configured on setWebhook
+      const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET;
+      if (secretToken) {
+        const provided = req.headers['x-telegram-bot-api-secret-token'];
+        if (provided !== secretToken) {
+          return res.status(403).json({ error: 'Forbidden' });
+        }
+      }
+
+      const { handleTelegramUpdate } = await import('./services/telegram-bot');
+      // Process async, respond 200 immediately (Telegram requirement)
+      handleTelegramUpdate(req.body).catch(err =>
+        console.error('[TelegramWebhook] handleTelegramUpdate error:', err)
+      );
+      return res.sendStatus(200);
+    } catch (err) {
+      console.error('[TelegramWebhook] error:', err);
+      return res.sendStatus(200); // Always 200 to avoid Telegram retries
+    }
+  });
+
   // POST /api/webhooks/cdek - Webhook for CDEK status updates (PUBLIC - no auth required)
   app.post("/api/webhooks/cdek", async (req, res) => {
     try {
