@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Switch, Route, useLocation } from 'wouter';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
@@ -6,6 +6,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initTelegramApp, getTelegramStartParam } from '@/lib/telegram';
 import { TelegramThemeProvider } from '@/components/TelegramThemeProvider';
+
+const WebApp = lazy(() => import('./web/WebApp'));
 import BottomNav from '@/components/BottomNav';
 import HomePage from '@/pages/HomePage';
 import CategoryPage from '@/pages/CategoryPage';
@@ -99,7 +101,7 @@ function DeepLinkHandler() {
   return null;
 }
 
-export default function App() {
+function TelegramApp() {
   useEffect(() => {
     initTelegramApp();
   }, []);
@@ -115,4 +117,27 @@ export default function App() {
       </QueryClientProvider>
     </TelegramThemeProvider>
   );
+}
+
+export default function App() {
+  const isWeb = typeof window !== 'undefined' && window.location.pathname.startsWith('/web');
+
+  if (isWeb) {
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+          <div className="text-center space-y-2">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 mx-auto flex items-center justify-center">
+              <span className="text-white text-sm font-bold">DG</span>
+            </div>
+            <p className="text-sm text-neutral-400">Загрузка...</p>
+          </div>
+        </div>
+      }>
+        <WebApp />
+      </Suspense>
+    );
+  }
+
+  return <TelegramApp />;
 }

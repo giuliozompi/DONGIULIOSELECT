@@ -1075,3 +1075,99 @@ export const welcomeNotifications = pgTable("welcome_notifications", {
 export const insertWelcomeNotificationSchema = createInsertSchema(welcomeNotifications).omit({ id: true, sentAt: true });
 export type InsertWelcomeNotification = z.infer<typeof insertWelcomeNotificationSchema>;
 export type WelcomeNotification = typeof welcomeNotifications.$inferSelect;
+
+// ============================================================
+// WEB E-COMMERCE AUTH TABLES (separate from Telegram auth)
+// ============================================================
+
+// Utenti web (registrazione con email/password, separati da Telegram)
+export const webUsers = pgTable("web_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").unique(),
+  phone: text("phone").unique(),
+  passwordHash: text("password_hash"),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name"),
+  avatar: text("avatar"),
+  isEmailVerified: boolean("is_email_verified").notNull().default(false),
+  isPhoneVerified: boolean("is_phone_verified").notNull().default(false),
+  verificationToken: text("verification_token"),
+  verificationTokenExpiresAt: timestamp("verification_token_expires_at"),
+  resetPasswordToken: text("reset_password_token"),
+  resetPasswordExpiresAt: timestamp("reset_password_expires_at"),
+  // Collegamento opzionale all'account Telegram
+  telegramUserId: varchar("telegram_user_id"),
+  // Preferenze
+  marketingConsent: boolean("marketing_consent").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertWebUserSchema = createInsertSchema(webUsers).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertWebUser = z.infer<typeof insertWebUserSchema>;
+export type WebUser = typeof webUsers.$inferSelect;
+
+// Sessioni web (refresh token per JWT rotation)
+export const webSessions = pgTable("web_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => webUsers.id, { onDelete: 'cascade' }),
+  refreshToken: text("refresh_token").notNull().unique(),
+  userAgent: text("user_agent"),
+  ipAddress: text("ip_address"),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+});
+
+export const insertWebSessionSchema = createInsertSchema(webSessions).omit({ id: true, createdAt: true });
+export type InsertWebSession = z.infer<typeof insertWebSessionSchema>;
+export type WebSession = typeof webSessions.$inferSelect;
+
+// Account OAuth (Google, etc.)
+export const oauthAccounts = pgTable("oauth_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => webUsers.id, { onDelete: 'cascade' }),
+  provider: text("provider").notNull(), // 'google' | 'apple'
+  providerUserId: text("provider_user_id").notNull(),
+  email: text("email"),
+  displayName: text("display_name"),
+  avatar: text("avatar"),
+  accessToken: text("access_token"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertOauthAccountSchema = createInsertSchema(oauthAccounts).omit({ id: true, createdAt: true });
+export type InsertOauthAccount = z.infer<typeof insertOauthAccountSchema>;
+export type OauthAccount = typeof oauthAccounts.$inferSelect;
+
+// Lista desideri web
+export const webWishlists = pgTable("web_wishlists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => webUsers.id, { onDelete: 'cascade' }),
+  productId: varchar("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertWebWishlistSchema = createInsertSchema(webWishlists).omit({ id: true, createdAt: true });
+export type InsertWebWishlist = z.infer<typeof insertWebWishlistSchema>;
+export type WebWishlist = typeof webWishlists.$inferSelect;
+
+// Indirizzi salvati utenti web
+export const webAddresses = pgTable("web_addresses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => webUsers.id, { onDelete: 'cascade' }),
+  label: text("label").notNull().default('Дом'), // 'Дом' | 'Работа' | custom
+  fullAddress: text("full_address").notNull(),
+  city: text("city").notNull(),
+  street: text("street"),
+  building: text("building"),
+  apartment: text("apartment"),
+  postalCode: text("postal_code"),
+  notes: text("notes"),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertWebAddressSchema = createInsertSchema(webAddresses).omit({ id: true, createdAt: true });
+export type InsertWebAddress = z.infer<typeof insertWebAddressSchema>;
+export type WebAddress = typeof webAddresses.$inferSelect;

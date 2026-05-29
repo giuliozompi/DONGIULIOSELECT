@@ -7473,6 +7473,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── WEB E-COMMERCE API (separate from Telegram auth) ──────
+  const { registerWebRoutes } = await import('./webRoutes');
+  registerWebRoutes(app);
+
   const httpServer = createServer(app);
   return httpServer;
 }

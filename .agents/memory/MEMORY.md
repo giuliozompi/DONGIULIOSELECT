@@ -1,0 +1,2 @@
+- [Web e-commerce routing](web-ecommerce-routing.md) — /web/* paths routed to standalone WebApp; Telegram app untouched at all other paths
+- [Web auth system](web-auth-system.md) — JWT (15min access token) + httpOnly refresh cookie (30d) at /web-api path; separate webUsers table from Telegram users
