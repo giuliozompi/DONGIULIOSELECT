@@ -120,7 +120,9 @@ function TelegramApp() {
 }
 
 export default function App() {
-  const isWeb = typeof window !== 'undefined' && window.location.pathname.startsWith('/web');
+  const isWebPath = typeof window !== 'undefined' && window.location.pathname.startsWith('/web');
+  const isInTelegram = typeof window !== 'undefined' && !!(window as any).Telegram?.WebApp?.initData;
+  const isWeb = isWebPath || !isInTelegram;
 
   if (isWeb) {
     return (
