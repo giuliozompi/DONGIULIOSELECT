@@ -2,7 +2,7 @@
 set -e
 
 TOKEN="$GITHUB_PERSONAL_ACCESS_TOKEN"
-REPO="giuliozombi/DONGIULIOSELECT"
+REPO="giuliozompi/DONGIULIOSELECT"
 
 # Check if Dockerfile already exists on GitHub
 EXISTING_SHA=$(curl -s -H "Authorization: token $TOKEN" \

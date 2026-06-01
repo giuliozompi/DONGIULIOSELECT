@@ -7,4 +7,4 @@ if [ -z "$GITHUB_PERSONAL_ACCESS_TOKEN" ]; then
   exit 1
 fi
 
-git -c credential.helper="" push "https://giuliozompi:${GITHUB_PERSONAL_ACCESS_TOKEN}@github.com/giuliozombi/DONGIULIOSELECT.git" main
+git -c credential.helper="" push "https://giuliozompi:${GITHUB_PERSONAL_ACCESS_TOKEN}@github.com/giuliozompi/DONGIULIOSELECT.git" main

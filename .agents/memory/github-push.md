@@ -7,10 +7,10 @@ description: How to push to giuliozompi/DONGIULIOSELECT from Replit using GITHUB
 
 **Working command:**
 ```bash
-git -c credential.helper="" push "https://giuliozompi:${GITHUB_PERSONAL_ACCESS_TOKEN}@github.com/giuliozombi/DONGIULIOSELECT.git" main
+git -c credential.helper="" push "https://giuliozompi:${GITHUB_PERSONAL_ACCESS_TOKEN}@github.com/giuliozompi/DONGIULIOSELECT.git" main
 ```
 
-**Why:** Must include `giuliozompi:` username before the token in the URL, and `credential.helper=""` to bypass any cached credentials. Without username prefix, git returns "Repository not found" even with valid `repo`-scoped token.
+**Why:** The owner/repo is `giuliozompi/DONGIULIOSELECT` — note the username is spelled `giuliozompi` (with **mp**), NOT `giuliozombi` (with **mb**). A misspelled owner returns "Repository not found" / 404 on every git push AND every REST API call, even with a valid `repo`-scoped token. Must also include the `giuliozompi:` username before the token in the URL, and `credential.helper=""` to bypass any cached credentials.
 
 **How to apply:** Use this exact format every time a push to GitHub is needed. Script saved at `scripts/push-github.sh`.
 
