@@ -1,0 +1,907 @@
+23:11:19 | DEBUG | 
+23:11:19 | DEBUG | Turn off this advice by setting config variable advice.detachedHead to false
+23:11:19 | DEBUG | 
+23:11:19 | DEBUG | HEAD is now at f56db67 Correct repository username for GitHub push operations
+23:11:19 | DEBUG | Cloning into '/workspace'...
+23:11:19 | DEBUG |   git switch -c <new-branch-name>
+23:11:19 | DEBUG | do so (now or later) by using -c with the switch command. Example:
+23:11:19 | DEBUG | 
+23:11:19 | DEBUG | You are in 'detached HEAD' state. You can look around, make experimental
+23:11:19 | DEBUG | 
+23:11:19 | DEBUG | Note: switching to 'f56db67c63d699f7f51169ab1c6a0857fe235244'.
+23:11:19 | DEBUG | changes and commit them, and you can discard any commits you make in this
+23:11:19 | DEBUG | state without impacting any branches by switching back to a branch.
+23:11:19 | DEBUG | 
+23:11:19 | DEBUG |   git switch -
+23:11:19 | DEBUG | If you want to create a new branch to retain commits you create, you may
+23:11:19 | DEBUG | 
+23:11:19 | DEBUG | Or undo this operation with:
+23:11:19 | DEBUG | 
+23:11:24 | DEBUG | #4 DONE 0.0s
+23:11:24 | DEBUG | #3 extracting sha256:804d4d68057cbb26cbcde9a735148ebc6589911bad32cf9dbddb5b0ba878bf1f 1.0s done
+23:11:24 | DEBUG | #3 sha256:e54aec64c365815cd7b91e718f00ac6e625562b1de09036b38614621b42c7582 3.31kB / 3.31kB 0.4s done
+23:11:24 | DEBUG | #3 sha256:804d4d68057cbb26cbcde9a735148ebc6589911bad32cf9dbddb5b0ba878bf1f 41.42MB / 41.42MB 0.8s done
+23:11:24 | DEBUG | 
+23:11:24 | DEBUG | #3 DONE 2.8s
+23:11:24 | DEBUG | #6 0.569 Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+23:11:24 | DEBUG | #4 [internal] load .dockerignore
+23:11:24 | DEBUG | #6 0.334 Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8790 kB]
+23:11:24 | DEBUG | #3 extracting sha256:e54aec64c365815cd7b91e718f00ac6e625562b1de09036b38614621b42c7582 done
+23:11:24 | DEBUG | #6 1.847 Reading package lists...
+23:11:24 | DEBUG | #5 transferring context: 28.31MB 0.8s done
+23:11:24 | DEBUG | #3 extracting sha256:3c02fd806613748139b8b8a14a69ae3518a1b0e863c57c35aada3b92ed87fb31 done
+23:11:24 | DEBUG | #6 [2/7] RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends     curl     && rm -rf /var/lib/apt/lists/*
+23:11:24 | DEBUG | #1 transferring dockerfile: 1.94kB 0.0s done
+23:11:24 | DEBUG | #1 WARN: Empty continuation line found in: RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends     curl     && rm -rf /var/lib/apt/lists/*
+23:11:24 | DEBUG | #6 1.847 Fetched 9363 kB in 2s (5279 kB/s)
+23:11:24 | DEBUG | #3 extracting sha256:64cfb949317c9824fd081d55c59a7225bfe1f650c6395ba42d7ed0ccf51993d2 0.0s done
+23:11:24 | DEBUG | 
+23:11:24 | DEBUG | #5 [internal] load build context
+23:11:24 | DEBUG | #4 transferring context: 2B done
+23:11:24 | DEBUG | #3 sha256:64cfb949317c9824fd081d55c59a7225bfe1f650c6395ba42d7ed0ccf51993d2 1.71MB / 1.71MB 0.5s done
+23:11:24 | DEBUG | #3 [runner  1/11] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+23:11:24 | DEBUG | #6 0.292 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+23:11:24 | DEBUG | 
+23:11:24 | DEBUG | #3 resolve docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 done
+23:11:24 | DEBUG | 
+23:11:24 | DEBUG | #1 [internal] load build definition from Dockerfile
+23:11:24 | DEBUG | #5 DONE 0.8s
+23:11:24 | DEBUG | #6 0.152 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+23:11:24 | DEBUG | #6 0.255 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+23:11:24 | DEBUG | #2 [internal] load metadata for docker.io/library/node:20-slim
+23:11:24 | DEBUG | #6 0.569 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [312 kB]
+23:11:24 | DEBUG | 
+23:11:24 | DEBUG | #3 sha256:ff86ea2e5edce334d19a34fbc65d1a511aa1fc823dba1110422f991aa56b44d4 28.24MB / 28.24MB 0.8s done
+23:11:24 | INFO | Build started
+23:11:24 | DEBUG | #3 extracting sha256:ff86ea2e5edce334d19a34fbc65d1a511aa1fc823dba1110422f991aa56b44d4 0.8s done
+23:11:24 | DEBUG | #1 DONE 0.0s
+23:11:24 | DEBUG | #2 DONE 0.4s
+23:11:24 | DEBUG | #3 sha256:3c02fd806613748139b8b8a14a69ae3518a1b0e863c57c35aada3b92ed87fb31 447B / 447B 0.2s done
+23:11:24 | DEBUG | #6 2.651 Reading package lists...
+23:11:25 | DEBUG | #6 3.463 Reading state information...
+23:11:25 | DEBUG | #6 3.285 Building dependency tree...
+23:11:25 | DEBUG | #6 3.614   libbrotli1 libcurl4 libgssapi-krb5-2 libk5crypto3 libkeyutils1 libkrb5-3
+23:11:25 | DEBUG | #6 3.614 The following additional packages will be installed:
+23:11:25 | DEBUG | #6 3.616   krb5-doc krb5-user
+23:11:25 | DEBUG | #6 3.700   libsasl2-2 libsasl2-modules-db libssh2-1 libssl3
+23:11:25 | DEBUG | #6 3.788 Get:1 http://deb.debian.org/debian bookworm/main amd64 libbrotli1 amd64 1.0.9-2+b6 [275 kB]
+23:11:25 | DEBUG | #6 3.700   libkrb5-3 libkrb5support0 libldap-2.5-0 libnghttp2-14 libpsl5 librtmp1
+23:11:25 | DEBUG | #6 3.616 Suggested packages:
+23:11:25 | DEBUG | #6 3.788 After this operation, 12.0 MB of additional disk space will be used.
+23:11:25 | DEBUG | #6 3.616   ca-certificates krb5-locales libldap-common publicsuffix libsasl2-modules
+23:11:25 | DEBUG | #6 3.615   libsasl2-modules-db libssh2-1 libssl3
+23:11:25 | DEBUG | #6 3.616 Recommended packages:
+23:11:25 | DEBUG | #6 3.615   libkrb5support0 libldap-2.5-0 libnghttp2-14 libpsl5 librtmp1 libsasl2-2
+23:11:25 | DEBUG | #6 3.700   curl libbrotli1 libcurl4 libgssapi-krb5-2 libk5crypto3 libkeyutils1
+23:11:25 | DEBUG | #6 3.699 The following NEW packages will be installed:
+23:11:25 | DEBUG | #6 3.788 Need to get 4240 kB of archives.
+23:11:25 | DEBUG | #6 3.788 0 upgraded, 16 newly installed, 0 to remove and 12 not upgraded.
+23:11:25 | DEBUG | #6 3.926 Get:2 http://deb.debian.org/debian-security bookworm-security/main amd64 libkrb5support0 amd64 1.20.1-2+deb12u5 [33.2 kB]
+23:11:25 | DEBUG | #6 4.025 Get:7 http://deb.debian.org/debian-security bookworm-security/main amd64 libgssapi-krb5-2 amd64 1.20.1-2+deb12u5 [135 kB]
+23:11:25 | DEBUG | #6 3.931 Get:4 http://deb.debian.org/debian bookworm/main amd64 libkeyutils1 amd64 1.6.3-2 [8808 B]
+23:11:25 | DEBUG | #6 3.931 Get:5 http://deb.debian.org/debian bookworm/main amd64 libssl3 amd64 3.0.20-1~deb12u1 [2034 kB]
+23:11:25 | DEBUG | #6 3.927 Get:3 http://deb.debian.org/debian-security bookworm-security/main amd64 libk5crypto3 amd64 1.20.1-2+deb12u5 [79.7 kB]
+23:11:25 | DEBUG | #6 4.010 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 libkrb5-3 amd64 1.20.1-2+deb12u5 [332 kB]
+23:11:25 | DEBUG | #6 4.027 Get:10 http://deb.debian.org/debian bookworm/main amd64 libldap-2.5-0 amd64 2.5.13+dfsg-5 [183 kB]
+23:11:25 | DEBUG | #6 4.026 Get:8 http://deb.debian.org/debian bookworm/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg-10 [20.3 kB]
+23:11:25 | DEBUG | #6 4.026 Get:9 http://deb.debian.org/debian bookworm/main amd64 libsasl2-2 amd64 2.1.28+dfsg-10 [59.7 kB]
+23:11:25 | DEBUG | #6 4.075 Get:16 http://deb.debian.org/debian bookworm/main amd64 curl amd64 7.88.1-10+deb12u14 [316 kB]
+23:11:25 | DEBUG | #6 4.199 debconf: delaying package configuration, since apt-utils is not installed
+23:11:25 | DEBUG | #6 4.044 Get:15 http://deb.debian.org/debian bookworm/main amd64 libcurl4 amd64 7.88.1-10+deb12u14 [392 kB]
+23:11:25 | DEBUG | #6 4.032 Get:13 http://deb.debian.org/debian bookworm/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2+b2 [60.8 kB]
+23:11:25 | DEBUG | #6 4.030 Get:11 http://deb.debian.org/debian-security bookworm-security/main amd64 libnghttp2-14 amd64 1.52.0-1+deb12u3 [72.4 kB]
+23:11:25 | DEBUG | #6 4.031 Get:12 http://deb.debian.org/debian bookworm/main amd64 libpsl5 amd64 0.21.2-1 [58.7 kB]
+23:11:25 | DEBUG | #6 4.032 Get:14 http://deb.debian.org/debian bookworm/main amd64 libssh2-1 amd64 1.10.0-3+b1 [179 kB]
+23:11:25 | DEBUG | #6 4.251 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6096 files and directories currently installed.)
+23:11:25 | DEBUG | #6 4.303 Selecting previously unselected package libkrb5support0:amd64.
+23:11:25 | DEBUG | #6 4.233 Fetched 4240 kB in 0s (11.4 MB/s)
+23:11:25 | DEBUG | #6 4.260 Unpacking libbrotli1:amd64 (1.0.9-2+b6) ...
+23:11:25 | DEBUG | #6 4.251 Selecting previously unselected package libbrotli1:amd64.
+23:11:25 | DEBUG | #6 4.257 Preparing to unpack .../00-libbrotli1_1.0.9-2+b6_amd64.deb ...
+23:11:26 | DEBUG | #6 4.361 Selecting previously unselected package libkeyutils1:amd64.
+23:11:26 | DEBUG | #6 4.334 Unpacking libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+23:11:26 | DEBUG | #6 4.332 Preparing to unpack .../02-libk5crypto3_1.20.1-2+deb12u5_amd64.deb ...
+23:11:26 | DEBUG | #6 4.331 Selecting previously unselected package libk5crypto3:amd64.
+23:11:26 | DEBUG | #6 4.391 Unpacking libssl3:amd64 (3.0.20-1~deb12u1) ...
+23:11:26 | DEBUG | #6 4.389 Preparing to unpack .../04-libssl3_3.0.20-1~deb12u1_amd64.deb ...
+23:11:26 | DEBUG | #6 4.304 Preparing to unpack .../01-libkrb5support0_1.20.1-2+deb12u5_amd64.deb ...
+23:11:26 | DEBUG | #6 4.306 Unpacking libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+23:11:26 | DEBUG | #6 4.362 Preparing to unpack .../03-libkeyutils1_1.6.3-2_amd64.deb ...
+23:11:26 | DEBUG | #6 4.388 Selecting previously unselected package libssl3:amd64.
+23:11:26 | DEBUG | #6 4.364 Unpacking libkeyutils1:amd64 (1.6.3-2) ...
+23:11:26 | DEBUG | #6 4.554 Selecting previously unselected package libkrb5-3:amd64.
+23:11:26 | DEBUG | #6 4.617 Preparing to unpack .../06-libgssapi-krb5-2_1.20.1-2+deb12u5_amd64.deb ...
+23:11:26 | DEBUG | #6 4.676 Selecting previously unselected package libsasl2-2:amd64.
+23:11:26 | DEBUG | #6 4.648 Selecting previously unselected package libsasl2-modules-db:amd64.
+23:11:26 | DEBUG | #6 4.616 Selecting previously unselected package libgssapi-krb5-2:amd64.
+23:11:26 | DEBUG | #6 4.557 Unpacking libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+23:11:26 | DEBUG | #6 4.620 Unpacking libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+23:11:26 | DEBUG | #6 4.650 Preparing to unpack .../07-libsasl2-modules-db_2.1.28+dfsg-10_amd64.deb ...
+23:11:26 | DEBUG | #6 4.555 Preparing to unpack .../05-libkrb5-3_1.20.1-2+deb12u5_amd64.deb ...
+23:11:26 | DEBUG | #6 4.652 Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+23:11:26 | DEBUG | #6 4.679 Unpacking libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+23:11:26 | DEBUG | #6 4.780 Selecting previously unselected package libpsl5:amd64.
+23:11:26 | DEBUG | #6 4.707 Selecting previously unselected package libldap-2.5-0:amd64.
+23:11:26 | DEBUG | #6 4.747 Selecting previously unselected package libnghttp2-14:amd64.
+23:11:26 | DEBUG | #6 4.678 Preparing to unpack .../08-libsasl2-2_2.1.28+dfsg-10_amd64.deb ...
+23:11:26 | DEBUG | #6 4.750 Unpacking libnghttp2-14:amd64 (1.52.0-1+deb12u3) ...
+23:11:26 | DEBUG | #6 4.708 Preparing to unpack .../09-libldap-2.5-0_2.5.13+dfsg-5_amd64.deb ...
+23:11:26 | DEBUG | #6 4.748 Preparing to unpack .../10-libnghttp2-14_1.52.0-1+deb12u3_amd64.deb ...
+23:11:26 | DEBUG | #6 4.710 Unpacking libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+23:11:26 | DEBUG | #6 4.784 Unpacking libpsl5:amd64 (0.21.2-1) ...
+23:11:26 | DEBUG | #6 4.859 Unpacking libssh2-1:amd64 (1.10.0-3+b1) ...
+23:11:26 | DEBUG | #6 4.854 Selecting previously unselected package libssh2-1:amd64.
+23:11:26 | DEBUG | #6 4.815 Selecting previously unselected package librtmp1:amd64.
+23:11:26 | DEBUG | #6 4.817 Preparing to unpack .../12-librtmp1_2.4+20151223.gitfa8646d.1-2+b2_amd64.deb ...
+23:11:26 | DEBUG | #6 4.856 Preparing to unpack .../13-libssh2-1_1.10.0-3+b1_amd64.deb ...
+23:11:26 | DEBUG | #6 4.820 Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+23:11:26 | DEBUG | #6 4.899 Selecting previously unselected package libcurl4:amd64.
+23:11:26 | DEBUG | #6 4.781 Preparing to unpack .../11-libpsl5_0.21.2-1_amd64.deb ...
+23:11:26 | DEBUG | #6 4.997 Setting up libkeyutils1:amd64 (1.6.3-2) ...
+23:11:26 | DEBUG | #6 4.903 Unpacking libcurl4:amd64 (7.88.1-10+deb12u14) ...
+23:11:26 | DEBUG | #6 4.901 Preparing to unpack .../14-libcurl4_7.88.1-10+deb12u14_amd64.deb ...
+23:11:26 | DEBUG | #6 4.947 Preparing to unpack .../15-curl_7.88.1-10+deb12u14_amd64.deb ...
+23:11:26 | DEBUG | #6 4.946 Selecting previously unselected package curl.
+23:11:26 | DEBUG | #6 5.004 Setting up libpsl5:amd64 (0.21.2-1) ...
+23:11:26 | DEBUG | #6 4.949 Unpacking curl (7.88.1-10+deb12u14) ...
+23:11:26 | DEBUG | #6 5.040 Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+23:11:26 | DEBUG | #6 5.010 Setting up libbrotli1:amd64 (1.0.9-2+b6) ...
+23:11:26 | DEBUG | #6 5.034 Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+23:11:26 | DEBUG | #6 5.057 Setting up libssh2-1:amd64 (1.10.0-3+b1) ...
+23:11:26 | DEBUG | #6 5.075 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u5) ...
+23:11:26 | DEBUG | #6 5.022 Setting up libnghttp2-14:amd64 (1.52.0-1+deb12u3) ...
+23:11:26 | DEBUG | #6 5.069 Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+23:11:26 | DEBUG | #6 5.052 Setting up libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+23:11:26 | DEBUG | #6 5.046 Setting up libk5crypto3:amd64 (1.20.1-2+deb12u5) ...
+23:11:26 | DEBUG | #6 5.016 Setting up libssl3:amd64 (3.0.20-1~deb12u1) ...
+23:11:26 | DEBUG | #6 5.028 Setting up libkrb5support0:amd64 (1.20.1-2+deb12u5) ...
+23:11:26 | DEBUG | #6 5.063 Setting up libkrb5-3:amd64 (1.20.1-2+deb12u5) ...
+23:11:26 | DEBUG | #6 5.089 Setting up curl (7.88.1-10+deb12u14) ...
+23:11:26 | DEBUG | #6 5.096 Processing triggers for libc-bin (2.36-9+deb12u13) ...
+23:11:26 | DEBUG | #6 5.083 Setting up libcurl4:amd64 (7.88.1-10+deb12u14) ...
+23:11:27 | DEBUG | #6 DONE 6.0s
+23:11:27 | DEBUG | #7 [3/7] RUN groupadd --gid 2000 app && useradd --uid 2000 --gid 2000 -m -s /bin/bash app
+23:11:27 | DEBUG | 
+23:11:28 | DEBUG | #7 DONE 0.6s
+23:11:28 | DEBUG | 
+23:11:28 | DEBUG | #8 [4/7] WORKDIR /app
+23:11:28 | DEBUG | #8 DONE 0.3s
+23:11:28 | DEBUG | #9 [5/7] COPY --chown=app:app . .
+23:11:28 | DEBUG | 
+23:11:28 | DEBUG | #9 DONE 0.2s
+23:11:28 | DEBUG | #10 0.136 npm verbose cli /usr/local/bin/node /usr/local/bin/npm
+23:11:28 | DEBUG | #10 0.136 npm info using npm@10.8.2
+23:11:28 | DEBUG | 
+23:11:28 | DEBUG | #10 [6/7] RUN if [ -f yarn.lock ]; then   corepack enable;   if [ "$(yarn --version | cut -d. -f1)" = "1" ]; then     yarn install --check-files;   else     yarn install --immutable;   fi; elif [ -f pnpm-lock.yaml ]; then   corepack enable && pnpm install; elif [ -f package-lock.json ]; then   npm ci --verbose; elif [ -f package.json ]; then   npm install --verbose; else   echo "No package.json found - skip installing dependencies"; fi
+23:11:29 | DEBUG | #10 0.137 npm info using node@v20.20.2
+23:11:29 | DEBUG | #10 0.139 npm verbose title npm ci
+23:11:29 | DEBUG | #10 0.140 npm verbose logfile /root/.npm/_logs/2026-06-01T20_11_28_864Z-debug-0.log
+23:11:29 | DEBUG | #10 0.139 npm verbose argv "ci" "--loglevel" "verbose"
+23:11:29 | DEBUG | #10 0.139 npm verbose logfile logs-max:10 dir:/root/.npm/_logs/2026-06-01T20_11_28_864Z-
+23:11:29 | INFO | #10 0.801 npm verbose reify failed optional dependency /app/node_modules/fsevents
+23:11:30 | DEBUG | #10 1.579 npm http fetch GET 200 https://registry.npmjs.org/npm 1208ms
+23:11:30 | DEBUG | #10 1.707 npm http fetch GET 200 https://registry.npmjs.org/wmf/-/wmf-1.0.2.tgz 809ms (cache miss)
+23:11:30 | DEBUG | #10 1.717 npm http fetch GET 200 https://registry.npmjs.org/yocto-queue/-/yocto-queue-0.1.0.tgz 824ms (cache miss)
+23:11:30 | DEBUG | #10 1.856 npm http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 1088ms
+23:11:30 | DEBUG | #10 1.763 npm http fetch GET 200 https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-7.0.0.tgz 867ms (cache miss)
+23:11:30 | DEBUG | #10 1.913 npm http fetch GET 200 https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz 1022ms (cache miss)
+23:11:30 | DEBUG | #10 1.882 npm http fetch GET 200 https://registry.npmjs.org/wildcard/-/wildcard-1.1.2.tgz 984ms (cache miss)
+23:11:30 | DEBUG | #10 1.913 npm http fetch GET 200 https://registry.npmjs.org/wrap-ansi/-/wrap-ansi-8.1.0.tgz 1019ms (cache miss)
+23:11:30 | DEBUG | #10 2.043 npm http fetch GET 200 https://registry.npmjs.org/vary/-/vary-1.1.2.tgz 1139ms (cache miss)
+23:11:30 | DEBUG | #10 1.954 npm http fetch GET 200 https://registry.npmjs.org/which/-/which-2.0.2.tgz 1056ms (cache miss)
+23:11:30 | DEBUG | #10 1.954 npm http fetch GET 200 https://registry.npmjs.org/word/-/word-0.3.0.tgz 1058ms (cache miss)
+23:11:30 | DEBUG | #10 1.927 npm http fetch GET 200 https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz 1034ms (cache miss)
+23:11:30 | DEBUG | #10 2.068 npm http fetch GET 200 https://registry.npmjs.org/utils-merge/-/utils-merge-1.0.1.tgz 1161ms (cache miss)
+23:11:30 | DEBUG | #10 2.125 npm http fetch GET 200 https://registry.npmjs.org/unpipe/-/unpipe-1.0.0.tgz 1213ms (cache miss)
+23:11:30 | DEBUG | #10 2.106 npm http fetch GET 200 https://registry.npmjs.org/typedarray/-/typedarray-0.0.6.tgz 1193ms (cache miss)
+23:11:30 | DEBUG | #10 2.080 npm http fetch GET 200 https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz 1173ms (cache miss)
+23:11:30 | DEBUG | #10 2.172 npm http fetch GET 200 https://registry.npmjs.org/whatwg-url/-/whatwg-url-5.0.0.tgz 1273ms (cache miss)
+23:11:30 | DEBUG | #10 2.105 npm http fetch GET 200 https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-3.0.1.tgz 1206ms (cache miss)
+23:11:31 | DEBUG | #10 2.243 npm http fetch GET 200 https://registry.npmjs.org/supports-preserve-symlinks-flag/-/supports-preserve-symlinks-flag-1.0.0.tgz 1322ms (cache miss)
+23:11:31 | DEBUG | #10 2.288 npm http fetch GET 200 https://registry.npmjs.org/strip-ansi/-/strip-ansi-7.1.0.tgz 1363ms (cache miss)
+23:11:31 | DEBUG | #10 2.173 npm http fetch GET 200 https://registry.npmjs.org/uid-safe/-/uid-safe-2.1.5.tgz 1261ms (cache miss)
+23:11:31 | DEBUG | #10 2.224 npm http fetch GET 200 https://registry.npmjs.org/thenify-all/-/thenify-all-1.6.0.tgz 1306ms (cache miss)
+23:11:31 | DEBUG | #10 2.202 npm http fetch GET 200 https://registry.npmjs.org/tailwindcss-animate/-/tailwindcss-animate-1.0.7.tgz 1282ms (cache miss)
+23:11:31 | DEBUG | #10 2.209 npm http fetch GET 200 https://registry.npmjs.org/thenify/-/thenify-3.3.1.tgz 1290ms (cache miss)
+23:11:31 | DEBUG | #10 2.242 npm http fetch GET 200 https://registry.npmjs.org/tiny-invariant/-/tiny-invariant-1.3.3.tgz 1325ms (cache miss)
+23:11:31 | DEBUG | #10 2.242 npm http fetch GET 200 https://registry.npmjs.org/ts-interface-checker/-/ts-interface-checker-0.1.13.tgz 1327ms (cache miss)
+23:11:31 | DEBUG | #10 2.241 npm http fetch GET 200 https://registry.npmjs.org/uzip/-/uzip-0.20201231.0.tgz 1335ms (cache miss)
+23:11:31 | DEBUG | #10 2.263 npm http fetch GET 200 https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz 1338ms (cache miss)
+23:11:31 | DEBUG | #10 2.172 npm http fetch GET 200 https://registry.npmjs.org/zod-validation-error/-/zod-validation-error-3.4.0.tgz 1282ms (cache miss)
+23:11:31 | DEBUG | #10 2.202 npm http fetch GET 200 https://registry.npmjs.org/to-regex-range/-/to-regex-range-5.0.1.tgz 1285ms (cache miss)
+23:11:31 | DEBUG | #10 2.242 npm http fetch GET 200 https://registry.npmjs.org/type-is/-/type-is-1.6.18.tgz 1328ms (cache miss)
+23:11:31 | DEBUG | #10 2.174 npm http fetch GET 200 https://registry.npmjs.org/tw-animate-css/-/tw-animate-css-1.2.5.tgz 1260ms (cache miss)
+23:11:31 | DEBUG | #10 2.208 npm http fetch GET 200 https://registry.npmjs.org/toidentifier/-/toidentifier-1.0.1.tgz 1292ms (cache miss)
+23:11:31 | DEBUG | #10 2.288 npm http fetch GET 200 https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz 1363ms (cache miss)
+23:11:31 | DEBUG | #10 2.303 npm http fetch GET 200 https://registry.npmjs.org/streamsearch/-/streamsearch-1.1.0.tgz 1371ms (cache miss)
+23:11:31 | DEBUG | #10 2.289 npm http fetch GET 200 https://registry.npmjs.org/stream-shift/-/stream-shift-1.0.3.tgz 1357ms (cache miss)
+23:11:31 | DEBUG | #10 2.288 npm http fetch GET 200 https://registry.npmjs.org/split2/-/split2-4.2.0.tgz 1353ms (cache miss)
+23:11:31 | DEBUG | #10 2.288 npm http fetch GET 200 https://registry.npmjs.org/string_decoder/-/string_decoder-1.3.0.tgz 1358ms (cache miss)
+23:11:31 | DEBUG | #10 2.302 npm http fetch GET 200 https://registry.npmjs.org/strnum/-/strnum-1.1.2.tgz 1378ms (cache miss)
+23:11:31 | DEBUG | #10 2.289 npm http fetch GET 200 https://registry.npmjs.org/stream-events/-/stream-events-1.0.5.tgz 1356ms (cache miss)
+23:11:31 | DEBUG | #10 2.292 npm http fetch GET 200 https://registry.npmjs.org/use-sync-external-store/-/use-sync-external-store-1.6.0.tgz 1384ms (cache miss)
+23:11:31 | DEBUG | #10 2.288 npm http fetch GET 200 https://registry.npmjs.org/stubs/-/stubs-3.0.0.tgz 1366ms (cache miss)
+23:11:31 | DEBUG | #10 2.302 npm http fetch GET 200 https://registry.npmjs.org/string-width/-/string-width-5.1.2.tgz 1376ms (cache miss)
+23:11:31 | DEBUG | #10 2.381 npm http fetch GET 200 https://registry.npmjs.org/safe-buffer/-/safe-buffer-5.2.1.tgz 1437ms (cache miss)
+23:11:31 | DEBUG | #10 2.381 npm http fetch GET 200 https://registry.npmjs.org/safer-buffer/-/safer-buffer-2.1.2.tgz 1438ms (cache miss)
+23:11:31 | DEBUG | #10 2.303 npm http fetch GET 200 https://registry.npmjs.org/statuses/-/statuses-2.0.1.tgz 1369ms (cache miss)
+23:11:31 | DEBUG | #10 2.337 npm http fetch GET 200 https://registry.npmjs.org/setprototypeof/-/setprototypeof-1.2.0.tgz 1396ms (cache miss)
+23:11:31 | DEBUG | #10 2.398 npm http fetch GET 200 https://registry.npmjs.org/serve-static/-/serve-static-1.16.2.tgz 1456ms (cache miss)
+23:11:31 | DEBUG | #10 2.337 npm http fetch GET 200 https://registry.npmjs.org/set-function-length/-/set-function-length-1.2.2.tgz 1396ms (cache miss)
+23:11:31 | DEBUG | #10 2.340 npm http fetch GET 200 https://registry.npmjs.org/wouter/-/wouter-3.3.5.tgz 1444ms (cache miss)
+23:11:31 | DEBUG | #10 2.371 npm http fetch GET 200 https://registry.npmjs.org/teeny-request/-/teeny-request-9.0.0.tgz 1452ms (cache miss)
+23:11:31 | DEBUG | #10 2.382 npm http fetch GET 200 https://registry.npmjs.org/run-parallel/-/run-parallel-1.2.0.tgz 1437ms (cache miss)
+23:11:31 | DEBUG | #10 2.367 npm http fetch GET 200 https://registry.npmjs.org/shallow-equal/-/shallow-equal-3.1.0.tgz 1427ms (cache miss)
+23:11:31 | DEBUG | #10 2.368 npm http fetch GET 200 https://registry.npmjs.org/shebang-command/-/shebang-command-2.0.0.tgz 1428ms (cache miss)
+23:11:31 | DEBUG | #10 2.337 npm http fetch GET 200 https://registry.npmjs.org/shebang-regex/-/shebang-regex-3.0.0.tgz 1398ms (cache miss)
+23:11:31 | DEBUG | #10 2.417 npm http fetch GET 200 https://registry.npmjs.org/send/-/send-0.19.0.tgz 1474ms (cache miss)
+23:11:31 | DEBUG | #10 2.398 npm http fetch GET 200 https://registry.npmjs.org/retry/-/retry-0.13.1.tgz 1452ms (cache miss)
+23:11:31 | DEBUG | #10 2.471 npm http fetch GET 200 https://registry.npmjs.org/proxy-addr/-/proxy-addr-2.0.7.tgz 1498ms (cache miss)
+23:11:31 | DEBUG | #10 2.398 npm http fetch GET 200 https://registry.npmjs.org/reusify/-/reusify-1.0.4.tgz 1453ms (cache miss)
+23:11:31 | DEBUG | #10 2.493 npm http fetch GET 200 https://registry.npmjs.org/react-is/-/react-is-18.3.1.tgz 1529ms (cache miss)
+23:11:31 | DEBUG | #10 2.471 npm http fetch GET 200 https://registry.npmjs.org/range-parser/-/range-parser-1.2.1.tgz 1502ms (cache miss)
+23:11:31 | DEBUG | #10 2.451 npm http fetch GET 200 https://registry.npmjs.org/retry-request/-/retry-request-7.0.2.tgz 1506ms (cache miss)
+23:11:31 | DEBUG | #10 2.417 npm http fetch GET 200 https://registry.npmjs.org/react-style-singleton/-/react-style-singleton-2.2.3.tgz 1459ms (cache miss)
+23:11:31 | DEBUG | #10 2.434 npm http fetch GET 200 https://registry.npmjs.org/read-cache/-/read-cache-1.0.0.tgz 1476ms (cache miss)
+23:11:31 | DEBUG | #10 2.455 npm http fetch GET 200 https://registry.npmjs.org/random-bytes/-/random-bytes-1.0.0.tgz 1485ms (cache miss)
+23:11:31 | DEBUG | #10 2.434 npm http fetch GET 200 https://registry.npmjs.org/readdirp/-/readdirp-3.6.0.tgz 1479ms (cache miss)
+23:11:31 | DEBUG | #10 2.570 npm http fetch GET 200 https://registry.npmjs.org/postcss-nested/-/postcss-nested-6.2.0.tgz 1584ms (cache miss)
+23:11:31 | DEBUG | #10 2.546 npm http fetch GET 200 https://registry.npmjs.org/postgres-range/-/postgres-range-1.1.4.tgz 1569ms (cache miss)
+23:11:31 | DEBUG | #10 2.529 npm http fetch GET 200 https://registry.npmjs.org/pirates/-/pirates-4.0.6.tgz 1541ms (cache miss)
+23:11:31 | DEBUG | #10 2.592 npm http fetch GET 200 https://registry.npmjs.org/postcss-import/-/postcss-import-15.1.0.tgz 1603ms (cache miss)
+23:11:31 | DEBUG | #10 2.496 npm http fetch GET 200 https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz 1525ms (cache miss)
+23:11:31 | DEBUG | #10 2.591 npm http fetch GET 200 https://registry.npmjs.org/postcss-js/-/postcss-js-4.0.1.tgz 1604ms (cache miss)
+23:11:31 | DEBUG | #10 2.508 npm http fetch GET 200 https://registry.npmjs.org/regenerator-runtime/-/regenerator-runtime-0.14.1.tgz 1561ms (cache miss)
+23:11:31 | DEBUG | #10 2.586 npm http fetch GET 200 https://registry.npmjs.org/side-channel/-/side-channel-1.0.6.tgz 1648ms (cache miss)
+23:11:31 | DEBUG | #10 2.566 npm http fetch GET 200 https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz 1623ms (cache miss)
+23:11:31 | DEBUG | #10 2.508 npm http fetch GET 200 https://registry.npmjs.org/regexparam/-/regexparam-3.0.0.tgz 1559ms (cache miss)
+23:11:31 | DEBUG | #10 2.546 npm http fetch GET 200 https://registry.npmjs.org/postcss-load-config/-/postcss-load-config-4.0.2.tgz 1560ms (cache miss)
+23:11:31 | DEBUG | #10 2.528 npm http fetch GET 200 https://registry.npmjs.org/postgres-bytea/-/postgres-bytea-3.0.0.tgz 1551ms (cache miss)
+23:11:31 | DEBUG | #10 2.569 npm http fetch GET 200 https://registry.npmjs.org/postgres-date/-/postgres-date-2.1.0.tgz 1589ms (cache miss)
+23:11:31 | DEBUG | #10 2.591 npm http fetch GET 200 https://registry.npmjs.org/postgres-array/-/postgres-array-3.0.2.tgz 1613ms (cache miss)
+23:11:31 | DEBUG | #10 2.591 npm http fetch GET 200 https://registry.npmjs.org/postgres-interval/-/postgres-interval-3.0.0.tgz 1615ms (cache miss)
+23:11:31 | DEBUG | #10 2.610 npm http fetch GET 200 https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz 1620ms (cache miss)
+23:11:31 | DEBUG | #10 2.529 npm http fetch GET 200 https://registry.npmjs.org/pseudomap/-/pseudomap-1.0.2.tgz 1556ms (cache miss)
+23:11:31 | DEBUG | #10 2.569 npm http fetch GET 200 https://registry.npmjs.org/postcss-value-parser/-/postcss-value-parser-4.2.0.tgz 1590ms (cache miss)
+23:11:31 | DEBUG | #10 2.546 npm http fetch GET 200 https://registry.npmjs.org/pretty-bytes/-/pretty-bytes-6.1.1.tgz 1572ms (cache miss)
+23:11:31 | DEBUG | #10 2.544 npm http fetch GET 200 https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz 1629ms (cache miss)
+23:11:31 | DEBUG | #10 2.638 npm http fetch GET 200 https://registry.npmjs.org/pify/-/pify-2.3.0.tgz 1649ms (cache miss)
+23:11:31 | DEBUG | #10 2.640 npm http fetch GET 200 https://registry.npmjs.org/pg-numeric/-/pg-numeric-1.0.2.tgz 1646ms (cache miss)
+23:11:31 | DEBUG | #10 2.663 npm http fetch GET 200 https://registry.npmjs.org/raw-body/-/raw-body-2.5.2.tgz 1696ms (cache miss)
+23:11:31 | DEBUG | #10 2.702 npm http fetch GET 200 https://registry.npmjs.org/pgpass/-/pgpass-1.0.5.tgz 1712ms (cache miss)
+23:11:31 | DEBUG | #10 2.665 npm http fetch GET 200 https://registry.npmjs.org/pg-cloudflare/-/pg-cloudflare-1.1.1.tgz 1670ms (cache miss)
+23:11:31 | DEBUG | #10 2.665 npm http fetch GET 200 https://registry.npmjs.org/pause/-/pause-0.0.1.tgz 1670ms (cache miss)
+23:11:31 | DEBUG | #10 2.680 npm http fetch GET 200 https://registry.npmjs.org/path-key/-/path-key-3.1.1.tgz 1682ms (cache miss)
+23:11:31 | DEBUG | #10 2.703 npm http fetch GET 200 https://registry.npmjs.org/path-parse/-/path-parse-1.0.7.tgz 1705ms (cache miss)
+23:11:31 | DEBUG | #10 2.702 npm http fetch GET 200 https://registry.npmjs.org/passport-strategy/-/passport-strategy-1.0.0.tgz 1704ms (cache miss)
+23:11:31 | DEBUG | #10 2.680 npm http fetch GET 200 https://registry.npmjs.org/path-to-regexp/-/path-to-regexp-0.1.12.tgz 1684ms (cache miss)
+23:11:31 | DEBUG | #10 2.680 npm http fetch GET 200 https://registry.npmjs.org/pg-types/-/pg-types-4.0.2.tgz 1688ms (cache miss)
+23:11:31 | DEBUG | #10 2.702 npm http fetch GET 200 https://registry.npmjs.org/pg-connection-string/-/pg-connection-string-2.7.0.tgz 1708ms (cache miss)
+23:11:31 | DEBUG | #10 2.679 npm http fetch GET 200 https://registry.npmjs.org/picomatch/-/picomatch-2.3.1.tgz 1689ms (cache miss)
+23:11:31 | DEBUG | #10 2.702 npm http fetch GET 200 https://registry.npmjs.org/pg-int8/-/pg-int8-1.0.1.tgz 1708ms (cache miss)
+23:11:31 | DEBUG | #10 2.677 npm http fetch GET 200 https://registry.npmjs.org/vaul/-/vaul-1.1.2.tgz 1771ms (cache miss)
+23:11:31 | DEBUG | #10 2.720 npm http fetch GET 200 https://registry.npmjs.org/ws/-/ws-8.18.0.tgz 1825ms (cache miss)
+23:11:31 | DEBUG | #10 2.675 npm http fetch GET 200 https://registry.npmjs.org/ssf/-/ssf-0.11.2.tgz 1739ms (cache miss)
+23:11:31 | DEBUG | #10 2.742 npm http fetch GET 200 https://registry.npmjs.org/p-timeout/-/p-timeout-6.1.4.tgz 1740ms (cache miss)
+23:11:31 | DEBUG | #10 2.796 npm http fetch GET 200 https://registry.npmjs.org/once/-/once-1.4.0.tgz 1786ms (cache miss)
+23:11:31 | DEBUG | #10 2.759 npm http fetch GET 200 https://registry.npmjs.org/p-retry/-/p-retry-6.2.1.tgz 1752ms (cache miss)
+23:11:31 | DEBUG | #10 2.796 npm http fetch GET 200 https://registry.npmjs.org/passport-local/-/passport-local-1.0.0.tgz 1797ms (cache miss)
+23:11:31 | DEBUG | #10 2.820 npm http fetch GET 200 https://registry.npmjs.org/source-map-js/-/source-map-js-1.2.1.tgz 1883ms (cache miss)
+23:11:31 | DEBUG | #10 2.723 npm http fetch GET 200 https://registry.npmjs.org/package-json-from-dist/-/package-json-from-dist-1.0.1.tgz 1721ms (cache miss)
+23:11:31 | DEBUG | #10 2.742 npm http fetch GET 200 https://registry.npmjs.org/obuf/-/obuf-1.1.2.tgz 1731ms (cache miss)
+23:11:31 | DEBUG | #10 2.721 npm http fetch GET 200 https://registry.npmjs.org/undici-types/-/undici-types-6.19.8.tgz 1811ms (cache miss)
+23:11:31 | DEBUG | #10 2.760 npm http fetch GET 200 https://registry.npmjs.org/p-queue/-/p-queue-8.1.1.tgz 1752ms (cache miss)
+23:11:31 | DEBUG | #10 2.743 npm http fetch GET 200 https://registry.npmjs.org/p-limit/-/p-limit-3.1.0.tgz 1735ms (cache miss)
+23:11:31 | DEBUG | #10 2.797 npm http fetch GET 200 https://registry.npmjs.org/on-headers/-/on-headers-1.0.2.tgz 1788ms (cache miss)
+23:11:31 | DEBUG | #10 2.747 npm http fetch GET 200 https://registry.npmjs.org/signal-exit/-/signal-exit-4.1.0.tgz 1811ms (cache miss)
+23:11:31 | DEBUG | #10 2.817 npm http fetch GET 200 https://registry.npmjs.org/normalize-path/-/normalize-path-3.0.0.tgz 1803ms (cache miss)
+23:11:31 | DEBUG | #10 2.775 npm http fetch GET 200 https://registry.npmjs.org/prop-types/-/prop-types-15.8.1.tgz 1801ms (cache miss)
+23:11:31 | DEBUG | #10 2.817 npm http fetch GET 200 https://registry.npmjs.org/object-hash/-/object-hash-3.0.0.tgz 1804ms (cache miss)
+23:11:31 | DEBUG | #10 2.778 npm http fetch GET 200 https://registry.npmjs.org/node-gyp-build/-/node-gyp-build-4.8.3.tgz 1765ms (cache miss)
+23:11:31 | DEBUG | #10 2.816 npm http fetch GET 200 https://registry.npmjs.org/negotiator/-/negotiator-0.6.3.tgz 1801ms (cache miss)
+23:11:31 | DEBUG | #10 2.796 npm http fetch GET 200 https://registry.npmjs.org/parseurl/-/parseurl-1.3.3.tgz 1795ms (cache miss)
+23:11:31 | DEBUG | #10 2.839 npm http fetch GET 200 https://registry.npmjs.org/object-assign/-/object-assign-4.1.1.tgz 1827ms (cache miss)
+23:11:31 | DEBUG | #10 2.817 npm http fetch GET 200 https://registry.npmjs.org/next-themes/-/next-themes-0.4.6.tgz 1804ms (cache miss)
+23:11:31 | DEBUG | #10 2.797 npm http fetch GET 200 https://registry.npmjs.org/on-finished/-/on-finished-2.4.1.tgz 1787ms (cache miss)
+23:11:31 | DEBUG | #10 2.886 npm http fetch GET 200 https://registry.npmjs.org/mz/-/mz-2.7.0.tgz 1870ms (cache miss)
+23:11:31 | DEBUG | #10 2.887 npm http fetch GET 200 https://registry.npmjs.org/motion-dom/-/motion-dom-11.13.0.tgz 1869ms (cache miss)
+23:11:31 | DEBUG | #10 2.926 npm http fetch GET 200 https://registry.npmjs.org/tr46/-/tr46-0.0.3.tgz 2010ms (cache miss)
+23:11:31 | DEBUG | #10 2.862 npm http fetch GET 200 https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.6.tgz 1841ms (cache miss)
+23:11:31 | DEBUG | #10 2.887 npm http fetch GET 200 https://registry.npmjs.org/mime-types/-/mime-types-2.1.35.tgz 1865ms (cache miss)
+23:11:31 | DEBUG | #10 2.910 npm http fetch GET 200 https://registry.npmjs.org/ms/-/ms-2.1.3.tgz 1892ms (cache miss)
+23:11:31 | DEBUG | #10 2.887 npm http fetch GET 200 https://registry.npmjs.org/nanoid/-/nanoid-5.1.6.tgz 1871ms (cache miss)
+23:11:31 | DEBUG | #10 2.886 npm http fetch GET 200 https://registry.npmjs.org/pg/-/pg-8.13.1.tgz 1890ms (cache miss)
+23:11:31 | DEBUG | #10 2.927 npm http fetch GET 200 https://registry.npmjs.org/node-fetch/-/node-fetch-2.7.0.tgz 1912ms (cache miss)
+23:11:31 | DEBUG | #10 2.912 npm http fetch GET 200 https://registry.npmjs.org/micromatch/-/micromatch-4.0.8.tgz 1880ms (cache miss)
+23:11:31 | DEBUG | #10 2.884 npm http fetch GET 200 https://registry.npmjs.org/react-remove-scroll-bar/-/react-remove-scroll-bar-2.3.8.tgz 1921ms (cache miss)
+23:11:31 | DEBUG | #10 2.887 npm http fetch GET 200 https://registry.npmjs.org/namespace-emitter/-/namespace-emitter-2.0.1.tgz 1869ms (cache miss)
+23:11:31 | DEBUG | #10 2.928 npm http fetch GET 200 https://registry.npmjs.org/mime-match/-/mime-match-1.0.2.tgz 1906ms (cache miss)
+23:11:31 | DEBUG | #10 2.929 npm http fetch GET 200 https://registry.npmjs.org/memorystore/-/memorystore-1.6.7.tgz 1895ms (cache miss)
+23:11:31 | DEBUG | #10 2.927 npm http fetch GET 200 https://registry.npmjs.org/mitt/-/mitt-3.0.1.tgz 1907ms (cache miss)
+23:11:31 | DEBUG | #10 2.929 npm http fetch GET 200 https://registry.npmjs.org/merge2/-/merge2-1.4.1.tgz 1897ms (cache miss)
+23:11:31 | DEBUG | #10 2.929 npm http fetch GET 200 https://registry.npmjs.org/methods/-/methods-1.1.2.tgz 1899ms (cache miss)
+23:11:31 | DEBUG | #10 2.939 npm http fetch GET 200 https://registry.npmjs.org/math-intrinsics/-/math-intrinsics-1.1.0.tgz 1899ms (cache miss)
+23:11:31 | DEBUG | #10 2.942 npm http fetch GET 200 https://registry.npmjs.org/multer/-/multer-2.0.2.tgz 1924ms (cache miss)
+23:11:31 | DEBUG | #10 2.944 npm http fetch GET 200 https://registry.npmjs.org/lines-and-columns/-/lines-and-columns-1.2.4.tgz 1892ms (cache miss)
+23:11:31 | DEBUG | #10 2.990 npm http fetch GET 200 https://registry.npmjs.org/media-typer/-/media-typer-0.3.0.tgz 1954ms (cache miss)
+23:11:31 | DEBUG | #10 3.021 npm http fetch GET 200 https://registry.npmjs.org/is-glob/-/is-glob-4.0.3.tgz 1960ms (cache miss)
+23:11:31 | DEBUG | #10 2.989 npm http fetch GET 200 https://registry.npmjs.org/pg-pool/-/pg-pool-3.7.0.tgz 1996ms (cache miss)
+23:11:31 | DEBUG | #10 3.021 npm http fetch GET 200 https://registry.npmjs.org/lodash.once/-/lodash.once-4.1.1.tgz 1977ms (cache miss)
+23:11:31 | DEBUG | #10 2.991 npm http fetch GET 200 https://registry.npmjs.org/lilconfig/-/lilconfig-3.1.3.tgz 1940ms (cache miss)
+23:11:31 | DEBUG | #10 2.961 npm http fetch GET 200 https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz 1918ms (cache miss)
+23:11:31 | DEBUG | #10 2.991 npm http fetch GET 200 https://registry.npmjs.org/lodash.isnumber/-/lodash.isnumber-3.0.3.tgz 1944ms (cache miss)
+23:11:31 | DEBUG | #10 2.986 npm http fetch GET 200 https://registry.npmjs.org/lodash.isplainobject/-/lodash.isplainobject-4.0.6.tgz 1939ms (cache miss)
+23:11:31 | DEBUG | #10 2.960 npm http fetch GET 200 https://registry.npmjs.org/mime-db/-/mime-db-1.52.0.tgz 1937ms (cache miss)
+23:11:31 | DEBUG | #10 3.022 npm http fetch GET 200 https://registry.npmjs.org/lodash.isstring/-/lodash.isstring-4.0.1.tgz 1976ms (cache miss)
+23:11:31 | DEBUG | #10 2.990 npm http fetch GET 200 https://registry.npmjs.org/mime/-/mime-1.6.0.tgz 1966ms (cache miss)
+23:11:31 | DEBUG | #10 2.961 npm http fetch GET 200 https://registry.npmjs.org/merge-descriptors/-/merge-descriptors-1.0.3.tgz 1925ms (cache miss)
+23:11:31 | DEBUG | #10 2.942 npm http fetch GET 200 https://registry.npmjs.org/minimist/-/minimist-1.2.8.tgz 1921ms (cache miss)
+23:11:31 | DEBUG | #10 3.009 npm http fetch GET 200 https://registry.npmjs.org/jws/-/jws-4.0.1.tgz 1957ms (cache miss)
+23:11:31 | DEBUG | #10 3.039 npm http fetch GET 200 https://registry.npmjs.org/react/-/react-18.3.1.tgz 2073ms (cache miss)
+23:11:31 | DEBUG | #10 3.042 npm http fetch GET 200 https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz 1987ms (cache miss)
+23:11:31 | DEBUG | #10 3.042 npm http fetch GET 200 https://registry.npmjs.org/lodash.includes/-/lodash.includes-4.3.0.tgz 1993ms (cache miss)
+23:11:31 | DEBUG | #10 3.024 npm http fetch GET 200 https://registry.npmjs.org/is-binary-path/-/is-binary-path-2.1.0.tgz 1961ms (cache miss)
+23:11:31 | DEBUG | #10 3.043 npm http fetch GET 200 https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz 1985ms (cache miss)
+23:11:31 | DEBUG | #10 3.042 npm http fetch GET 200 https://registry.npmjs.org/is-number/-/is-number-7.0.0.tgz 1983ms (cache miss)
+23:11:31 | DEBUG | #10 3.022 npm http fetch GET 200 https://registry.npmjs.org/lodash.isinteger/-/lodash.isinteger-4.0.4.tgz 1975ms (cache miss)
+23:11:31 | DEBUG | #10 3.042 npm http fetch GET 200 https://registry.npmjs.org/lodash.isboolean/-/lodash.isboolean-3.0.3.tgz 1993ms (cache miss)
+23:11:31 | DEBUG | #10 3.042 npm http fetch GET 200 https://registry.npmjs.org/jwa/-/jwa-2.0.1.tgz 1989ms (cache miss)
+23:11:31 | DEBUG | #10 3.023 npm http fetch GET 200 https://registry.npmjs.org/is-fullwidth-code-point/-/is-fullwidth-code-point-3.0.0.tgz 1961ms (cache miss)
+23:11:31 | DEBUG | #10 3.149 npm http fetch GET 200 https://registry.npmjs.org/zustand/-/zustand-5.0.14.tgz 2260ms (cache miss)
+23:11:31 | DEBUG | #10 3.109 npm http fetch GET 200 https://registry.npmjs.org/is-core-module/-/is-core-module-2.15.1.tgz 2045ms (cache miss)
+23:11:31 | DEBUG | #10 3.129 npm http fetch GET 200 https://registry.npmjs.org/is-mobile/-/is-mobile-4.0.0.tgz 2067ms (cache miss)
+23:11:31 | DEBUG | #10 3.130 npm http fetch GET 200 https://registry.npmjs.org/recharts-scale/-/recharts-scale-0.4.5.tgz 2175ms (cache miss)
+23:11:31 | DEBUG | #10 3.063 npm http fetch GET 200 https://registry.npmjs.org/ipaddr.js/-/ipaddr.js-1.9.1.tgz 1999ms (cache miss)
+23:11:31 | DEBUG | #10 3.043 npm http fetch GET 200 https://registry.npmjs.org/is-stream/-/is-stream-2.0.1.tgz 1985ms (cache miss)
+23:11:31 | DEBUG | #10 3.062 npm http fetch GET 200 https://registry.npmjs.org/is-extglob/-/is-extglob-2.1.1.tgz 1999ms (cache miss)
+23:11:31 | DEBUG | #10 3.131 npm http fetch GET 200 https://registry.npmjs.org/internmap/-/internmap-2.0.3.tgz 2066ms (cache miss)
+23:11:31 | DEBUG | #10 3.132 npm http fetch GET 200 https://registry.npmjs.org/http-errors/-/http-errors-2.0.0.tgz 2064ms (cache miss)
+23:11:31 | DEBUG | #10 3.082 npm http fetch GET 200 https://registry.npmjs.org/is-network-error/-/is-network-error-1.3.0.tgz 2021ms (cache miss)
+23:11:31 | DEBUG | #10 3.063 npm http fetch GET 200 https://registry.npmjs.org/https-proxy-agent/-/https-proxy-agent-7.0.6.tgz 1998ms (cache miss)
+23:11:31 | DEBUG | #10 3.083 npm http fetch GET 200 https://registry.npmjs.org/inherits/-/inherits-2.0.4.tgz 2017ms (cache miss)
+23:11:31 | DEBUG | #10 3.110 npm http fetch GET 200 https://registry.npmjs.org/gtoken/-/gtoken-7.1.0.tgz 2040ms (cache miss)
+23:11:31 | DEBUG | #10 3.104 npm http fetch GET 200 https://registry.npmjs.org/readable-stream/-/readable-stream-3.6.2.tgz 2146ms (cache miss)
+23:11:31 | DEBUG | #10 3.082 npm http fetch GET 200 https://registry.npmjs.org/json-bigint/-/json-bigint-1.0.0.tgz 2027ms (cache miss)
+23:11:32 | DEBUG | #10 3.152 npm http fetch GET 200 https://registry.npmjs.org/hasown/-/hasown-2.0.2.tgz 2084ms (cache miss)
+23:11:32 | DEBUG | #10 3.196 npm http fetch GET 200 https://registry.npmjs.org/use-sidecar/-/use-sidecar-1.1.3.tgz 2287ms (cache miss)
+23:11:32 | DEBUG | #10 3.151 npm http fetch GET 200 https://registry.npmjs.org/jsonwebtoken/-/jsonwebtoken-9.0.3.tgz 2096ms (cache miss)
+23:11:32 | DEBUG | #10 3.154 npm http fetch GET 200 https://registry.npmjs.org/gopd/-/gopd-1.2.0.tgz 2082ms (cache miss)
+23:11:32 | DEBUG | #10 3.259 npm http fetch GET 200 https://registry.npmjs.org/motion-utils/-/motion-utils-11.13.0.tgz 2239ms (cache miss)
+23:11:32 | DEBUG | #10 3.154 npm http fetch GET 200 https://registry.npmjs.org/get-nonce/-/get-nonce-1.0.1.tgz 2079ms (cache miss)
+23:11:32 | DEBUG | #10 3.239 npm http fetch GET 200 https://registry.npmjs.org/finalhandler/-/finalhandler-1.3.1.tgz 2153ms (cache miss)
+23:11:32 | DEBUG | #10 3.240 npm http fetch GET 200 https://registry.npmjs.org/fill-range/-/fill-range-7.1.1.tgz 2154ms (cache miss)
+23:11:32 | DEBUG | #10 3.199 npm http fetch GET 200 https://registry.npmjs.org/http-proxy-agent/-/http-proxy-agent-5.0.0.tgz 2133ms (cache miss)
+23:11:32 | DEBUG | #10 3.239 npm http fetch GET 200 https://registry.npmjs.org/fastq/-/fastq-1.17.1.tgz 2154ms (cache miss)
+23:11:32 | DEBUG | #10 3.153 npm http fetch GET 200 https://registry.npmjs.org/has-property-descriptors/-/has-property-descriptors-1.0.2.tgz 2083ms (cache miss)
+23:11:32 | DEBUG | #10 3.202 npm http fetch GET 200 https://registry.npmjs.org/forwarded/-/forwarded-0.2.0.tgz 2117ms (cache miss)
+23:11:32 | DEBUG | #10 3.200 npm http fetch GET 200 https://registry.npmjs.org/has-symbols/-/has-symbols-1.1.0.tgz 2130ms (cache miss)
+23:11:32 | DEBUG | #10 3.180 npm http fetch GET 200 https://registry.npmjs.org/get-proto/-/get-proto-1.0.1.tgz 2105ms (cache miss)
+23:11:32 | DEBUG | #10 3.180 npm http fetch GET 200 https://registry.npmjs.org/glob-parent/-/glob-parent-6.0.2.tgz 2106ms (cache miss)
+23:11:32 | DEBUG | #10 3.200 npm http fetch GET 200 https://registry.npmjs.org/function-bind/-/function-bind-1.1.2.tgz 2123ms (cache miss)
+23:11:32 | DEBUG | #10 3.239 npm http fetch GET 200 https://registry.npmjs.org/foreground-child/-/foreground-child-3.3.0.tgz 2156ms (cache miss)
+23:11:32 | DEBUG | #10 3.301 npm http fetch GET 200 https://registry.npmjs.org/has-tostringtag/-/has-tostringtag-1.0.2.tgz 2232ms (cache miss)
+23:11:32 | DEBUG | #10 3.261 npm http fetch GET 200 https://registry.npmjs.org/frac/-/frac-1.1.2.tgz 2179ms (cache miss)
+23:11:32 | DEBUG | #10 3.302 npm http fetch GET 200 https://registry.npmjs.org/google-logging-utils/-/google-logging-utils-0.0.2.tgz 2230ms (cache miss)
+23:11:32 | DEBUG | #10 3.261 npm http fetch GET 200 https://registry.npmjs.org/get-intrinsic/-/get-intrinsic-1.3.0.tgz 2186ms (cache miss)
+23:11:32 | DEBUG | #10 3.282 npm http fetch GET 200 https://registry.npmjs.org/es-errors/-/es-errors-1.3.0.tgz 2178ms (cache miss)
+23:11:32 | DEBUG | #10 3.261 npm http fetch GET 200 https://registry.npmjs.org/fresh/-/fresh-0.5.2.tgz 2180ms (cache miss)
+23:11:32 | DEBUG | #10 3.262 npm http fetch GET 200 https://registry.npmjs.org/express-session/-/express-session-1.18.1.tgz 2172ms (cache miss)
+23:11:32 | DEBUG | #10 3.305 npm http fetch GET 200 https://registry.npmjs.org/end-of-stream/-/end-of-stream-1.4.5.tgz 2201ms (cache miss)
+23:11:32 | DEBUG | #10 3.327 npm http fetch GET 200 https://registry.npmjs.org/gcp-metadata/-/gcp-metadata-6.1.1.tgz 2251ms (cache miss)
+23:11:32 | DEBUG | #10 3.329 npm http fetch GET 200 https://registry.npmjs.org/escape-html/-/escape-html-1.0.3.tgz 2228ms (cache miss)
+23:11:32 | DEBUG | #10 3.328 npm http fetch GET 200 https://registry.npmjs.org/es-object-atoms/-/es-object-atoms-1.1.1.tgz 2227ms (cache miss)
+23:11:32 | DEBUG | #10 3.329 npm http fetch GET 200 https://registry.npmjs.org/es-set-tostringtag/-/es-set-tostringtag-2.1.0.tgz 2228ms (cache miss)
+23:11:32 | DEBUG | #10 3.329 npm http fetch GET 200 https://registry.npmjs.org/etag/-/etag-1.8.1.tgz 2230ms (cache miss)
+23:11:32 | DEBUG | #10 3.330 npm http fetch GET 200 https://registry.npmjs.org/embla-carousel-react/-/embla-carousel-react-8.6.0.tgz 2222ms (cache miss)
+23:11:32 | DEBUG | #10 3.303 npm http fetch GET 200 https://registry.npmjs.org/form-data/-/form-data-2.5.5.tgz 2219ms (cache miss)
+23:11:32 | DEBUG | #10 3.303 npm http fetch GET 200 https://registry.npmjs.org/extend/-/extend-3.0.2.tgz 2214ms (cache miss)
+23:11:32 | DEBUG | #10 3.349 npm http fetch GET 200 https://registry.npmjs.org/emoji-regex/-/emoji-regex-9.2.2.tgz 2244ms (cache miss)
+23:11:32 | DEBUG | #10 3.349 npm http fetch GET 200 https://registry.npmjs.org/eventemitter3/-/eventemitter3-4.0.7.tgz 2250ms (cache miss)
+23:11:32 | DEBUG | #10 3.330 npm http fetch GET 200 https://registry.npmjs.org/ee-first/-/ee-first-1.1.1.tgz 2222ms (cache miss)
+23:11:32 | DEBUG | #10 3.349 npm http fetch GET 200 https://registry.npmjs.org/encodeurl/-/encodeurl-2.0.0.tgz 2245ms (cache miss)
+23:11:32 | DEBUG | #10 3.346 npm http fetch GET 200 https://registry.npmjs.org/use-callback-ref/-/use-callback-ref-1.3.3.tgz 2436ms (cache miss)
+23:11:32 | DEBUG | #10 3.350 npm http fetch GET 200 https://registry.npmjs.org/duplexify/-/duplexify-4.1.3.tgz 2240ms (cache miss)
+23:11:32 | DEBUG | #10 3.367 npm http fetch GET 200 https://registry.npmjs.org/es-define-property/-/es-define-property-1.0.1.tgz 2264ms (cache miss)
+23:11:32 | DEBUG | #10 3.419 npm http fetch GET 200 https://registry.npmjs.org/destroy/-/destroy-1.2.0.tgz 2304ms (cache miss)
+23:11:32 | DEBUG | #10 3.439 npm http fetch GET 200 https://registry.npmjs.org/delayed-stream/-/delayed-stream-1.0.0.tgz 2321ms (cache miss)
+23:11:32 | DEBUG | #10 3.439 npm http fetch GET 200 https://registry.npmjs.org/ecdsa-sig-formatter/-/ecdsa-sig-formatter-1.0.11.tgz 2330ms (cache miss)
+23:11:32 | DEBUG | #10 3.402 npm http fetch GET 200 https://registry.npmjs.org/drizzle-zod/-/drizzle-zod-0.7.0.tgz 2292ms (cache miss)
+23:11:32 | DEBUG | #10 3.368 npm http fetch GET 200 https://registry.npmjs.org/dlv/-/dlv-1.1.3.tgz 2255ms (cache miss)
+23:11:32 | DEBUG | #10 3.440 npm http fetch GET 200 https://registry.npmjs.org/define-data-property/-/define-data-property-1.1.4.tgz 2323ms (cache miss)
+23:11:32 | DEBUG | #10 3.400 npm http fetch GET 200 https://registry.npmjs.org/input-otp/-/input-otp-1.4.2.tgz 2336ms (cache miss)
+23:11:32 | DEBUG | #10 3.439 npm http fetch GET 200 https://registry.npmjs.org/didyoumean/-/didyoumean-1.2.2.tgz 2326ms (cache miss)
+23:11:32 | DEBUG | #10 3.432 npm http fetch GET 200 https://registry.npmjs.org/uuid/-/uuid-8.3.2.tgz 2526ms (cache miss)
+23:11:32 | DEBUG | #10 3.404 npm http fetch GET 200 https://registry.npmjs.org/dequal/-/dequal-2.0.3.tgz 2288ms (cache miss)
+23:11:32 | DEBUG | #10 3.403 npm http fetch GET 200 https://registry.npmjs.org/dunder-proto/-/dunder-proto-1.0.1.tgz 2292ms (cache miss)
+23:11:32 | DEBUG | #10 3.439 npm http fetch GET 200 https://registry.npmjs.org/eastasianwidth/-/eastasianwidth-0.2.0.tgz 2329ms (cache miss)
+23:11:32 | DEBUG | #10 3.382 npm http fetch GET 200 https://registry.npmjs.org/minipass/-/minipass-7.1.2.tgz 2361ms (cache miss)
+23:11:32 | DEBUG | #10 3.381 npm http fetch GET 200 https://registry.npmjs.org/qs/-/qs-6.13.0.tgz 2409ms (cache miss)
+23:11:32 | DEBUG | #10 3.461 npm http fetch GET 200 https://registry.npmjs.org/d3-timer/-/d3-timer-3.0.1.tgz 2341ms (cache miss)
+23:11:32 | DEBUG | #10 3.460 npm http fetch GET 200 https://registry.npmjs.org/depd/-/depd-2.0.0.tgz 2343ms (cache miss)
+23:11:32 | DEBUG | #10 3.462 npm http fetch GET 200 https://registry.npmjs.org/cross-spawn/-/cross-spawn-7.0.6.tgz 2330ms (cache miss)
+23:11:32 | DEBUG | #10 3.461 npm http fetch GET 200 https://registry.npmjs.org/detect-node-es/-/detect-node-es-1.1.0.tgz 2346ms (cache miss)
+23:11:32 | DEBUG | #10 3.440 npm http fetch GET 200 https://registry.npmjs.org/debug/-/debug-4.3.7.tgz 2321ms (cache miss)
+23:11:32 | DEBUG | #10 3.478 npm http fetch GET 200 https://registry.npmjs.org/d3-path/-/d3-path-3.1.0.tgz 2354ms (cache miss)
+23:11:32 | DEBUG | #10 3.511 npm http fetch GET 200 https://registry.npmjs.org/path-scurry/-/path-scurry-1.11.1.tgz 2514ms (cache miss)
+23:11:32 | DEBUG | #10 3.519 npm http fetch GET 200 https://registry.npmjs.org/content-type/-/content-type-1.0.5.tgz 2381ms (cache miss)
+23:11:32 | DEBUG | #10 3.504 npm http fetch GET 200 https://registry.npmjs.org/cssesc/-/cssesc-3.0.0.tgz 2372ms (cache miss)
+23:11:32 | DEBUG | #10 3.518 npm http fetch GET 200 https://registry.npmjs.org/cookie-parser/-/cookie-parser-1.4.7.tgz 2383ms (cache miss)
+23:11:32 | DEBUG | #10 3.519 npm http fetch GET 200 https://registry.npmjs.org/cookie-signature/-/cookie-signature-1.0.6.tgz 2384ms (cache miss)
+23:11:32 | DEBUG | #10 3.519 npm http fetch GET 200 https://registry.npmjs.org/combined-stream/-/combined-stream-1.0.8.tgz 2379ms (cache miss)
+23:11:32 | DEBUG | #10 3.504 npm http fetch GET 200 https://registry.npmjs.org/d3-ease/-/d3-ease-3.0.1.tgz 2373ms (cache miss)
+23:11:32 | DEBUG | #10 3.518 npm http fetch GET 200 https://registry.npmjs.org/crc-32/-/crc-32-1.2.2.tgz 2385ms (cache miss)
+23:11:32 | DEBUG | #10 3.516 npm http fetch GET 200 https://registry.npmjs.org/embla-carousel-reactive-utils/-/embla-carousel-reactive-utils-8.6.0.tgz 2411ms (cache miss)
+23:11:32 | DEBUG | #10 3.505 npm http fetch GET 200 https://registry.npmjs.org/concat-stream/-/concat-stream-2.0.0.tgz 2365ms (cache miss)
+23:11:32 | DEBUG | #10 3.493 npm http fetch GET 200 https://registry.npmjs.org/cookie/-/cookie-0.7.1.tgz 2356ms (cache miss)
+23:11:32 | DEBUG | #10 3.519 npm http fetch GET 200 https://registry.npmjs.org/content-disposition/-/content-disposition-0.5.4.tgz 2381ms (cache miss)
+23:11:32 | DEBUG | #10 3.516 npm http fetch GET 200 https://registry.npmjs.org/event-target-shim/-/event-target-shim-5.0.1.tgz 2418ms (cache miss)
+23:11:32 | DEBUG | #10 3.531 npm http fetch GET 200 https://registry.npmjs.org/color-convert/-/color-convert-2.0.1.tgz 2389ms (cache miss)
+23:11:32 | DEBUG | #10 3.532 npm http fetch GET 200 https://registry.npmjs.org/color-name/-/color-name-1.1.4.tgz 2390ms (cache miss)
+23:11:32 | DEBUG | #10 3.529 npm http fetch GET 200 https://registry.npmjs.org/d3-time/-/d3-time-3.1.0.tgz 2408ms (cache miss)
+23:11:32 | DEBUG | #10 3.531 npm http fetch GET 200 https://registry.npmjs.org/connect-pg-simple/-/connect-pg-simple-10.0.0.tgz 2391ms (cache miss)
+23:11:32 | DEBUG | #10 3.542 npm http fetch GET 200 https://registry.npmjs.org/classnames/-/classnames-2.5.1.tgz 2392ms (cache miss)
+23:11:32 | DEBUG | #10 3.560 npm http fetch GET 200 https://registry.npmjs.org/commander/-/commander-4.1.1.tgz 2420ms (cache miss)
+23:11:32 | DEBUG | #10 3.542 npm http fetch GET 200 https://registry.npmjs.org/call-bind-apply-helpers/-/call-bind-apply-helpers-1.0.2.tgz 2389ms (cache miss)
+23:11:32 | DEBUG | #10 3.576 npm http fetch GET 200 https://registry.npmjs.org/buffer-equal-constant-time/-/buffer-equal-constant-time-1.0.1.tgz 2419ms (cache miss)
+23:11:32 | DEBUG | #10 3.553 npm http fetch GET 200 https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz 2409ms (cache miss)
+23:11:32 | DEBUG | #10 3.585 npm http fetch GET 200 https://registry.npmjs.org/object-inspect/-/object-inspect-1.13.2.tgz 2574ms (cache miss)
+23:11:32 | DEBUG | #10 3.572 npm http fetch GET 200 https://registry.npmjs.org/postcss-selector-parser/-/postcss-selector-parser-6.1.2.tgz 2591ms (cache miss)
+23:11:32 | DEBUG | #10 3.577 npm http fetch GET 200 https://registry.npmjs.org/brace-expansion/-/brace-expansion-2.0.1.tgz 2416ms (cache miss)
+23:11:32 | DEBUG | #10 3.554 npm http fetch GET 200 https://registry.npmjs.org/camelcase-css/-/camelcase-css-2.0.1.tgz 2401ms (cache miss)
+23:11:32 | DEBUG | #10 3.568 npm http fetch GET 200 https://registry.npmjs.org/chokidar/-/chokidar-3.6.0.tgz 2418ms (cache miss)
+23:11:32 | DEBUG | #10 3.553 npm http fetch GET 200 https://registry.npmjs.org/class-variance-authority/-/class-variance-authority-0.7.1.tgz 2407ms (cache miss)
+23:11:32 | DEBUG | #10 3.568 npm http fetch GET 200 https://registry.npmjs.org/d3-color/-/d3-color-3.1.0.tgz 2438ms (cache miss)
+23:11:32 | DEBUG | #10 3.561 npm http fetch GET 200 https://registry.npmjs.org/buffer-from/-/buffer-from-1.1.2.tgz 2403ms (cache miss)
+23:11:32 | DEBUG | #10 3.563 npm http fetch GET 200 https://registry.npmjs.org/react-transition-group/-/react-transition-group-4.4.5.tgz 2604ms (cache miss)
+23:11:32 | DEBUG | #10 3.575 npm http fetch GET 200 https://registry.npmjs.org/decimal.js-light/-/decimal.js-light-2.5.1.tgz 2457ms (cache miss)
+23:11:32 | DEBUG | #10 3.583 npm http fetch GET 200 https://registry.npmjs.org/react-smooth/-/react-smooth-4.0.4.tgz 2623ms (cache miss)
+23:11:32 | DEBUG | #10 3.568 npm http fetch GET 200 https://registry.npmjs.org/cmdk/-/cmdk-1.1.1.tgz 2425ms (cache miss)
+23:11:32 | DEBUG | #10 3.554 npm http fetch GET 200 https://registry.npmjs.org/bytes/-/bytes-3.1.2.tgz 2399ms (cache miss)
+23:11:32 | DEBUG | #10 3.570 npm http fetch GET 200 https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz 2406ms (cache miss)
+23:11:32 | DEBUG | #10 3.608 npm http fetch GET 200 https://registry.npmjs.org/braces/-/braces-3.0.3.tgz 2449ms (cache miss)
+23:11:32 | DEBUG | #10 3.592 npm http fetch GET 200 https://registry.npmjs.org/call-bind/-/call-bind-1.0.7.tgz 2437ms (cache miss)
+23:11:32 | DEBUG | #10 3.617 npm http fetch GET 200 https://registry.npmjs.org/aria-hidden/-/aria-hidden-1.2.4.tgz 2449ms (cache miss)
+23:11:32 | DEBUG | #10 3.629 npm http fetch GET 200 https://registry.npmjs.org/bcryptjs/-/bcryptjs-3.0.3.tgz 2466ms (cache miss)
+23:11:32 | DEBUG | #10 3.655 npm http fetch GET 200 https://registry.npmjs.org/abort-controller/-/abort-controller-3.0.0.tgz 2479ms (cache miss)
+23:11:32 | DEBUG | #10 3.592 npm http fetch GET 200 https://registry.npmjs.org/array-flatten/-/array-flatten-1.1.1.tgz 2425ms (cache miss)
+23:11:32 | DEBUG | #10 3.624 npm http fetch GET 200 https://registry.npmjs.org/ansi-styles/-/ansi-styles-6.2.1.tgz 2451ms (cache miss)
+23:11:32 | DEBUG | #10 3.606 npm http fetch GET 200 https://registry.npmjs.org/gaxios/-/gaxios-6.7.1.tgz 2530ms (cache miss)
+23:11:32 | DEBUG | #10 3.593 npm http fetch GET 200 https://registry.npmjs.org/async-retry/-/async-retry-1.3.3.tgz 2427ms (cache miss)
+23:11:32 | DEBUG | #10 3.588 npm http fetch GET 200 https://registry.npmjs.org/jackspeak/-/jackspeak-3.4.3.tgz 2532ms (cache miss)
+23:11:32 | DEBUG | #10 3.631 npm http fetch GET 200 https://registry.npmjs.org/adler-32/-/adler-32-1.3.1.tgz 2457ms (cache miss)
+23:11:32 | DEBUG | #10 3.617 npm http fetch GET 200 https://registry.npmjs.org/arg/-/arg-5.0.2.tgz 2448ms (cache miss)
+23:11:32 | DEBUG | #10 3.592 npm http fetch GET 200 https://registry.npmjs.org/binary-extensions/-/binary-extensions-2.3.0.tgz 2430ms (cache miss)
+23:11:32 | DEBUG | #10 3.594 npm http fetch GET 200 https://registry.npmjs.org/passport/-/passport-0.7.0.tgz 2595ms (cache miss)
+23:11:32 | DEBUG | #10 3.600 npm http fetch GET 200 https://registry.npmjs.org/balanced-match/-/balanced-match-1.0.2.tgz 2435ms (cache miss)
+23:11:32 | DEBUG | #10 3.610 npm http fetch GET 200 https://registry.npmjs.org/append-field/-/append-field-1.0.0.tgz 2440ms (cache miss)
+23:11:32 | DEBUG | #10 3.609 npm http fetch GET 200 https://registry.npmjs.org/asynckit/-/asynckit-0.4.0.tgz 2443ms (cache miss)
+23:11:32 | DEBUG | #10 3.609 npm http fetch GET 200 https://registry.npmjs.org/anymatch/-/anymatch-3.1.3.tgz 2439ms (cache miss)
+23:11:32 | DEBUG | #10 3.599 npm http fetch GET 200 https://registry.npmjs.org/body-parser/-/body-parser-1.20.3.tgz 2438ms (cache miss)
+23:11:32 | DEBUG | #10 3.624 npm http fetch GET 200 https://registry.npmjs.org/agent-base/-/agent-base-7.1.4.tgz 2450ms (cache miss)
+23:11:32 | DEBUG | #10 3.599 npm http fetch GET 200 https://registry.npmjs.org/arrify/-/arrify-2.0.1.tgz 2433ms (cache miss)
+23:11:32 | DEBUG | #10 3.618 npm http fetch GET 200 https://registry.npmjs.org/accepts/-/accepts-1.3.8.tgz 2443ms (cache miss)
+23:11:32 | DEBUG | #10 3.605 npm http fetch GET 200 https://registry.npmjs.org/pg-protocol/-/pg-protocol-1.7.0.tgz 2612ms (cache miss)
+23:11:32 | DEBUG | #10 3.613 npm http fetch GET 200 https://registry.npmjs.org/html-entities/-/html-entities-2.6.0.tgz 2544ms (cache miss)
+23:11:32 | DEBUG | #10 3.623 npm http fetch GET 200 https://registry.npmjs.org/ansi-regex/-/ansi-regex-6.1.0.tgz 2451ms (cache miss)
+23:11:32 | DEBUG | #10 3.600 npm http fetch GET 200 https://registry.npmjs.org/any-promise/-/any-promise-1.3.0.tgz 2429ms (cache miss)
+23:11:32 | DEBUG | #10 3.688 npm http fetch GET 200 https://registry.npmjs.org/iconv-lite/-/iconv-lite-0.4.24.tgz 2622ms (cache miss)
+23:11:32 | DEBUG | #10 3.672 npm http fetch GET 200 https://registry.npmjs.org/tailwind-merge/-/tailwind-merge-2.6.0.tgz 2752ms (cache miss)
+23:11:32 | DEBUG | #10 3.682 npm http fetch GET 200 https://registry.npmjs.org/d3-interpolate/-/d3-interpolate-3.0.1.tgz 2557ms (cache miss)
+23:11:32 | DEBUG | #10 3.711 npm http fetch GET 200 https://registry.npmjs.org/express/-/express-4.21.2.tgz 2620ms (cache miss)
+23:11:32 | DEBUG | #10 3.763 npm http fetch GET 200 https://registry.npmjs.org/busboy/-/busboy-1.6.0.tgz 2610ms (cache miss)
+23:11:32 | DEBUG | #10 3.745 npm http fetch GET 200 https://registry.npmjs.org/d3-scale/-/d3-scale-4.0.2.tgz 2620ms (cache miss)
+23:11:32 | DEBUG | #10 3.773 npm http fetch GET 200 https://registry.npmjs.org/bignumber.js/-/bignumber.js-9.3.1.tgz 2611ms (cache miss)
+23:11:32 | DEBUG | #10 3.782 npm http fetch GET 200 https://registry.npmjs.org/@uppy/url/-/url-5.0.1.tgz 2600ms (cache miss)
+23:11:32 | DEBUG | #10 3.792 npm http fetch GET 200 https://registry.npmjs.org/@uppy/thumbnail-generator/-/thumbnail-generator-5.0.1.tgz 2607ms (cache miss)
+23:11:32 | DEBUG | #10 3.708 npm http fetch GET 200 https://registry.npmjs.org/react-remove-scroll/-/react-remove-scroll-2.6.3.tgz 2746ms (cache miss)
+23:11:32 | DEBUG | #10 3.720 npm http fetch GET 200 https://registry.npmjs.org/postcss/-/postcss-8.4.47.tgz 2731ms (cache miss)
+23:11:32 | DEBUG | #10 3.821 npm http fetch GET 200 https://registry.npmjs.org/@uppy/zoom/-/zoom-4.0.1.tgz 2645ms (cache miss)
+23:11:32 | DEBUG | #10 3.881 npm http fetch GET 200 https://registry.npmjs.org/@uppy/google-drive/-/google-drive-5.0.1.tgz 2692ms (cache miss)
+23:11:32 | DEBUG | #10 3.802 npm http fetch GET 200 https://registry.npmjs.org/@uppy/store-default/-/store-default-5.0.0.tgz 2618ms (cache miss)
+23:11:32 | DEBUG | #10 3.830 npm http fetch GET 200 https://registry.npmjs.org/@uppy/onedrive/-/onedrive-5.0.1.tgz 2644ms (cache miss)
+23:11:32 | DEBUG | #10 3.797 npm http fetch GET 200 https://registry.npmjs.org/d3-time-format/-/d3-time-format-4.1.0.tgz 2674ms (cache miss)
+23:11:32 | DEBUG | #10 3.898 npm http fetch GET 200 https://registry.npmjs.org/@types/send/-/send-0.17.4.tgz 2698ms (cache miss)
+23:11:32 | DEBUG | #10 3.809 npm http fetch GET 200 https://registry.npmjs.org/cfb/-/cfb-1.2.2.tgz 2658ms (cache miss)
+23:11:32 | DEBUG | #10 3.845 npm http fetch GET 200 https://registry.npmjs.org/@uppy/instagram/-/instagram-5.0.1.tgz 2655ms (cache miss)
+23:11:32 | DEBUG | #10 3.855 npm http fetch GET 200 https://registry.npmjs.org/minimatch/-/minimatch-9.0.5.tgz 2834ms (cache miss)
+23:11:32 | DEBUG | #10 3.836 npm http fetch GET 200 https://registry.npmjs.org/@uppy/remote-sources/-/remote-sources-3.0.1.tgz 2651ms (cache miss)
+23:11:32 | DEBUG | #10 3.836 npm http fetch GET 200 https://registry.npmjs.org/@uppy/unsplash/-/unsplash-5.0.1.tgz 2654ms (cache miss)
+23:11:32 | DEBUG | #10 3.939 npm http fetch GET 200 https://registry.npmjs.org/@types/retry/-/retry-0.12.2.tgz 2731ms (cache miss)
+23:11:32 | DEBUG | #10 3.911 npm http fetch GET 200 https://registry.npmjs.org/bufferutil/-/bufferutil-4.0.8.tgz 2755ms (cache miss)
+23:11:32 | DEBUG | #10 3.951 npm http fetch GET 200 https://registry.npmjs.org/cropperjs/-/cropperjs-1.6.2.tgz 2817ms (cache miss)
+23:11:32 | DEBUG | #10 3.998 npm http fetch GET 200 https://registry.npmjs.org/browser-image-compression/-/browser-image-compression-2.0.2.tgz 2840ms (cache miss)
+23:11:32 | DEBUG | #10 3.909 npm http fetch GET 200 https://registry.npmjs.org/fast-glob/-/fast-glob-3.3.2.tgz 2821ms (cache miss)
+23:11:32 | DEBUG | #10 3.984 npm http fetch GET 200 https://registry.npmjs.org/d3-array/-/d3-array-3.2.4.tgz 2852ms (cache miss)
+23:11:32 | DEBUG | #10 3.980 npm http fetch GET 200 https://registry.npmjs.org/@types/serve-static/-/serve-static-1.15.7.tgz 2782ms (cache miss)
+23:11:32 | DEBUG | #10 3.992 npm http fetch GET 200 https://registry.npmjs.org/@types/qs/-/qs-6.9.16.tgz 2784ms (cache miss)
+23:11:32 | DEBUG | #10 3.921 npm http fetch GET 200 https://registry.npmjs.org/@types/react-dom/-/react-dom-18.3.1.tgz 2714ms (cache miss)
+23:11:32 | DEBUG | #10 4.021 npm http fetch GET 200 https://registry.npmjs.org/@types/range-parser/-/range-parser-1.2.7.tgz 2811ms (cache miss)
+23:11:32 | DEBUG | #10 4.076 npm http fetch GET 200 https://registry.npmjs.org/csstype/-/csstype-3.1.3.tgz 2944ms (cache miss)
+23:11:32 | DEBUG | #10 4.045 npm http fetch GET 200 https://registry.npmjs.org/react-resizable-panels/-/react-resizable-panels-2.1.7.tgz 3084ms (cache miss)
+23:11:32 | DEBUG | #10 4.059 npm http fetch GET 200 https://registry.npmjs.org/d3-format/-/d3-format-3.1.0.tgz 2934ms (cache miss)
+23:11:32 | DEBUG | #10 4.101 npm http fetch GET 200 https://registry.npmjs.org/@types/tough-cookie/-/tough-cookie-4.0.5.tgz 2903ms (cache miss)
+23:11:32 | DEBUG | #10 4.081 npm http fetch GET 200 https://registry.npmjs.org/d3-shape/-/d3-shape-3.2.0.tgz 2959ms (cache miss)
+23:11:32 | DEBUG | #10 4.145 npm http fetch GET 200 https://registry.npmjs.org/glob/-/glob-10.4.5.tgz 3071ms (cache miss)
+23:11:32 | DEBUG | #10 4.185 npm http fetch GET 200 https://registry.npmjs.org/@uppy/box/-/box-4.0.1.tgz 2989ms (cache miss)
+23:11:32 | DEBUG | #10 4.180 npm http fetch GET 200 https://registry.npmjs.org/@types/jsonwebtoken/-/jsonwebtoken-9.0.10.tgz 2964ms (cache miss)
+23:11:32 | DEBUG | #10 4.180 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-time/-/d3-time-3.0.3.tgz 2962ms (cache miss)
+23:11:32 | DEBUG | #10 4.180 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-timer/-/d3-timer-3.0.2.tgz 2961ms (cache miss)
+23:11:32 | DEBUG | #10 4.185 npm http fetch GET 200 https://registry.npmjs.org/@types/express/-/express-4.17.21.tgz 2968ms (cache miss)
+23:11:32 | DEBUG | #10 4.121 npm http fetch GET 200 https://registry.npmjs.org/@types/prop-types/-/prop-types-15.7.13.tgz 2911ms (cache miss)
+23:11:32 | DEBUG | #10 4.136 npm http fetch GET 200 https://registry.npmjs.org/@types/request/-/request-2.48.13.tgz 2936ms (cache miss)
+23:11:32 | DEBUG | #10 4.136 npm http fetch GET 200 https://registry.npmjs.org/@types/mime/-/mime-1.3.5.tgz 2922ms (cache miss)
+23:11:32 | DEBUG | #10 4.121 npm http fetch GET 200 https://registry.npmjs.org/@uppy/dropbox/-/dropbox-5.0.1.tgz 2922ms (cache miss)
+23:11:32 | DEBUG | #10 4.154 npm http fetch GET 200 https://registry.npmjs.org/@types/ms/-/ms-2.1.0.tgz 2940ms (cache miss)
+23:11:32 | DEBUG | #10 4.170 npm http fetch GET 200 https://registry.npmjs.org/@types/express-serve-static-core/-/express-serve-static-core-4.19.6.tgz 2952ms (cache miss)
+23:11:32 | DEBUG | #10 4.188 npm http fetch GET 200 https://registry.npmjs.org/@types/http-errors/-/http-errors-2.0.4.tgz 2974ms (cache miss)
+23:11:32 | DEBUG | #10 4.193 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-scale/-/d3-scale-4.0.8.tgz 2973ms (cache miss)
+23:11:32 | DEBUG | #10 4.199 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-shape/-/d3-shape-3.1.6.tgz 2979ms (cache miss)
+23:11:32 | DEBUG | #10 4.188 npm http fetch GET 200 https://registry.npmjs.org/@uppy/image-editor/-/image-editor-4.0.1.tgz 2999ms (cache miss)
+23:11:32 | DEBUG | #10 4.186 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-path/-/d3-path-3.1.0.tgz 2964ms (cache miss)
+23:11:32 | DEBUG | #10 4.193 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-interpolate/-/d3-interpolate-3.0.4.tgz 2971ms (cache miss)
+23:11:32 | DEBUG | #10 4.196 npm http fetch GET 200 https://registry.npmjs.org/@uppy/screen-capture/-/screen-capture-5.0.1.tgz 3012ms (cache miss)
+23:11:33 | DEBUG | #10 4.234 npm http fetch GET 200 https://registry.npmjs.org/@types/body-parser/-/body-parser-1.19.5.tgz 3001ms (cache miss)
+23:11:33 | DEBUG | #10 4.266 npm http fetch GET 200 https://registry.npmjs.org/fast-equals/-/fast-equals-5.2.2.tgz 3176ms (cache miss)
+23:11:33 | DEBUG | #10 4.234 npm http fetch GET 200 https://registry.npmjs.org/@types/multer/-/multer-2.0.0.tgz 3021ms (cache miss)
+23:11:33 | DEBUG | #10 4.206 npm http fetch GET 200 https://registry.npmjs.org/@types/connect/-/connect-3.4.38.tgz 2976ms (cache miss)
+23:11:33 | DEBUG | #10 4.282 npm http fetch GET 200 https://registry.npmjs.org/@uppy/webcam/-/webcam-5.0.1.tgz 3103ms (cache miss)
+23:11:33 | DEBUG | #10 4.272 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/rect/-/rect-1.1.1.tgz 3032ms (cache miss)
+23:11:33 | DEBUG | #10 4.281 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-use-rect/-/react-use-rect-1.1.1.tgz 3039ms (cache miss)
+23:11:33 | DEBUG | #10 4.206 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-color/-/d3-color-3.1.3.tgz 2983ms (cache miss)
+23:11:33 | DEBUG | #10 4.199 npm http fetch GET 200 https://registry.npmjs.org/@types/caseless/-/caseless-0.12.5.tgz 2971ms (cache miss)
+23:11:33 | DEBUG | #10 4.266 npm http fetch GET 200 https://registry.npmjs.org/fast-xml-parser/-/fast-xml-parser-4.5.3.tgz 3179ms (cache miss)
+23:11:33 | DEBUG | #10 4.281 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-use-layout-effect/-/react-use-layout-effect-1.1.1.tgz 3038ms (cache miss)
+23:11:33 | DEBUG | #10 4.220 npm http fetch GET 200 https://registry.npmjs.org/@tootallnate/once/-/once-2.0.0.tgz 2987ms (cache miss)
+23:11:33 | DEBUG | #10 4.233 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-array/-/d3-array-3.2.1.tgz 3008ms (cache miss)
+23:11:33 | DEBUG | #10 4.207 npm http fetch GET 200 https://registry.npmjs.org/@types/pg/-/pg-8.11.6.tgz 2995ms (cache miss)
+23:11:33 | DEBUG | #10 4.260 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-use-size/-/react-use-size-1.1.1.tgz 3018ms (cache miss)
+23:11:33 | DEBUG | #10 4.280 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-use-previous/-/react-use-previous-1.1.1.tgz 3038ms (cache miss)
+23:11:33 | DEBUG | #10 4.281 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-use-callback-ref/-/react-use-callback-ref-1.1.1.tgz 3036ms (cache miss)
+23:11:33 | DEBUG | #10 4.230 npm http fetch GET 200 https://registry.npmjs.org/@types/react/-/react-18.3.12.tgz 3021ms (cache miss)
+23:11:33 | DEBUG | #10 4.272 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-use-escape-keydown/-/react-use-escape-keydown-1.1.1.tgz 3027ms (cache miss)
+23:11:33 | DEBUG | #10 4.221 npm http fetch GET 200 https://registry.npmjs.org/@types/d3-ease/-/d3-ease-3.0.2.tgz 2998ms (cache miss)
+23:11:33 | DEBUG | #10 4.240 npm http fetch GET 200 https://registry.npmjs.org/@twa-dev/types/-/types-8.0.2.tgz 3010ms (cache miss)
+23:11:33 | DEBUG | #10 4.290 npm http fetch GET 200 https://registry.npmjs.org/jiti/-/jiti-1.21.6.tgz 3232ms (cache miss)
+23:11:33 | DEBUG | #10 4.310 npm http fetch GET 200 https://registry.npmjs.org/@uppy/companion-client/-/companion-client-5.1.0.tgz 3115ms (cache miss)
+23:11:33 | DEBUG | #10 4.337 npm http fetch GET 200 https://registry.npmjs.org/@types/bcryptjs/-/bcryptjs-2.4.6.tgz 3107ms (cache miss)
+23:11:33 | DEBUG | #10 4.332 npm http fetch GET 200 https://registry.npmjs.org/google-auth-library/-/google-auth-library-9.15.1.tgz 3260ms (cache miss)
+23:11:33 | DEBUG | #10 4.446 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-use-controllable-state/-/react-use-controllable-state-1.1.1.tgz 3201ms (cache miss)
+23:11:33 | DEBUG | #10 4.376 npm http fetch GET 200 https://registry.npmjs.org/embla-carousel/-/embla-carousel-8.6.0.tgz 3269ms (cache miss)
+23:11:33 | DEBUG | #10 4.388 npm http fetch GET 200 https://registry.npmjs.org/@uppy/audio/-/audio-3.0.1.tgz 3190ms (cache miss)
+23:11:33 | DEBUG | #10 4.394 npm http fetch GET 200 https://registry.npmjs.org/@uppy/components/-/components-1.0.3.tgz 3200ms (cache miss)
+23:11:33 | DEBUG | #10 4.370 npm http fetch GET 200 https://registry.npmjs.org/@uppy/react/-/react-5.1.0.tgz 3182ms (cache miss)
+23:11:33 | DEBUG | #10 4.314 npm http fetch GET 200 https://registry.npmjs.org/@uppy/aws-s3/-/aws-s3-5.0.1.tgz 3118ms (cache miss)
+23:11:33 | DEBUG | #10 4.391 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-visually-hidden/-/react-visually-hidden-1.1.3.tgz 3152ms (cache miss)
+23:11:33 | DEBUG | #10 4.402 npm http fetch GET 200 https://registry.npmjs.org/resolve/-/resolve-1.22.8.tgz 3455ms (cache miss)
+23:11:33 | DEBUG | #10 4.328 npm http fetch GET 200 https://registry.npmjs.org/@types/cookie-parser/-/cookie-parser-1.4.10.tgz 3100ms (cache miss)
+23:11:33 | DEBUG | #10 4.530 npm http fetch GET 200 https://registry.npmjs.org/exifr/-/exifr-7.1.3.tgz 3437ms (cache miss)
+23:11:33 | DEBUG | #10 4.532 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-tooltip/-/react-tooltip-1.2.0.tgz 3285ms (cache miss)
+23:11:33 | DEBUG | #10 4.536 npm http fetch GET 200 https://registry.npmjs.org/@twa-dev/sdk/-/sdk-8.0.2.tgz 3304ms (cache miss)
+23:11:33 | DEBUG | #10 4.537 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-toggle/-/react-toggle-1.1.3.tgz 3290ms (cache miss)
+23:11:33 | DEBUG | #10 4.549 npm http fetch GET 200 https://registry.npmjs.org/@uppy/core/-/core-5.1.0.tgz 3355ms (cache miss)
+23:11:33 | DEBUG | #10 4.591 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-toast/-/react-toast-1.2.7.tgz 3342ms (cache miss)
+23:11:33 | DEBUG | #10 4.554 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-tabs/-/react-tabs-1.1.4.tgz 3305ms (cache miss)
+23:11:33 | DEBUG | #10 4.554 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-switch/-/react-switch-1.1.4.tgz 3305ms (cache miss)
+23:11:33 | DEBUG | #10 4.551 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-toggle-group/-/react-toggle-group-1.1.3.tgz 3305ms (cache miss)
+23:11:33 | DEBUG | #10 4.585 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-slider/-/react-slider-1.2.4.tgz 3334ms (cache miss)
+23:11:33 | DEBUG | #10 4.649 npm http fetch GET 200 https://registry.npmjs.org/@transloadit/prettier-bytes/-/prettier-bytes-0.3.5.tgz 3416ms (cache miss)
+23:11:33 | DEBUG | #10 4.608 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-slot/-/react-slot-1.2.0.tgz 3356ms (cache miss)
+23:11:33 | DEBUG | #10 4.623 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-separator/-/react-separator-1.1.3.tgz 3372ms (cache miss)
+23:11:33 | DEBUG | #10 4.722 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-primitive/-/react-primitive-2.0.3.tgz 3462ms (cache miss)
+23:11:33 | DEBUG | #10 4.659 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-scroll-area/-/react-scroll-area-1.2.4.tgz 3405ms (cache miss)
+23:11:33 | DEBUG | #10 4.693 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-radio-group/-/react-radio-group-1.2.4.tgz 3439ms (cache miss)
+23:11:33 | DEBUG | #10 4.707 npm http fetch GET 200 https://registry.npmjs.org/@uppy/provider-views/-/provider-views-5.1.0.tgz 3519ms (cache miss)
+23:11:33 | DEBUG | #10 4.698 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-select/-/react-select-2.1.7.tgz 3445ms (cache miss)
+23:11:33 | DEBUG | #10 4.712 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-progress/-/react-progress-1.1.3.tgz 3456ms (cache miss)
+23:11:33 | DEBUG | #10 4.680 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-roving-focus/-/react-roving-focus-1.1.3.tgz 3425ms (cache miss)
+23:11:33 | DEBUG | #10 4.709 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-id/-/react-id-1.1.1.tgz 3442ms (cache miss)
+23:11:33 | DEBUG | #10 4.768 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-portal/-/react-portal-1.1.5.tgz 3511ms (cache miss)
+23:11:33 | DEBUG | #10 4.736 npm http fetch GET 200 https://registry.npmjs.org/preact/-/preact-10.27.2.tgz 3760ms (cache miss)
+23:11:33 | DEBUG | #10 4.865 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-compose-refs/-/react-compose-refs-1.1.2.tgz 3591ms (cache miss)
+23:11:33 | DEBUG | #10 4.780 npm http fetch GET 200 https://registry.npmjs.org/react-hook-form/-/react-hook-form-7.55.0.tgz 3814ms (cache miss)
+23:11:33 | DEBUG | #10 4.771 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-presence/-/react-presence-1.1.3.tgz 3513ms (cache miss)
+23:11:33 | DEBUG | #10 4.843 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-context/-/react-context-1.1.2.tgz 3570ms (cache miss)
+23:11:33 | DEBUG | #10 4.780 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-popper/-/react-popper-1.2.3.tgz 3522ms (cache miss)
+23:11:33 | DEBUG | #10 4.784 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-popover/-/react-popover-1.1.7.tgz 3527ms (cache miss)
+23:11:33 | DEBUG | #10 4.874 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-label/-/react-label-2.1.3.tgz 3607ms (cache miss)
+23:11:33 | DEBUG | #10 4.778 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-direction/-/react-direction-1.1.1.tgz 3508ms (cache miss)
+23:11:33 | DEBUG | #10 4.777 npm http fetch GET 200 https://registry.npmjs.org/sucrase/-/sucrase-3.35.0.tgz 3854ms (cache miss)
+23:11:33 | DEBUG | #10 4.898 npm http fetch GET 200 https://registry.npmjs.org/yaml/-/yaml-2.6.0.tgz 4007ms (cache miss)
+23:11:33 | DEBUG | #10 4.919 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-menu/-/react-menu-2.1.7.tgz 3653ms (cache miss)
+23:11:33 | DEBUG | #10 4.953 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-dismissable-layer/-/react-dismissable-layer-1.1.6.tgz 3683ms (cache miss)
+23:11:33 | DEBUG | #10 4.886 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-navigation-menu/-/react-navigation-menu-1.2.6.tgz 3622ms (cache miss)
+23:11:33 | DEBUG | #10 4.967 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-dropdown-menu/-/react-dropdown-menu-2.1.7.tgz 3697ms (cache miss)
+23:11:33 | DEBUG | #10 4.880 npm http fetch GET 200 https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz 3911ms (cache miss)
+23:11:33 | DEBUG | #10 4.886 npm http fetch GET 200 https://registry.npmjs.org/@types/node/-/node-20.16.11.tgz 3674ms (cache miss)
+23:11:33 | DEBUG | #10 4.887 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-hover-card/-/react-hover-card-1.1.7.tgz 3619ms (cache miss)
+23:11:33 | DEBUG | #10 4.955 npm http fetch GET 200 https://registry.npmjs.org/dom-helpers/-/dom-helpers-5.2.1.tgz 3843ms (cache miss)
+23:11:33 | DEBUG | #10 4.911 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-focus-scope/-/react-focus-scope-1.1.3.tgz 3644ms (cache miss)
+23:11:33 | DEBUG | #10 4.879 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-menubar/-/react-menubar-1.1.7.tgz 3614ms (cache miss)
+23:11:33 | DEBUG | #10 4.981 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-focus-guards/-/react-focus-guards-1.1.2.tgz 3712ms (cache miss)
+23:11:33 | DEBUG | #10 5.074 npm http fetch GET 200 https://registry.npmjs.org/@pkgjs/parseargs/-/parseargs-0.11.0.tgz 3794ms (cache miss)
+23:11:33 | DEBUG | #10 5.048 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-context-menu/-/react-context-menu-2.2.7.tgz 3775ms (cache miss)
+23:11:33 | DEBUG | #10 5.037 npm http fetch GET 200 https://registry.npmjs.org/@nodelib/fs.walk/-/fs.walk-1.2.8.tgz 3757ms (cache miss)
+23:11:33 | DEBUG | #10 5.086 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-collapsible/-/react-collapsible-1.1.4.tgz 3811ms (cache miss)
+23:11:33 | DEBUG | #10 5.025 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-collection/-/react-collection-1.1.3.tgz 3750ms (cache miss)
+23:11:33 | DEBUG | #10 5.035 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-dialog/-/react-dialog-1.1.7.tgz 3763ms (cache miss)
+23:11:33 | DEBUG | #10 4.994 npm http fetch GET 200 https://registry.npmjs.org/@uppy/dashboard/-/dashboard-5.0.2.tgz 3802ms (cache miss)
+23:11:33 | DEBUG | #10 5.052 npm http fetch GET 200 https://registry.npmjs.org/victory-vendor/-/victory-vendor-36.9.2.tgz 4153ms (cache miss)
+23:11:33 | DEBUG | #10 5.022 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/number/-/number-1.1.1.tgz 3742ms (cache miss)
+23:11:33 | DEBUG | #10 5.103 npm http fetch GET 200 https://registry.npmjs.org/@uppy/utils/-/utils-7.1.0.tgz 3922ms (cache miss)
+23:11:33 | DEBUG | #10 5.130 npm http fetch GET 200 https://registry.npmjs.org/@jridgewell/resolve-uri/-/resolve-uri-3.1.2.tgz 3843ms (cache miss)
+23:11:33 | DEBUG | #10 5.167 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-checkbox/-/react-checkbox-1.1.5.tgz 3892ms (cache miss)
+23:11:33 | DEBUG | #10 5.100 npm http fetch GET 200 https://registry.npmjs.org/@nodelib/fs.scandir/-/fs.scandir-2.1.5.tgz 3818ms (cache miss)
+23:11:33 | DEBUG | #10 5.210 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/primitive/-/primitive-1.1.2.tgz 3932ms (cache miss)
+23:11:33 | DEBUG | #10 5.149 npm http fetch GET 200 https://registry.npmjs.org/@isaacs/cliui/-/cliui-8.0.2.tgz 3861ms (cache miss)
+23:11:33 | DEBUG | #10 5.122 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-arrow/-/react-arrow-1.1.3.tgz 3845ms (cache miss)
+23:11:33 | DEBUG | #10 5.145 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-accordion/-/react-accordion-1.2.4.tgz 3866ms (cache miss)
+23:11:33 | DEBUG | #10 5.126 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-avatar/-/react-avatar-1.1.4.tgz 3850ms (cache miss)
+23:11:33 | DEBUG | #10 5.130 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-aspect-ratio/-/react-aspect-ratio-1.1.3.tgz 3853ms (cache miss)
+23:11:33 | DEBUG | #10 5.108 npm http fetch GET 200 https://registry.npmjs.org/@nodelib/fs.stat/-/fs.stat-2.0.5.tgz 3828ms (cache miss)
+23:11:34 | DEBUG | #10 5.308 npm http fetch GET 200 https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz 4005ms (cache miss)
+23:11:34 | DEBUG | #10 5.290 npm http fetch GET 200 https://registry.npmjs.org/https-proxy-agent/-/https-proxy-agent-5.0.1.tgz 3990ms (cache miss)
+23:11:34 | DEBUG | #10 5.274 npm http fetch GET 200 https://registry.npmjs.org/ansi-styles/-/ansi-styles-4.3.0.tgz 3975ms (cache miss)
+23:11:34 | DEBUG | #10 5.238 npm http fetch GET 200 https://registry.npmjs.org/@radix-ui/react-alert-dialog/-/react-alert-dialog-1.1.7.tgz 3960ms (cache miss)
+23:11:34 | DEBUG | #10 5.289 npm http fetch GET 200 https://registry.npmjs.org/@alloc/quick-lru/-/quick-lru-5.2.0.tgz 3992ms (cache miss)
+23:11:34 | DEBUG | #10 5.307 npm http fetch GET 200 https://registry.npmjs.org/ansi-regex/-/ansi-regex-5.0.1.tgz 4005ms (cache miss)
+23:11:34 | DEBUG | #10 5.254 npm http fetch GET 200 https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz 3957ms (cache miss)
+23:11:34 | DEBUG | #10 5.225 npm http fetch GET 200 https://registry.npmjs.org/@jridgewell/sourcemap-codec/-/sourcemap-codec-1.5.0.tgz 3941ms (cache miss)
+23:11:34 | DEBUG | #10 5.299 npm http fetch GET 200 https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz 3998ms (cache miss)
+23:11:34 | DEBUG | #10 5.283 npm http fetch GET 200 https://registry.npmjs.org/ansi-regex/-/ansi-regex-5.0.1.tgz 3985ms (cache miss)
+23:11:34 | DEBUG | #10 5.240 npm http fetch GET 200 https://registry.npmjs.org/strip-ansi/-/strip-ansi-6.0.1.tgz 3943ms (cache miss)
+23:11:34 | DEBUG | #10 5.248 npm http fetch GET 200 https://registry.npmjs.org/@google-cloud/promisify/-/promisify-4.0.0.tgz 3956ms (cache miss)
+23:11:34 | DEBUG | #10 5.248 npm http fetch GET 200 https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.9.tgz 3956ms (cache miss)
+23:11:34 | DEBUG | #10 5.249 npm http fetch GET 200 https://registry.npmjs.org/@floating-ui/react-dom/-/react-dom-2.1.2.tgz 3954ms (cache miss)
+23:11:34 | DEBUG | #10 5.312 npm http fetch GET 200 https://registry.npmjs.org/@neondatabase/serverless/-/serverless-0.10.4.tgz 4030ms (cache miss)
+23:11:34 | DEBUG | #10 5.336 npm http fetch GET 200 https://registry.npmjs.org/@uppy/facebook/-/facebook-5.0.1.tgz 4145ms (cache miss)
+23:11:34 | DEBUG | #10 5.379 npm http fetch GET 200 https://registry.npmjs.org/react-is/-/react-is-16.13.1.tgz 4073ms (cache miss)
+23:11:34 | DEBUG | #10 5.325 npm http fetch GET 200 https://registry.npmjs.org/@floating-ui/dom/-/dom-1.6.13.tgz 4031ms (cache miss)
+23:11:34 | DEBUG | #10 5.321 npm http fetch GET 200 https://registry.npmjs.org/ansi-regex/-/ansi-regex-5.0.1.tgz 4016ms (cache miss)
+23:11:34 | DEBUG | #10 5.321 npm http fetch GET 200 https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz 4019ms (cache miss)
+23:11:34 | DEBUG | #10 5.317 npm http fetch GET 200 https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz 4014ms (cache miss)
+23:11:34 | DEBUG | #10 5.335 npm http fetch GET 200 https://registry.npmjs.org/react-day-picker/-/react-day-picker-8.10.1.tgz 4370ms (cache miss)
+23:11:34 | DEBUG | #10 5.336 npm http fetch GET 200 https://registry.npmjs.org/encodeurl/-/encodeurl-1.0.2.tgz 4032ms (cache miss)
+23:11:34 | DEBUG | #10 5.330 npm http fetch GET 200 https://registry.npmjs.org/ms/-/ms-2.0.0.tgz 4024ms (cache miss)
+23:11:34 | DEBUG | #10 5.365 npm http fetch GET 200 https://registry.npmjs.org/nanoid/-/nanoid-3.3.11.tgz 4053ms (cache miss)
+23:11:34 | DEBUG | #10 5.413 npm http fetch GET 200 https://registry.npmjs.org/postgres-array/-/postgres-array-2.0.0.tgz 4100ms (cache miss)
+23:11:34 | DEBUG | #10 5.400 npm http fetch GET 200 https://registry.npmjs.org/postgres-date/-/postgres-date-1.0.7.tgz 4089ms (cache miss)
+23:11:34 | DEBUG | #10 5.464 npm http fetch GET 200 https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz 4147ms (cache miss)
+23:11:34 | DEBUG | #10 5.413 npm http fetch GET 200 https://registry.npmjs.org/eventemitter3/-/eventemitter3-5.0.1.tgz 4098ms (cache miss)
+23:11:34 | DEBUG | #10 5.437 npm http fetch GET 200 https://registry.npmjs.org/pg-types/-/pg-types-2.2.0.tgz 4124ms (cache miss)
+23:11:34 | DEBUG | #10 5.429 npm http fetch GET 200 https://registry.npmjs.org/postgres-interval/-/postgres-interval-1.2.0.tgz 4116ms (cache miss)
+23:11:34 | DEBUG | #10 5.429 npm http fetch GET 200 https://registry.npmjs.org/postgres-bytea/-/postgres-bytea-1.0.0.tgz 4115ms (cache miss)
+23:11:34 | DEBUG | #10 5.490 npm http fetch GET 200 https://registry.npmjs.org/@jridgewell/gen-mapping/-/gen-mapping-0.3.13.tgz 4200ms (cache miss)
+23:11:34 | DEBUG | #10 5.447 npm http fetch GET 200 https://registry.npmjs.org/lru-cache/-/lru-cache-4.1.5.tgz 4131ms (cache miss)
+23:11:34 | DEBUG | #10 5.451 npm http fetch GET 200 https://registry.npmjs.org/debug/-/debug-2.6.9.tgz 4146ms (cache miss)
+23:11:34 | DEBUG | #10 5.512 npm http fetch GET 200 https://registry.npmjs.org/yallist/-/yallist-2.1.2.tgz 4197ms (cache miss)
+23:11:34 | DEBUG | #10 5.517 npm http fetch GET 200 https://registry.npmjs.org/cookie-signature/-/cookie-signature-1.0.7.tgz 4197ms (cache miss)
+23:11:34 | DEBUG | #10 5.540 npm http fetch GET 200 https://registry.npmjs.org/@tootallnate%2fonce 3681ms (cache miss)
+23:11:34 | DEBUG | #10 5.536 npm http fetch GET 200 https://registry.npmjs.org/glob-parent/-/glob-parent-5.1.2.tgz 4212ms (cache miss)
+23:11:34 | DEBUG | #10 5.513 npm http fetch GET 200 https://registry.npmjs.org/@google-cloud/paginator/-/paginator-5.0.2.tgz 4221ms (cache miss)
+23:11:34 | DEBUG | #10 5.516 npm http fetch GET 200 https://registry.npmjs.org/glob-parent/-/glob-parent-5.1.2.tgz 4197ms (cache miss)
+23:11:34 | DEBUG | #10 5.527 npm http fetch GET 200 https://registry.npmjs.org/ms/-/ms-2.0.0.tgz 4204ms (cache miss)
+23:11:34 | DEBUG | #10 5.513 npm http fetch GET 200 https://registry.npmjs.org/@google-cloud/projectify/-/projectify-4.0.0.tgz 4222ms (cache miss)
+23:11:34 | DEBUG | #10 5.527 npm http fetch GET 200 https://registry.npmjs.org/ms/-/ms-2.0.0.tgz 4205ms (cache miss)
+23:11:34 | DEBUG | #10 5.512 npm http fetch GET 200 https://registry.npmjs.org/@jridgewell/trace-mapping/-/trace-mapping-0.3.31.tgz 4230ms (cache miss)
+23:11:34 | DEBUG | #10 5.517 npm http fetch GET 200 https://registry.npmjs.org/cookie/-/cookie-0.7.2.tgz 4196ms (cache miss)
+23:11:34 | DEBUG | #10 5.513 npm http fetch GET 200 https://registry.npmjs.org/ms/-/ms-2.0.0.tgz 4195ms (cache miss)
+23:11:34 | DEBUG | #10 5.536 npm http fetch GET 200 https://registry.npmjs.org/cookie/-/cookie-0.7.2.tgz 4214ms (cache miss)
+23:11:34 | DEBUG | #10 5.513 npm http fetch GET 200 https://registry.npmjs.org/ms/-/ms-2.0.0.tgz 4192ms (cache miss)
+23:11:34 | DEBUG | #10 5.552 npm http fetch GET 200 https://registry.npmjs.org/mime/-/mime-3.0.0.tgz 4227ms (cache miss)
+23:11:34 | DEBUG | #10 5.610 npm http fetch GET 200 https://registry.npmjs.org/path-to-regexp 3745ms (cache miss)
+23:11:34 | DEBUG | #10 5.589 npm http fetch GET 200 https://registry.npmjs.org/debug/-/debug-2.6.9.tgz 4269ms (cache miss)
+23:11:34 | DEBUG | #10 5.591 npm http fetch GET 200 https://registry.npmjs.org/picomatch 3725ms (cache miss)
+23:11:34 | DEBUG | #10 5.603 npm http fetch GET 200 https://registry.npmjs.org/debug/-/debug-2.6.9.tgz 4281ms (cache miss)
+23:11:34 | DEBUG | #10 5.607 npm http fetch GET 200 https://registry.npmjs.org/debug/-/debug-2.6.9.tgz 4282ms (cache miss)
+23:11:34 | DEBUG | #10 5.562 npm http fetch GET 200 https://registry.npmjs.org/on-headers 3698ms (cache miss)
+23:11:34 | DEBUG | #10 5.552 npm http fetch GET 200 https://registry.npmjs.org/brace-expansion 3693ms (cache miss)
+23:11:34 | DEBUG | #10 5.560 npm http fetch GET 200 https://registry.npmjs.org/debug/-/debug-2.6.9.tgz 4241ms (cache miss)
+23:11:34 | DEBUG | #10 5.616 npm http fetch GET 200 https://registry.npmjs.org/multer 3752ms (cache miss)
+23:11:34 | DEBUG | #10 5.567 npm http fetch GET 200 https://registry.npmjs.org/uuid 3706ms (cache miss)
+23:11:34 | DEBUG | #10 5.571 npm http fetch GET 200 https://registry.npmjs.org/lodash 3709ms (cache miss)
+23:11:34 | DEBUG | #10 5.674 npm http fetch GET 200 https://registry.npmjs.org/minimatch 3811ms (cache miss)
+23:11:34 | DEBUG | #10 5.651 npm http fetch GET 200 https://registry.npmjs.org/qs 3785ms (cache miss)
+23:11:34 | DEBUG | #10 5.715 npm http fetch GET 200 https://registry.npmjs.org/glob 3853ms (cache miss)
+23:11:34 | DEBUG | #10 5.665 npm http fetch GET 200 https://registry.npmjs.org/xlsx 3797ms (cache miss)
+23:11:34 | DEBUG | #10 5.648 npm http fetch GET 200 https://registry.npmjs.org/@floating-ui/core/-/core-1.6.9.tgz 4352ms (cache miss)
+23:11:34 | DEBUG | #10 5.691 npm http fetch GET 200 https://registry.npmjs.org/fast-xml-parser 3830ms (cache miss)
+23:11:34 | DEBUG | #10 5.814 npm http fetch GET 200 https://registry.npmjs.org/semver/-/semver-7.8.1.tgz 4497ms (cache miss)
+23:11:34 | DEBUG | #10 5.837 npm http fetch GET 200 https://registry.npmjs.org/xlsx/-/xlsx-0.18.5.tgz 4944ms (cache miss)
+23:11:34 | DEBUG | #10 5.786 npm http fetch GET 200 https://registry.npmjs.org/preact 3919ms (cache miss)
+23:11:34 | DEBUG | #10 5.815 npm http fetch GET 200 https://registry.npmjs.org/uuid/-/uuid-9.0.1.tgz 4514ms (cache miss)
+23:11:34 | DEBUG | #10 5.823 npm http fetch GET 200 https://registry.npmjs.org/lru-cache/-/lru-cache-10.4.3.tgz 4508ms (cache miss)
+23:11:34 | DEBUG | #10 5.762 npm http fetch GET 200 https://registry.npmjs.org/postcss 3897ms (cache miss)
+23:11:34 | DEBUG | #10 5.752 npm http fetch GET 200 https://registry.npmjs.org/ws 3884ms (cache miss)
+23:11:34 | DEBUG | #10 5.719 npm http fetch GET 200 https://registry.npmjs.org/yaml 3850ms (cache miss)
+23:11:34 | DEBUG | #10 5.850 npm http fetch GET 200 https://registry.npmjs.org/uuid/-/uuid-9.0.1.tgz 4532ms (cache miss)
+23:11:34 | DEBUG | #10 5.973 npm http fetch GET 200 https://registry.npmjs.org/codepage/-/codepage-1.15.0.tgz 4829ms (cache miss)
+23:11:34 | DEBUG | #10 6.051 npm http fetch GET 200 https://registry.npmjs.org/@google-cloud/storage/-/storage-7.17.2.tgz 4761ms (cache miss)
+23:11:34 | DEBUG | #10 6.049 npm http fetch GET 200 https://registry.npmjs.org/@tanstack/react-query/-/react-query-5.60.5.tgz 4815ms (cache miss)
+23:11:34 | DEBUG | #10 6.020 npm http fetch GET 200 https://registry.npmjs.org/@tanstack/query-core/-/query-core-5.60.5.tgz 4781ms (cache miss)
+23:11:34 | DEBUG | #10 6.037 npm http fetch GET 200 https://registry.npmjs.org/tailwindcss/-/tailwindcss-3.4.17.tgz 5117ms (cache miss)
+23:11:34 | DEBUG | #10 6.080 npm http fetch GET 200 https://registry.npmjs.org/@babel/runtime/-/runtime-7.27.0.tgz 4785ms (cache miss)
+23:11:35 | DEBUG | #10 6.114 npm http fetch GET 200 https://registry.npmjs.org/recharts/-/recharts-2.15.2.tgz 5157ms (cache miss)
+23:11:35 | DEBUG | #10 6.126 npm http fetch GET 200 https://registry.npmjs.org/drizzle-orm 4265ms (cache miss)
+23:11:35 | DEBUG | #10 6.294 npm http fetch GET 200 https://registry.npmjs.org/http-proxy-agent 58ms (cache miss)
+23:11:35 | DEBUG | #10 6.427 npm http fetch GET 200 https://registry.npmjs.org/zod/-/zod-3.25.76.tgz 5537ms (cache miss)
+23:11:35 | DEBUG | #10 6.319 npm http fetch GET 200 https://registry.npmjs.org/framer-motion/-/framer-motion-11.13.1.tgz 5239ms (cache miss)
+23:11:35 | DEBUG | #10 6.535 npm http fetch GET 200 https://registry.npmjs.org/drizzle-zod 177ms (cache miss)
+23:11:35 | DEBUG | #10 6.613 npm http fetch GET 200 https://registry.npmjs.org/@hookform/resolvers/-/resolvers-3.10.0.tgz 5324ms (cache miss)
+23:11:35 | DEBUG | #10 6.605 npm http fetch GET 200 https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz 5555ms (cache miss)
+23:11:35 | DEBUG | #10 6.722 npm http fetch GET 200 https://registry.npmjs.org/@google-cloud%2fstorage 107ms (cache miss)
+23:11:35 | DEBUG | #10 6.851 npm http fetch GET 200 https://registry.npmjs.org/gaxios 101ms (cache miss)
+23:11:35 | DEBUG | #10 6.816 npm http fetch GET 200 https://registry.npmjs.org/teeny-request 64ms (cache miss)
+23:11:35 | DEBUG | #10 6.937 npm http fetch GET 200 https://registry.npmjs.org/sucrase 67ms (cache miss)
+23:11:35 | DEBUG | #10 7.033 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fdashboard 81ms (cache miss)
+23:11:35 | DEBUG | #10 7.048 npm http fetch GET 200 https://registry.npmjs.org/recharts 95ms (cache miss)
+23:11:35 | DEBUG | #10 7.172 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fcore 220ms (cache miss)
+23:11:36 | DEBUG | #10 7.324 npm http fetch GET 200 https://registry.npmjs.org/openai/-/openai-6.0.0.tgz 6316ms (cache miss)
+23:11:36 | DEBUG | #10 7.438 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2futils 485ms (cache miss)
+23:11:36 | DEBUG | #10 7.589 npm http fetch GET 200 https://registry.npmjs.org/drizzle-orm/-/drizzle-orm-0.39.1.tgz 6476ms (cache miss)
+23:11:36 | DEBUG | #10 7.510 npm http fetch GET 200 https://registry.npmjs.org/express-session 51ms (cache miss)
+23:11:36 | DEBUG | #10 7.591 npm http fetch GET 200 https://registry.npmjs.org/express 69ms (cache miss)
+23:11:36 | DEBUG | #10 7.671 npm http fetch GET 200 https://registry.npmjs.org/anymatch 60ms (cache miss)
+23:11:36 | DEBUG | #10 7.673 npm http fetch GET 200 https://registry.npmjs.org/micromatch 62ms (cache miss)
+23:11:36 | DEBUG | #10 7.676 npm http fetch GET 200 https://registry.npmjs.org/readdirp 65ms (cache miss)
+23:11:36 | DEBUG | #10 7.746 npm http fetch GET 200 https://registry.npmjs.org/postcss-import 61ms (cache miss)
+23:11:36 | DEBUG | #10 7.786 npm http fetch GET 200 https://registry.npmjs.org/postcss-nested 101ms (cache miss)
+23:11:36 | DEBUG | #10 7.763 npm http fetch GET 200 https://registry.npmjs.org/postcss-load-config 78ms (cache miss)
+23:11:36 | DEBUG | #10 7.816 npm http fetch GET 200 https://registry.npmjs.org/autoprefixer 132ms (cache miss)
+23:11:36 | DEBUG | #10 7.920 npm http fetch GET 200 https://registry.npmjs.org/vite 234ms (cache miss)
+23:11:36 | DEBUG | #10 7.765 npm http fetch GET 200 https://registry.npmjs.org/postcss-js 81ms (cache miss)
+23:11:36 | DEBUG | #10 8.073 npm http fetch GET 200 https://registry.npmjs.org/tailwindcss 387ms (cache miss)
+23:11:37 | DEBUG | #10 8.367 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fprovider-views 108ms (cache miss)
+23:11:37 | DEBUG | #10 8.655 npm http fetch GET 200 https://registry.npmjs.org/lucide-react/-/lucide-react-0.453.0.tgz 7617ms (cache miss)
+23:11:37 | DEBUG | #10 8.720 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2funsplash 458ms (cache miss)
+23:11:37 | DEBUG | #10 8.737 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2furl 473ms (cache miss)
+23:11:37 | DEBUG | #10 8.750 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fscreen-capture 488ms (cache miss)
+23:11:37 | DEBUG | #10 8.762 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2finstagram 505ms (cache miss)
+23:11:37 | DEBUG | #10 8.723 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fcomponents 475ms (cache miss)
+23:11:37 | DEBUG | #10 8.789 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fonedrive 532ms (cache miss)
+23:11:37 | DEBUG | #10 8.882 npm http fetch GET 200 https://registry.npmjs.org/react-icons/-/react-icons-5.4.0.tgz 7918ms (cache miss)
+23:11:37 | DEBUG | #10 8.798 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fzoom 531ms (cache miss)
+23:11:37 | DEBUG | #10 8.774 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fbox 526ms (cache miss)
+23:11:37 | DEBUG | #10 8.767 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2faudio 521ms (cache miss)
+23:11:37 | DEBUG | #10 8.775 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2ffacebook 524ms (cache miss)
+23:11:37 | DEBUG | #10 8.783 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fdropbox 533ms (cache miss)
+23:11:37 | DEBUG | #10 8.792 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2freact 531ms (cache miss)
+23:11:37 | DEBUG | #10 8.778 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fimage-editor 523ms (cache miss)
+23:11:37 | DEBUG | #10 8.785 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fwebcam 520ms (cache miss)
+23:11:37 | DEBUG | #10 8.959 npm http fetch GET 200 https://registry.npmjs.org/date-fns/-/date-fns-3.6.0.tgz 7840ms (cache miss)
+23:11:37 | DEBUG | #10 8.982 npm info run bufferutil@4.0.8 install node_modules/bufferutil node-gyp-build
+23:11:37 | DEBUG | #10 8.997 npm http fetch GET 200 https://registry.npmjs.org/@uppy%2fgoogle-drive 744ms (cache miss)
+23:11:37 | DEBUG | #10 9.070 npm info run bufferutil@4.0.8 install { code: 0, signal: null }
+23:11:37 | DEBUG | #10 9.062 npm http fetch GET 200 https://registry.npmjs.org/body-parser 59ms (cache miss)
+23:11:37 | DEBUG | #10 9.176 npm http fetch GET 200 https://registry.npmjs.org/openai 108ms (cache miss)
+23:11:38 | DEBUG | #10 9.306 npm http fetch GET 200 https://registry.npmjs.org/gtoken 56ms (cache miss)
+23:11:38 | DEBUG | #10 9.245 npm http fetch GET 200 https://registry.npmjs.org/retry-request 49ms (cache miss)
+23:11:38 | DEBUG | #10 9.310 npm http fetch GET 200 https://registry.npmjs.org/gcp-metadata 60ms (cache miss)
+23:11:38 | DEBUG | #10 9.413   npm audit fix --force
+23:11:38 | DEBUG | #10 9.371 68 packages are looking for funding
+23:11:38 | DEBUG | #10 9.413 
+23:11:38 | DEBUG | #10 9.371   run `npm fund` for details
+23:11:38 | DEBUG | #10 9.413 
+23:11:38 | DEBUG | #10 9.413 To address all issues possible (including breaking changes), run:
+23:11:38 | DEBUG | #10 9.413 To address issues that do not require attention, run:
+23:11:38 | DEBUG | #10 9.413 25 vulnerabilities (3 low, 11 moderate, 10 high, 1 critical)
+23:11:38 | DEBUG | #10 9.371 
+23:11:38 | DEBUG | #10 9.413 
+23:11:38 | DEBUG | #10 9.371 added 532 packages, and audited 533 packages in 9s
+23:11:38 | DEBUG | #10 9.330 npm http fetch GET 200 https://registry.npmjs.org/google-auth-library 80ms (cache miss)
+23:11:38 | DEBUG | #10 9.413   npm audit fix
+23:11:38 | DEBUG | #10 9.371 
+23:11:38 | DEBUG | #10 9.413 
+23:11:38 | DEBUG | #10 9.413 Run `npm audit` for details.
+23:11:38 | DEBUG | #10 9.413 Some issues need review, and may require choosing
+23:11:38 | DEBUG | #10 9.413 
+23:11:38 | DEBUG | #10 9.413 a different dependency.
+23:11:38 | DEBUG | #10 9.414 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.16.0
+23:11:38 | DEBUG | #10 9.414 npm notice
+23:11:38 | DEBUG | #10 9.414 npm verbose npm  v10.8.2
+23:11:38 | DEBUG | #10 9.414 npm info ok
+23:11:38 | DEBUG | #10 9.414 npm verbose os Linux 5.15.0-177-generic
+23:11:38 | DEBUG | #10 9.414 npm notice New major version of npm available! 10.8.2 -> 11.16.0
+23:11:38 | DEBUG | #10 9.414 npm verbose cwd /app
+23:11:38 | DEBUG | #10 9.414 npm verbose node v20.20.2
+23:11:38 | DEBUG | #10 9.414 npm verbose exit 0
+23:11:38 | DEBUG | #10 9.414 npm notice
+23:11:38 | DEBUG | #10 9.414 npm notice To update run: npm install -g npm@11.16.0
+23:11:39 | DEBUG | #10 DONE 10.3s
+23:11:39 | DEBUG | 
+23:11:39 | DEBUG | #11 [7/7] RUN npm install && npx vite build && npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist || true
+23:11:41 | DEBUG | #11 2.082   run `npm fund` for details
+23:11:41 | DEBUG | #11 2.082 up to date, audited 533 packages in 2s
+23:11:41 | DEBUG | #11 2.082 
+23:11:41 | DEBUG | #11 2.082 68 packages are looking for funding
+23:11:41 | DEBUG | #11 2.082 
+23:11:41 | DEBUG | #11 2.119   npm audit fix
+23:11:41 | DEBUG | #11 2.119 25 vulnerabilities (3 low, 11 moderate, 10 high, 1 critical)
+23:11:41 | DEBUG | #11 2.119 a different dependency.
+23:11:41 | DEBUG | #11 2.119 
+23:11:41 | DEBUG | #11 2.119 Some issues need review, and may require choosing
+23:11:41 | DEBUG | #11 2.119 
+23:11:41 | DEBUG | #11 2.119 Run `npm audit` for details.
+23:11:41 | DEBUG | #11 2.119 
+23:11:41 | DEBUG | #11 2.119 To address issues that do not require attention, run:
+23:11:41 | DEBUG | #11 2.119   npm audit fix --force
+23:11:41 | DEBUG | #11 2.119 
+23:11:41 | DEBUG | #11 2.119 To address all issues possible (including breaking changes), run:
+23:11:41 | DEBUG | #11 2.119 
+23:11:41 | DEBUG | #11 2.935 npm warn exec The following package was not found and will be installed: vite@8.0.16
+23:11:47 | DEBUG | #11 8.939    [38;5;246m│[0m
+23:11:47 | DEBUG | #11 8.939 vite.config.ts (1:219) [33m[UNRESOLVED_IMPORT] [0mCould not resolve 'vite' in vite.config.ts
+23:11:47 | DEBUG | #11 8.939    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m vite.config.ts:1:220 [38;5;246m][0m
+23:11:47 | DEBUG | #11 8.939  [38;5;246m1 │[0m [38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249m_[0m[38;5;249m_[0m[38;5;249mv[0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249m_[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mj[0m[38;5;249me[0m[38;5;249mc[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m_[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249m_[0m[38;5;249md[0m[38;5;249mi[0m[38;5;249mr[0m[38;5;249mn[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249m/[0m[38;5;249ma[0m[38;5;249mp[0m[38;5;249mp[0m[38;5;249m"[0m[38;5;249m;[0m[38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249m_[0m[38;5;249m_[0m[38;5;249mv[0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249m_[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mj[0m[38;5;249me[0m[38;5;249mc[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m_[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249m_[0m[38;5;249mf[0m[38;5;249mi[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249ma[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249m/[0m[38;5;249ma[0m[38;5;249mp[0m[38;5;249mp[0m[38;5;249m/[0m[38;5;249mv[0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249m.[0m[38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mf[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249m.[0m[38;5;249mt[0m[38;5;249ms[0m[38;5;249m"[0m[38;5;249m;[0m[38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249m_[0m[38;5;249m_[0m[38;5;249mv[0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249m_[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mj[0m[38;5;249me[0m[38;5;249mc[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249md[0m[38;5;249m_[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249ma[0m[38;5;249ml[0m[38;5;249m_[0m[38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m_[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249mt[0m[38;5;249ma[0m[38;5;249m_[0m[38;5;249mu[0m[38;5;249mr[0m[38;5;249ml[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m"[0m[38;5;249mf[0m[38;5;249mi[0m[38;5;249ml[0m[38;5;249me[0m[38;5;249m:[0m[38;5;249m/[0m[38;5;249m/[0m[38;5;249m/[0m[38;5;249ma[0m[38;5;249mp[0m[38;5;249mp[0m[38;5;249m/[0m[38;5;249mv[0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249me[0m[38;5;249m.[0m[38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mf[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249m.[0m[38;5;249mt[0m[38;5;249ms[0m[38;5;249m"[0m[38;5;249m;[0m[38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249m{[0m[38;5;249m [0m[38;5;249md[0m[38;5;249me[0m[38;5;249mf[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249me[0m[38;5;249mC[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249mf[0m[38;5;249mi[0m[38;5;249mg[0m[38;5;249m [0m[38;5;249m}[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mm[0m[38;5;249m [0m"vite"[38;5;249m;[0m
+23:11:47 | DEBUG | #11 8.939 
+23:11:47 | DEBUG | #11 8.939  [38;5;240m  │[0m                                                                                                                                                                                                                               ╰──── Module not found, treating it as an external dependency
+23:11:47 | DEBUG | #11 8.939 [38;5;246m───╯[0m
+23:11:47 | DEBUG | #11 8.939  [38;5;240m  │[0m                                                                                                                                                                                                                            ───┬──  
+23:11:48 | DEBUG | #11 8.939    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m vite.config.ts:2:19 [38;5;246m][0m
+23:11:48 | DEBUG | #11 8.940    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m vite.config.ts:4:33 [38;5;246m][0m
+23:11:48 | DEBUG | #11 8.939 
+23:11:48 | DEBUG | #11 8.940  [38;5;246m4 │[0m [38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mr[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mm[0m[38;5;249me[0m[38;5;249mE[0m[38;5;249mr[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mO[0m[38;5;249mv[0m[38;5;249me[0m[38;5;249mr[0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249my[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mm[0m[38;5;249m [0m"@replit/vite-plugin-runtime-error-modal"[38;5;249m;[0m
+23:11:48 | DEBUG | #11 8.940 
+23:11:48 | DEBUG | #11 8.940 vite.config.ts (4:32) [33m[UNRESOLVED_IMPORT] [0mCould not resolve '@replit/vite-plugin-runtime-error-modal' in vite.config.ts
+23:11:48 | DEBUG | #11 8.940  [38;5;240m  │[0m                                                     ╰────────────────────── Module not found, treating it as an external dependency
+23:11:48 | DEBUG | #11 8.939  [38;5;240m  │[0m                              ╰──────────── Module not found, treating it as an external dependency
+23:11:48 | DEBUG | #11 8.939  [38;5;240m  │[0m                   ───────────┬──────────  
+23:11:48 | DEBUG | #11 8.940     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m vite.config.ts:13:24 [38;5;246m][0m
+23:11:48 | DEBUG | #11 8.940 [38;5;246m───╯[0m
+23:11:48 | DEBUG | #11 8.939  [38;5;246m2 │[0m [38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mr[0m[38;5;249me[0m[38;5;249ma[0m[38;5;249mc[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249mr[0m[38;5;249mo[0m[38;5;249mm[0m[38;5;249m [0m"@vitejs/plugin-react"[38;5;249m;[0m
+23:11:48 | DEBUG | #11 8.939    [38;5;246m│[0m
+23:11:48 | DEBUG | #11 8.940  [38;5;240m  │[0m                                 ────────────────────┬────────────────────  
+23:11:48 | DEBUG | #11 8.940    [38;5;246m│[0m
+23:11:48 | DEBUG | #11 8.940 vite.config.ts (13:23) [33m[UNRESOLVED_IMPORT] [0mCould not resolve '@replit/vite-plugin-cartographer' in vite.config.ts
+23:11:48 | DEBUG | #11 8.939 vite.config.ts (2:18) [33m[UNRESOLVED_IMPORT] [0mCould not resolve '@vitejs/plugin-react' in vite.config.ts
+23:11:48 | DEBUG | #11 8.940     [38;5;246m│[0m
+23:11:48 | DEBUG | #11 8.939 [38;5;246m───╯[0m
+23:11:48 | DEBUG | #11 8.946 error during build:
+23:11:48 | DEBUG | #11 8.940 [38;5;246m────╯[0m
+23:11:48 | DEBUG | #11 8.946     at defaultResolve (node:internal/modules/esm/resolve:1188:11)
+23:11:48 | DEBUG | #11 8.946     at ModuleLoader.resolve (node:internal/modules/esm/loader:640:38)
+23:11:48 | DEBUG | #11 8.940     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m vite.config.ts:16:24 [38;5;246m][0m
+23:11:48 | INFO | #11 8.944 failed to load config from /app/vite.config.ts
+23:11:48 | DEBUG | #11 8.946     at packageResolve (node:internal/modules/esm/resolve:873:9)
+23:11:48 | DEBUG | #11 8.940 
+23:11:48 | DEBUG | #11 8.940  [38;5;240m   │[0m                        ────────────────┬───────────────  
+23:11:48 | DEBUG | #11 8.940  [38;5;240m   │[0m                                        ╰───────────────── Module not found, treating it as an external dependency
+23:11:48 | DEBUG | #11 8.946     at moduleResolve (node:internal/modules/esm/resolve:946:18)
+23:11:48 | DEBUG | #11 8.940 [38;5;246m────╯[0m
+23:11:48 | DEBUG | #11 8.946     at ModuleLoader.defaultResolve (node:internal/modules/esm/loader:708:12)
+23:11:48 | DEBUG | #11 8.940  [38;5;240m   │[0m                                         ╰────────────────── Module not found, treating it as an external dependency
+23:11:48 | DEBUG | #11 8.946   code: 'ERR_MODULE_NOT_FOUND'
+23:11:48 | DEBUG | #11 8.946     at ModuleJob._link (node:internal/modules/esm/module_job:168:49) {
+23:11:48 | DEBUG | #11 8.946 }
+23:11:48 | DEBUG | #11 8.940     [38;5;246m│[0m
+23:11:48 | DEBUG | #11 8.940  [38;5;246m13 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249ma[0m[38;5;249mw[0m[38;5;249ma[0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m([0m"@replit/vite-plugin-cartographer"[38;5;249m)[0m[38;5;249m.[0m[38;5;249mt[0m[38;5;249mh[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249m([0m[38;5;249m([0m[38;5;249mm[0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m
+23:11:48 | DEBUG | #11 8.940 vite.config.ts (16:23) [33m[UNRESOLVED_IMPORT] [0mCould not resolve '@replit/vite-plugin-dev-banner' in vite.config.ts
+23:11:48 | DEBUG | #11 8.940  [38;5;240m   │[0m                        ─────────────────┬────────────────  
+23:11:48 | DEBUG | #11 8.940 
+23:11:48 | DEBUG | #11 8.940  [38;5;246m16 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249ma[0m[38;5;249mw[0m[38;5;249ma[0m[38;5;249mi[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mi[0m[38;5;249mm[0m[38;5;249mp[0m[38;5;249mo[0m[38;5;249mr[0m[38;5;249mt[0m[38;5;249m([0m"@replit/vite-plugin-dev-banner"[38;5;249m)[0m[38;5;249m.[0m[38;5;249mt[0m[38;5;249mh[0m[38;5;249me[0m[38;5;249mn[0m[38;5;249m([0m[38;5;249m([0m[38;5;249mm[0m[38;5;249m)[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m>[0m
+23:11:48 | DEBUG | #11 8.946     at #cachedDefaultResolve (node:internal/modules/esm/loader:657:25)
+23:11:48 | DEBUG | #11 8.946 Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'vite' imported from /app/node_modules/.vite-temp/vite.config.ts.timestamp-1780344707993-c8d9a82b7af8e.mjs
+23:11:48 | DEBUG | #11 8.946     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:264:38)
+23:11:48 | DEBUG | #11 DONE 9.2s
+23:11:48 | DEBUG | #12 exporting layers
+23:11:48 | DEBUG | 
+23:11:48 | DEBUG | #12 exporting to image
+23:12:01 | DEBUG | #12 exporting layers 12.9s done
+23:12:01 | DEBUG | #12 ...
+23:12:01 | DEBUG | #12 exporting config sha256:1c95ec92481c4188f1db9c15d1354cd41acdfb8d9d6cde642d53dcd940328ed6 done
+23:12:01 | DEBUG | 
+23:12:01 | DEBUG | #12 exporting to image
+23:12:01 | DEBUG | #13 DONE 0.0s
+23:12:01 | DEBUG | #12 exporting manifest sha256:e37b1ad75b429565421165946574479ba0415c45578d901a8bbd1f3374955028 done
+23:12:01 | DEBUG | #12 pushing layers
+23:12:01 | DEBUG | 
+23:12:18 | DEBUG | #12 pushing layers 17.8s done
+23:12:19 | DEBUG | #12 DONE 31.0s
+23:12:19 | INFO | Build succeeded
+23:12:25 | INFO | Pulling image from registry
+23:12:36 | INFO | Successfully pulled
+23:12:36 | INFO | Unpacking static
+23:12:50 | INFO | Static extracted
+23:12:50 | INFO | Configuring web server for deploy
+23:12:50 | INFO | Web server Configured
+23:12:50 | INFO | Deploy succeeded
+23:12:50 | INFO | Cleaning up old static
