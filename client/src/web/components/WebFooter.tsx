@@ -47,7 +47,7 @@ export default function WebFooter() {
             <ul className="space-y-2 text-sm">
               <li className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <a href="tel:+74951234567" className="hover:text-white transition-colors">+7 (495) 123-45-67</a>
+                <a href="tel:+79259176867" className="hover:text-white transition-colors">+7 (925) 917-68-67</a>
               </li>
               <li className="flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-amber-500 shrink-0" />
