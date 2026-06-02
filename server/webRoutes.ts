@@ -354,16 +354,24 @@ export function registerWebRoutes(app: Express) {
 
   // GET /web-api/db-check — diagnostic endpoint for DB connectivity
   app.get('/web-api/db-check', async (_req: Request, res: Response) => {
+    const dbUrl = process.env.DATABASE_URL ?? '';
+    const dbUrlStatus = !dbUrl
+      ? 'MISSING'
+      : dbUrl.startsWith('postgresql://') || dbUrl.startsWith('postgres://')
+        ? `SET (starts with: ${dbUrl.substring(0, 20)}...)`
+        : `INVALID FORMAT (starts with: ${dbUrl.substring(0, 20)}...)`;
+
     try {
       const start = Date.now();
       await db.select({ id: categories.id }).from(categories).limit(1);
-      return res.json({ status: 'ok', latencyMs: Date.now() - start });
+      return res.json({ status: 'ok', latencyMs: Date.now() - start, dbUrl: dbUrlStatus });
     } catch (err: any) {
       console.error('❌ [web-api/db-check] DB error:', err);
       return res.status(500).json({
         status: 'error',
         message: err?.message ?? String(err),
         code: err?.code,
+        dbUrl: dbUrlStatus,
       });
     }
   });
