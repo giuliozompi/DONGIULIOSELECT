@@ -104,7 +104,7 @@ export default function WebHomePage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
             {[
               { icon: Truck, title: 'Быстрая доставка', text: 'Курьеры Яндекс по Москве или СДЭК по всей России' },
-              { icon: Shield, title: 'Гарантия качества', text: 'Сертифицированные продукты' },
+              { icon: Shield, title: 'Гарантия качества', text: 'Только сертифицированные продукты' },
               { icon: Star, title: 'Оригинальные вкусы', text: 'Прямые поставки из Италии' },
               { icon: Clock, title: 'Свежесть', text: 'Контроль условий хранения' },
             ].map(({ icon: Icon, title, text }) => (
