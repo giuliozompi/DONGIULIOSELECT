@@ -81,9 +81,17 @@ export function serveStatic(app: Express) {
   }
 
   if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
+    // Don't throw — a throw here prevents server.listen() from ever being
+    // called. Log the warning and serve a plain 503 for all frontend routes
+    // so at least the API (including /ping and /healthz) keeps working.
+    console.error(
+      `⚠️ Build directory not found: ${distPath}. ` +
+      "Frontend will return 503 until the app is rebuilt."
     );
+    app.use("*", (_req, res) => {
+      res.status(503).send("Frontend build not found. Run the build step first.");
+    });
+    return;
   }
 
   app.use(express.static(distPath));

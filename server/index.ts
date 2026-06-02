@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createServer } from "http";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
@@ -53,14 +54,10 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Seed database with initial data (categories and products)
-  // Skip seeding if it takes too long or fails
+  // ── Seed (non-blocking, best-effort) ────────────────────────────────────
   const seedPromise = seedDatabase().catch((error) => {
     console.error('⚠️ Database seeding failed:', error);
-    console.log('Continuing without seeding...');
   });
-  
-  // Don't wait more than 5 seconds for seeding
   await Promise.race([
     seedPromise,
     new Promise((resolve) => setTimeout(() => {
@@ -68,23 +65,34 @@ app.use((req, res, next) => {
       resolve(undefined);
     }, 5000))
   ]);
-  
-  const server = await registerRoutes(app);
 
+  // ── Routes ──────────────────────────────────────────────────────────────
+  let server: ReturnType<typeof createServer>;
+  try {
+    server = await registerRoutes(app);
+  } catch (err) {
+    console.error('❌ registerRoutes failed — starting in API-only degraded mode:', err);
+    server = createServer(app);
+  }
+
+  // ── Error middleware ─────────────────────────────────────────────────────
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
+    // Do NOT re-throw — re-throwing inside Express error middleware terminates
+    // the process on the first route error.
+    console.error(`[error] ${status} ${message}`, err.stack ?? "");
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
   });
 
-  // Robust production detection — works on all Node.js versions and hosts.
-  // Primary check: NODE_ENV=production (set by npm start script).
+  // ── Static / Vite ────────────────────────────────────────────────────────
+  // Primary check: NODE_ENV=production (set by npm start).
   // Fallback: detect whether the compiled client build exists next to this bundle.
   // This handles hosts (e.g. Timeweb) that run `node dist/index.js` directly
-  // without setting NODE_ENV, and also handles Node.js < 21.2.0 where
-  // import.meta.dirname is undefined (so we use fileURLToPath instead).
+  // without setting NODE_ENV, and Node.js < 21.2.0 where import.meta.dirname
+  // is undefined (so we use fileURLToPath instead).
   const isProductionEnv = process.env.NODE_ENV === "production";
   let hasClientBuild = false;
   try {
@@ -96,22 +104,21 @@ app.use((req, res, next) => {
   const useProductionServing = isProductionEnv || hasClientBuild;
   console.log(`[server] mode=${useProductionServing ? "production" : "development"} NODE_ENV=${process.env.NODE_ENV ?? "unset"} hasClientBuild=${hasClientBuild}`);
 
-  if (!useProductionServing) {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+  try {
+    if (!useProductionServing) {
+      await setupVite(app, server);
+    } else {
+      serveStatic(app);
+    }
+  } catch (err) {
+    console.error('❌ Static/Vite setup failed — frontend unavailable, API still running:', err);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  // ── Listen ───────────────────────────────────────────────────────────────
+  // Default to 3000 — Timeweb Docker deployments expose port 3000 by default.
+  // Replit injects PORT=5000; other hosts inject their own value.
+  const port = parseInt(process.env.PORT || '3000', 10);
+  server.listen({ port, host: "0.0.0.0" }, () => {
     log(`serving on port ${port}`);
     log(`serving ${hasClientBuild ? "compiled build" : "dev (Vite)"}`);
     log(getIntegrationsSummary());
@@ -121,4 +128,9 @@ app.use((req, res, next) => {
     startReengagementCron(24);
     startWelcomeCron(24);
   });
-})();
+})().catch((fatalErr) => {
+  // Last-resort catch: if the async IIFE itself throws unexpectedly, log it.
+  // The process may exit but at least we get a useful message in the logs.
+  console.error('💥 Fatal server startup error:', fatalErr);
+  process.exit(1);
+});
