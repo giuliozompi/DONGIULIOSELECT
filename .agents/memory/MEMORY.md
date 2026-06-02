@@ -2,3 +2,4 @@
 - [Web auth system](web-auth-system.md) — JWT (15min access token) + httpOnly refresh cookie (30d) at /web-api path; separate webUsers table from Telegram users
 - [GitHub push](github-push.md) — push requires username prefix in URL: https://giuliozompi:${TOKEN}@github.com/...
 - [Timeweb build ignores repo Dockerfile](timeweb-build.md) — Timeweb auto-generates a production-mode npm-install Dockerfile; build tooling MUST live in dependencies, not devDependencies
+- [Timeweb runtime env](timeweb-runtime.md) — Timeweb does NOT set NODE_ENV=production; detect prod by compiled-build presence, not NODE_ENV, or server serves dev index.html (blank page)
