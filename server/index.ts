@@ -18,6 +18,10 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Minimal liveness probe — registered before everything else so it responds
+// even if seeding or route-registration is still in progress.
+app.get("/ping", (_req, res) => res.type("text/plain").send("pong"));
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
