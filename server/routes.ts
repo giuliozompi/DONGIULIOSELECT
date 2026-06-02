@@ -15,10 +15,43 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import path from "path";
+import fs from "fs";
 import { normalizePhoneNumber } from "./utils";
 import { logOrderNotification } from "./services/notification-logger";
+import { getIntegrationsMap } from "./integrations-status";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ==================== HEALTH CHECK ====================
+  // Public, lightweight endpoint to quickly diagnose production health.
+  // Reports: server up, DB reachable (quick SELECT 1), whether we're serving
+  // the compiled build vs the dev server, and which integrations are configured.
+  // No secret values are ever exposed.
+  app.get("/healthz", async (_req, res) => {
+    const startedAt = Date.now();
+    let dbReachable = false;
+    try {
+      await db.execute(sqlDrizzle`SELECT 1`);
+      dbReachable = true;
+    } catch (error) {
+      console.error("❌ /healthz DB check failed:", error);
+    }
+
+    const servingBuild = fs.existsSync(
+      path.resolve(import.meta.dirname, "public"),
+    );
+
+    const ok = dbReachable;
+    res.status(ok ? 200 : 503).json({
+      status: ok ? "ok" : "degraded",
+      server: "up",
+      db: dbReachable ? "reachable" : "unreachable",
+      serving: servingBuild ? "build" : "dev",
+      integrations: getIntegrationsMap(),
+      uptimeSeconds: Math.round(process.uptime()),
+      checkDurationMs: Date.now() - startedAt,
+    });
+  });
+
   // ==================== NO-CACHE MIDDLEWARE FOR ADMIN ROUTES ====================
   // Previene caching HTTP 304 per dati admin mutabili
   app.use('/api/admin', (_req, res, next) => {
