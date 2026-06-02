@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import fs from "fs";
+import path from "path";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
@@ -74,7 +76,13 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  // Detect production by the presence of the built client output instead of
+  // relying solely on NODE_ENV. Some hosts (e.g. Timeweb) run `node dist/index.js`
+  // without setting NODE_ENV=production, which would otherwise fall back to the
+  // Vite dev server and serve the un-bundled dev index.html (blank page).
+  const clientBuildPath = path.resolve(import.meta.dirname, "public");
+  const hasClientBuild = fs.existsSync(clientBuildPath);
+  if (app.get("env") === "development" && !hasClientBuild) {
     await setupVite(app, server);
   } else {
     serveStatic(app);
