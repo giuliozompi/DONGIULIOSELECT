@@ -28,23 +28,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // No secret values are ever exposed.
   app.get("/healthz", async (_req, res) => {
     const startedAt = Date.now();
+    // Timeout-protected DB check: never hangs longer than 4 s
     let dbReachable = false;
+    let dbError = "";
     try {
-      await db.execute(sqlDrizzle`SELECT 1`);
-      dbReachable = true;
-    } catch (error) {
-      console.error("❌ /healthz DB check failed:", error);
+      await Promise.race([
+        db.execute(sqlDrizzle`SELECT 1`).then(() => { dbReachable = true; }),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("DB check timeout")), 4000)
+        ),
+      ]);
+    } catch (error: any) {
+      dbError = error?.message ?? String(error);
+      console.error("❌ /healthz DB check failed:", dbError);
     }
 
-    const servingBuild = fs.existsSync(
-      path.resolve(import.meta.dirname, "public"),
-    );
+    // Detect whether the compiled client build is present.
+    // fileURLToPath is used to avoid relying on import.meta.dirname
+    // which requires Node.js ≥ 21.2.0.
+    let servingBuild = false;
+    try {
+      const { fileURLToPath } = await import("url");
+      const bundleDir = path.dirname(fileURLToPath(import.meta.url));
+      servingBuild = fs.existsSync(path.join(bundleDir, "public"));
+    } catch {
+      servingBuild = fs.existsSync(path.join(process.cwd(), "dist", "public"));
+    }
 
     const ok = dbReachable;
     res.status(ok ? 200 : 503).json({
       status: ok ? "ok" : "degraded",
       server: "up",
       db: dbReachable ? "reachable" : "unreachable",
+      ...(dbError ? { dbError } : {}),
       serving: servingBuild ? "build" : "dev",
       integrations: getIntegrationsMap(),
       uptimeSeconds: Math.round(process.uptime()),

@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect, lazy, Suspense, Component, type ReactNode, type ErrorInfo } from 'react';
 import { Switch, Route, useLocation } from 'wouter';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
@@ -8,6 +8,41 @@ import { initTelegramApp, getTelegramStartParam } from '@/lib/telegram';
 import { TelegramThemeProvider } from '@/components/TelegramThemeProvider';
 
 const WebApp = lazy(() => import('./web/WebApp'));
+
+class WebAppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, message: error?.message ?? 'Errore sconosciuto' };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[WebApp] render error:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
+          <div className="text-center space-y-3 max-w-sm">
+            <div className="w-12 h-12 rounded-full bg-amber-100 mx-auto flex items-center justify-center">
+              <span className="text-amber-700 text-xl font-bold">!</span>
+            </div>
+            <h1 className="text-lg font-semibold text-neutral-800">Qualcosa è andato storto</h1>
+            <p className="text-sm text-neutral-500">{this.state.message}</p>
+            <button
+              className="mt-2 px-4 py-2 bg-amber-600 text-white text-sm rounded-md"
+              onClick={() => window.location.reload()}
+            >
+              Ricarica la pagina
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import BottomNav from '@/components/BottomNav';
 import HomePage from '@/pages/HomePage';
 import CategoryPage from '@/pages/CategoryPage';
@@ -126,18 +161,20 @@ export default function App() {
 
   if (isWeb) {
     return (
-      <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-neutral-50">
-          <div className="text-center space-y-2">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 mx-auto flex items-center justify-center">
-              <span className="text-white text-sm font-bold">DG</span>
+      <WebAppErrorBoundary>
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+            <div className="text-center space-y-2">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-600 to-amber-800 mx-auto flex items-center justify-center">
+                <span className="text-white text-sm font-bold">DG</span>
+              </div>
+              <p className="text-sm text-neutral-400">Загрузка...</p>
             </div>
-            <p className="text-sm text-neutral-400">Загрузка...</p>
           </div>
-        </div>
-      }>
-        <WebApp />
-      </Suspense>
+        }>
+          <WebApp />
+        </Suspense>
+      </WebAppErrorBoundary>
     );
   }
 

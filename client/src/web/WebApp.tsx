@@ -25,13 +25,19 @@ function WebAuthInit() {
   return null;
 }
 
+function RootRedirect() {
+  const [, navigate] = useLocation();
+  useEffect(() => { navigate('/web'); }, [navigate]);
+  return null;
+}
+
 function WebRouter() {
   return (
     <div className="min-h-screen flex flex-col bg-neutral-50">
       <WebHeader />
       <main className="flex-1">
         <Switch>
-          <Route path="/" component={() => { const [, navigate] = useLocation(); useEffect(() => { navigate('/web'); }, []); return null; }} />
+          <Route path="/" component={RootRedirect} />
           <Route path="/web" component={WebHomePage} />
           <Route path="/web/" component={WebHomePage} />
           <Route path="/web/catalog" component={WebCatalogPage} />
