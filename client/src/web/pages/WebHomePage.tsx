@@ -74,7 +74,7 @@ export default function WebHomePage() {
               <span className="text-amber-400">у вас дома</span>
             </h1>
             <p className="text-neutral-300 text-base sm:text-lg mb-8 leading-relaxed">
-              Отборные итальянские сыры, колбасы и деликатесы с доставкой по всей России. Прямые поставки от проверенных производителей.
+              Отборные итальянские сыры, колбасы и деликатесы с доставкой по всей России. Прямые поставки от лучших фермеров России.
             </p>
             <div className="flex flex-wrap gap-3">
               <Button
