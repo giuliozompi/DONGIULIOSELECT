@@ -321,6 +321,7 @@ export function registerWebRoutes(app: Express) {
         pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
       });
     } catch (err) {
+      console.error('❌ [web-api/products] DB error:', err);
       return res.status(500).json({ error: 'Ошибка сервера' });
     }
   });
@@ -346,7 +347,24 @@ export function registerWebRoutes(app: Express) {
         .orderBy(categories.sortOrder, categories.name);
       return res.json(cats);
     } catch (err) {
+      console.error('❌ [web-api/categories] DB error:', err);
       return res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  });
+
+  // GET /web-api/db-check — diagnostic endpoint for DB connectivity
+  app.get('/web-api/db-check', async (_req: Request, res: Response) => {
+    try {
+      const start = Date.now();
+      await db.select({ id: categories.id }).from(categories).limit(1);
+      return res.json({ status: 'ok', latencyMs: Date.now() - start });
+    } catch (err: any) {
+      console.error('❌ [web-api/db-check] DB error:', err);
+      return res.status(500).json({
+        status: 'error',
+        message: err?.message ?? String(err),
+        code: err?.code,
+      });
     }
   });
 

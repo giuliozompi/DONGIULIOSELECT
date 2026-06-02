@@ -39,14 +39,16 @@ export default function WebHomePage() {
     type: 'website',
   });
 
-  const { data: productsData } = useQuery({
+  const { data: productsData, isLoading: productsLoading, isError: productsError } = useQuery({
     queryKey: ['/web-api/products', { limit: 8 }],
     queryFn: () => webApi.get<{ products: Product[] }>('/products?limit=8'),
+    retry: 2,
   });
 
-  const { data: categories } = useQuery({
+  const { data: categories, isLoading: categoriesLoading } = useQuery({
     queryKey: ['/web-api/categories'],
     queryFn: () => webApi.get<Category[]>('/categories'),
+    retry: 2,
   });
 
   const featured = productsData?.products?.slice(0, 8) ?? [];
@@ -160,17 +162,28 @@ export default function WebHomePage() {
             Все товары <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
         </div>
-        {featured.length > 0 ? (
+        {productsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="rounded-xl bg-neutral-100 animate-pulse aspect-[3/4]" />
+            ))}
+          </div>
+        ) : productsError ? (
+          <div className="text-center py-12 text-neutral-500">
+            <p className="text-sm">Не удалось загрузить товары. Попробуйте обновить страницу.</p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => window.location.reload()}>
+              Обновить
+            </Button>
+          </div>
+        ) : featured.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {featured.map(product => (
               <WebProductCard key={product.id} product={product} />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="rounded-xl bg-neutral-100 animate-pulse aspect-[3/4]" />
-            ))}
+          <div className="text-center py-12 text-neutral-400 text-sm">
+            Товары появятся в ближайшее время
           </div>
         )}
       </section>
