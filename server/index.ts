@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
@@ -73,16 +74,24 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  // Detect production by the presence of the built client output instead of
-  // relying solely on NODE_ENV. Some hosts (e.g. Timeweb) run `node dist/index.js`
-  // without setting NODE_ENV=production, which would otherwise fall back to the
-  // Vite dev server and serve the un-bundled dev index.html (blank page).
-  const clientBuildPath = path.resolve(import.meta.dirname, "public");
-  const hasClientBuild = fs.existsSync(clientBuildPath);
-  if (app.get("env") === "development" && !hasClientBuild) {
+  // Robust production detection — works on all Node.js versions and hosts.
+  // Primary check: NODE_ENV=production (set by npm start script).
+  // Fallback: detect whether the compiled client build exists next to this bundle.
+  // This handles hosts (e.g. Timeweb) that run `node dist/index.js` directly
+  // without setting NODE_ENV, and also handles Node.js < 21.2.0 where
+  // import.meta.dirname is undefined (so we use fileURLToPath instead).
+  const isProductionEnv = process.env.NODE_ENV === "production";
+  let hasClientBuild = false;
+  try {
+    const bundleDir = path.dirname(fileURLToPath(import.meta.url));
+    hasClientBuild = fs.existsSync(path.join(bundleDir, "public"));
+  } catch {
+    hasClientBuild = fs.existsSync(path.join(process.cwd(), "dist", "public"));
+  }
+  const useProductionServing = isProductionEnv || hasClientBuild;
+  console.log(`[server] mode=${useProductionServing ? "production" : "development"} NODE_ENV=${process.env.NODE_ENV ?? "unset"} hasClientBuild=${hasClientBuild}`);
+
+  if (!useProductionServing) {
     await setupVite(app, server);
   } else {
     serveStatic(app);

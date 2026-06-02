@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
@@ -46,7 +47,7 @@ export async function setupVite(app: Express, server: Server) {
 
     try {
       const clientTemplate = path.resolve(
-        import.meta.dirname,
+        path.dirname(fileURLToPath(import.meta.url)),
         "..",
         "client",
         "index.html",
@@ -68,7 +69,16 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+  // Use fileURLToPath(import.meta.url) instead of import.meta.dirname
+  // for compatibility with all Node.js versions (import.meta.dirname requires v21.2.0+).
+  // In the bundled dist/index.js, import.meta.url points to the bundle file,
+  // so path.dirname gives dist/ — where dist/public lives.
+  let distPath: string;
+  try {
+    distPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "public");
+  } catch {
+    distPath = path.resolve(process.cwd(), "dist", "public");
+  }
 
   if (!fs.existsSync(distPath)) {
     throw new Error(
