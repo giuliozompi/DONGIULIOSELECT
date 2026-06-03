@@ -17,6 +17,14 @@ import WebWishlistPage from './pages/WebWishlistPage';
 import WebAddressesPage from './pages/WebAddressesPage';
 import WebAccountPage from './pages/WebAccountPage';
 import WebNotFoundPage from './pages/WebNotFoundPage';
+import WebAdminLayout from './admin/WebAdminLayout';
+import AdminDashboard from './admin/pages/AdminDashboard';
+import AdminCategories from './admin/pages/AdminCategories';
+import AdminProducts from './admin/pages/AdminProducts';
+import AdminOrders from './admin/pages/AdminOrders';
+import AdminClients from './admin/pages/AdminClients';
+import AdminLogs from './admin/pages/AdminLogs';
+import AdminSettings from './admin/pages/AdminSettings';
 import { useWebAuth } from './hooks/useWebAuth';
 
 function WebAuthInit() {
@@ -31,7 +39,31 @@ function RootRedirect() {
   return null;
 }
 
+function AdminRouter() {
+  return (
+    <WebAdminLayout>
+      <Switch>
+        <Route path="/web/admin" component={AdminDashboard} />
+        <Route path="/web/admin/categories" component={AdminCategories} />
+        <Route path="/web/admin/products" component={AdminProducts} />
+        <Route path="/web/admin/orders" component={AdminOrders} />
+        <Route path="/web/admin/clients" component={AdminClients} />
+        <Route path="/web/admin/logs" component={AdminLogs} />
+        <Route path="/web/admin/settings" component={AdminSettings} />
+        <Route component={AdminDashboard} />
+      </Switch>
+    </WebAdminLayout>
+  );
+}
+
 function WebRouter() {
+  const [location] = useLocation();
+  const isAdmin = location.startsWith('/web/admin');
+
+  if (isAdmin) {
+    return <AdminRouter />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-neutral-50">
       <WebHeader />

@@ -1097,6 +1097,9 @@ export const webUsers = pgTable("web_users", {
   resetPasswordExpiresAt: timestamp("reset_password_expires_at"),
   // Collegamento opzionale all'account Telegram
   telegramUserId: varchar("telegram_user_id"),
+  // Accesso backoffice
+  isAdmin: boolean("is_admin").notNull().default(false),
+  isMasterAdmin: boolean("is_master_admin").notNull().default(false),
   // Preferenze
   marketingConsent: boolean("marketing_consent").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),

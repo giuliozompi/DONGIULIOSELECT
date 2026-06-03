@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
-import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications } from '../shared/schema';
-import { eq, and, gt, or, ilike, desc, sql, lt } from 'drizzle-orm';
+import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs } from '../shared/schema';
+import { eq, and, gt, or, ilike, desc, sql, lt, gte, lte, asc } from 'drizzle-orm';
+import { storage } from './storage';
 import {
   hashPassword,
   verifyPassword,
@@ -21,6 +22,23 @@ import {
 } from './services/web-auth';
 
 // ─── Middleware ─────────────────────────────────────────────
+
+export async function requireWebAdmin(req: Request, res: Response, next: any) {
+  const webUser = (req as any).webUser as JwtPayload | undefined;
+  if (!webUser) return res.status(401).json({ error: 'Требуется авторизация' });
+  const [user] = await db.select({ isAdmin: webUsers.isAdmin, isMasterAdmin: webUsers.isMasterAdmin })
+    .from(webUsers).where(eq(webUsers.id, webUser.sub));
+  if (!user?.isAdmin) return res.status(403).json({ error: 'Доступ запрещён. Только для администраторов.' });
+  (req as any).isWebMasterAdmin = user.isMasterAdmin;
+  next();
+}
+
+export function requireWebMasterAdmin(req: Request, res: Response, next: any) {
+  if (!(req as any).isWebMasterAdmin) {
+    return res.status(403).json({ error: 'Доступ запрещён. Только для главного администратора.' });
+  }
+  next();
+}
 
 export function requireWebAuth(req: Request, res: Response, next: any) {
   const authHeader = req.headers.authorization;
@@ -742,6 +760,371 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   });
 
   console.log('✅ [WebRoutes] Web e-commerce API routes registered at /web-api/*');
+
+  // ═══════════════════════════════════════════════════════════
+  // WEB ADMIN ROUTES  /web-api/admin/*
+  // ═══════════════════════════════════════════════════════════
+
+  function calcOrderTotal(items: any[], discountType?: string | null, discountValue?: string | null) {
+    const subtotal = items.reduce((s: number, i: any) => s + parseFloat(i.price) * i.quantity, 0);
+    if (!discountType || !discountValue) return { subtotal, discountAmount: 0, total: subtotal };
+    const pct = discountType === 'percentage';
+    const discountAmount = pct ? (subtotal * parseFloat(discountValue)) / 100 : parseFloat(discountValue);
+    return { subtotal, discountAmount, total: Math.max(0, subtotal - discountAmount) };
+  }
+
+  // GET /web-api/admin/check
+  app.get('/web-api/admin/check', requireWebAuth, requireWebAdmin, (req: Request, res: Response) => {
+    res.json({ ok: true, isMasterAdmin: !!(req as any).isWebMasterAdmin });
+  });
+
+  // ── ANALYTICS ──────────────────────────────────────────────
+
+  app.get('/web-api/admin/analytics/summary', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate } = z.object({ startDate: z.string(), endDate: z.string() }).parse(req.query);
+      const snaps = await db.select().from(analyticsSnapshots).where(and(gte(analyticsSnapshots.snapshotDate, startDate), lte(analyticsSnapshots.snapshotDate, endDate)));
+      if (!snaps.length) return res.json({ totalOrders:0,completedOrders:0,paidOrders:0,grossRevenue:'0',netRevenue:'0',totalDiscounts:'0',totalRefunds:'0',abandonedCarts:0,cartRemindersSent:0,cartRecoveryOrders:0,conversionRate:0 });
+      const sum = snaps.reduce((a, s) => ({
+        totalOrders: a.totalOrders+(s.totalOrders||0), completedOrders: a.completedOrders+(s.completedOrders||0),
+        paidOrders: a.paidOrders+(s.paidOrders||0),
+        grossRevenue: (parseFloat(a.grossRevenue)+parseFloat(s.grossRevenue||'0')).toFixed(2),
+        netRevenue: (parseFloat(a.netRevenue)+parseFloat(s.netRevenue||'0')).toFixed(2),
+        totalDiscounts: (parseFloat(a.totalDiscounts)+parseFloat(s.totalDiscounts||'0')).toFixed(2),
+        totalRefunds: (parseFloat(a.totalRefunds)+parseFloat(s.totalRefunds||'0')).toFixed(2),
+        abandonedCarts: a.abandonedCarts+(s.abandonedCarts||0), cartRemindersSent: a.cartRemindersSent+(s.cartRemindersSent||0),
+        cartRecoveryOrders: a.cartRecoveryOrders+(s.cartRecoveryOrders||0),
+      }), { totalOrders:0,completedOrders:0,paidOrders:0,grossRevenue:'0',netRevenue:'0',totalDiscounts:'0',totalRefunds:'0',abandonedCarts:0,cartRemindersSent:0,cartRecoveryOrders:0 });
+      const conversionRate = sum.cartRemindersSent > 0 ? ((sum.cartRecoveryOrders/sum.cartRemindersSent)*100).toFixed(2) : 0;
+      res.json({ ...sum, conversionRate });
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.get('/web-api/admin/analytics/timeseries', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate } = z.object({ startDate: z.string(), endDate: z.string() }).parse(req.query);
+      const rows = await db.select({ date: analyticsSnapshots.snapshotDate, orders: analyticsSnapshots.totalOrders, revenue: analyticsSnapshots.grossRevenue })
+        .from(analyticsSnapshots).where(and(gte(analyticsSnapshots.snapshotDate, startDate), lte(analyticsSnapshots.snapshotDate, endDate))).orderBy(asc(analyticsSnapshots.snapshotDate));
+      res.json(rows);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.get('/web-api/admin/analytics/top-products', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate } = z.object({ startDate: z.string(), endDate: z.string() }).parse(req.query);
+      const snaps = await db.select({ id: analyticsSnapshots.id }).from(analyticsSnapshots).where(and(gte(analyticsSnapshots.snapshotDate, startDate), lte(analyticsSnapshots.snapshotDate, endDate)));
+      if (!snaps.length) return res.json([]);
+      const ids = snaps.map(s => s.id);
+      const rows = await db.select().from(analyticsTopProducts).where(sql`${analyticsTopProducts.snapshotId} = ANY(${sql.raw(`ARRAY['${ids.join("','")}']::varchar[]`)})`);
+      const agg: Record<string, { productId: string; productName: string; totalQuantity: number; totalRevenue: number }> = {};
+      for (const r of rows) {
+        if (!agg[r.productId]) agg[r.productId] = { productId: r.productId, productName: r.productName||r.productId, totalQuantity: 0, totalRevenue: 0 };
+        agg[r.productId].totalQuantity += Math.round(r.totalQuantity||0);
+        agg[r.productId].totalRevenue += parseFloat(r.totalRevenue||'0');
+      }
+      res.json(Object.values(agg).sort((a,b) => b.totalQuantity - a.totalQuantity).slice(0,10));
+    } catch(e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── CATEGORIES ─────────────────────────────────────────────
+
+  app.get('/web-api/admin/categories', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {
+    try { res.json(await storage.getAllCategories(true)); } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.post('/web-api/admin/categories', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const body = z.object({ name: z.string().min(1), slug: z.string().min(1), imageUrl: z.string().optional(), parentId: z.string().optional(), sortOrder: z.number().optional(), isVisible: z.boolean().optional() }).parse(req.body);
+      const [cat] = await db.insert(categories).values({ id: randomUUID(), ...body, isVisible: body.isVisible ?? true, sortOrder: body.sortOrder ?? 0 }).returning();
+      res.status(201).json(cat);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.patch('/web-api/admin/categories/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const body = z.object({ name: z.string().min(1).optional(), slug: z.string().optional(), imageUrl: z.string().optional().nullable(), parentId: z.string().optional().nullable(), sortOrder: z.number().optional(), isVisible: z.boolean().optional() }).parse(req.body);
+      const [cat] = await db.update(categories).set(body).where(eq(categories.id, req.params.id)).returning();
+      if (!cat) return res.status(404).json({ error: 'Not found' });
+      res.json(cat);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.delete('/web-api/admin/categories/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      await db.delete(categories).where(eq(categories.id, req.params.id));
+      res.sendStatus(204);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── PRODUCTS ───────────────────────────────────────────────
+
+  app.get('/web-api/admin/products', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const categoryId = req.query.categoryId as string | undefined;
+      res.json(await storage.getAllProducts({ categoryId, includeHidden: true }));
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  const productBodySchema = z.object({
+    name: z.string().min(1).optional(), slug: z.string().optional(), description: z.string().optional().nullable(),
+    price: z.string().optional(), oldPrice: z.string().optional().nullable(), unit: z.string().optional(),
+    categoryId: z.string().optional(), inStock: z.boolean().optional(), isVisible: z.boolean().optional(),
+    images: z.array(z.string()).optional(), sortPriority: z.number().optional(),
+    requiresMarking: z.boolean().optional(), tasteVariations: z.string().optional().nullable(),
+    proteins: z.string().optional().nullable(), fats: z.string().optional().nullable(),
+    carbs: z.string().optional().nullable(), calories: z.string().optional().nullable(),
+    ingredients: z.string().optional().nullable(), additionalInfo: z.string().optional().nullable(),
+  });
+
+  app.post('/web-api/admin/products', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const body = productBodySchema.parse(req.body);
+      const [prod] = await db.insert(products).values({ id: randomUUID(), name: body.name!, slug: body.slug || body.name!.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,''), price: body.price || '0', unit: body.unit || 'шт', inStock: body.inStock ?? true, isVisible: body.isVisible ?? true, images: body.images || [], ...body }).returning();
+      res.status(201).json(prod);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.patch('/web-api/admin/products/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const body = productBodySchema.parse(req.body);
+      const [prod] = await db.update(products).set(body).where(eq(products.id, req.params.id)).returning();
+      if (!prod) return res.status(404).json({ error: 'Not found' });
+      res.json(prod);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.patch('/web-api/admin/products/:id/stock', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { inStock } = z.object({ inStock: z.boolean() }).parse(req.body);
+      const [prod] = await db.update(products).set({ inStock }).where(eq(products.id, req.params.id)).returning();
+      res.json(prod);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.patch('/web-api/admin/products/:id/visibility', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
+    try {
+      const { isVisible } = z.object({ isVisible: z.boolean() }).parse(req.body);
+      const [prod] = await db.update(products).set({ isVisible }).where(eq(products.id, req.params.id)).returning();
+      res.json(prod);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.delete('/web-api/admin/products/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      await db.delete(products).where(eq(products.id, req.params.id));
+      res.sendStatus(204);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── ORDERS ─────────────────────────────────────────────────
+
+  app.get('/web-api/admin/orders', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { status, search } = req.query as { status?: string; search?: string };
+      let allOrders = await storage.getAllOrders({ status: status && status !== 'all' ? status : undefined, limit: 500 });
+      if (search) {
+        const q = search.toLowerCase();
+        allOrders = allOrders.filter((o: any) =>
+          o.id?.toLowerCase().includes(q) ||
+          o.customerName?.toLowerCase().includes(q) ||
+          o.customerPhone?.toLowerCase().includes(q)
+        );
+      }
+      res.json(allOrders);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.get('/web-api/admin/orders/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) return res.status(404).json({ error: 'Not found' });
+      res.json(order);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.patch('/web-api/admin/orders/:id/status', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { status } = z.object({ status: z.string() }).parse(req.body);
+      const order = await storage.updateOrderStatus(req.params.id, status);
+      if (!order) return res.status(404).json({ error: 'Not found' });
+      res.json(order);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.post('/web-api/admin/orders/:id/update-quantity', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { productId, newQuantity } = z.object({ productId: z.string(), newQuantity: z.number().positive() }).parse(req.body);
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+      const idx = order.items.findIndex((i: any) => i.productId === productId);
+      if (idx === -1) return res.status(404).json({ error: 'Product not in order' });
+      const newItems = [...order.items];
+      newItems[idx] = { ...newItems[idx], quantity: newQuantity };
+      const totals = calcOrderTotal(newItems, order.discountType, order.discountValue);
+      const updated = await storage.updateOrder(req.params.id, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
+      res.json(updated);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.post('/web-api/admin/orders/:id/add-product', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { productId, quantity } = z.object({ productId: z.string(), quantity: z.number().positive().optional() }).parse(req.body);
+      const [order, product] = await Promise.all([storage.getOrderById(req.params.id), storage.getProductById(productId, true)]);
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+      if (!product) return res.status(404).json({ error: 'Product not found' });
+      const qty = quantity ?? (product.unit === 'кг' ? 0.2 : 1);
+      const newItems = [...order.items, { productId: product.id, productName: product.name, quantity: qty, price: product.price, unit: product.unit }];
+      const totals = calcOrderTotal(newItems, order.discountType, order.discountValue);
+      const updated = await storage.updateOrder(req.params.id, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
+      res.json(updated);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.post('/web-api/admin/orders/:id/remove-product', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { productId } = z.object({ productId: z.string() }).parse(req.body);
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+      const newItems = order.items.filter((i: any) => i.productId !== productId);
+      const totals = calcOrderTotal(newItems, order.discountType, order.discountValue);
+      const updated = await storage.updateOrder(req.params.id, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
+      res.json(updated);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.post('/web-api/admin/orders/:id/apply-discount', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { discountType, discountValue } = z.object({ discountType: z.enum(['percentage','fixed']), discountValue: z.string() }).parse(req.body);
+      const order = await storage.getOrderById(req.params.id);
+      if (!order) return res.status(404).json({ error: 'Order not found' });
+      const totals = calcOrderTotal(order.items, discountType, discountValue);
+      const updated = await storage.updateOrder(req.params.id, { discount: totals.discountAmount.toFixed(2), discountType, discountValue, amount: totals.total.toFixed(2) });
+      res.json(updated);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.delete('/web-api/admin/orders/:id', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
+    try {
+      await db.delete(orders).where(eq(orders.id, req.params.id));
+      res.sendStatus(204);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── CLIENTS ────────────────────────────────────────────────
+
+  app.get('/web-api/admin/clients', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {
+    try { res.json(await storage.getAllUsers()); } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.get('/web-api/admin/clients/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) return res.status(404).json({ error: 'Not found' });
+      const userOrders = await storage.getOrdersByUserId(req.params.id);
+      res.json({ ...user, orders: userOrders });
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── LOGS ───────────────────────────────────────────────────
+
+  app.get('/web-api/admin/action-logs', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {
+    try {
+      const logs = await db.select().from(adminActionLogs).orderBy(desc(adminActionLogs.createdAt)).limit(100);
+      res.json(logs);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.get('/web-api/admin/notification-logs/order', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {
+    try {
+      const logs = await db.select().from(orderNotificationLogs).orderBy(desc(orderNotificationLogs.sentAt)).limit(100);
+      res.json(logs);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── PICKUP ADDRESSES ───────────────────────────────────────
+
+  app.get('/web-api/admin/pickup-addresses', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {
+    try {
+      const rows = await db.select().from(pickupAddresses).orderBy(desc(pickupAddresses.isDefault), asc(pickupAddresses.createdAt));
+      res.json(rows);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.post('/web-api/admin/pickup-addresses', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const body = z.object({ label: z.string().min(1), fullAddress: z.string().min(1), city: z.string().optional(), contactName: z.string().optional(), contactPhone: z.string().optional(), isDefault: z.boolean().optional() }).parse(req.body);
+      if (body.isDefault) await db.update(pickupAddresses).set({ isDefault: false });
+      const [row] = await db.insert(pickupAddresses).values({ id: randomUUID(), ...body, isDefault: body.isDefault ?? false }).returning();
+      res.status(201).json(row);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.patch('/web-api/admin/pickup-addresses/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const body = z.object({ label: z.string().optional(), fullAddress: z.string().optional(), city: z.string().optional(), contactName: z.string().optional(), contactPhone: z.string().optional(), isDefault: z.boolean().optional() }).parse(req.body);
+      if (body.isDefault) await db.update(pickupAddresses).set({ isDefault: false });
+      const [row] = await db.update(pickupAddresses).set(body).where(eq(pickupAddresses.id, req.params.id)).returning();
+      res.json(row);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.delete('/web-api/admin/pickup-addresses/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      await db.delete(pickupAddresses).where(eq(pickupAddresses.id, req.params.id));
+      res.sendStatus(204);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── PRODUCT ASSOCIATIONS ───────────────────────────────────
+
+  app.get('/web-api/admin/product-associations', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {
+    try {
+      const rows = await db.select().from(productAssociations);
+      res.json(rows);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.post('/web-api/admin/product-associations', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const body = z.object({ sourceProductId: z.string(), targetProductId: z.string() }).parse(req.body);
+      const [row] = await db.insert(productAssociations).values({ id: randomUUID(), ...body }).returning();
+      res.status(201).json(row);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.delete('/web-api/admin/product-associations/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      await db.delete(productAssociations).where(eq(productAssociations.id, req.params.id));
+      res.sendStatus(204);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── WEB ADMIN MANAGEMENT ───────────────────────────────────
+
+  app.get('/web-api/admin/admins', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {
+    try {
+      const admins = await db.select({ id: webUsers.id, email: webUsers.email, firstName: webUsers.firstName, lastName: webUsers.lastName, isAdmin: webUsers.isAdmin, isMasterAdmin: webUsers.isMasterAdmin, createdAt: webUsers.createdAt }).from(webUsers).where(eq(webUsers.isAdmin, true));
+      res.json(admins);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.post('/web-api/admin/admins/promote', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
+    try {
+      const { email, isMasterAdmin: master } = z.object({ email: z.string().email(), isMasterAdmin: z.boolean().optional() }).parse(req.body);
+      const [user] = await db.update(webUsers).set({ isAdmin: true, isMasterAdmin: master ?? false }).where(eq(webUsers.email, email)).returning({ id: webUsers.id, email: webUsers.email, firstName: webUsers.firstName });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(user);
+    } catch(e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.delete('/web-api/admin/admins/:id', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
+    try {
+      const webUser = (req as any).webUser as JwtPayload;
+      if (req.params.id === webUser.sub) return res.status(400).json({ error: 'Cannot remove yourself' });
+      await db.update(webUsers).set({ isAdmin: false, isMasterAdmin: false }).where(eq(webUsers.id, req.params.id));
+      res.sendStatus(204);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
 }
 
 // ─── Helpers ───────────────────────────────────────────────
