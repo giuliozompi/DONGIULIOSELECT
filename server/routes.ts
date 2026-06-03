@@ -7440,7 +7440,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // When running on external hosting (e.g. Timeweb), proxy requests to Replit
     const proxyBase = process.env.REPLIT_OBJECT_PROXY_URL?.replace(/\/$/, '');
     if (proxyBase) {
-      return res.redirect(302, `${proxyBase}${req.path}`);
+      try {
+        const upstream = await fetch(`${proxyBase}${req.path}`);
+        if (!upstream.ok) {
+          return res.sendStatus(upstream.status);
+        }
+        const contentType = upstream.headers.get('content-type') || 'application/octet-stream';
+        const buffer = Buffer.from(await upstream.arrayBuffer());
+        res.set({
+          'Content-Type': contentType,
+          'Content-Length': buffer.length,
+          'Cache-Control': 'public, max-age=86400',
+        });
+        return res.send(buffer);
+      } catch (err) {
+        console.error('Image proxy error:', err);
+        return res.sendStatus(502);
+      }
     }
 
     const objectStorageService = new ObjectStorageService();
