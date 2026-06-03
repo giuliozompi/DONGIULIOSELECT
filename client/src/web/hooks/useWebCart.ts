@@ -22,7 +22,7 @@ interface WebCartState {
 
 function calcDerived(items: WebCartItem[]) {
   return {
-    itemCount: items.reduce((s, i) => s + i.quantity, 0),
+    itemCount: items.length,
     subtotal: items.reduce((s, i) => s + parseFloat(i.price) * i.quantity, 0),
   };
 }
