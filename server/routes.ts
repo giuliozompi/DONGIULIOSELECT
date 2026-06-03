@@ -7437,6 +7437,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // GET /objects/:objectPath - Serve uploaded objects (publicly visible)
   app.get("/objects/:objectPath(*)", async (req, res) => {
+    // When running on external hosting (e.g. Timeweb), proxy requests to Replit
+    const proxyBase = process.env.REPLIT_OBJECT_PROXY_URL?.replace(/\/$/, '');
+    if (proxyBase) {
+      return res.redirect(302, `${proxyBase}${req.path}`);
+    }
+
     const objectStorageService = new ObjectStorageService();
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
