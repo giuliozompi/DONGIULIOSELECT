@@ -1,32 +1,15 @@
 ---
-name: Timeweb Deployment Config
-description: Critical Timeweb Apps deployment configuration for this Express+React fullstack app
+name: Timeweb deployment
+description: How to correctly deploy this app on Timeweb Cloud
 ---
 
-## App Type
-Always use **"Другой" (Other)** — not React, not Node.js. React type serves only static frontend without the Express backend.
+## Key facts
 
-## Build Command
-```
-npm install && npx vite build && npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
-```
+- Timeweb generates its OWN Dockerfile (ignores ours partially). Their template injects "Команда сборки" as a final `RUN` step.
+- "Директория сборки" MUST be empty (root). If set to `main`, Docker looks for `/main/package.json` which doesn't exist.
+- "Команда сборки" MUST be `npm run build` (not `docker-compose build`).
+- "Команда запуска" MUST be `pm2 start --no-daemon dist/index.js`.
+- DATABASE_URL must use TCP port 5432 with SSL (`?sslmode=require`), NOT Neon's WebSocket endpoint.
+- `server/db.ts` uses `import pg from 'pg'` (ESM default import) with `node-postgres`.
 
-## Start Command
-```
-node dist/index.js
-```
-
-## Port
-The server reads `process.env.PORT` (injected by Timeweb) and defaults to `3000`.
-User must also set `PORT=3000` in Timeweb's "Переменные" section as a fallback.
-
-## Required Environment Variables
-- `DATABASE_URL` — Neon serverless PostgreSQL connection string
-- `PORT` — `3000`
-- All other app secrets (YooKassa, Telegram, etc.)
-
-**Why:** Without DATABASE_URL the old code threw at module load time crashing the process before server.listen(). Fixed in db.ts to defer the crash.
-
-## Push to GitHub
-Use `bash scripts/push-github.sh` — requires `GITHUB_PERSONAL_ACCESS_TOKEN` secret.
-Git commits happen automatically via Replit checkpoints; push script sends committed code to GitHub which triggers Timeweb auto-deploy.
+**Why:** Timeweb's Docker template has 11 steps, ending with `RUN <Команда сборки>`. docker-compose is not installed in the node:24-slim image.

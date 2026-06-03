@@ -1,6 +1,2 @@
-- [Web e-commerce routing](web-ecommerce-routing.md) — /web/* paths routed to standalone WebApp; Telegram app untouched at all other paths
-- [Web auth system](web-auth-system.md) — JWT (15min access token) + httpOnly refresh cookie (30d) at /web-api path; separate webUsers table from Telegram users
-- [GitHub push](github-push.md) — push requires username prefix in URL: https://giuliozompi:${TOKEN}@github.com/...
-- [Timeweb build ignores repo Dockerfile](timeweb-build.md) — Timeweb auto-generates a production-mode npm-install Dockerfile; build tooling MUST live in dependencies, not devDependencies
-- [Timeweb runtime env](timeweb-runtime.md) — Timeweb does NOT set NODE_ENV=production; detect prod by compiled-build presence, not NODE_ENV, or server serves dev index.html (blank page)
-- [Timeweb deployment config](timeweb-deployment.md) — use app type "Другой", build cmd with npx vite+esbuild, start cmd `node dist/index.js`; React type breaks backend
+- [Timeweb deployment](timeweb-deployment.md) — Timeweb usa Dockerfile generato automaticamente; "Директория сборки" deve essere vuota, "Команда сборки" = npm run build, "Команда запуска" = pm2 start --no-daemon dist/index.js
+- [Image proxy for Timeweb](timeweb-images.md) — Replit Object Storage non accessibile da Timeweb; usare REPLIT_OBJECT_PROXY_URL env var per proxy trasparente via fetch+pipe
