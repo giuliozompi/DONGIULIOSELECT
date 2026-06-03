@@ -1,0 +1,227 @@
+13:58:37 | DEBUG | 
+13:58:37 | DEBUG | 
+13:58:37 | DEBUG | HEAD is now at f7074e6 Add screenshot of Timeweb deployment dashboard
+13:58:37 | DEBUG | You are in 'detached HEAD' state. You can look around, make experimental
+13:58:37 | DEBUG | If you want to create a new branch to retain commits you create, you may
+13:58:37 | DEBUG | 
+13:58:37 | DEBUG | 
+13:58:37 | DEBUG | 
+13:58:37 | DEBUG | Turn off this advice by setting config variable advice.detachedHead to false
+13:58:37 | DEBUG | Note: switching to 'f7074e6d956313b2ae35adb6a80040ac70388db5'.
+13:58:37 | DEBUG | Or undo this operation with:
+13:58:37 | DEBUG |   git switch -c <new-branch-name>
+13:58:37 | DEBUG | 
+13:58:37 | DEBUG | changes and commit them, and you can discard any commits you make in this
+13:58:37 | DEBUG | do so (now or later) by using -c with the switch command. Example:
+13:58:37 | DEBUG | state without impacting any branches by switching back to a branch.
+13:58:37 | DEBUG | Cloning into '/workspace'...
+13:58:37 | DEBUG |   git switch -
+13:58:37 | DEBUG | 
+13:58:42 | DEBUG | #10 ...
+13:58:42 | DEBUG | #1 transferring dockerfile: 2.13kB 0.0s done
+13:58:42 | DEBUG | #3 transferring context: 114B done
+13:58:42 | DEBUG | #9 transferring context: 8.40MB 0.2s done
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | #1 DONE 0.2s
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | #1 [internal] load build definition from Dockerfile
+13:58:42 | DEBUG | #5 CACHED
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | #9 [internal] load build context
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | #7 [ 4/12] RUN npm install -g pm2
+13:58:42 | DEBUG | #3 transferring context: 32B
+13:58:42 | DEBUG | #9 DONE 0.6s
+13:58:42 | DEBUG | #7 CACHED
+13:58:42 | DEBUG | #10 [ 6/12] WORKDIR /app/main
+13:58:42 | DEBUG | #4 [1/7] FROM docker.io/library/node:24-slim@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf
+13:58:42 | DEBUG | #6 CACHED
+13:58:42 | DEBUG | #6 [ 3/12] RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends     curl     && rm -rf /var/lib/apt/lists/*
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | #5 [ 2/12] RUN corepack enable
+13:58:42 | INFO | Build started
+13:58:42 | DEBUG | #2 DONE 0.7s
+13:58:42 | DEBUG | #4 CACHED
+13:58:42 | DEBUG | #11 [ 7/12] COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./
+13:58:42 | INFO | #11 ERROR: failed to calculate checksum of ref 445ogdm00xwgm58dydx9jt30h::okgjolps416wrsrmxmvngo5t4: "/main/package.json": not found
+13:58:42 | DEBUG | #3 [internal] load .dockerignore
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | #8 CACHED
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | #10 [ 6/12] WORKDIR /app/main
+13:58:42 | DEBUG | #3 DONE 0.1s
+13:58:42 | DEBUG | 
+13:58:42 | DEBUG | #1 transferring dockerfile:
+13:58:42 | DEBUG | #8 [ 5/12] RUN groupadd --gid 2000 app && useradd --uid 2000 --gid 2000 -m -s /bin/bash app
+13:58:42 | DEBUG | #2 [internal] load metadata for docker.io/library/node:24-slim
+13:58:42 | DEBUG | #4 resolve docker.io/library/node:24-slim@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf done
+13:58:43 | DEBUG | #10 DONE 3.9s
+13:58:43 | DEBUG | ------
+13:58:43 | DEBUG |  > [ 7/12] COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./:
+13:58:43 | DEBUG | ------
+13:58:43 | INFO | error: failed to solve: failed to compute cache key: failed to calculate checksum of ref 445ogdm00xwgm58dydx9jt30h::okgjolps416wrsrmxmvngo5t4: "/main/package.json": not found
+13:58:43 | DEBUG |   97 |     
+13:58:43 | DEBUG |   98 | >>> COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./
+13:58:43 | DEBUG | --------------------
+13:58:43 | DEBUG |  100 |     
+13:58:43 | DEBUG | Dockerfile:98
+13:58:43 | DEBUG | --------------------
+13:58:43 | DEBUG |   96 |     # Copy package descriptors first for better caching
+13:58:43 | DEBUG |   99 |     
+13:58:43 | INFO | Build failed
+13:58:54 | DEBUG | Cloning into '/workspace'...
+13:58:56 | DEBUG | 
+13:58:56 | DEBUG | Turn off this advice by setting config variable advice.detachedHead to false
+13:58:56 | DEBUG | state without impacting any branches by switching back to a branch.
+13:58:56 | DEBUG | 
+13:58:56 | DEBUG |   git switch -c <new-branch-name>
+13:58:56 | DEBUG | do so (now or later) by using -c with the switch command. Example:
+13:58:56 | DEBUG | 
+13:58:56 | DEBUG | You are in 'detached HEAD' state. You can look around, make experimental
+13:58:56 | DEBUG | If you want to create a new branch to retain commits you create, you may
+13:58:56 | DEBUG | Note: switching to 'f7074e6d956313b2ae35adb6a80040ac70388db5'.
+13:58:56 | DEBUG | Or undo this operation with:
+13:58:56 | DEBUG | 
+13:58:56 | DEBUG | 
+13:58:56 | DEBUG | 
+13:58:56 | DEBUG |   git switch -
+13:58:56 | DEBUG | changes and commit them, and you can discard any commits you make in this
+13:58:56 | DEBUG | HEAD is now at f7074e6 Add screenshot of Timeweb deployment dashboard
+13:58:56 | DEBUG | 
+13:59:04 | DEBUG |   97 |     
+13:59:04 | INFO | error: failed to solve: failed to compute cache key: failed to calculate checksum of ref ws61yj6d10lg9a6n3e8jckxkj::mv5yp774qv73mjnx4guwksvcm: "/main/package.json": not found
+13:59:04 | DEBUG | #4 DONE 0.0s
+13:59:04 | DEBUG | #1 WARN: Empty continuation line found in: RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends     curl     && rm -rf /var/lib/apt/lists/*
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | #1 transferring dockerfile: 2.13kB 0.0s done
+13:59:04 | DEBUG | #10 [ 6/12] WORKDIR /app/main
+13:59:04 | DEBUG | #5 [internal] load build context
+13:59:04 | DEBUG | #11 [ 7/12] COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./
+13:59:04 | INFO | Build started
+13:59:04 | DEBUG | #7 CACHED
+13:59:04 | DEBUG | #2 [internal] load metadata for docker.io/library/node:24-slim
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | #10 CACHED
+13:59:04 | DEBUG | --------------------
+13:59:04 | DEBUG | #1 DONE 0.0s
+13:59:04 | DEBUG | #3 CACHED
+13:59:04 | DEBUG | #1 [internal] load build definition from Dockerfile
+13:59:04 | DEBUG | #3 [1/7] FROM docker.io/library/node:24-slim@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf
+13:59:04 | DEBUG | #9 CACHED
+13:59:04 | DEBUG | #6 [ 2/12] RUN corepack enable
+13:59:04 | DEBUG | #7 [ 3/12] RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends     curl     && rm -rf /var/lib/apt/lists/*
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG |   99 |     
+13:59:04 | DEBUG | #4 transferring context: 114B done
+13:59:04 | INFO | Build failed
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | #9 [ 5/12] RUN groupadd --gid 2000 app && useradd --uid 2000 --gid 2000 -m -s /bin/bash app
+13:59:04 | DEBUG | #3 resolve docker.io/library/node:24-slim@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf done
+13:59:04 | DEBUG | Dockerfile:98
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | ------
+13:59:04 | DEBUG | ------
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | #2 DONE 0.8s
+13:59:04 | DEBUG | #8 [ 4/12] RUN npm install -g pm2
+13:59:04 | DEBUG |  100 |     
+13:59:04 | DEBUG | 
+13:59:04 | DEBUG | #5 DONE 0.3s
+13:59:04 | DEBUG |  > [ 7/12] COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./:
+13:59:04 | DEBUG | #4 [internal] load .dockerignore
+13:59:04 | DEBUG | #8 CACHED
+13:59:04 | DEBUG | --------------------
+13:59:04 | DEBUG |   96 |     # Copy package descriptors first for better caching
+13:59:04 | INFO | #11 ERROR: failed to calculate checksum of ref ws61yj6d10lg9a6n3e8jckxkj::mv5yp774qv73mjnx4guwksvcm: "/main/package.json": not found
+13:59:04 | DEBUG |   98 | >>> COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./
+13:59:04 | DEBUG | #5 transferring context: 8.40MB 0.3s done
+13:59:04 | DEBUG | #6 DONE 0.5s
+13:59:24 | DEBUG | Cloning into '/workspace'...
+13:59:25 | DEBUG | You are in 'detached HEAD' state. You can look around, make experimental
+13:59:25 | DEBUG |   git switch -c <new-branch-name>
+13:59:25 | DEBUG |   git switch -
+13:59:25 | DEBUG | Turn off this advice by setting config variable advice.detachedHead to false
+13:59:25 | DEBUG | 
+13:59:25 | DEBUG | state without impacting any branches by switching back to a branch.
+13:59:25 | DEBUG | do so (now or later) by using -c with the switch command. Example:
+13:59:25 | DEBUG | If you want to create a new branch to retain commits you create, you may
+13:59:25 | DEBUG | Note: switching to 'f7074e6d956313b2ae35adb6a80040ac70388db5'.
+13:59:25 | DEBUG | HEAD is now at f7074e6 Add screenshot of Timeweb deployment dashboard
+13:59:25 | DEBUG | Or undo this operation with:
+13:59:25 | DEBUG | 
+13:59:25 | DEBUG | 
+13:59:25 | DEBUG | 
+13:59:25 | DEBUG | 
+13:59:25 | DEBUG | 
+13:59:25 | DEBUG | 
+13:59:25 | DEBUG | changes and commit them, and you can discard any commits you make in this
+13:59:44 | DEBUG | #7 CACHED
+13:59:44 | DEBUG | #2 [internal] load metadata for docker.io/library/node:24-slim
+13:59:44 | DEBUG | #2 DONE 0.6s
+13:59:44 | DEBUG | #1 DONE 0.0s
+13:59:44 | DEBUG | #9 CACHED
+13:59:44 | DEBUG | #1 WARN: Empty continuation line found in: RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends     curl     && rm -rf /var/lib/apt/lists/*
+13:59:44 | DEBUG | #4 DONE 0.0s
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | #11 [ 7/12] COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./
+13:59:44 | DEBUG | #6 ...
+13:59:44 | DEBUG | #5 DONE 0.3s
+13:59:44 | DEBUG | #3 extracting sha256:06d464f614a98416f8f326dcd40292b0a96bf6a56a6fba9e2f98ed770cdacf11 done
+13:59:44 | DEBUG | #4 transferring context: 114B done
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | #7 [ 6/12] WORKDIR /app/main
+13:59:44 | DEBUG | #8 CACHED
+13:59:44 | DEBUG | #9 [ 4/12] RUN npm install -g pm2
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | #6 [ 2/12] RUN corepack enable
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | #3 resolve docker.io/library/node:24-slim@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf done
+13:59:44 | DEBUG | #5 transferring context: 8.40MB 0.2s done
+13:59:44 | DEBUG | #3 extracting sha256:9bea510bd805f72c63e2d093c23fca1da9b02127c4849c121b6117a45d4d2ba7 0.0s done
+13:59:44 | INFO | Build started
+13:59:44 | DEBUG | #10 [ 5/12] RUN groupadd --gid 2000 app && useradd --uid 2000 --gid 2000 -m -s /bin/bash app
+13:59:44 | DEBUG | #3 extracting sha256:b2b95943836ce3dea08d21af828b011a0645bdca70cd53536131ccd295ef3def 0.1s done
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | #3 sha256:9bea510bd805f72c63e2d093c23fca1da9b02127c4849c121b6117a45d4d2ba7 3.31kB / 3.31kB 0.4s done
+13:59:44 | DEBUG | #3 sha256:06d464f614a98416f8f326dcd40292b0a96bf6a56a6fba9e2f98ed770cdacf11 449B / 449B 0.4s done
+13:59:44 | DEBUG | #8 [ 3/12] RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends     curl     && rm -rf /var/lib/apt/lists/*
+13:59:44 | DEBUG | #3 extracting sha256:e008f534e95cab9dfc584b72c1beb5ccd5b4e7b6b73973a6fd6791f0d8e2ac29 1.4s done
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | #3 sha256:b2b95943836ce3dea08d21af828b011a0645bdca70cd53536131ccd295ef3def 1.71MB / 1.71MB 0.2s done
+13:59:44 | DEBUG | #3 sha256:068fedd6b0f109b8186d00d49327b6fc6747c428fd3c9a8739424ff5f38d7531 28.23MB / 28.23MB 0.6s done
+13:59:44 | DEBUG | #6 [ 2/12] RUN corepack enable
+13:59:44 | DEBUG | 
+13:59:44 | INFO | #11 ERROR: failed to calculate checksum of ref n6ncsp1pmwow41rably5r7r9g::ij4002kd7xwsdxsbki7m2wc91: "/main/package.json": not found
+13:59:44 | DEBUG | #10 CACHED
+13:59:44 | DEBUG | #4 [internal] load .dockerignore
+13:59:44 | DEBUG | 
+13:59:44 | DEBUG | #3 sha256:e008f534e95cab9dfc584b72c1beb5ccd5b4e7b6b73973a6fd6791f0d8e2ac29 50.09MB / 50.09MB 1.2s done
+13:59:44 | DEBUG | #3 [1/7] FROM docker.io/library/node:24-slim@sha256:242549cd46785b480c832479a730f4f2a20865d61ea2e404fdb2a5c3d3b73ecf
+13:59:44 | DEBUG | #3 extracting sha256:068fedd6b0f109b8186d00d49327b6fc6747c428fd3c9a8739424ff5f38d7531 1.2s done
+13:59:44 | DEBUG | #3 DONE 3.7s
+13:59:44 | DEBUG | #1 [internal] load build definition from Dockerfile
+13:59:44 | DEBUG | #1 transferring dockerfile: 2.13kB 0.0s done
+13:59:44 | DEBUG | #5 [internal] load build context
+13:59:44 | DEBUG | 
+13:59:45 | DEBUG | #6 DONE 1.9s
+13:59:45 | DEBUG | ------
+13:59:45 | DEBUG |  > [ 7/12] COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./:
+13:59:45 | DEBUG | ------
+13:59:45 | INFO | error: failed to solve: failed to compute cache key: failed to calculate checksum of ref n6ncsp1pmwow41rably5r7r9g::ij4002kd7xwsdxsbki7m2wc91: "/main/package.json": not found
+13:59:45 | DEBUG |   97 |     
+13:59:45 | INFO | Build failed
+13:59:45 | DEBUG |  100 |     
+13:59:45 | DEBUG |   96 |     # Copy package descriptors first for better caching
+13:59:45 | DEBUG | --------------------
+13:59:45 | DEBUG |   99 |     
+13:59:45 | DEBUG |   98 | >>> COPY main/package.json main/pnpm-lock.yaml* main/package-lock.json* main/pnpm-workspace.yaml* ./
+13:59:45 | DEBUG | Dockerfile:98
+13:59:45 | DEBUG | --------------------
