@@ -1,13 +1,9 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
+import pg from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
 
-neonConfig.webSocketConstructor = ws;
+const { Pool } = pg;
 
-// DATABASE_URL is required. We defer the hard crash to the first actual DB
-// call so that the HTTP server (and /ping, /healthz) can start up and give
-// a diagnostic response even when the env-var is missing.
 const DATABASE_URL = process.env.DATABASE_URL ?? "";
 
 if (!DATABASE_URL) {
@@ -18,5 +14,12 @@ if (!DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: DATABASE_URL || "postgresql://localhost/placeholder" });
+export const pool = new Pool({
+  connectionString: DATABASE_URL || "postgresql://localhost/placeholder",
+  ssl: DATABASE_URL ? { rejectUnauthorized: false } : false,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
 export const db = drizzle({ client: pool, schema });
