@@ -109,6 +109,25 @@ const addAddressSchema = z.object({
 export function registerWebRoutes(app: Express) {
   app.use('/web-api', cookieParser());
 
+  // ── TEMPORARY ADMIN SETUP (remove after use) ─────────────
+  app.post('/web-api/_setup_admin_9f3k2x', async (req: Request, res: Response) => {
+    const { secret } = req.body || {};
+    if (secret !== 'DGS_SETUP_TOKEN_2026') return res.status(403).json({ error: 'Forbidden' });
+    try {
+      const { hashPassword } = await import('./services/web-auth');
+      const hash = await hashPassword('DGSAdmin2026!');
+      const existing = await db.select({ id: webUsers.id }).from(webUsers).where(eq(webUsers.email, 'iabarinova88@yandex.ru'));
+      if (existing.length > 0) {
+        await db.update(webUsers).set({ passwordHash: hash, isAdmin: true, isEmailVerified: true }).where(eq(webUsers.email, 'iabarinova88@yandex.ru'));
+        return res.json({ ok: true, action: 'updated' });
+      } else {
+        await db.insert(webUsers).values({ id: randomUUID(), email: 'iabarinova88@yandex.ru', passwordHash: hash, firstName: 'Admin', lastName: 'Iabarinova', isAdmin: true, isMasterAdmin: false, isEmailVerified: true, marketingConsent: false });
+        return res.json({ ok: true, action: 'created' });
+      }
+    } catch(e) { return res.status(500).json({ error: String(e) }); }
+  });
+  // ─────────────────────────────────────────────────────────
+
   // ── AUTH ──────────────────────────────────────────────────
 
   // POST /web-api/auth/register
