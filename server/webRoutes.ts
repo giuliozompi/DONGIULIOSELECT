@@ -1059,6 +1059,14 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
 
   // ── PICKUP ADDRESSES ───────────────────────────────────────
 
+  // Public endpoint — used on the delivery page
+  app.get('/web-api/pickup-addresses', async (_req: Request, res: Response) => {
+    try {
+      const rows = await db.select({ id: pickupAddresses.id, label: pickupAddresses.label, fullAddress: pickupAddresses.fullAddress, city: pickupAddresses.city, contactName: pickupAddresses.contactName, contactPhone: pickupAddresses.contactPhone, isDefault: pickupAddresses.isDefault }).from(pickupAddresses).orderBy(desc(pickupAddresses.isDefault), asc(pickupAddresses.createdAt));
+      res.json(rows);
+    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
   app.get('/web-api/admin/pickup-addresses', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {
     try {
       const rows = await db.select().from(pickupAddresses).orderBy(desc(pickupAddresses.isDefault), asc(pickupAddresses.createdAt));
