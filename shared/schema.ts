@@ -966,7 +966,7 @@ export const analyticsTopProducts = pgTable("analytics_top_products", {
   productId: varchar("product_id").notNull().references(() => products.id),
   productName: text("product_name").notNull(),
   
-  unitsSold: integer("units_sold").notNull().default(0),
+  unitsSold: decimal("units_sold", { precision: 10, scale: 3 }).notNull().default('0'),
   revenue: decimal("revenue", { precision: 10, scale: 2 }).notNull().default('0'),
   rank: integer("rank").notNull(), // 1 = best seller
   

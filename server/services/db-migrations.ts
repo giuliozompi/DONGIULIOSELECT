@@ -25,6 +25,21 @@ export async function runMigrations(): Promise<void> {
         UNIQUE(user_id, channel)
       )
     `);
+    // Change units_sold from INTEGER to NUMERIC(10,3) to support kg quantities
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'analytics_top_products'
+            AND column_name = 'units_sold'
+            AND data_type = 'integer'
+        ) THEN
+          ALTER TABLE analytics_top_products
+            ALTER COLUMN units_sold TYPE NUMERIC(10,3) USING units_sold::numeric;
+        END IF;
+      END $$;
+    `);
     console.log('✅ DB migrations applied (notification settings tables ready)');
   } catch (error) {
     console.error('⚠️ DB migration error (non-fatal):', error);

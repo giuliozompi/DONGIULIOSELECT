@@ -12,6 +12,8 @@ export const adminApi = {
     webApi.get<any[]>(`${A}/analytics/timeseries?startDate=${startDate}&endDate=${endDate}`),
   analyticsTopProducts: (startDate: string, endDate: string) =>
     webApi.get<any[]>(`${A}/analytics/top-products?startDate=${startDate}&endDate=${endDate}`),
+  analyticsBackfill: (startDate: string, endDate: string) =>
+    webApi.post<any>(`${A}/analytics/backfill`, { startDate, endDate }),
 
   // Categories
   getCategories: () => webApi.get<any[]>(`${A}/categories`),

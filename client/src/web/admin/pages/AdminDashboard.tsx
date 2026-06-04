@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '../lib/adminApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, ShoppingCart, Users, Banknote, RotateCcw } from 'lucide-react';
+import { TrendingUp, ShoppingCart, Users, Banknote, RotateCcw, RefreshCw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from 'recharts';
@@ -24,9 +25,20 @@ function fmt(n: string | number) {
 
 export default function AdminDashboard() {
   const [rangeIdx, setRangeIdx] = useState(1);
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const range = RANGES[rangeIdx];
   const endDate = dateStr(new Date());
   const startDate = dateStr(new Date(Date.now() - range.days * 86400000));
+
+  const backfillMut = useMutation({
+    mutationFn: () => adminApi.analyticsBackfill(startDate, endDate),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/analytics'] });
+      toast({ title: 'Данные пересчитаны' });
+    },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
+  });
 
   const { data: summary, isLoading: loadSum } = useQuery({
     queryKey: ['/web-api/admin/analytics/summary', startDate, endDate],
@@ -62,7 +74,7 @@ export default function AdminDashboard() {
 
   const topData = topProducts.slice(0, 10).map((p: any) => ({
     name: (p.productName || '').slice(0, 20),
-    Количество: Math.round(p.totalQuantity ?? 0),
+    Количество: parseFloat((p.totalQuantity ?? 0).toFixed(3)),
     Выручка: Math.round(p.totalRevenue ?? 0),
   }));
 
@@ -70,7 +82,7 @@ export default function AdminDashboard() {
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold">Дашборд</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {RANGES.map((r, i) => (
             <Button
               key={r.label}
@@ -81,6 +93,16 @@ export default function AdminDashboard() {
               {r.label}
             </Button>
           ))}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => backfillMut.mutate()}
+            disabled={backfillMut.isPending}
+            title="Pересчитать данные за выбранный период"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${backfillMut.isPending ? 'animate-spin' : ''}`} />
+            Пересчитать
+          </Button>
         </div>
       </div>
 

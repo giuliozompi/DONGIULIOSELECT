@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { backfillHistoricalData } from './services/analytics-aggregation';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
 import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs } from '../shared/schema';
@@ -820,10 +821,24 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       const agg: Record<string, { productId: string; productName: string; totalQuantity: number; totalRevenue: number }> = {};
       for (const r of rows) {
         if (!agg[r.productId]) agg[r.productId] = { productId: r.productId, productName: r.productName||r.productId, totalQuantity: 0, totalRevenue: 0 };
-        agg[r.productId].totalQuantity += Math.round(r.unitsSold||0);
-        agg[r.productId].totalRevenue += parseFloat(r.revenue||'0');
+        agg[r.productId].totalQuantity += parseFloat(String(r.unitsSold||0));
+        agg[r.productId].totalRevenue += parseFloat(String(r.revenue||'0'));
       }
       res.json(Object.values(agg).sort((a,b) => b.totalQuantity - a.totalQuantity).slice(0,10));
+    } catch(e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // Force-regenerate analytics snapshots (deletes existing and re-runs)
+  app.post('/web-api/admin/analytics/backfill', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate } = z.object({ startDate: z.string(), endDate: z.string() }).parse(req.body);
+      // Delete existing snapshots for the date range (cascade deletes top_products)
+      await db.delete(analyticsSnapshots).where(
+        and(gte(analyticsSnapshots.snapshotDate, startDate), lte(analyticsSnapshots.snapshotDate, endDate))
+      );
+      // Re-run aggregation
+      await backfillHistoricalData(startDate, endDate);
+      res.json({ ok: true, message: `Backfill completed for ${startDate} → ${endDate}` });
     } catch(e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
   });
 

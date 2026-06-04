@@ -230,7 +230,7 @@ async function aggregateTopProducts(dateRange: DateRange) {
         continue;
       }
       
-      const quantity = Math.round(Number(item.quantity) || 0);
+      const quantity = parseFloat(Number(item.quantity).toFixed(3)) || 0;
       if (quantity <= 0) {
         console.warn(`[Analytics] Skipping item with invalid quantity ${item.quantity} in order ${order.id}`);
         continue;
@@ -283,7 +283,7 @@ async function aggregateTopProducts(dateRange: DateRange) {
     .map(([productId, stats]) => ({
       productId,
       productName: stats.productName,
-      unitsSold: Math.round(stats.unitsSold),
+      unitsSold: parseFloat(stats.unitsSold.toFixed(3)),
       revenue: Number.isFinite(stats.revenue) ? stats.revenue.toFixed(2) : '0.00'
     }))
     .filter(p => p.unitsSold > 0 && p.productName)
