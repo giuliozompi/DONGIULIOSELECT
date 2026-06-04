@@ -6,13 +6,15 @@ import { Button } from '@/components/ui/button';
 import { TrendingUp, ShoppingCart, Users, Banknote, RotateCcw, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, LabelList, Cell,
 } from 'recharts';
 
 const RANGES = [
   { label: '7 дней', days: 7 },
   { label: '30 дней', days: 30 },
   { label: '90 дней', days: 90 },
+  { label: '180 дней', days: 180 },
+  { label: '1 год', days: 365 },
 ];
 
 function dateStr(d: Date) {
@@ -24,7 +26,7 @@ function fmt(n: string | number) {
 }
 
 export default function AdminDashboard() {
-  const [rangeIdx, setRangeIdx] = useState(1);
+  const [rangeIdx, setRangeIdx] = useState(4); // default: 1 год
   const { toast } = useToast();
   const qc = useQueryClient();
   const range = RANGES[rangeIdx];
@@ -173,16 +175,46 @@ export default function AdminDashboard() {
           {topData.length > 0 && (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Топ-10 товаров</CardTitle>
+                <CardTitle className="text-base">
+                  Топ-{topData.length} товаров
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">по количеству проданных единиц</span>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={topData} layout="vertical" margin={{ left: 8, right: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                    <XAxis type="number" tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="Количество" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]} />
+                <ResponsiveContainer width="100%" height={Math.max(260, topData.length * 36)}>
+                  <BarChart
+                    data={topData}
+                    layout="vertical"
+                    margin={{ left: 8, right: 48, top: 4, bottom: 4 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      tick={{ fontSize: 11 }}
+                      allowDecimals={true}
+                      tickFormatter={(v) => v % 1 === 0 ? v : v.toFixed(3)}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={130}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <Tooltip
+                      formatter={(value: number, name: string) => {
+                        if (name === 'Количество') return [value % 1 === 0 ? value : value.toFixed(3), 'Кол-во'];
+                        if (name === 'Выручка') return [fmt(value), 'Выручка'];
+                        return [value, name];
+                      }}
+                    />
+                    <Bar dataKey="Количество" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]}>
+                      <LabelList
+                        dataKey="Количество"
+                        position="right"
+                        style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                        formatter={(v: number) => v % 1 === 0 ? v : v.toFixed(3)}
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
