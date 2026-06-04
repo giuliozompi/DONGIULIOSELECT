@@ -820,8 +820,8 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       const agg: Record<string, { productId: string; productName: string; totalQuantity: number; totalRevenue: number }> = {};
       for (const r of rows) {
         if (!agg[r.productId]) agg[r.productId] = { productId: r.productId, productName: r.productName||r.productId, totalQuantity: 0, totalRevenue: 0 };
-        agg[r.productId].totalQuantity += Math.round(r.totalQuantity||0);
-        agg[r.productId].totalRevenue += parseFloat(r.totalRevenue||'0');
+        agg[r.productId].totalQuantity += Math.round(r.unitsSold||0);
+        agg[r.productId].totalRevenue += parseFloat(r.revenue||'0');
       }
       res.json(Object.values(agg).sort((a,b) => b.totalQuantity - a.totalQuantity).slice(0,10));
     } catch(e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
