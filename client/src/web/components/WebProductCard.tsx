@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { Heart, ShoppingCart, Plus, Minus } from 'lucide-react';
+import { ShoppingCart, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useWebCart } from '../hooks/useWebCart';
-import { useWebAuth } from '../hooks/useWebAuth';
 
 interface Product {
   id: string;
@@ -22,13 +21,27 @@ interface Props {
   product: Product;
 }
 
-const STEP = 0.1; // кг или шт
+const STEP = 0.1;
 
 export default function WebProductCard({ product }: Props) {
   const [, setLocation] = useLocation();
   const { addItem, items, updateQuantity, removeItem } = useWebCart();
-  const { isAuthenticated } = useWebAuth();
+  const [activeImg, setActiveImg] = useState(0);
   const [imgError, setImgError] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const images = product.images?.filter(Boolean) ?? [];
+  const hasMultiple = images.length > 1;
+
+  useEffect(() => {
+    if (!hasMultiple) return;
+    intervalRef.current = setInterval(() => {
+      setActiveImg(i => (i + 1) % images.length);
+    }, 3000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [hasMultiple, images.length]);
 
   const cartItem = items.find(i => i.productId === product.id);
   const qty = cartItem?.quantity ?? 0;
@@ -44,7 +57,7 @@ export default function WebProductCard({ product }: Props) {
         productName: product.name,
         price: product.price,
         unit: product.unit,
-        image: product.images[0],
+        image: images[0],
       }, step);
     } else {
       updateQuantity(product.id, parseFloat((qty + step).toFixed(3)));
@@ -62,7 +75,7 @@ export default function WebProductCard({ product }: Props) {
   const priceOld = product.priceOld ? parseFloat(product.priceOld) : null;
   const discountPct = priceOld ? Math.round((1 - price / priceOld) * 100) : null;
 
-  const image = !imgError && product.images?.[0] ? product.images[0] : null;
+  const currentImage = !imgError && images[activeImg] ? images[activeImg] : null;
 
   return (
     <div
@@ -72,11 +85,11 @@ export default function WebProductCard({ product }: Props) {
     >
       {/* Image */}
       <div className="relative aspect-square bg-neutral-50 overflow-hidden">
-        {image ? (
+        {currentImage ? (
           <img
-            src={image}
+            src={currentImage}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-cover transition-all duration-700"
             onError={() => setImgError(true)}
           />
         ) : (
@@ -84,14 +97,32 @@ export default function WebProductCard({ product }: Props) {
             <ShoppingCart className="w-8 h-8" />
           </div>
         )}
+
         {discountPct && (
           <Badge className="absolute top-2 left-2 bg-red-500 text-white border-0 text-xs">
             -{discountPct}%
           </Badge>
         )}
+
         {!product.inStock && (
           <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
             <Badge variant="secondary">Нет в наличии</Badge>
+          </div>
+        )}
+
+        {/* Dot indicators */}
+        {hasMultiple && (
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+            {images.map((_, i) => (
+              <span
+                key={i}
+                className={`block rounded-full transition-all duration-300 ${
+                  i === activeImg
+                    ? 'w-4 h-1.5 bg-white'
+                    : 'w-1.5 h-1.5 bg-white/60'
+                }`}
+              />
+            ))}
           </div>
         )}
       </div>
