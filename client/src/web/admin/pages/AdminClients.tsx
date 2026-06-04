@@ -45,6 +45,12 @@ function ClientNotifPrefs({ clientId, isMasterAdmin }: { clientId: string; isMas
     enabled: isMasterAdmin,
   });
 
+  const { data: globalSettings = [] } = useQuery({
+    queryKey: ['/web-api/admin/notification-settings'],
+    queryFn: () => adminApi.getChannelSettings(),
+    enabled: isMasterAdmin,
+  });
+
   const toggleMut = useMutation({
     mutationFn: ({ channel, enabled }: { channel: string; enabled: boolean }) =>
       adminApi.setClientNotifPref(clientId, channel, enabled),
@@ -60,6 +66,12 @@ function ClientNotifPrefs({ clientId, isMasterAdmin }: { clientId: string; isMas
 
   if (!isMasterAdmin) return null;
 
+  // channel → globally enabled (default true if not found)
+  const globalEnabled = (ch: string) => {
+    const row = (globalSettings as any[]).find((s: any) => s.channel === ch);
+    return row ? row.enabled : true;
+  };
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -73,26 +85,34 @@ function ClientNotifPrefs({ clientId, isMasterAdmin }: { clientId: string; isMas
         <div className="space-y-3">
           {['telegram', 'whatsapp', 'email'].map(ch => {
             const row = prefs.find((p: any) => p.channel === ch);
-            const enabled = row?.enabled ?? true;
+            const clientEnabled = row?.enabled ?? true;
+            const isGloballyOff = !globalEnabled(ch);
+            const effectivelyEnabled = !isGloballyOff && clientEnabled;
             return (
               <div key={ch} className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium">{CHANNEL_LABELS[ch]}</p>
+                  <p className={`text-sm font-medium ${isGloballyOff ? 'text-muted-foreground' : ''}`}>
+                    {CHANNEL_LABELS[ch]}
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    {enabled ? 'Уведомления активны' : 'Уведомления отключены для этого клиента'}
+                    {isGloballyOff
+                      ? 'Отключено глобально в настройках'
+                      : clientEnabled
+                        ? 'Уведомления активны'
+                        : 'Уведомления отключены для этого клиента'}
                   </p>
                 </div>
                 <Switch
-                  checked={enabled}
+                  checked={effectivelyEnabled}
                   onCheckedChange={v => toggleMut.mutate({ channel: ch, enabled: v })}
-                  disabled={toggleMut.isPending}
+                  disabled={toggleMut.isPending || isGloballyOff}
                 />
               </div>
             );
           })}
         </div>
         <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
-          Отключение здесь не влияет на глобальные настройки каналов.
+          Canali disabilitati globalmente non possono essere attivati per singolo cliente.
         </p>
       </CardContent>
     </Card>
