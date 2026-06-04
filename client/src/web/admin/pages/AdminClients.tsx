@@ -123,7 +123,9 @@ export default function AdminClients() {
   const filtered = clients.filter((c: any) => {
     if (!search) return true;
     const q = search.toLowerCase();
+    const fullName = [c.firstName, c.lastName].filter(Boolean).join(' ').toLowerCase();
     return (
+      fullName.includes(q) ||
       c.firstName?.toLowerCase().includes(q) ||
       c.lastName?.toLowerCase().includes(q) ||
       c.username?.toLowerCase().includes(q) ||
