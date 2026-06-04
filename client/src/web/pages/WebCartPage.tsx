@@ -42,6 +42,7 @@ export default function WebCartPage() {
           {items.map(item => {
             const isKg = item.unit === 'кг';
             const step = isKg ? 0.1 : 1;
+            const minQty = isKg ? 0.2 : 1;
             const lineTotal = parseFloat(item.price) * item.quantity;
 
             return (
@@ -73,7 +74,7 @@ export default function WebCartPage() {
                         size="icon" variant="ghost" className="h-6 w-6"
                         onClick={() => {
                           const newQty = parseFloat((item.quantity - step).toFixed(3));
-                          if (newQty <= 0) removeItem(item.productId);
+                          if (newQty < minQty) removeItem(item.productId);
                           else updateQuantity(item.productId, newQty);
                         }}
                         data-testid={`button-decrease-${item.productId}`}

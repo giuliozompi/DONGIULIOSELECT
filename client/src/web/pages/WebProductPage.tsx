@@ -19,6 +19,7 @@ interface Product {
 }
 
 const STEP = 0.1;
+const MIN_KG = 0.2;
 
 export default function WebProductPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -84,18 +85,20 @@ export default function WebProductPage() {
   const qty = cartItem?.quantity ?? 0;
   const isKg = product.unit === 'кг';
   const step = isKg ? STEP : 1;
+  const initialQty = isKg ? MIN_KG : 1;
+  const minQty = initialQty;
 
   const handleAdd = () => {
     if (!product.inStock) return;
     if (qty === 0) {
-      addItem({ productId: product.id, productName: product.name, price: product.price, unit: product.unit, image: product.images[0] }, step);
+      addItem({ productId: product.id, productName: product.name, price: product.price, unit: product.unit, image: images[0] }, initialQty);
     } else {
       updateQuantity(product.id, parseFloat((qty + step).toFixed(3)));
     }
   };
   const handleMinus = () => {
     const newQty = parseFloat((qty - step).toFixed(3));
-    if (newQty <= 0) removeItem(product.id);
+    if (newQty < minQty) removeItem(product.id);
     else updateQuantity(product.id, newQty);
   };
 

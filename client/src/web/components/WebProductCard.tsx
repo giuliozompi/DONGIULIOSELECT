@@ -22,6 +22,7 @@ interface Props {
 }
 
 const STEP = 0.1;
+const MIN_KG = 0.2;
 
 export default function WebProductCard({ product }: Props) {
   const [, setLocation] = useLocation();
@@ -48,6 +49,9 @@ export default function WebProductCard({ product }: Props) {
   const isKg = product.unit === 'кг' || product.unit === 'г';
   const step = isKg ? STEP : 1;
 
+  const initialQty = isKg ? MIN_KG : 1;
+  const minQty = initialQty;
+
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!product.inStock) return;
@@ -58,7 +62,7 @@ export default function WebProductCard({ product }: Props) {
         price: product.price,
         unit: product.unit,
         image: images[0],
-      }, step);
+      }, initialQty);
     } else {
       updateQuantity(product.id, parseFloat((qty + step).toFixed(3)));
     }
@@ -67,7 +71,7 @@ export default function WebProductCard({ product }: Props) {
   const handleMinus = (e: React.MouseEvent) => {
     e.stopPropagation();
     const newQty = parseFloat((qty - step).toFixed(3));
-    if (newQty <= 0) removeItem(product.id);
+    if (newQty < minQty) removeItem(product.id);
     else updateQuantity(product.id, newQty);
   };
 
