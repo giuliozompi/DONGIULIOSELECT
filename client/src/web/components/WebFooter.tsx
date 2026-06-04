@@ -63,7 +63,7 @@ export default function WebFooter() {
 
         <div className="border-t border-neutral-800 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-neutral-500">
           <p>© {new Date().getFullYear()} Don Giulio Select. Все права защищены.</p>
-          <p>ИП Джулио Джулио · ИНН 772863212942</p>
+          <p>ИП Дзомпи Джулио · ИНН 772863212942</p>
         </div>
       </div>
     </footer>
