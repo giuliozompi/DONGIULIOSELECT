@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from './lib/adminApi';
 import { useWebAuth } from '../hooks/useWebAuth';
 import {
   LayoutDashboard, Tag, Package, ShoppingCart, Users,
-  FileText, Settings, LogOut, Menu, X, Shield, ChevronRight,
+  FileText, Settings, LogOut, Menu, Shield, ChevronRight, Eye, EyeOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -40,12 +42,100 @@ function NavItem({ item, active, onClick }: { item: typeof NAV[0]; active: boole
   );
 }
 
+function AdminLoginForm({ onSuccess }: { onSuccess: () => void }) {
+  const { login } = useWebAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await login(email, password);
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Credenziali non valide');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="w-full max-w-sm px-4">
+        <div className="bg-card border rounded-lg p-8 space-y-6">
+          <div className="text-center space-y-2">
+            <Shield className="h-10 w-10 text-primary mx-auto" />
+            <h1 className="text-xl font-semibold">Don Giulio Admin</h1>
+            <p className="text-sm text-muted-foreground">Accedi al pannello di amministrazione</p>
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-email">Email</Label>
+              <Input
+                id="admin-email"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="email@esempio.com"
+                required
+                autoComplete="email"
+                data-testid="input-admin-email"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-password">Password</Label>
+              <div className="relative">
+                <Input
+                  id="admin-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                  className="pr-10"
+                  data-testid="input-admin-password"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword(v => !v)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
+            <Button type="submit" className="w-full" disabled={loading} data-testid="button-admin-login">
+              {loading ? 'Accesso in corso...' : 'Accedi'}
+            </Button>
+          </form>
+          <div className="text-center">
+            <Link href="/web" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
+              Torna al sito
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function WebAdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { logout } = useWebAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const queryClient = useQueryClient();
 
-  const { data: checkData, isLoading, isError } = useQuery({
+  const { data: checkData, isLoading, isError, refetch } = useQuery({
     queryKey: ['/web-api/admin/check'],
     queryFn: () => adminApi.check(),
     retry: false,
@@ -68,19 +158,10 @@ export default function WebAdminLayout({ children }: { children: React.ReactNode
 
   if (isError || !checkData?.ok) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="text-center space-y-4 max-w-sm px-4">
-          <Shield className="h-12 w-12 text-destructive mx-auto" />
-          <h1 className="text-xl font-semibold">Accesso negato</h1>
-          <p className="text-muted-foreground text-sm">
-            Non hai i permessi per accedere al pannello di amministrazione.
-          </p>
-          <div className="flex gap-2 justify-center">
-            <Button variant="outline" asChild><Link href="/web">Torna al sito</Link></Button>
-            <Button onClick={logout}>Esci</Button>
-          </div>
-        </div>
-      </div>
+      <AdminLoginForm onSuccess={() => {
+        queryClient.invalidateQueries({ queryKey: ['/web-api/admin/check'] });
+        refetch();
+      }} />
     );
   }
 
