@@ -1127,9 +1127,25 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   app.post('/web-api/admin/admins/promote', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
     try {
       const { email, isMasterAdmin: master } = z.object({ email: z.string().email(), isMasterAdmin: z.boolean().optional() }).parse(req.body);
-      const [user] = await db.update(webUsers).set({ isAdmin: true, isMasterAdmin: master ?? false }).where(eq(webUsers.email, email)).returning({ id: webUsers.id, email: webUsers.email, firstName: webUsers.firstName });
-      if (!user) return res.status(404).json({ error: 'User not found' });
-      res.json(user);
+      // Try to update existing user first
+      const [existing] = await db.update(webUsers)
+        .set({ isAdmin: true, isMasterAdmin: master ?? false })
+        .where(eq(webUsers.email, email))
+        .returning({ id: webUsers.id, email: webUsers.email, firstName: webUsers.firstName });
+      if (existing) return res.json({ ...existing, created: false });
+      // User doesn't have a web account yet — create it with a random password
+      const tempHash = await hashPassword(randomUUID());
+      const [created] = await db.insert(webUsers).values({
+        email,
+        passwordHash: tempHash,
+        firstName: email.split('@')[0],
+        isAdmin: true,
+        isMasterAdmin: master ?? false,
+        isEmailVerified: false,
+        isPhoneVerified: false,
+        marketingConsent: false,
+      }).returning({ id: webUsers.id, email: webUsers.email, firstName: webUsers.firstName });
+      res.json({ ...created, created: true });
     } catch(e) { res.status(400).json({ error: String(e) }); }
   });
 

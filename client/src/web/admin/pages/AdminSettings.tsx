@@ -27,10 +27,14 @@ function AdminsTab() {
 
   const promoteMut = useMutation({
     mutationFn: () => adminApi.promoteAdmin(email, isMaster),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       qc.invalidateQueries({ queryKey: ['/web-api/admin/admins'] });
       setDialog(false); setEmail(''); setIsMaster(false);
-      toast({ title: 'Администратор добавлен' });
+      if (data?.created) {
+        toast({ title: 'Администратор создан', description: 'Аккаунт создан. Пользователь должен сбросить пароль через «Забыл пароль».' });
+      } else {
+        toast({ title: 'Администратор добавлен' });
+      }
     },
     onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
