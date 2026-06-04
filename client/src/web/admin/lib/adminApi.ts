@@ -77,4 +77,14 @@ export const adminApi = {
   promoteAdmin: (email: string, isMasterAdmin?: boolean) =>
     webApi.post<any>(`${A}/admins/promote`, { email, isMasterAdmin }),
   demoteAdmin: (id: string) => webApi.delete<void>(`${A}/admins/${id}`),
+
+  // Notification Settings (master admin only)
+  getNotificationSettings: () =>
+    webApi.get<{ channel: string; enabled: boolean }[]>(`${A}/notification-settings`),
+  setChannelEnabled: (channel: string, enabled: boolean) =>
+    webApi.patch<{ ok: boolean }>(`${A}/notification-settings/${channel}`, { enabled }),
+  getClientNotifPrefs: (userId: string) =>
+    webApi.get<{ channel: string; enabled: boolean }[]>(`${A}/clients/${userId}/notification-prefs`),
+  setClientNotifPref: (userId: string, channel: string, enabled: boolean) =>
+    webApi.patch<{ ok: boolean }>(`${A}/clients/${userId}/notification-prefs/${channel}`, { enabled }),
 };

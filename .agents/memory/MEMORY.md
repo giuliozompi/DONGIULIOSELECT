@@ -1,2 +1,1 @@
-- [Timeweb deployment](timeweb-deployment.md) — Timeweb usa Dockerfile generato automaticamente; "Директория сборки" deve essere vuota, "Команда сборки" = npm run build, "Команда запуска" = pm2 start --no-daemon dist/index.js
-- [Image proxy for Timeweb](timeweb-images.md) — Replit Object Storage non accessibile da Timeweb; usare REPLIT_OBJECT_PROXY_URL env var per proxy trasparente via fetch+pipe
+- [Notification settings system](notification-settings.md) — global per-channel + per-user opt-out; canNotify() helper with 60s cache; fail-open design

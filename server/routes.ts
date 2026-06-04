@@ -18,6 +18,7 @@ import path from "path";
 import fs from "fs";
 import { normalizePhoneNumber } from "./utils";
 import { logOrderNotification } from "./services/notification-logger";
+import { canNotify } from "./services/notification-settings";
 import { getIntegrationsMap } from "./integrations-status";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -902,7 +903,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Invia notifica Telegram al cliente per conferma ordine
-      try {
+      if (await canNotify('telegram', req.userId)) try {
         const { sendOrderCreatedNotification } = await import('./services/telegram-bot');
         const telegramItems = orderItems.map(item => ({
           productName: item.productName,
@@ -972,7 +973,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Invia notifica WhatsApp al cliente
-      try {
+      if (await canNotify('whatsapp', order.userId)) try {
         const { sendOrderConfirmationWhatsApp } = await import('./services/whatsapp');
         const whatsappItems = orderItems.map(item => ({
           productName: item.productName,
@@ -2980,7 +2981,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           
           // Invia link pagamento via WhatsApp
-          try {
+          if (await canNotify('whatsapp', order.userId)) try {
             const { sendPaymentLinkWhatsApp } = await import('./services/whatsapp');
             const whatsappSent = await sendPaymentLinkWhatsApp(
               order.customerPhone,
@@ -3035,7 +3036,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const shouldSendStatusNotification = !(status === 'СОБРАН' && order.paymentMethod !== 'cash_on_delivery');
       
       if (shouldSendStatusNotification) {
-        try {
+        if (await canNotify('telegram', order.userId)) try {
           const { sendOrderStatusNotification } = await import('./services/telegram-bot');
           
           // Se stato è "ВЫЗВАН КУРЬЕР", passa il costo di spedizione
@@ -3061,7 +3062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Invia anche notifica WhatsApp
-        try {
+        if (await canNotify('whatsapp', order.userId)) try {
           const { sendOrderStatusUpdateWhatsApp } = await import('./services/whatsapp');
           const whatsappSent = await sendOrderStatusUpdateWhatsApp(
             order.customerPhone,
@@ -3556,7 +3557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Invia link pagamento via WhatsApp
-      try {
+      if (await canNotify('whatsapp', order.userId)) try {
         const { sendPaymentLinkWhatsApp } = await import('./services/whatsapp');
         const whatsappSent = await sendPaymentLinkWhatsApp(
           order.customerPhone,

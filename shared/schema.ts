@@ -1174,3 +1174,24 @@ export const webAddresses = pgTable("web_addresses", {
 export const insertWebAddressSchema = createInsertSchema(webAddresses).omit({ id: true, createdAt: true });
 export type InsertWebAddress = z.infer<typeof insertWebAddressSchema>;
 export type WebAddress = typeof webAddresses.$inferSelect;
+
+// ── NOTIFICATION SETTINGS ──────────────────────────────────────────────────
+// Global per-channel on/off switch (one row per channel)
+export const notificationChannelSettings = pgTable("notification_channel_settings", {
+  channel: text("channel").primaryKey(), // 'telegram' | 'whatsapp' | 'email'
+  enabled: boolean("enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedBy: varchar("updated_by"), // web user ID
+});
+
+// Per-user opt-out per channel (unique per userId+channel)
+export const userNotificationPreferences = pgTable("user_notification_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(), // Telegram user ID
+  channel: text("channel").notNull(),   // 'telegram' | 'whatsapp' | 'email'
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type NotificationChannelSetting = typeof notificationChannelSettings.$inferSelect;
+export type UserNotificationPreference = typeof userNotificationPreferences.$inferSelect;

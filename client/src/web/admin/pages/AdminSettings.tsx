@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Pencil, Trash2, Shield, MapPin, Link2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Shield, MapPin, Link2, Bell, MessageCircle, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 function AdminsTab() {
@@ -259,7 +259,102 @@ function AssociationsTab() {
   );
 }
 
+const CHANNEL_INFO: Record<string, { label: string; icon: any; description: string }> = {
+  telegram: {
+    label: 'Telegram',
+    icon: MessageCircle,
+    description: 'Уведомления клиентам через Telegram-бот (подтверждение заказа, статусы, ссылки оплаты)',
+  },
+  email: {
+    label: 'Email',
+    icon: Mail,
+    description: 'Email клиентам и менеджерам (подтверждения, ссылки оплаты, чеки)',
+  },
+  whatsapp: {
+    label: 'WhatsApp',
+    icon: Bell,
+    description: 'Уведомления клиентам через WhatsApp (подтверждение заказа, статусы, ссылки оплаты)',
+  },
+};
+
+function NotificationsTab() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: settings = [], isLoading } = useQuery({
+    queryKey: ['/web-api/admin/notification-settings'],
+    queryFn: () => adminApi.getNotificationSettings(),
+  });
+
+  const toggleMut = useMutation({
+    mutationFn: ({ channel, enabled }: { channel: string; enabled: boolean }) =>
+      adminApi.setChannelEnabled(channel, enabled),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/notification-settings'] });
+      toast({
+        title: vars.enabled ? 'Канал включён' : 'Канал отключён',
+        description: `${CHANNEL_INFO[vars.channel]?.label ?? vars.channel} — уведомления ${vars.enabled ? 'активированы' : 'приостановлены'}`,
+      });
+    },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
+  });
+
+  return (
+    <div className="space-y-4 mt-3">
+      <p className="text-sm text-muted-foreground">
+        Глобальное управление каналами уведомлений. Отключённый канал не отправляет сообщений ни одному клиенту.
+        Для отключения конкретного клиента используйте настройки в карточке клиента.
+      </p>
+
+      {isLoading && <div className="text-center py-6 text-muted-foreground">Загрузка...</div>}
+
+      <div className="space-y-3">
+        {['telegram', 'whatsapp', 'email'].map(ch => {
+          const info = CHANNEL_INFO[ch];
+          const row = settings.find(s => s.channel === ch);
+          const enabled = row?.enabled ?? true;
+          const Icon = info.icon;
+
+          return (
+            <Card key={ch}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`p-2 rounded-md ${enabled ? 'bg-primary/10' : 'bg-muted'}`}>
+                      <Icon className={`h-4 w-4 ${enabled ? 'text-primary' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm">{info.label}</p>
+                        <Badge variant={enabled ? 'default' : 'secondary'} className="text-xs">
+                          {enabled ? 'Активен' : 'Отключён'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{info.description}</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={enabled}
+                    onCheckedChange={v => toggleMut.mutate({ channel: ch, enabled: v })}
+                    disabled={toggleMut.isPending}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminSettings() {
+  const { data: checkData } = useQuery({
+    queryKey: ['/web-api/admin/check'],
+    queryFn: () => adminApi.check(),
+  });
+  const isMasterAdmin = checkData?.isMasterAdmin ?? false;
+
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
       <h1 className="text-2xl font-bold">Настройки</h1>
@@ -268,10 +363,14 @@ export default function AdminSettings() {
           <TabsTrigger value="admins">Администраторы</TabsTrigger>
           <TabsTrigger value="addresses">Адреса самовывоза</TabsTrigger>
           <TabsTrigger value="associations">Связанные товары</TabsTrigger>
+          {isMasterAdmin && <TabsTrigger value="notifications">Уведомления</TabsTrigger>}
         </TabsList>
         <TabsContent value="admins"><AdminsTab /></TabsContent>
         <TabsContent value="addresses"><PickupAddressesTab /></TabsContent>
         <TabsContent value="associations"><AssociationsTab /></TabsContent>
+        {isMasterAdmin && (
+          <TabsContent value="notifications"><NotificationsTab /></TabsContent>
+        )}
       </Tabs>
     </div>
   );

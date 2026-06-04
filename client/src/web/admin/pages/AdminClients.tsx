@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '../lib/adminApi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Search, ChevronLeft, ShoppingCart, User } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Search, ChevronLeft, ShoppingCart, User, Bell } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 function fmtDate(d: string) {
   if (!d) return '—';
@@ -27,9 +29,85 @@ const STATUS_RU: Record<string, string> = {
   cancelled: 'Отменён',
 };
 
+const CHANNEL_LABELS: Record<string, string> = {
+  telegram: 'Telegram',
+  email: 'Email',
+  whatsapp: 'WhatsApp',
+};
+
+function ClientNotifPrefs({ clientId, isMasterAdmin }: { clientId: string; isMasterAdmin: boolean }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: prefs = [], isLoading } = useQuery({
+    queryKey: ['/web-api/admin/clients', clientId, 'notification-prefs'],
+    queryFn: () => adminApi.getClientNotifPrefs(clientId),
+    enabled: isMasterAdmin,
+  });
+
+  const toggleMut = useMutation({
+    mutationFn: ({ channel, enabled }: { channel: string; enabled: boolean }) =>
+      adminApi.setClientNotifPref(clientId, channel, enabled),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/clients', clientId, 'notification-prefs'] });
+      toast({
+        title: vars.enabled ? 'Уведомления включены' : 'Уведомления отключены',
+        description: `${CHANNEL_LABELS[vars.channel] ?? vars.channel} — ${vars.enabled ? 'возобновлены' : 'приостановлены'} для этого клиента`,
+      });
+    },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
+  });
+
+  if (!isMasterAdmin) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Bell className="h-4 w-4" />
+          Уведомления клиента
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0">
+        {isLoading && <p className="text-sm text-muted-foreground">Загрузка...</p>}
+        <div className="space-y-3">
+          {['telegram', 'whatsapp', 'email'].map(ch => {
+            const row = prefs.find((p: any) => p.channel === ch);
+            const enabled = row?.enabled ?? true;
+            return (
+              <div key={ch} className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">{CHANNEL_LABELS[ch]}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {enabled ? 'Уведомления активны' : 'Уведомления отключены для этого клиента'}
+                  </p>
+                </div>
+                <Switch
+                  checked={enabled}
+                  onCheckedChange={v => toggleMut.mutate({ channel: ch, enabled: v })}
+                  disabled={toggleMut.isPending}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+          Отключение здесь не влияет на глобальные настройки каналов.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminClients() {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const { data: checkData } = useQuery({
+    queryKey: ['/web-api/admin/check'],
+    queryFn: () => adminApi.check(),
+  });
+  const isMasterAdmin = checkData?.isMasterAdmin ?? false;
 
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ['/web-api/admin/clients'],
@@ -94,6 +172,8 @@ export default function AdminClients() {
                 )}
               </CardContent>
             </Card>
+
+            <ClientNotifPrefs clientId={cl.id} isMasterAdmin={isMasterAdmin} />
 
             {cl.orders && cl.orders.length > 0 && (
               <Card>

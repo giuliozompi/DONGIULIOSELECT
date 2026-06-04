@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
 import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs } from '../shared/schema';
+import { getAllChannelSettings, setChannelEnabled, getUserPreferences, setUserPreference } from './services/notification-settings';
 import { eq, and, gt, or, ilike, desc, sql, lt, gte, lte, asc } from 'drizzle-orm';
 import { storage } from './storage';
 import {
@@ -1124,6 +1125,58 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       await db.update(webUsers).set({ isAdmin: false, isMasterAdmin: false }).where(eq(webUsers.id, req.params.id));
       res.sendStatus(204);
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── Notification Settings (Master Admin only) ──────────────────────────
+  app.get('/web-api/admin/notification-settings', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (_req: Request, res: Response) => {
+    try {
+      const settings = await getAllChannelSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error('Error fetching notification settings:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.patch('/web-api/admin/notification-settings/:channel', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
+    try {
+      const { channel } = req.params;
+      const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+      if (!['telegram', 'email', 'whatsapp'].includes(channel)) {
+        return res.status(400).json({ error: 'Invalid channel' });
+      }
+      const webUser = (req as any).webUser;
+      await setChannelEnabled(channel as any, enabled, webUser?.sub);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error('Error updating notification setting:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.get('/web-api/admin/clients/:id/notification-prefs', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
+    try {
+      const prefs = await getUserPreferences(req.params.id);
+      res.json(prefs);
+    } catch (error) {
+      console.error('Error fetching user notification prefs:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.patch('/web-api/admin/clients/:id/notification-prefs/:channel', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
+    try {
+      const { id, channel } = req.params;
+      const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+      if (!['telegram', 'email', 'whatsapp'].includes(channel)) {
+        return res.status(400).json({ error: 'Invalid channel' });
+      }
+      await setUserPreference(id, channel as any, enabled);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error('Error updating user notification pref:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
   });
 }
 

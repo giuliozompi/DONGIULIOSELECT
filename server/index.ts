@@ -11,6 +11,7 @@ import { startAnalyticsCron } from "./services/analytics-cron";
 import { startReengagementCron } from "./services/reengagement-cron";
 import { startWelcomeCron } from "./services/welcome-cron";
 import { getIntegrationsSummary } from "./integrations-status";
+import { runMigrations } from "./services/db-migrations";
 
 // Configura timezone UTC+3 (Mosca) per tutto il server
 process.env.TZ = 'Europe/Moscow';
@@ -54,6 +55,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // ── DB Migrations (non-blocking, best-effort) ───────────────────────────
+  await runMigrations().catch(e => console.error('Migration error:', e));
+
   // ── Seed (non-blocking, best-effort) ────────────────────────────────────
   const seedPromise = seedDatabase().catch((error) => {
     console.error('⚠️ Database seeding failed:', error);
