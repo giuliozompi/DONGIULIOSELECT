@@ -36,7 +36,7 @@ export default function WebFooter() {
             <ul className="space-y-2 text-sm">
               <li><Link href="/web/about" className="hover:text-white transition-colors">О нас</Link></li>
               <li><Link href="/web/delivery" className="hover:text-white transition-colors">Доставка и оплата</Link></li>
-              <li><Link href="/web/legal" className="hover:text-white transition-colors">Политика конфиденциальности</Link></li>
+              <li><Link href="/web/privacy" className="hover:text-white transition-colors">Политика конфиденциальности</Link></li>
               <li><Link href="/web/legal" className="hover:text-white transition-colors">Оферта</Link></li>
             </ul>
           </div>
