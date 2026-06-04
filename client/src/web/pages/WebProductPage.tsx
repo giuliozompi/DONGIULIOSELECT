@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Plus, Minus, ShoppingCart, Heart, ArrowLeft, Package } from 'lucide-react';
+import { ChevronRight, Plus, Minus, ShoppingCart, Heart, ArrowLeft, Package, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -25,6 +25,7 @@ export default function WebProductPage() {
   const [, setLocation] = useLocation();
   const [activeImg, setActiveImg] = useState(0);
   const [selectedVariation, setSelectedVariation] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { addItem, items, updateQuantity, removeItem } = useWebCart();
 
   const { data: product, isLoading } = useQuery({
@@ -40,6 +41,17 @@ export default function WebProductPage() {
     type: 'product',
     price: product?.price,
   });
+
+  const images = product?.images?.filter(Boolean) ?? [];
+  const hasMultiple = images.length > 1;
+
+  useEffect(() => {
+    if (!hasMultiple) return;
+    intervalRef.current = setInterval(() => {
+      setActiveImg(i => (i + 1) % images.length);
+    }, 5000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [hasMultiple, images.length]);
 
   if (isLoading) {
     return (
@@ -120,22 +132,45 @@ export default function WebProductPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
         {/* Gallery */}
         <div className="space-y-3">
-          <div className="aspect-square rounded-xl overflow-hidden bg-neutral-50 border border-neutral-200">
-            {product.images[activeImg] ? (
-              <img src={product.images[activeImg]} alt={product.name} className="w-full h-full object-cover" />
+          <div className="relative aspect-square rounded-xl overflow-hidden bg-neutral-50 border border-neutral-200">
+            {images[activeImg] ? (
+              <img src={images[activeImg]} alt={product.name} className="w-full h-full object-cover transition-all duration-700" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-neutral-300">
                 <ShoppingCart className="w-16 h-16" />
               </div>
             )}
+            {hasMultiple && (
+              <>
+                <button
+                  onClick={() => setActiveImg(i => (i - 1 + images.length) % images.length)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 rounded-full p-1.5 shadow hover:bg-white transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4 text-neutral-700" />
+                </button>
+                <button
+                  onClick={() => setActiveImg(i => (i + 1) % images.length)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 rounded-full p-1.5 shadow hover:bg-white transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4 text-neutral-700" />
+                </button>
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                  {images.map((_, i) => (
+                    <button key={i} onClick={() => setActiveImg(i)}
+                      className={`rounded-full transition-all duration-300 ${i === activeImg ? 'w-4 h-1.5 bg-amber-600' : 'w-1.5 h-1.5 bg-white/70'}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-          {product.images.length > 1 && (
+          {hasMultiple && (
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {product.images.map((img, i) => (
+              {images.map((img, i) => (
                 <button
                   key={i}
                   onClick={() => setActiveImg(i)}
-                  className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${i === activeImg ? 'border-amber-600' : 'border-transparent'}`}
+                  className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${i === activeImg ? 'border-amber-600' : 'border-neutral-200'}`}
                 >
                   <img src={img} alt="" className="w-full h-full object-cover" />
                 </button>
