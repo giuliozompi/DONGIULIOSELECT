@@ -18,6 +18,7 @@ import WebAddressesPage from './pages/WebAddressesPage';
 import WebAccountPage from './pages/WebAccountPage';
 import WebPrivacyPage from './pages/WebPrivacyPage';
 import WebDeliveryPage from './pages/WebDeliveryPage';
+import WebLegalPage from './pages/WebLegalPage';
 import WebNotFoundPage from './pages/WebNotFoundPage';
 import WebAdminLayout from './admin/WebAdminLayout';
 import AdminDashboard from './admin/pages/AdminDashboard';
@@ -87,6 +88,7 @@ function WebRouter() {
           <Route path="/web/account" component={WebAccountPage} />
           <Route path="/web/account/:section" component={WebAccountPage} />
           <Route path="/web/delivery" component={WebDeliveryPage} />
+          <Route path="/web/legal" component={WebLegalPage} />
           <Route path="/web/privacy" component={WebPrivacyPage} />
           <Route component={WebNotFoundPage} />
         </Switch>
