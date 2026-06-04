@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '../lib/adminApi';
 import { Badge } from '@/components/ui/badge';
@@ -16,11 +15,11 @@ function ActionLogsTab() {
     queryFn: () => adminApi.getActionLogs(),
   });
 
-  if (isLoading) return <div className="text-center py-8 text-muted-foreground">Caricamento...</div>;
+  if (isLoading) return <div className="text-center py-8 text-muted-foreground">Загрузка...</div>;
 
   return (
     <div className="space-y-2 mt-3">
-      {logs.length === 0 && <p className="text-center py-8 text-muted-foreground">Nessun log trovato</p>}
+      {logs.length === 0 && <p className="text-center py-8 text-muted-foreground">Логи не найдены</p>}
       {logs.map((log: any) => (
         <Card key={log.id}>
           <CardContent className="p-3">
@@ -42,7 +41,7 @@ function ActionLogsTab() {
                 )}
               </div>
               <div className="text-xs text-muted-foreground shrink-0">
-                {log.adminUserId ? `Admin: ${String(log.adminUserId).slice(-6)}` : ''}
+                {log.adminUserId ? `Адм.: ${String(log.adminUserId).slice(-6)}` : ''}
               </div>
             </div>
           </CardContent>
@@ -58,11 +57,11 @@ function OrderNotifLogsTab() {
     queryFn: () => adminApi.getOrderNotifLogs(),
   });
 
-  if (isLoading) return <div className="text-center py-8 text-muted-foreground">Caricamento...</div>;
+  if (isLoading) return <div className="text-center py-8 text-muted-foreground">Загрузка...</div>;
 
   return (
     <div className="space-y-2 mt-3">
-      {logs.length === 0 && <p className="text-center py-8 text-muted-foreground">Nessun log trovato</p>}
+      {logs.length === 0 && <p className="text-center py-8 text-muted-foreground">Логи не найдены</p>}
       {logs.map((log: any, i: number) => (
         <Card key={i}>
           <CardContent className="p-3">
@@ -73,11 +72,11 @@ function OrderNotifLogsTab() {
                   {log.channel && <Badge variant="secondary" className="text-xs shrink-0">{log.channel}</Badge>}
                   <span className="text-xs text-muted-foreground">{fmtDate(log.sentAt)}</span>
                 </div>
-                {log.orderId && <p className="text-xs mt-1 text-muted-foreground">Ordine #{String(log.orderId).slice(-6)}</p>}
+                {log.orderId && <p className="text-xs mt-1 text-muted-foreground">Заказ #{String(log.orderId).slice(-6)}</p>}
                 {log.errorMessage && <p className="text-xs mt-1 text-destructive">{log.errorMessage}</p>}
               </div>
               <Badge variant={log.success ? 'default' : 'destructive'} className="text-xs shrink-0">
-                {log.success ? 'OK' : 'Errore'}
+                {log.success ? 'OK' : 'Ошибка'}
               </Badge>
             </div>
           </CardContent>
@@ -90,11 +89,11 @@ function OrderNotifLogsTab() {
 export default function AdminLogs() {
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
-      <h1 className="text-2xl font-bold">Log di sistema</h1>
+      <h1 className="text-2xl font-bold">Системные логи</h1>
       <Tabs defaultValue="actions">
         <TabsList>
-          <TabsTrigger value="actions">Azioni admin</TabsTrigger>
-          <TabsTrigger value="notifications">Notifiche ordini</TabsTrigger>
+          <TabsTrigger value="actions">Действия адм.</TabsTrigger>
+          <TabsTrigger value="notifications">Уведомления заказов</TabsTrigger>
         </TabsList>
         <TabsContent value="actions"><ActionLogsTab /></TabsContent>
         <TabsContent value="notifications"><OrderNotifLogsTab /></TabsContent>

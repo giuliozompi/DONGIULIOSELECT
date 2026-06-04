@@ -9,19 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Search, Eye, Trash2, Plus, Minus, X, Percent, Tag, ChevronLeft } from 'lucide-react';
+import { Search, Eye, Trash2, Plus, Minus, X, Percent, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const STATUSES = [
-  { value: 'all', label: 'Tutti' },
-  { value: 'pending', label: 'In attesa' },
-  { value: 'confirmed', label: 'Confermato' },
-  { value: 'preparing', label: 'In preparazione' },
-  { value: 'ready', label: 'Pronto' },
-  { value: 'delivering', label: 'In consegna' },
-  { value: 'delivered', label: 'Consegnato' },
-  { value: 'completed', label: 'Completato' },
-  { value: 'cancelled', label: 'Annullato' },
+  { value: 'all', label: 'Все' },
+  { value: 'pending', label: 'Ожидает' },
+  { value: 'confirmed', label: 'Подтверждён' },
+  { value: 'preparing', label: 'Готовится' },
+  { value: 'ready', label: 'Готов' },
+  { value: 'delivering', label: 'Доставляется' },
+  { value: 'delivered', label: 'Доставлен' },
+  { value: 'completed', label: 'Завершён' },
+  { value: 'cancelled', label: 'Отменён' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -80,26 +80,26 @@ export default function AdminOrders() {
 
   const statusMut = useMutation({
     mutationFn: ({ status }: any) => adminApi.updateOrderStatus(selectedId!, status),
-    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); toast({ title: 'Stato aggiornato' }); },
-    onError: (e: any) => toast({ title: 'Errore', description: e.message, variant: 'destructive' }),
+    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); toast({ title: 'Статус обновлён' }); },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
   const qtyMut = useMutation({
     mutationFn: ({ productId, newQuantity }: any) => adminApi.updateQuantity(selectedId!, productId, newQuantity),
     onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); },
-    onError: (e: any) => toast({ title: 'Errore', description: e.message, variant: 'destructive' }),
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
   const removeProdMut = useMutation({
     mutationFn: (productId: string) => adminApi.removeProduct(selectedId!, productId),
     onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); },
-    onError: (e: any) => toast({ title: 'Errore', description: e.message, variant: 'destructive' }),
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
   const discountMut = useMutation({
     mutationFn: () => adminApi.applyDiscount(selectedId!, discType, discValue),
-    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); setDiscountDialog(false); toast({ title: 'Sconto applicato' }); },
-    onError: (e: any) => toast({ title: 'Errore', description: e.message, variant: 'destructive' }),
+    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); setDiscountDialog(false); toast({ title: 'Скидка применена' }); },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
   const addProdMut = useMutation({
@@ -108,14 +108,14 @@ export default function AdminOrders() {
       const qty = product?.unit === 'кг' ? parseFloat(addProdQty) || 0.2 : parseFloat(addProdQty) || 1;
       return adminApi.addProduct(selectedId!, addProdId, qty);
     },
-    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); setAddProdDialog(false); setAddProdId(''); setAddProdQty('1'); toast({ title: 'Prodotto aggiunto' }); },
-    onError: (e: any) => toast({ title: 'Errore', description: e.message, variant: 'destructive' }),
+    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); setAddProdDialog(false); setAddProdId(''); setAddProdQty('1'); toast({ title: 'Товар добавлен' }); },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminApi.deleteOrder(id),
-    onSuccess: () => { inv(); setSelectedId(null); toast({ title: 'Ordine eliminato' }); },
-    onError: (e: any) => toast({ title: 'Errore', description: e.message, variant: 'destructive' }),
+    onSuccess: () => { inv(); setSelectedId(null); toast({ title: 'Заказ удалён' }); },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
   function stepQty(item: any, delta: number) {
@@ -133,20 +133,20 @@ export default function AdminOrders() {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)}><ChevronLeft className="h-5 w-5" /></Button>
           <div>
-            <h1 className="text-lg font-bold">Ordine #{o?.id?.slice(-6).toUpperCase()}</h1>
+            <h1 className="text-lg font-bold">Заказ #{o?.id?.slice(-6).toUpperCase()}</h1>
             <p className="text-xs text-muted-foreground">{fmtDate(o?.createdAt)}</p>
           </div>
           {o && <Badge className={`ml-auto ${STATUS_COLORS[o.status] || ''}`}>{STATUSES.find(s => s.value === o.status)?.label || o.status}</Badge>}
         </div>
 
-        {loadOrder && <div className="text-center py-8 text-muted-foreground">Caricamento...</div>}
+        {loadOrder && <div className="text-center py-8 text-muted-foreground">Загрузка...</div>}
 
         {o && (
           <>
             <Card>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <p className="font-medium text-sm">Stato ordine</p>
+                  <p className="font-medium text-sm">Статус заказа</p>
                   <Select value={o.status} onValueChange={status => statusMut.mutate({ status })}>
                     <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -158,11 +158,11 @@ export default function AdminOrders() {
                 </div>
                 <Separator />
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div><p className="text-muted-foreground text-xs">Cliente</p><p className="font-medium">{o.customerName || '—'}</p></div>
-                  <div><p className="text-muted-foreground text-xs">Telefono</p><p className="font-medium">{o.customerPhone || '—'}</p></div>
-                  <div><p className="text-muted-foreground text-xs">Metodo</p><p className="font-medium capitalize">{o.paymentMethod || '—'}</p></div>
-                  <div><p className="text-muted-foreground text-xs">Consegna</p><p className="font-medium capitalize">{o.deliveryType || '—'}</p></div>
-                  {o.deliveryAddress && <div className="col-span-2"><p className="text-muted-foreground text-xs">Indirizzo</p><p className="font-medium">{o.deliveryAddress}</p></div>}
+                  <div><p className="text-muted-foreground text-xs">Клиент</p><p className="font-medium">{o.customerName || '—'}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Телефон</p><p className="font-medium">{o.customerPhone || '—'}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Оплата</p><p className="font-medium capitalize">{o.paymentMethod || '—'}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Доставка</p><p className="font-medium capitalize">{o.deliveryType || '—'}</p></div>
+                  {o.deliveryAddress && <div className="col-span-2"><p className="text-muted-foreground text-xs">Адрес</p><p className="font-medium">{o.deliveryAddress}</p></div>}
                 </div>
               </CardContent>
             </Card>
@@ -170,8 +170,8 @@ export default function AdminOrders() {
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Prodotti</CardTitle>
-                  <Button size="sm" variant="outline" onClick={() => setAddProdDialog(true)}><Plus className="h-3.5 w-3.5 mr-1" />Aggiungi</Button>
+                  <CardTitle className="text-base">Товары</CardTitle>
+                  <Button size="sm" variant="outline" onClick={() => setAddProdDialog(true)}><Plus className="h-3.5 w-3.5 mr-1" />Добавить</Button>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -188,7 +188,7 @@ export default function AdminOrders() {
                         <Button size="icon" variant="outline" onClick={() => stepQty(item, 1)} disabled={qtyMut.isPending}><Plus className="h-3 w-3" /></Button>
                       </div>
                       <p className="font-medium text-sm shrink-0 w-20 text-right">{fmt(parseFloat(item.price) * item.quantity)}</p>
-                      <Button size="icon" variant="ghost" className="text-destructive shrink-0" onClick={() => { if (confirm('Rimuovere?')) removeProdMut.mutate(item.productId); }}><X className="h-3.5 w-3.5" /></Button>
+                      <Button size="icon" variant="ghost" className="text-destructive shrink-0" onClick={() => { if (confirm('Удалить товар из заказа?')) removeProdMut.mutate(item.productId); }}><X className="h-3.5 w-3.5" /></Button>
                     </div>
                   ))}
                 </div>
@@ -198,83 +198,81 @@ export default function AdminOrders() {
             <Card>
               <CardContent className="p-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotale</span>
+                  <span className="text-muted-foreground">Подытог</span>
                   <span>{fmt((o.items || []).reduce((s: number, i: any) => s + parseFloat(i.price) * i.quantity, 0))}</span>
                 </div>
                 {parseFloat(o.discount || '0') > 0 && (
                   <div className="flex justify-between text-sm text-green-600">
-                    <span>Sconto {o.discountType === 'percentage' ? `(${o.discountValue}%)` : '(fisso)'}</span>
-                    <span>- {fmt(o.discount)}</span>
+                    <span>Скидка {o.discountType === 'percentage' ? `(${o.discountValue}%)` : '(фиксированная)'}</span>
+                    <span>− {fmt(o.discount)}</span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between font-bold">
-                  <span>Totale</span>
+                  <span>Итого</span>
                   <span>{fmt(o.amount)}</span>
                 </div>
                 <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => { setDiscType('percentage'); setDiscValue(''); setDiscountDialog(true); }}>
-                  <Percent className="h-3.5 w-3.5 mr-1" />Applica sconto
+                  <Percent className="h-3.5 w-3.5 mr-1" />Применить скидку
                 </Button>
               </CardContent>
             </Card>
 
             <div className="flex justify-end">
-              <Button variant="destructive" size="sm" onClick={() => { if (confirm('Eliminare definitivamente?')) deleteMut.mutate(o.id); }}>
-                <Trash2 className="h-3.5 w-3.5 mr-1" />Elimina ordine
+              <Button variant="destructive" size="sm" onClick={() => { if (confirm('Удалить заказ навсегда?')) deleteMut.mutate(o.id); }}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" />Удалить заказ
               </Button>
             </div>
           </>
         )}
 
-        {/* Discount dialog */}
         <Dialog open={discountDialog} onOpenChange={setDiscountDialog}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>Applica sconto</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Применить скидку</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
               <div className="space-y-1.5">
-                <Label>Tipo</Label>
+                <Label>Тип</Label>
                 <Select value={discType} onValueChange={setDiscType}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="percentage">Percentuale (%)</SelectItem>
-                    <SelectItem value="fixed">Fisso (₽)</SelectItem>
+                    <SelectItem value="percentage">Процент (%)</SelectItem>
+                    <SelectItem value="fixed">Фиксированный (₽)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Valore</Label>
-                <Input type="number" value={discValue} onChange={e => setDiscValue(e.target.value)} placeholder={discType === 'percentage' ? 'es. 10' : 'es. 500'} />
+                <Label>Значение</Label>
+                <Input type="number" value={discValue} onChange={e => setDiscValue(e.target.value)} placeholder={discType === 'percentage' ? 'напр. 10' : 'напр. 500'} />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDiscountDialog(false)}>Annulla</Button>
-              <Button onClick={() => discountMut.mutate()} disabled={!discValue || discountMut.isPending}>Applica</Button>
+              <Button variant="outline" onClick={() => setDiscountDialog(false)}>Отмена</Button>
+              <Button onClick={() => discountMut.mutate()} disabled={!discValue || discountMut.isPending}>Применить</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Add product dialog */}
         <Dialog open={addProdDialog} onOpenChange={setAddProdDialog}>
           <DialogContent className="max-w-sm">
-            <DialogHeader><DialogTitle>Aggiungi prodotto</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Добавить товар</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
               <div className="space-y-1.5">
-                <Label>Prodotto</Label>
+                <Label>Товар</Label>
                 <Select value={addProdId} onValueChange={setAddProdId}>
-                  <SelectTrigger><SelectValue placeholder="Seleziona..." /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Выберите товар..." /></SelectTrigger>
                   <SelectContent>
                     {allProducts.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Quantità</Label>
+                <Label>Количество</Label>
                 <Input type="number" step={allProducts.find((p: any) => p.id === addProdId)?.unit === 'кг' ? '0.1' : '1'} min={allProducts.find((p: any) => p.id === addProdId)?.unit === 'кг' ? '0.2' : '1'} value={addProdQty} onChange={e => setAddProdQty(e.target.value)} />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setAddProdDialog(false)}>Annulla</Button>
-              <Button onClick={() => addProdMut.mutate()} disabled={!addProdId || addProdMut.isPending}>Aggiungi</Button>
+              <Button variant="outline" onClick={() => setAddProdDialog(false)}>Отмена</Button>
+              <Button onClick={() => addProdMut.mutate()} disabled={!addProdId || addProdMut.isPending}>Добавить</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -284,12 +282,12 @@ export default function AdminOrders() {
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4">
-      <h1 className="text-2xl font-bold">Ordini</h1>
+      <h1 className="text-2xl font-bold">Заказы</h1>
 
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-40">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Cerca per nome, telefono, ID..." value={search} onChange={e => setSearch(e.target.value)} />
+          <Input className="pl-9" placeholder="Поиск по имени, телефону, ID..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
@@ -299,17 +297,17 @@ export default function AdminOrders() {
         </Select>
       </div>
 
-      {isLoading && <div className="text-center py-8 text-muted-foreground">Caricamento...</div>}
+      {isLoading && <div className="text-center py-8 text-muted-foreground">Загрузка...</div>}
 
       <div className="rounded-md border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
               <th className="text-left p-3 font-medium">ID</th>
-              <th className="text-left p-3 font-medium hidden md:table-cell">Cliente</th>
-              <th className="text-left p-3 font-medium hidden md:table-cell">Data</th>
-              <th className="text-right p-3 font-medium">Totale</th>
-              <th className="text-center p-3 font-medium">Stato</th>
+              <th className="text-left p-3 font-medium hidden md:table-cell">Клиент</th>
+              <th className="text-left p-3 font-medium hidden md:table-cell">Дата</th>
+              <th className="text-right p-3 font-medium">Сумма</th>
+              <th className="text-center p-3 font-medium">Статус</th>
               <th className="p-3" />
             </tr>
           </thead>
@@ -331,7 +329,7 @@ export default function AdminOrders() {
               </tr>
             ))}
             {orders.length === 0 && !isLoading && (
-              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nessun ordine trovato</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Заказы не найдены</td></tr>
             )}
           </tbody>
         </table>

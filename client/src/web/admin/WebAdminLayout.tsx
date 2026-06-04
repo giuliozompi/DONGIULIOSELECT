@@ -13,13 +13,13 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 const NAV = [
-  { path: '/web/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { path: '/web/admin/categories', label: 'Categorie', icon: Tag },
-  { path: '/web/admin/products', label: 'Prodotti', icon: Package },
-  { path: '/web/admin/orders', label: 'Ordini', icon: ShoppingCart },
-  { path: '/web/admin/clients', label: 'Clienti', icon: Users },
-  { path: '/web/admin/logs', label: 'Log', icon: FileText },
-  { path: '/web/admin/settings', label: 'Impostazioni', icon: Settings },
+  { path: '/web/admin', label: 'Дашборд', icon: LayoutDashboard, exact: true },
+  { path: '/web/admin/categories', label: 'Категории', icon: Tag },
+  { path: '/web/admin/products', label: 'Товары', icon: Package },
+  { path: '/web/admin/orders', label: 'Заказы', icon: ShoppingCart },
+  { path: '/web/admin/clients', label: 'Клиенты', icon: Users },
+  { path: '/web/admin/logs', label: 'Логи', icon: FileText },
+  { path: '/web/admin/settings', label: 'Настройки', icon: Settings },
 ];
 
 function NavItem({ item, active, onClick }: { item: typeof NAV[0]; active: boolean; onClick?: () => void }) {
@@ -58,7 +58,7 @@ function AdminLoginForm({ onSuccess }: { onSuccess: () => void }) {
       await login(email, password);
       onSuccess();
     } catch (err: any) {
-      setError(err.message || 'Credenziali non valide');
+      setError(err.message || 'Неверные учётные данные');
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ function AdminLoginForm({ onSuccess }: { onSuccess: () => void }) {
           <div className="text-center space-y-2">
             <Shield className="h-10 w-10 text-primary mx-auto" />
             <h1 className="text-xl font-semibold">Don Giulio Admin</h1>
-            <p className="text-sm text-muted-foreground">Accedi al pannello di amministrazione</p>
+            <p className="text-sm text-muted-foreground">Войдите в панель управления</p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
@@ -81,14 +81,14 @@ function AdminLoginForm({ onSuccess }: { onSuccess: () => void }) {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="email@esempio.com"
+                placeholder="email@example.com"
                 required
                 autoComplete="email"
                 data-testid="input-admin-email"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="admin-password">Password</Label>
+              <Label htmlFor="admin-password">Пароль</Label>
               <div className="relative">
                 <Input
                   id="admin-password"
@@ -115,12 +115,12 @@ function AdminLoginForm({ onSuccess }: { onSuccess: () => void }) {
               <p className="text-sm text-destructive">{error}</p>
             )}
             <Button type="submit" className="w-full" disabled={loading} data-testid="button-admin-login">
-              {loading ? 'Accesso in corso...' : 'Accedi'}
+              {loading ? 'Вход...' : 'Войти'}
             </Button>
           </form>
           <div className="text-center">
             <Link href="/web" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
-              Torna al sito
+              На сайт
             </Link>
           </div>
         </div>
@@ -150,7 +150,7 @@ export default function WebAdminLayout({ children }: { children: React.ReactNode
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center space-y-2">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground">Caricamento...</p>
+          <p className="text-sm text-muted-foreground">Загрузка...</p>
         </div>
       </div>
     );
@@ -187,7 +187,7 @@ export default function WebAdminLayout({ children }: { children: React.ReactNode
       <div className="p-3 border-t">
         <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground" onClick={logout}>
           <LogOut className="h-4 w-4" />
-          Esci
+          Выйти
         </Button>
       </div>
     </div>
@@ -195,12 +195,10 @@ export default function WebAdminLayout({ children }: { children: React.ReactNode
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-56 border-r bg-card shrink-0">
         <SidebarContent />
       </aside>
 
-      {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
@@ -210,7 +208,6 @@ export default function WebAdminLayout({ children }: { children: React.ReactNode
         </div>
       )}
 
-      {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <header className="flex items-center gap-3 px-4 py-3 border-b bg-card shrink-0">
           <Button

@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Pencil, Trash2, EyeOff, Package, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -39,13 +38,13 @@ export default function AdminProducts() {
 
   const saveMut = useMutation({
     mutationFn: (d: any) => dialog.editing ? adminApi.updateProduct(dialog.editing.id, d) : adminApi.createProduct(d),
-    onSuccess: () => { invalidate(); closeDialog(); toast({ title: dialog.editing ? 'Prodotto aggiornato' : 'Prodotto creato' }); },
-    onError: (e: any) => toast({ title: 'Errore', description: e.message, variant: 'destructive' }),
+    onSuccess: () => { invalidate(); closeDialog(); toast({ title: dialog.editing ? 'Товар обновлён' : 'Товар создан' }); },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminApi.deleteProduct(id),
-    onSuccess: () => { invalidate(); toast({ title: 'Prodotto eliminato' }); },
-    onError: (e: any) => toast({ title: 'Errore', description: e.message, variant: 'destructive' }),
+    onSuccess: () => { invalidate(); toast({ title: 'Товар удалён' }); },
+    onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
   const stockMut = useMutation({
     mutationFn: ({ id, inStock }: any) => adminApi.toggleStock(id, inStock),
@@ -115,35 +114,35 @@ export default function AdminProducts() {
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold">Prodotti</h1>
-        <Button onClick={() => openDialog()} size="sm"><Plus className="h-4 w-4 mr-1" />Nuovo</Button>
+        <h1 className="text-2xl font-bold">Товары</h1>
+        <Button onClick={() => openDialog()} size="sm"><Plus className="h-4 w-4 mr-1" />Создать</Button>
       </div>
 
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-40">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Cerca prodotto..." value={search} onChange={e => setSearch(e.target.value)} />
+          <Input className="pl-9" placeholder="Поиск товара..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={catFilter} onValueChange={setCatFilter}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tutte le categorie</SelectItem>
+            <SelectItem value="all">Все категории</SelectItem>
             {cats.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
 
-      {isLoading && <div className="text-center py-8 text-muted-foreground">Caricamento...</div>}
+      {isLoading && <div className="text-center py-8 text-muted-foreground">Загрузка...</div>}
 
       <div className="rounded-md border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
-              <th className="text-left p-3 font-medium">Prodotto</th>
-              <th className="text-left p-3 font-medium hidden md:table-cell">Categoria</th>
-              <th className="text-right p-3 font-medium">Prezzo</th>
-              <th className="text-center p-3 font-medium">Stock</th>
-              <th className="text-center p-3 font-medium hidden md:table-cell">Visibile</th>
+              <th className="text-left p-3 font-medium">Товар</th>
+              <th className="text-left p-3 font-medium hidden md:table-cell">Категория</th>
+              <th className="text-right p-3 font-medium">Цена</th>
+              <th className="text-center p-3 font-medium">Наличие</th>
+              <th className="text-center p-3 font-medium hidden md:table-cell">Видимый</th>
               <th className="p-3" />
             </tr>
           </thead>
@@ -175,13 +174,13 @@ export default function AdminProducts() {
                 <td className="p-3">
                   <div className="flex gap-1 justify-end">
                     <Button size="icon" variant="ghost" onClick={() => openDialog(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="text-destructive" onClick={() => { if (confirm('Eliminare?')) deleteMut.mutate(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="text-destructive" onClick={() => { if (confirm('Удалить товар?')) deleteMut.mutate(p.id); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && !isLoading && (
-              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nessun prodotto trovato</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Товары не найдены</td></tr>
             )}
           </tbody>
         </table>
@@ -190,12 +189,12 @@ export default function AdminProducts() {
       <Dialog open={dialog.open} onOpenChange={v => !v && closeDialog()}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{dialog.editing ? 'Modifica prodotto' : 'Nuovo prodotto'}</DialogTitle>
+            <DialogTitle>{dialog.editing ? 'Редактировать товар' : 'Новый товар'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 space-y-1.5">
-                <Label>Nome</Label>
+                <Label>Название</Label>
                 <Input value={form.name} onChange={e => handleSlug(e.target.value)} />
               </div>
               <div className="space-y-1.5">
@@ -203,25 +202,25 @@ export default function AdminProducts() {
                 <Input value={form.slug} onChange={e => set('slug', e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label>Categoria</Label>
+                <Label>Категория</Label>
                 <Select value={form.categoryId || 'none'} onValueChange={v => set('categoryId', v === 'none' ? '' : v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Nessuna</SelectItem>
+                    <SelectItem value="none">Без категории</SelectItem>
                     {cats.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Prezzo (₽)</Label>
+                <Label>Цена (₽)</Label>
                 <Input type="number" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label>Prezzo precedente (₽)</Label>
-                <Input type="number" step="0.01" value={form.oldPrice} onChange={e => set('oldPrice', e.target.value)} placeholder="Opzionale" />
+                <Label>Старая цена (₽)</Label>
+                <Input type="number" step="0.01" value={form.oldPrice} onChange={e => set('oldPrice', e.target.value)} placeholder="Необязательно" />
               </div>
               <div className="space-y-1.5">
-                <Label>Unità di misura</Label>
+                <Label>Единица измерения</Label>
                 <Select value={form.unit} onValueChange={v => set('unit', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -230,36 +229,36 @@ export default function AdminProducts() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Priorità ordinamento</Label>
+                <Label>Приоритет сортировки</Label>
                 <Input type="number" value={form.sortPriority} onChange={e => set('sortPriority', e.target.value)} />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Descrizione</Label>
+              <Label>Описание</Label>
               <Textarea rows={3} value={form.description} onChange={e => set('description', e.target.value)} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="flex items-center gap-3">
                 <Switch checked={form.inStock} onCheckedChange={v => set('inStock', v)} />
-                <Label>Disponibile</Label>
+                <Label>В наличии</Label>
               </div>
               <div className="flex items-center gap-3">
                 <Switch checked={form.isVisible} onCheckedChange={v => set('isVisible', v)} />
-                <Label>Visibile</Label>
+                <Label>Видимый</Label>
               </div>
               <div className="flex items-center gap-3">
                 <Switch checked={form.requiresMarking} onCheckedChange={v => set('requiresMarking', v)} />
-                <Label>Richiede marcatura</Label>
+                <Label>Требует маркировки</Label>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Immagini (URL)</Label>
+              <Label>Изображения (URL)</Label>
               <div className="flex gap-2">
                 <Input placeholder="https://..." value={imgInput} onChange={e => setImgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addImage()} />
-                <Button type="button" variant="outline" onClick={addImage}>Aggiungi</Button>
+                <Button type="button" variant="outline" onClick={addImage}>Добавить</Button>
               </div>
               {form.images.length > 0 && (
                 <div className="flex gap-2 flex-wrap">
@@ -271,34 +270,39 @@ export default function AdminProducts() {
                   ))}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">Per caricare immagini, usare l'app Telegram (pannello admin).</p>
+              <p className="text-xs text-muted-foreground">Для загрузки изображений используйте приложение Telegram (панель администратора).</p>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Valori nutrizionali</Label>
+              <Label className="text-sm font-medium">Пищевая ценность</Label>
               <div className="grid grid-cols-4 gap-2">
-                {['proteins','fats','carbs','calories'].map(k => (
-                  <div key={k} className="space-y-1">
-                    <Label className="text-xs capitalize">{k === 'proteins' ? 'Proteine' : k === 'fats' ? 'Grassi' : k === 'carbs' ? 'Carboidrati' : 'Calorie'}</Label>
-                    <Input value={form[k]} onChange={e => set(k, e.target.value)} placeholder="—" />
+                {[
+                  { key: 'proteins', label: 'Белки' },
+                  { key: 'fats', label: 'Жиры' },
+                  { key: 'carbs', label: 'Углеводы' },
+                  { key: 'calories', label: 'Калории' },
+                ].map(({ key, label }) => (
+                  <div key={key} className="space-y-1">
+                    <Label className="text-xs">{label}</Label>
+                    <Input value={form[key]} onChange={e => set(key, e.target.value)} placeholder="—" />
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Ingredienti</Label>
+              <Label>Ингредиенты</Label>
               <Textarea rows={2} value={form.ingredients} onChange={e => set('ingredients', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Informazioni aggiuntive</Label>
+              <Label>Дополнительная информация</Label>
               <Textarea rows={2} value={form.additionalInfo} onChange={e => set('additionalInfo', e.target.value)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Annulla</Button>
+            <Button variant="outline" onClick={closeDialog}>Отмена</Button>
             <Button onClick={handleSave} disabled={saveMut.isPending}>
-              {saveMut.isPending ? 'Salvataggio...' : 'Salva'}
+              {saveMut.isPending ? 'Сохранение...' : 'Сохранить'}
             </Button>
           </DialogFooter>
         </DialogContent>

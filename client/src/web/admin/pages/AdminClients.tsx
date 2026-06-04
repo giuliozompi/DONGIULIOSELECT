@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Search, ChevronLeft, ShoppingCart, User } from 'lucide-react';
 
 function fmtDate(d: string) {
@@ -16,6 +15,17 @@ function fmtDate(d: string) {
 function fmt(n: string | number) {
   return `₽${parseFloat(String(n)).toFixed(0)}`;
 }
+
+const STATUS_RU: Record<string, string> = {
+  pending: 'Ожидает',
+  confirmed: 'Подтверждён',
+  preparing: 'Готовится',
+  ready: 'Готов',
+  delivering: 'Доставляется',
+  delivered: 'Доставлен',
+  completed: 'Завершён',
+  cancelled: 'Отменён',
+};
 
 export default function AdminClients() {
   const [search, setSearch] = useState('');
@@ -50,10 +60,10 @@ export default function AdminClients() {
       <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)}><ChevronLeft className="h-5 w-5" /></Button>
-          <h1 className="text-lg font-bold">Profilo cliente</h1>
+          <h1 className="text-lg font-bold">Профиль клиента</h1>
         </div>
 
-        {loadClient && <div className="text-center py-8 text-muted-foreground">Caricamento...</div>}
+        {loadClient && <div className="text-center py-8 text-muted-foreground">Загрузка...</div>}
 
         {cl && (
           <>
@@ -64,17 +74,17 @@ export default function AdminClients() {
                     <User className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <p className="font-semibold">{[cl.firstName, cl.lastName].filter(Boolean).join(' ') || 'Senza nome'}</p>
+                    <p className="font-semibold">{[cl.firstName, cl.lastName].filter(Boolean).join(' ') || 'Без имени'}</p>
                     {cl.username && <p className="text-sm text-muted-foreground">@{cl.username}</p>}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><p className="text-xs text-muted-foreground">Telegram ID</p><p className="font-mono">{cl.telegramId}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Lingua</p><p>{cl.languageCode || '—'}</p></div>
-                  {cl.phone && <div><p className="text-xs text-muted-foreground">Telefono</p><p>{cl.phone}</p></div>}
-                  <div><p className="text-xs text-muted-foreground">Registrato</p><p>{fmtDate(cl.createdAt)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Spin token</p><p>{cl.spinTokens ?? 0}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Attivo</p><p>{cl.isActive ? 'Sì' : 'No'}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Язык</p><p>{cl.languageCode || '—'}</p></div>
+                  {cl.phone && <div><p className="text-xs text-muted-foreground">Телефон</p><p>{cl.phone}</p></div>}
+                  <div><p className="text-xs text-muted-foreground">Зарегистрирован</p><p>{fmtDate(cl.createdAt)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Spin-токены</p><p>{cl.spinTokens ?? 0}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Активен</p><p>{cl.isActive ? 'Да' : 'Нет'}</p></div>
                 </div>
                 {cl.email && (
                   <div className="mt-3 text-sm">
@@ -90,7 +100,7 @@ export default function AdminClients() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     <ShoppingCart className="h-4 w-4" />
-                    Ordini ({cl.orders.length})
+                    Заказы ({cl.orders.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -103,7 +113,7 @@ export default function AdminClients() {
                         </div>
                         <div className="text-right">
                           <p className="font-medium">{fmt(o.amount)}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{o.status}</p>
+                          <p className="text-xs text-muted-foreground">{STATUS_RU[o.status] || o.status}</p>
                         </div>
                       </div>
                     ))}
@@ -119,23 +129,23 @@ export default function AdminClients() {
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4">
-      <h1 className="text-2xl font-bold">Clienti</h1>
+      <h1 className="text-2xl font-bold">Клиенты</h1>
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input className="pl-9" placeholder="Cerca per nome, username, telefono..." value={search} onChange={e => setSearch(e.target.value)} />
+        <Input className="pl-9" placeholder="Поиск по имени, username, телефону..." value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
-      {isLoading && <div className="text-center py-8 text-muted-foreground">Caricamento...</div>}
+      {isLoading && <div className="text-center py-8 text-muted-foreground">Загрузка...</div>}
 
       <div className="rounded-md border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
-              <th className="text-left p-3 font-medium">Cliente</th>
+              <th className="text-left p-3 font-medium">Клиент</th>
               <th className="text-left p-3 font-medium hidden md:table-cell">Username</th>
-              <th className="text-left p-3 font-medium hidden lg:table-cell">Registrato</th>
-              <th className="text-center p-3 font-medium">Token</th>
+              <th className="text-left p-3 font-medium hidden lg:table-cell">Зарегистрирован</th>
+              <th className="text-center p-3 font-medium">Токены</th>
               <th className="p-3" />
             </tr>
           </thead>
@@ -143,7 +153,7 @@ export default function AdminClients() {
             {filtered.map((c: any) => (
               <tr key={c.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedId(c.id)}>
                 <td className="p-3">
-                  <p className="font-medium">{[c.firstName, c.lastName].filter(Boolean).join(' ') || 'Senza nome'}</p>
+                  <p className="font-medium">{[c.firstName, c.lastName].filter(Boolean).join(' ') || 'Без имени'}</p>
                   <p className="text-xs text-muted-foreground font-mono">{c.telegramId}</p>
                 </td>
                 <td className="p-3 hidden md:table-cell text-muted-foreground">
@@ -161,7 +171,7 @@ export default function AdminClients() {
               </tr>
             ))}
             {filtered.length === 0 && !isLoading && (
-              <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Nessun cliente trovato</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">Клиенты не найдены</td></tr>
             )}
           </tbody>
         </table>
