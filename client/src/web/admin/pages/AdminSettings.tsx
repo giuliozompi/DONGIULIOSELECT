@@ -363,11 +363,25 @@ export default function AdminSettings() {
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
       <h1 className="text-2xl font-bold">Настройки</h1>
       <Tabs defaultValue="admins">
-        <TabsList>
-          <TabsTrigger value="admins">Администраторы</TabsTrigger>
-          <TabsTrigger value="addresses">Адреса самовывоза</TabsTrigger>
-          <TabsTrigger value="associations">Связанные товары</TabsTrigger>
-          {isMasterAdmin && <TabsTrigger value="notifications">Уведомления</TabsTrigger>}
+        <TabsList className="flex flex-col sm:flex-row h-auto sm:h-10 w-full sm:w-auto gap-0.5 sm:gap-0 p-1">
+          <TabsTrigger value="admins" className="w-full sm:w-auto justify-start sm:justify-center text-left sm:text-center">
+            <Shield className="h-4 w-4 mr-2 sm:hidden" />
+            Администраторы
+          </TabsTrigger>
+          <TabsTrigger value="addresses" className="w-full sm:w-auto justify-start sm:justify-center text-left sm:text-center">
+            <MapPin className="h-4 w-4 mr-2 sm:hidden" />
+            Адреса самовывоза
+          </TabsTrigger>
+          <TabsTrigger value="associations" className="w-full sm:w-auto justify-start sm:justify-center text-left sm:text-center">
+            <Link2 className="h-4 w-4 mr-2 sm:hidden" />
+            Связанные товары
+          </TabsTrigger>
+          {isMasterAdmin && (
+            <TabsTrigger value="notifications" className="w-full sm:w-auto justify-start sm:justify-center text-left sm:text-center">
+              <Bell className="h-4 w-4 mr-2 sm:hidden" />
+              Уведомления
+            </TabsTrigger>
+          )}
         </TabsList>
         <TabsContent value="admins"><AdminsTab /></TabsContent>
         <TabsContent value="addresses"><PickupAddressesTab /></TabsContent>
