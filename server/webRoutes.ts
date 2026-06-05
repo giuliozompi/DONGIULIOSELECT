@@ -814,17 +814,35 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   app.get('/web-api/admin/analytics/top-products', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = z.object({ startDate: z.string(), endDate: z.string() }).parse(req.query);
-      const snaps = await db.select({ id: analyticsSnapshots.id }).from(analyticsSnapshots).where(and(gte(analyticsSnapshots.snapshotDate, startDate), lte(analyticsSnapshots.snapshotDate, endDate)));
-      if (!snaps.length) return res.json([]);
-      const ids = snaps.map(s => s.id);
-      const rows = await db.select().from(analyticsTopProducts).where(sql`${analyticsTopProducts.snapshotId} = ANY(${sql.raw(`ARRAY['${ids.join("','")}']::varchar[]`)})`);
+      // Read directly from orders for accurate, always-current data
+      const ordersData = await db
+        .select()
+        .from(orders)
+        .where(and(
+          gte(orders.createdAt, sql`${startDate + ' 00:00:00'}::timestamp`),
+          lte(orders.createdAt, sql`${endDate + ' 23:59:59'}::timestamp`)
+        ));
       const agg: Record<string, { productId: string; productName: string; totalQuantity: number; totalRevenue: number }> = {};
-      for (const r of rows) {
-        if (!agg[r.productId]) agg[r.productId] = { productId: r.productId, productName: r.productName||r.productId, totalQuantity: 0, totalRevenue: 0 };
-        agg[r.productId].totalQuantity += parseFloat(String(r.unitsSold||0));
-        agg[r.productId].totalRevenue += parseFloat(String(r.revenue||'0'));
+      for (const order of ordersData) {
+        const items = (order.items as Array<{ productId?: string; productName?: string; quantity?: number; price?: string }>) || [];
+        for (const item of items) {
+          if (!item.productId) continue;
+          const qty = parseFloat(String(item.quantity ?? 0));
+          if (!qty || qty <= 0) continue;
+          const price = parseFloat(String(item.price ?? 0));
+          const rev = isNaN(price) ? 0 : qty * price;
+          if (!agg[item.productId]) {
+            agg[item.productId] = { productId: item.productId, productName: item.productName || item.productId, totalQuantity: 0, totalRevenue: 0 };
+          }
+          agg[item.productId].totalQuantity += qty;
+          agg[item.productId].totalRevenue += rev;
+        }
       }
-      res.json(Object.values(agg).sort((a,b) => b.totalQuantity - a.totalQuantity).slice(0,10));
+      const result = Object.values(agg)
+        .map(p => ({ ...p, totalQuantity: parseFloat(p.totalQuantity.toFixed(3)) }))
+        .sort((a, b) => b.totalQuantity - a.totalQuantity)
+        .slice(0, 10);
+      res.json(result);
     } catch(e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
   });
 
