@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { TrendingUp, ShoppingCart, Users, Banknote, RotateCcw, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, LabelList, Cell,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, LabelList,
 } from 'recharts';
 
 const RANGES = [
@@ -23,6 +23,10 @@ function dateStr(d: Date) {
 
 function fmt(n: string | number) {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(Number(n));
+}
+
+function fmtQty(v: number) {
+  return v % 1 === 0 ? String(v) : v.toFixed(3);
 }
 
 export default function AdminDashboard() {
@@ -75,10 +79,12 @@ export default function AdminDashboard() {
   }));
 
   const topData = topProducts.slice(0, 10).map((p: any) => ({
-    name: (p.productName || '').slice(0, 20),
+    name: (p.productName || '').slice(0, 22),
     Количество: parseFloat((p.totalQuantity ?? 0).toFixed(3)),
     Выручка: Math.round(p.totalRevenue ?? 0),
   }));
+
+  const chartHeight = Math.max(280, topData.length * 38);
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
@@ -100,7 +106,7 @@ export default function AdminDashboard() {
             size="sm"
             onClick={() => backfillMut.mutate()}
             disabled={backfillMut.isPending}
-            title="Pересчитать данные за выбранный период"
+            title="Пересчитать данные за выбранный период"
           >
             <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${backfillMut.isPending ? 'animate-spin' : ''}`} />
             Пересчитать
@@ -173,52 +179,94 @@ export default function AdminDashboard() {
           )}
 
           {topData.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">
-                  Топ-{topData.length} товаров
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">по количеству проданных единиц</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={Math.max(260, topData.length * 36)}>
-                  <BarChart
-                    data={topData}
-                    layout="vertical"
-                    margin={{ left: 8, right: 48, top: 4, bottom: 4 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" className="opacity-30" horizontal={false} />
-                    <XAxis
-                      type="number"
-                      tick={{ fontSize: 11 }}
-                      allowDecimals={true}
-                      tickFormatter={(v) => v % 1 === 0 ? v : v.toFixed(3)}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={130}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      formatter={(value: number, name: string) => {
-                        if (name === 'Количество') return [value % 1 === 0 ? value : value.toFixed(3), 'Кол-во'];
-                        if (name === 'Выручка') return [fmt(value), 'Выручка'];
-                        return [value, name];
-                      }}
-                    />
-                    <Bar dataKey="Количество" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]}>
-                      <LabelList
-                        dataKey="Количество"
-                        position="right"
-                        style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                        formatter={(v: number) => v % 1 === 0 ? v : v.toFixed(3)}
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Chart: quantity */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">
+                    Топ-{topData.length} товаров
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">по кол-ву единиц (ПОЛУЧЕН)</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={chartHeight}>
+                    <BarChart
+                      data={topData}
+                      layout="vertical"
+                      margin={{ left: 8, right: 52, top: 4, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 11 }}
+                        allowDecimals={true}
+                        tickFormatter={fmtQty}
                       />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={130}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [fmtQty(value), 'Кол-во']}
+                      />
+                      <Bar dataKey="Количество" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]}>
+                        <LabelList
+                          dataKey="Количество"
+                          position="right"
+                          style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                          formatter={fmtQty}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Chart: revenue */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">
+                    Топ-{topData.length} товаров
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">по выручке ₽ (ПОЛУЧЕН)</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={chartHeight}>
+                    <BarChart
+                      data={[...topData].sort((a, b) => b.Выручка - a.Выручка)}
+                      layout="vertical"
+                      margin={{ left: 8, right: 72, top: 4, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        tick={{ fontSize: 11 }}
+                        tickFormatter={(v) => `₽${(v / 1000).toFixed(0)}к`}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={130}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [fmt(value), 'Выручка']}
+                      />
+                      <Bar dataKey="Выручка" fill="hsl(var(--primary) / 0.7)" radius={[0, 3, 3, 0]}>
+                        <LabelList
+                          dataKey="Выручка"
+                          position="right"
+                          style={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                          formatter={(v: number) => fmt(v)}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {tsData.length === 0 && topData.length === 0 && (

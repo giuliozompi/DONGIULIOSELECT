@@ -814,13 +814,14 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   app.get('/web-api/admin/analytics/top-products', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = z.object({ startDate: z.string(), endDate: z.string() }).parse(req.query);
-      // Read directly from orders for accurate, always-current data
+      // Read directly from DELIVERED orders (ПОЛУЧЕН) for accurate top-products data
       const ordersData = await db
         .select()
         .from(orders)
         .where(and(
           gte(orders.createdAt, sql`${startDate + ' 00:00:00'}::timestamp`),
-          lte(orders.createdAt, sql`${endDate + ' 23:59:59'}::timestamp`)
+          lte(orders.createdAt, sql`${endDate + ' 23:59:59'}::timestamp`),
+          eq(orders.status, 'ПОЛУЧЕН')
         ));
       const agg: Record<string, { productId: string; productName: string; totalQuantity: number; totalRevenue: number }> = {};
       for (const order of ordersData) {
