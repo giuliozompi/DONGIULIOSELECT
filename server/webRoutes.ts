@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { backfillHistoricalData } from './services/analytics-aggregation';
 import cookieParser from 'cookie-parser';
 import { db } from './db';
-import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs } from '../shared/schema';
+import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs, userAddresses } from '../shared/schema';
 import { getAllChannelSettings, setChannelEnabled, getUserPreferences, setUserPreference } from './services/notification-settings';
 import { eq, and, gt, or, ilike, desc, sql, lt, gte, lte, asc } from 'drizzle-orm';
 import { storage } from './storage';
@@ -1056,7 +1056,29 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       const user = await storage.getUser(req.params.id);
       if (!user) return res.status(404).json({ error: 'Not found' });
       const userOrders = await storage.getOrdersByUserId(req.params.id);
-      res.json({ ...user, orders: userOrders });
+
+      // Saved addresses from user_addresses table
+      const savedAddresses = await db
+        .select()
+        .from(userAddresses)
+        .where(eq(userAddresses.userId, req.params.id))
+        .orderBy(desc(userAddresses.isDefault), asc(userAddresses.createdAt));
+
+      // Unique delivery addresses extracted from past orders
+      const orderAddresses: Array<{ address: string; method: string | null; orderId: string; date: string }> = [];
+      const seen = new Set<string>();
+      for (const o of userOrders) {
+        const addr = (o as any).deliveryAddress;
+        const pvz = (o as any).cdekPvzAddress;
+        const method = (o as any).deliveryMethod ?? null;
+        const key = addr || pvz;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          orderAddresses.push({ address: pvz || addr, method, orderId: o.id, date: (o as any).createdAt });
+        }
+      }
+
+      res.json({ ...user, orders: userOrders, savedAddresses, orderAddresses });
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
   });
 

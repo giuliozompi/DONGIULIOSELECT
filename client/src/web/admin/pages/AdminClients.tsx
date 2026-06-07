@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Search, ChevronLeft, ShoppingCart, User, Bell } from 'lucide-react';
+import { Search, ChevronLeft, ShoppingCart, User, Bell, MapPin, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 function fmtDate(d: string) {
@@ -196,6 +196,49 @@ export default function AdminClients() {
             </Card>
 
             <ClientNotifPrefs clientId={cl.id} isMasterAdmin={isMasterAdmin} />
+
+            {/* Addresses: saved + from orders */}
+            {((cl.savedAddresses && cl.savedAddresses.length > 0) || (cl.orderAddresses && cl.orderAddresses.length > 0)) && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Адреса ({(cl.savedAddresses?.length ?? 0) + (cl.orderAddresses?.length ?? 0)})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y">
+                    {(cl.savedAddresses ?? []).map((a: any) => (
+                      <div key={a.id} className="p-3 flex items-start gap-2">
+                        <Star className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium">{a.label}</p>
+                            {a.isDefault && <Badge variant="secondary" className="text-xs">По умолчанию</Badge>}
+                          </div>
+                          <p className="text-xs text-muted-foreground break-words">{a.fullAddress}</p>
+                          {a.phone && <p className="text-xs text-muted-foreground">{a.phone}</p>}
+                        </div>
+                      </div>
+                    ))}
+                    {(cl.orderAddresses ?? []).map((a: any) => (
+                      <div key={a.orderId} className="p-3 flex items-start gap-2">
+                        <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs text-muted-foreground">
+                              Заказ #{a.orderId?.slice(-6).toUpperCase()} · {fmtDate(a.date)}
+                            </p>
+                            {a.method && <Badge variant="outline" className="text-xs">{a.method}</Badge>}
+                          </div>
+                          <p className="text-sm break-words">{a.address}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {cl.orders && cl.orders.length > 0 && (
               <Card>
