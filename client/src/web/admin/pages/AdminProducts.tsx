@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '../lib/adminApi';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Pencil, Trash2, EyeOff, Package, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, Search, Upload, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const EMPTY_FORM = {
@@ -30,6 +30,8 @@ export default function AdminProducts() {
   const [dialog, setDialog] = useState<{ open: boolean; editing: any | null }>({ open: false, editing: null });
   const [form, setForm] = useState<any>(EMPTY_FORM);
   const [imgInput, setImgInput] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: cats = [] } = useQuery({ queryKey: ['/web-api/admin/categories'], queryFn: () => adminApi.getCategories() });
   const { data: prods = [], isLoading } = useQuery({ queryKey: ['/web-api/admin/products'], queryFn: () => adminApi.getProducts() });
@@ -90,6 +92,21 @@ export default function AdminProducts() {
   }
   function removeImage(i: number) {
     setForm((f: any) => ({ ...f, images: f.images.filter((_: any, idx: number) => idx !== i) }));
+  }
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(true);
+    try {
+      const { path } = await adminApi.uploadImage(file);
+      setForm((f: any) => ({ ...f, images: [...f.images, path] }));
+      toast({ title: 'Фото загружено' });
+    } catch (err: any) {
+      toast({ title: 'Errore upload', description: err.message, variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
   }
 
   function handleSave() {
@@ -313,22 +330,58 @@ export default function AdminProducts() {
             {/* ── Изображения ── */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Изображения</p>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <Input placeholder="https://..." value={imgInput} onChange={e => setImgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addImage()} />
-                  <Button type="button" variant="outline" onClick={addImage}>Добавить</Button>
-                </div>
+              <div className="space-y-3">
+                {/* Previews with delete */}
                 {form.images.length > 0 && (
                   <div className="flex gap-2 flex-wrap">
                     {form.images.map((url: string, i: number) => (
-                      <div key={i} className="relative">
-                        <img src={url} alt="" className="w-16 h-16 object-cover rounded border" />
-                        <button onClick={() => removeImage(i)} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 text-xs flex items-center justify-center">×</button>
+                      <div key={i} className="relative group">
+                        <img src={url} alt="" className="w-20 h-20 object-cover rounded-md border" />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(i)}
+                          className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">Per caricare immagini usa l'app Telegram (pannello admin).</p>
+
+                {/* Upload file button */}
+                <div className="flex gap-2 items-center flex-wrap">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    {uploading
+                      ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Загрузка...</>
+                      : <><Upload className="h-3.5 w-3.5 mr-1.5" />Загрузить фото</>
+                    }
+                  </Button>
+                  <span className="text-muted-foreground text-xs">oppure</span>
+                  <div className="flex gap-2 flex-1 min-w-48">
+                    <Input
+                      placeholder="URL esterno https://..."
+                      value={imgInput}
+                      onChange={e => setImgInput(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addImage()}
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={addImage}>+</Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Max 5 MB · JPG, PNG, WebP</p>
               </div>
             </div>
 

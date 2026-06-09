@@ -32,6 +32,24 @@ export const adminApi = {
     webApi.patch<any>(`${A}/products/${id}/visibility`, { isVisible }),
   deleteProduct: (id: string) => webApi.delete<void>(`${A}/products/${id}`),
 
+  // Image upload
+  uploadImage: async (file: File): Promise<{ path: string }> => {
+    const token = getAccessToken();
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await fetch('/web-api/admin/uploads/image', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   // Orders
   getOrders: (status?: string, search?: string) => {
     const params = new URLSearchParams();

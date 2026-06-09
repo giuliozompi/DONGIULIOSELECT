@@ -1,8 +1,11 @@
 import type { Express, Request, Response } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import multer from 'multer';
 import { backfillHistoricalData } from './services/analytics-aggregation';
 import cookieParser from 'cookie-parser';
+import { ObjectStorageService } from './objectStorage';
 import { db } from './db';
 import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs, userAddresses } from '../shared/schema';
 import { getAllChannelSettings, setChannelEnabled, getUserPreferences, setUserPreference } from './services/notification-settings';
@@ -889,6 +892,50 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       await db.delete(categories).where(eq(categories.id, req.params.id));
       res.sendStatus(204);
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  // ── IMAGE UPLOAD ───────────────────────────────────────────
+
+  const webUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (!file.mimetype.startsWith('image/')) { cb(new Error('Solo immagini')); return; }
+      cb(null, true);
+    },
+  });
+
+  app.post('/web-api/admin/uploads/image', requireWebAuth, requireWebAdmin, webUpload.single('image'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: 'Nessun file' });
+      const ext = path.extname(req.file.originalname) || '.jpg';
+      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || '';
+      const objectPath = `${privateObjectDir}/uploads/${randomUUID()}${ext}`;
+      const pathParts = objectPath.split('/');
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: req.file.buffer,
+        headers: { 'Content-Type': req.file.mimetype },
+      });
+      if (!uploadResponse.ok) throw new Error('Upload fallito');
+      const normalizedPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      await objectStorageService.trySetObjectEntityAclPolicy(uploadURL, { owner: 'web-admin', visibility: 'public' });
+      res.json({ path: normalizedPath });
+    } catch(e) { console.error('[WEB UPLOAD]', e); res.status(500).json({ error: String(e) }); }
+  });
+
+  app.delete('/web-api/admin/uploads/image', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      const { path: imagePath } = req.body;
+      if (!imagePath) return res.status(400).json({ error: 'Path mancante' });
+      if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) return res.json({ success: true, skipped: true });
+      const objectStorageService = new ObjectStorageService();
+      const objectFile = await objectStorageService.getObjectEntityFile(imagePath);
+      await objectFile.delete();
+      res.json({ success: true });
+    } catch(e) { console.error('[WEB DELETE IMAGE]', e); res.status(500).json({ error: String(e) }); }
   });
 
   // ── PRODUCTS ───────────────────────────────────────────────
