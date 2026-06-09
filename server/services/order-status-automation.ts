@@ -1,19 +1,23 @@
 /**
  * Shared order-status automation logic.
- * Used by both the Telegram admin (routes.ts) and the Web admin (webRoutes.ts)
- * so that every status change triggers identical automations regardless of origin.
+ * Used by both the Telegram admin (routes.ts) and the Web admin (webRoutes.ts).
+ *
+ * Every notification goes through canNotify() — both global channel toggle
+ * and per-user opt-out are respected.
  *
  * Automations per status:
- *   СОБРАН  (online payment) → create YooKassa payment → send link Telegram/Email/WhatsApp
- *                               → update status to ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
- *   ОПЛАЧЕН                  → award spin token → notify managers via Email + Telegram
- *   all others               → send status-change notification to customer via Telegram + WhatsApp
+ *   СОБРАН  (online payment) → create YooKassa payment
+ *                            → send link via Telegram / Email / WhatsApp (if canNotify)
+ *                            → status becomes ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
+ *   СОБРАН  (cash)           → status notification to customer (Telegram + WhatsApp)
+ *   ОПЛАЧЕН                  → award spin token
+ *                            → notify managers: Email + Telegram (if channel globally enabled)
+ *   all others               → status notification to customer (Telegram + WhatsApp)
  */
 
 import { storage } from '../storage';
 import { canNotify } from './notification-settings';
 import { logOrderNotification } from './notification-logger';
-import { randomUUID } from 'crypto';
 
 export interface StatusChangeResult {
   order: any;
@@ -31,35 +35,41 @@ export async function processOrderStatusChange(
   const order = await storage.getOrderById(orderId);
   if (!order) throw new Error('Order not found');
 
-  // Persist the new status first
+  // ── Persist the new status ────────────────────────────────────────────────
   const updatedOrder = await storage.updateOrder(orderId, { status: newStatus });
 
   // ── ОПЛАЧЕН ──────────────────────────────────────────────────────────────
   if (newStatus === 'ОПЛАЧЕН') {
-    // Award 1 spin token
+    // Award 1 spin token (atomic, idempotent)
     const awarded = await storage.awardSpinTokensForOrder(orderId, order.userId);
-    if (awarded) {
-      console.log(`✅ [OrderStatus] Spin token awarded to user ${order.userId} for order ${orderId}`);
+    if (awarded) console.log(`✅ [OrderStatus] Spin token awarded to user ${order.userId} for order ${orderId}`);
+
+    // Notify managers via Email (checks global 'email' channel)
+    if (await canNotify('email', null)) {
+      try {
+        const { sendOrderPaidNotificationToManagers } = await import('./email');
+        await sendOrderPaidNotificationToManagers(
+          order.id, order.customerName, order.customerPhone, order.amount, order.paymentMethod
+        );
+        await logOrderNotification({ event: 'order_paid', channel: 'email', recipient: 'managers', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'sent', details: order.amount });
+        console.log(`✅ [OrderStatus] Manager payment notification sent via Email for order ${orderId}`);
+      } catch (e) {
+        console.warn('⚠️ [OrderStatus] Manager email failed:', e);
+        await logOrderNotification({ event: 'order_paid', channel: 'email', recipient: 'managers', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(e) });
+      }
     }
 
-    // Notify managers via Email
-    try {
-      const { sendOrderPaidNotificationToManagers } = await import('./email');
-      await sendOrderPaidNotificationToManagers(
-        order.id, order.customerName, order.customerPhone, order.amount, order.paymentMethod
-      );
-      console.log(`✅ [OrderStatus] Payment notification email sent to managers for order ${orderId}`);
-    } catch (e) {
-      console.warn('⚠️ [OrderStatus] Manager email failed:', e);
-    }
-
-    // Notify managers via Telegram
-    try {
-      const { sendOrderPaidNotificationToManagers: tgManagers } = await import('./telegram-bot');
-      await tgManagers(order.id, order.customerName, order.customerPhone, order.amount, order.paymentMethod);
-      console.log(`✅ [OrderStatus] Payment notification sent to managers via Telegram for order ${orderId}`);
-    } catch (e) {
-      console.warn('⚠️ [OrderStatus] Manager Telegram failed:', e);
+    // Notify managers via Telegram (checks global 'telegram' channel)
+    if (await canNotify('telegram', null)) {
+      try {
+        const { sendOrderPaidNotificationToManagers: tgManagers } = await import('./telegram-bot');
+        await tgManagers(order.id, order.customerName, order.customerPhone, order.amount, order.paymentMethod);
+        await logOrderNotification({ event: 'order_paid', channel: 'telegram', recipient: 'managers', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'sent', details: order.amount });
+        console.log(`✅ [OrderStatus] Manager payment notification sent via Telegram for order ${orderId}`);
+      } catch (e) {
+        console.warn('⚠️ [OrderStatus] Manager Telegram failed:', e);
+        await logOrderNotification({ event: 'order_paid', channel: 'telegram', recipient: 'managers', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(e) });
+      }
     }
   }
 
@@ -78,7 +88,7 @@ export async function processOrderStatusChange(
           : (process.env.APP_URL || 'http://localhost:5000');
         const returnUrl = `${baseUrl}/payment-return`;
 
-        // Gather products & marking codes
+        // Gather products & marking codes for fiscal receipt
         const allProducts = await storage.getAllProducts();
         const productsMap = new Map(allProducts.map((p: any) => [p.id, p]));
         const markingLogs = await storage.getMarkingLogsByOrder(orderId);
@@ -146,34 +156,46 @@ export async function processOrderStatusChange(
         confirmationUrl = paymentIntent.redirectUrl || '';
       }
 
-      // Send link via Telegram
-      try {
-        const { sendPaymentLink } = await import('./telegram-bot');
-        const sent = await sendPaymentLink(order.userId, orderId, order.amount, confirmationUrl);
-        console.log(sent ? '✅ [OrderStatus] Payment link sent via Telegram' : '⚠️ [OrderStatus] Telegram not configured');
-      } catch (e) { console.warn('⚠️ [OrderStatus] Telegram payment link failed:', e); }
+      // Send link via Telegram (respects global + per-user toggle)
+      if (await canNotify('telegram', order.userId)) {
+        try {
+          const { sendPaymentLink } = await import('./telegram-bot');
+          const sent = await sendPaymentLink(order.userId, orderId, order.amount, confirmationUrl);
+          await logOrderNotification({ event: 'payment_link', channel: 'telegram', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: sent ? 'sent' : 'failed', details: order.amount });
+          console.log(sent ? '✅ [OrderStatus] Payment link sent via Telegram' : '⚠️ [OrderStatus] Telegram bot not configured');
+        } catch (e) {
+          console.warn('⚠️ [OrderStatus] Telegram payment link failed:', e);
+          await logOrderNotification({ event: 'payment_link', channel: 'telegram', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(e) });
+        }
+      }
 
-      // Send link via Email
-      if (order.customerEmail) {
+      // Send link via Email (respects global + per-user toggle; requires customerEmail)
+      if (order.customerEmail && await canNotify('email', order.userId)) {
         try {
           const { sendPaymentLinkEmail } = await import('./email');
           await sendPaymentLinkEmail(order.customerEmail, orderId, order.customerName, order.amount, confirmationUrl);
+          await logOrderNotification({ event: 'payment_link', channel: 'email', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'sent', details: order.amount });
           console.log('✅ [OrderStatus] Payment link sent via Email');
-        } catch (e) { console.warn('⚠️ [OrderStatus] Email payment link failed:', e); }
+        } catch (e) {
+          console.warn('⚠️ [OrderStatus] Email payment link failed:', e);
+          await logOrderNotification({ event: 'payment_link', channel: 'email', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(e) });
+        }
       }
 
-      // Send link via WhatsApp
+      // Send link via WhatsApp (respects global + per-user toggle)
       if (await canNotify('whatsapp', order.userId)) {
         try {
           const { sendPaymentLinkWhatsApp } = await import('./whatsapp');
           const sent = await sendPaymentLinkWhatsApp(order.customerPhone, orderId, order.customerName, order.amount, confirmationUrl);
           await logOrderNotification({ event: 'payment_link', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: sent ? 'sent' : 'failed', details: order.amount });
+          if (sent) console.log('✅ [OrderStatus] Payment link sent via WhatsApp');
         } catch (e) {
+          console.warn('⚠️ [OrderStatus] WhatsApp payment link failed:', e);
           await logOrderNotification({ event: 'payment_link', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(e) });
         }
       }
 
-      // Finalize status to ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
+      // Finalize — set status to ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
       await storage.updateOrder(orderId, {
         status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
         paymentId: paymentIntent!.id,
@@ -189,7 +211,7 @@ export async function processOrderStatusChange(
       };
     } catch (e) {
       console.error(`❌ [OrderStatus] Auto-СОБРАН payment link failed for ${orderId}:`, e);
-      // Status stays СОБРАН, return warning instead of failing completely
+      // Status stays СОБРАН — never fail the whole call
       return {
         order: { ...updatedOrder, status: 'СОБРАН' },
         status: 'СОБРАН',
@@ -200,10 +222,10 @@ export async function processOrderStatusChange(
     }
   }
 
-  // ── Status notification to customer (all statuses except auto-СОБРАН) ────
+  // ── Customer status notification (all statuses except auto-payment СОБРАН) ─
   const shouldSendNotification = !(newStatus === 'СОБРАН' && order.paymentMethod !== 'cash_on_delivery');
   if (shouldSendNotification) {
-    // Telegram
+    // Telegram (respects global + per-user toggle)
     if (await canNotify('telegram', order.userId)) {
       try {
         const { sendOrderStatusNotification } = await import('./telegram-bot');
@@ -217,7 +239,7 @@ export async function processOrderStatusChange(
       }
     }
 
-    // WhatsApp
+    // WhatsApp (respects global + per-user toggle)
     if (await canNotify('whatsapp', order.userId)) {
       try {
         const { sendOrderStatusUpdateWhatsApp } = await import('./whatsapp');
