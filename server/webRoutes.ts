@@ -893,19 +893,51 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
 
   // ── PRODUCTS ───────────────────────────────────────────────
 
+  // Flatten DB product → frontend-friendly shape
+  function flattenProduct(p: any) {
+    const n = p.nutrition || {};
+    return {
+      ...p,
+      description: p.descriptionFull || p.descriptionShort || '',
+      oldPrice: p.priceOld || '',
+      proteins: n.proteins || '',
+      fats: n.fats || '',
+      carbs: n.carbs || '',
+      calories: n.calories || '',
+      ingredients: Array.isArray(n.composition) ? n.composition.join('\n') : (n.composition || ''),
+      additionalInfo: Array.isArray(n.additionalInfo) ? n.additionalInfo.join('\n') : (n.additionalInfo || ''),
+    };
+  }
+
+  // Build nutrition JSONB from flat form fields
+  function buildNutrition(body: any) {
+    const hasAny = body.proteins || body.fats || body.carbs || body.calories || body.ingredients || body.additionalInfo;
+    if (!hasAny) return null;
+    return {
+      proteins: body.proteins || '',
+      fats: body.fats || '',
+      carbs: body.carbs || '',
+      calories: body.calories || '',
+      composition: body.ingredients ? body.ingredients.split('\n').map((s: string) => s.trim()).filter(Boolean) : [],
+      additionalInfo: body.additionalInfo ? body.additionalInfo.split('\n').map((s: string) => s.trim()).filter(Boolean) : [],
+    };
+  }
+
   app.get('/web-api/admin/products', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
       const categoryId = req.query.categoryId as string | undefined;
-      res.json(await storage.getAllProducts({ categoryId, includeHidden: true }));
+      const prods = await storage.getAllProducts({ categoryId, includeHidden: true });
+      res.json(prods.map(flattenProduct));
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
   });
 
   const productBodySchema = z.object({
-    name: z.string().min(1).optional(), slug: z.string().optional(), description: z.string().optional().nullable(),
+    name: z.string().min(1).optional(), slug: z.string().optional(),
+    description: z.string().optional().nullable(),
     price: z.string().optional(), oldPrice: z.string().optional().nullable(), unit: z.string().optional(),
     categoryId: z.string().optional(), inStock: z.boolean().optional(), isVisible: z.boolean().optional(),
     images: z.array(z.string()).optional(), sortPriority: z.number().optional(),
-    requiresMarking: z.boolean().optional(), tasteVariations: z.string().optional().nullable(),
+    requiresMarking: z.boolean().optional(),
     proteins: z.string().optional().nullable(), fats: z.string().optional().nullable(),
     carbs: z.string().optional().nullable(), calories: z.string().optional().nullable(),
     ingredients: z.string().optional().nullable(), additionalInfo: z.string().optional().nullable(),
@@ -914,17 +946,49 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   app.post('/web-api/admin/products', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
       const body = productBodySchema.parse(req.body);
-      const [prod] = await db.insert(products).values({ id: randomUUID(), name: body.name!, slug: body.slug || body.name!.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,''), price: body.price || '0', unit: body.unit || 'шт', inStock: body.inStock ?? true, isVisible: body.isVisible ?? true, images: body.images || [], ...body }).returning();
-      res.status(201).json(prod);
+      const slug = body.slug || (body.name || '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const nutrition = buildNutrition(body);
+      const [prod] = await db.insert(products).values({
+        id: randomUUID(),
+        name: body.name!,
+        slug,
+        price: body.price || '0',
+        priceOld: body.oldPrice || null,
+        unit: body.unit || 'шт',
+        inStock: body.inStock ?? true,
+        isVisible: body.isVisible ?? true,
+        images: body.images || [],
+        categoryId: body.categoryId!,
+        sortPriority: body.sortPriority ?? 0,
+        requiresMarking: body.requiresMarking ?? false,
+        descriptionFull: body.description || null,
+        nutrition,
+      }).returning();
+      res.status(201).json(flattenProduct(prod));
     } catch(e) { res.status(400).json({ error: String(e) }); }
   });
 
   app.patch('/web-api/admin/products/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
       const body = productBodySchema.parse(req.body);
-      const [prod] = await db.update(products).set(body).where(eq(products.id, req.params.id)).returning();
+      const nutrition = buildNutrition(body);
+      const updateData: any = {};
+      if (body.name !== undefined) updateData.name = body.name;
+      if (body.slug !== undefined) updateData.slug = body.slug;
+      if (body.description !== undefined) updateData.descriptionFull = body.description;
+      if (body.price !== undefined) updateData.price = body.price;
+      if (body.oldPrice !== undefined) updateData.priceOld = body.oldPrice || null;
+      if (body.unit !== undefined) updateData.unit = body.unit;
+      if (body.categoryId !== undefined) updateData.categoryId = body.categoryId;
+      if (body.inStock !== undefined) updateData.inStock = body.inStock;
+      if (body.isVisible !== undefined) updateData.isVisible = body.isVisible;
+      if (body.images !== undefined) updateData.images = body.images;
+      if (body.sortPriority !== undefined) updateData.sortPriority = body.sortPriority;
+      if (body.requiresMarking !== undefined) updateData.requiresMarking = body.requiresMarking;
+      if (nutrition !== null) updateData.nutrition = nutrition;
+      const [prod] = await db.update(products).set(updateData).where(eq(products.id, req.params.id)).returning();
       if (!prod) return res.status(404).json({ error: 'Not found' });
-      res.json(prod);
+      res.json(flattenProduct(prod));
     } catch(e) { res.status(400).json({ error: String(e) }); }
   });
 
