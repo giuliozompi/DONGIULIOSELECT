@@ -908,10 +908,24 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   app.post('/web-api/admin/uploads/image', requireWebAuth, requireWebAdmin, webUpload.single('image'), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ error: 'Nessun file' });
-      const ext = path.extname(req.file.originalname) || '.jpg';
-      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR || '';
-      const objectPath = `${privateObjectDir}/uploads/${randomUUID()}${ext}`;
-      const pathParts = objectPath.split('/');
+
+      // On external hosting (Timeweb), proxy to Replit where Object Storage sidecar is available
+      const proxyBase = process.env.REPLIT_OBJECT_PROXY_URL?.replace(/\/$/, '');
+      if (proxyBase) {
+        const FormDataNode = (await import('form-data')).default;
+        const fd = new FormDataNode();
+        fd.append('image', req.file.buffer, { filename: req.file.originalname, contentType: req.file.mimetype });
+        const authHeader = req.headers.authorization || '';
+        const proxyRes = await fetch(`${proxyBase}/web-api/admin/uploads/image`, {
+          method: 'POST',
+          headers: { ...fd.getHeaders(), Authorization: authHeader },
+          body: fd.getBuffer(),
+        });
+        const data = await proxyRes.json().catch(() => ({ error: proxyRes.statusText }));
+        return res.status(proxyRes.status).json(data);
+      }
+
+      // Direct Object Storage upload (Replit environment)
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
       const uploadResponse = await fetch(uploadURL, {

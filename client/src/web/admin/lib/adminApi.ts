@@ -1,4 +1,4 @@
-import { webApi, getAccessToken } from '../../lib/webApi';
+import { webApi, getAccessToken, tryRefresh } from '../../lib/webApi';
 
 const A = '/admin';
 
@@ -34,15 +34,22 @@ export const adminApi = {
 
   // Image upload
   uploadImage: async (file: File): Promise<{ path: string }> => {
-    const token = getAccessToken();
-    const fd = new FormData();
-    fd.append('image', file);
-    const res = await fetch('/web-api/admin/uploads/image', {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      credentials: 'include',
-      body: fd,
-    });
+    const doUpload = async () => {
+      const token = getAccessToken();
+      const fd = new FormData();
+      fd.append('image', file);
+      return fetch('/web-api/admin/uploads/image', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+        body: fd,
+      });
+    };
+    let res = await doUpload();
+    if (res.status === 401) {
+      const refreshed = await tryRefresh();
+      if (refreshed) res = await doUpload();
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(err.error || `HTTP ${res.status}`);
