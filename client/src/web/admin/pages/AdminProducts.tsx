@@ -191,113 +191,147 @@ export default function AdminProducts() {
           <DialogHeader>
             <DialogTitle>{dialog.editing ? 'Редактировать товар' : 'Новый товар'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1.5">
-                <Label>Название</Label>
-                <Input value={form.name} onChange={e => handleSlug(e.target.value)} />
+          <div className="space-y-5 py-2">
+
+            {/* ── Основное ── */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Основное</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 space-y-1.5">
+                  <Label>Название</Label>
+                  <Input value={form.name} onChange={e => handleSlug(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Категория</Label>
+                  <Select value={form.categoryId || 'none'} onValueChange={v => set('categoryId', v === 'none' ? '' : v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Без категории</SelectItem>
+                      {cats.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Единица измерения</Label>
+                  <Select value={form.unit} onValueChange={v => set('unit', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Цена (₽)</Label>
+                  <Input type="number" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Старая цена (₽)</Label>
+                  <Input type="number" step="0.01" value={form.oldPrice} onChange={e => set('oldPrice', e.target.value)} placeholder="Необязательно" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Slug</Label>
+                  <Input value={form.slug} onChange={e => set('slug', e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Приоритет сортировки</Label>
+                  <Input type="number" value={form.sortPriority} onChange={e => set('sortPriority', e.target.value)} />
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Slug</Label>
-                <Input value={form.slug} onChange={e => set('slug', e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Категория</Label>
-                <Select value={form.categoryId || 'none'} onValueChange={v => set('categoryId', v === 'none' ? '' : v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Без категории</SelectItem>
-                    {cats.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Цена (₽)</Label>
-                <Input type="number" step="0.01" value={form.price} onChange={e => set('price', e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Старая цена (₽)</Label>
-                <Input type="number" step="0.01" value={form.oldPrice} onChange={e => set('oldPrice', e.target.value)} placeholder="Необязательно" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Единица измерения</Label>
-                <Select value={form.unit} onValueChange={v => set('unit', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Приоритет сортировки</Label>
-                <Input type="number" value={form.sortPriority} onChange={e => set('sortPriority', e.target.value)} />
+              <div className="grid grid-cols-3 gap-3 mt-3">
+                <div className="flex items-center gap-2">
+                  <Switch checked={form.inStock} onCheckedChange={v => set('inStock', v)} />
+                  <Label>В наличии</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={form.isVisible} onCheckedChange={v => set('isVisible', v)} />
+                  <Label>Видимый</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={form.requiresMarking} onCheckedChange={v => set('requiresMarking', v)} />
+                  <Label>Маркировка</Label>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Описание</Label>
-              <Textarea rows={3} value={form.description} onChange={e => set('description', e.target.value)} />
+            <div className="border-t" />
+
+            {/* ── Описание ── */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Описание</p>
+              <Textarea
+                rows={4}
+                placeholder="Краткое описание товара, показываемое в каталоге..."
+                value={form.description}
+                onChange={e => set('description', e.target.value)}
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-3">
-                <Switch checked={form.inStock} onCheckedChange={v => set('inStock', v)} />
-                <Label>В наличии</Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch checked={form.isVisible} onCheckedChange={v => set('isVisible', v)} />
-                <Label>Видимый</Label>
-              </div>
-              <div className="flex items-center gap-3">
-                <Switch checked={form.requiresMarking} onCheckedChange={v => set('requiresMarking', v)} />
-                <Label>Требует маркировки</Label>
-              </div>
+            {/* ── Дополнительная информация ── */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Дополнительная информация</p>
+              <Textarea
+                rows={3}
+                placeholder="Условия хранения, происхождение, сертификаты..."
+                value={form.additionalInfo}
+                onChange={e => set('additionalInfo', e.target.value)}
+              />
             </div>
 
-            <div className="space-y-2">
-              <Label>Изображения (URL)</Label>
-              <div className="flex gap-2">
-                <Input placeholder="https://..." value={imgInput} onChange={e => setImgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addImage()} />
-                <Button type="button" variant="outline" onClick={addImage}>Добавить</Button>
-              </div>
-              {form.images.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
-                  {form.images.map((url: string, i: number) => (
-                    <div key={i} className="relative">
-                      <img src={url} alt="" className="w-16 h-16 object-cover rounded border" />
-                      <button onClick={() => removeImage(i)} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 text-xs flex items-center justify-center">×</button>
+            <div className="border-t" />
+
+            {/* ── Состав и пищевая ценность ── */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Состав и пищевая ценность</p>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Ингредиенты / Состав</Label>
+                  <Textarea
+                    rows={2}
+                    placeholder="Каждый ингредиент на отдельной строке..."
+                    value={form.ingredients}
+                    onChange={e => set('ingredients', e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { key: 'proteins', label: 'Белки' },
+                    { key: 'fats', label: 'Жиры' },
+                    { key: 'carbs', label: 'Углеводы' },
+                    { key: 'calories', label: 'Калории' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="space-y-1">
+                      <Label className="text-xs">{label}</Label>
+                      <Input value={form[key]} onChange={e => set(key, e.target.value)} placeholder="—" />
                     </div>
                   ))}
                 </div>
-              )}
-              <p className="text-xs text-muted-foreground">Для загрузки изображений используйте приложение Telegram (панель администратора).</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Пищевая ценность</Label>
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { key: 'proteins', label: 'Белки' },
-                  { key: 'fats', label: 'Жиры' },
-                  { key: 'carbs', label: 'Углеводы' },
-                  { key: 'calories', label: 'Калории' },
-                ].map(({ key, label }) => (
-                  <div key={key} className="space-y-1">
-                    <Label className="text-xs">{label}</Label>
-                    <Input value={form[key]} onChange={e => set(key, e.target.value)} placeholder="—" />
-                  </div>
-                ))}
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Ингредиенты</Label>
-              <Textarea rows={2} value={form.ingredients} onChange={e => set('ingredients', e.target.value)} />
+            <div className="border-t" />
+
+            {/* ── Изображения ── */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Изображения</p>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input placeholder="https://..." value={imgInput} onChange={e => setImgInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addImage()} />
+                  <Button type="button" variant="outline" onClick={addImage}>Добавить</Button>
+                </div>
+                {form.images.length > 0 && (
+                  <div className="flex gap-2 flex-wrap">
+                    {form.images.map((url: string, i: number) => (
+                      <div key={i} className="relative">
+                        <img src={url} alt="" className="w-16 h-16 object-cover rounded border" />
+                        <button onClick={() => removeImage(i)} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-4 h-4 text-xs flex items-center justify-center">×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">Per caricare immagini usa l'app Telegram (pannello admin).</p>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Дополнительная информация</Label>
-              <Textarea rows={2} value={form.additionalInfo} onChange={e => set('additionalInfo', e.target.value)} />
-            </div>
+
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>Отмена</Button>
