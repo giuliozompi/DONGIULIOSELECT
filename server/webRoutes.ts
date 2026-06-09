@@ -1090,11 +1090,16 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
 
   app.patch('/web-api/admin/orders/:id/status', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
-      const { status } = z.object({ status: z.string() }).parse(req.body);
-      const order = await storage.updateOrderStatus(req.params.id, status);
-      if (!order) return res.status(404).json({ error: 'Not found' });
-      res.json(order);
-    } catch(e) { res.status(400).json({ error: String(e) }); }
+      const { status } = z.object({
+        status: z.enum(['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', 'ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН', 'ВОЗВРАТ', 'УДАЛЕНО']),
+      }).parse(req.body);
+      const { processOrderStatusChange } = await import('./services/order-status-automation');
+      const result = await processOrderStatusChange(req.params.id, status);
+      res.json(result.order);
+    } catch(e: any) {
+      if (e.message === 'Order not found') return res.status(404).json({ error: 'Not found' });
+      res.status(400).json({ error: String(e) });
+    }
   });
 
   app.post('/web-api/admin/orders/:id/update-quantity', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
