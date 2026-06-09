@@ -1,4 +1,4 @@
-import { webApi } from '../../lib/webApi';
+import { webApi, getAccessToken } from '../../lib/webApi';
 
 const A = '/admin';
 
