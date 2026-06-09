@@ -108,6 +108,8 @@ export const adminApi = {
   // Notification Settings (master admin only)
   getNotificationSettings: () =>
     webApi.get<{ channel: string; enabled: boolean }[]>(`${A}/notification-settings`),
+  getChannelSettings: () =>
+    webApi.get<{ channel: string; enabled: boolean }[]>(`${A}/notification-settings`),
   setChannelEnabled: (channel: string, enabled: boolean) =>
     webApi.patch<{ ok: boolean }>(`${A}/notification-settings/${channel}`, { enabled }),
   getClientNotifPrefs: (userId: string) =>
