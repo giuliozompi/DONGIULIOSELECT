@@ -7,7 +7,7 @@ import { eq, and, gt } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dgs-web-jwt-secret-2024-change-in-prod';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dgs-web-refresh-secret-2024-change-in-prod';
-const ACCESS_TOKEN_TTL = '15m';
+const ACCESS_TOKEN_TTL = '8h';
 const REFRESH_TOKEN_TTL_DAYS = 30;
 
 export interface JwtPayload {

@@ -1,10 +1,17 @@
 const BASE = '/web-api';
+const STORAGE_KEY = 'dgs_web_access_token';
 
-let _accessToken: string | null = null;
+let _accessToken: string | null = (() => {
+  try { return sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
+})();
 let _refreshPromise: Promise<boolean> | null = null;
 
 export function setAccessToken(token: string | null) {
   _accessToken = token;
+  try {
+    if (token) sessionStorage.setItem(STORAGE_KEY, token);
+    else sessionStorage.removeItem(STORAGE_KEY);
+  } catch { /* ignore */ }
 }
 
 export function getAccessToken() {
@@ -20,12 +27,13 @@ export async function tryRefresh(): Promise<boolean> {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
-      if (!res.ok) { _accessToken = null; return false; }
+      if (!res.ok) { setAccessToken(null); return false; }
       const data = await res.json();
-      _accessToken = data.accessToken ?? null;
-      return !!_accessToken;
+      const token = data.accessToken ?? null;
+      setAccessToken(token);
+      return !!token;
     } catch {
-      _accessToken = null;
+      setAccessToken(null);
       return false;
     } finally {
       _refreshPromise = null;
