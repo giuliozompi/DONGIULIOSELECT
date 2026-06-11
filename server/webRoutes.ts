@@ -905,21 +905,46 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
     },
   });
 
+  // Internal proxy endpoint — called by Timeweb, authenticated with UPLOAD_PROXY_SECRET (not JWT)
+  app.post('/web-api/internal/upload-proxy', webUpload.single('image'), async (req: Request, res: Response) => {
+    try {
+      const proxySecret = process.env.UPLOAD_PROXY_SECRET;
+      if (!proxySecret) return res.status(503).json({ error: 'Proxy non configurato' });
+      const incoming = req.headers['x-proxy-secret'];
+      if (!incoming || incoming !== proxySecret) return res.status(403).json({ error: 'Segreto proxy non valido' });
+      if (!req.file) return res.status(400).json({ error: 'Nessun file' });
+
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      const uploadResponse = await fetch(uploadURL, {
+        method: 'PUT',
+        body: req.file.buffer as unknown as BodyInit,
+        headers: { 'Content-Type': req.file.mimetype },
+      });
+      if (!uploadResponse.ok) throw new Error('Upload Object Storage fallito');
+      const normalizedPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      await objectStorageService.trySetObjectEntityAclPolicy(uploadURL, { owner: 'web-admin', visibility: 'public' });
+      res.json({ path: normalizedPath });
+    } catch(e) { console.error('[WEB UPLOAD PROXY]', e); res.status(500).json({ error: String(e) }); }
+  });
+
   app.post('/web-api/admin/uploads/image', requireWebAuth, requireWebAdmin, webUpload.single('image'), async (req: Request, res: Response) => {
     try {
       if (!req.file) return res.status(400).json({ error: 'Nessun file' });
 
-      // On external hosting (Timeweb), proxy to Replit where Object Storage sidecar is available
+      // On external hosting (Timeweb), proxy to Replit where Object Storage sidecar is available.
+      // Uses UPLOAD_PROXY_SECRET (shared static key) instead of JWT to avoid JWT_SECRET mismatch.
       const proxyBase = process.env.REPLIT_OBJECT_PROXY_URL?.replace(/\/$/, '');
       if (proxyBase) {
+        const proxySecret = process.env.UPLOAD_PROXY_SECRET;
+        if (!proxySecret) return res.status(503).json({ error: 'UPLOAD_PROXY_SECRET non configurato su Timeweb' });
         const FormDataNode = (await import('form-data')).default;
         const fd = new FormDataNode();
         fd.append('image', req.file.buffer, { filename: req.file.originalname, contentType: req.file.mimetype });
-        const authHeader = req.headers.authorization || '';
-        const proxyRes = await fetch(`${proxyBase}/web-api/admin/uploads/image`, {
+        const proxyRes = await fetch(`${proxyBase}/web-api/internal/upload-proxy`, {
           method: 'POST',
-          headers: { ...fd.getHeaders(), Authorization: authHeader },
-          body: fd.getBuffer(),
+          headers: { ...fd.getHeaders(), 'x-proxy-secret': proxySecret },
+          body: fd.getBuffer() as unknown as BodyInit,
         });
         const data = await proxyRes.json().catch(() => ({ error: proxyRes.statusText }));
         return res.status(proxyRes.status).json(data);
@@ -930,7 +955,7 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
       const uploadResponse = await fetch(uploadURL, {
         method: 'PUT',
-        body: req.file.buffer,
+        body: req.file.buffer as unknown as BodyInit,
         headers: { 'Content-Type': req.file.mimetype },
       });
       if (!uploadResponse.ok) throw new Error('Upload fallito');
