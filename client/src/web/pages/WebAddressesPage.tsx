@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { webApi } from '../lib/webApi';
 import { useWebAuth } from '../hooks/useWebAuth';
+import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 
 interface Address {
   id: string; label: string; fullAddress: string; city: string;
@@ -27,6 +28,8 @@ const addSchema = z.object({
   label: z.string().default('Дом'),
   fullAddress: z.string().min(5, 'Введите полный адрес'),
   city: z.string().min(2, 'Введите город'),
+  street: z.string().optional(),
+  building: z.string().optional(),
   apartment: z.string().optional(),
   postalCode: z.string().optional(),
   notes: z.string().optional(),
@@ -39,6 +42,7 @@ export default function WebAddressesPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const selectedAddress = useRef<AddressSuggestion | null>(null);
 
   const { data: addresses = [], isLoading } = useQuery({
     queryKey: ['/web-api/addresses'],
@@ -46,14 +50,40 @@ export default function WebAddressesPage() {
     enabled: isAuthenticated,
   });
 
-  const form = useForm({ resolver: zodResolver(addSchema), defaultValues: { label: 'Дом', fullAddress: '', city: '', isDefault: false } });
+  const form = useForm<z.infer<typeof addSchema>>({
+    resolver: zodResolver(addSchema),
+    defaultValues: {
+      label: 'Дом', fullAddress: '', city: '', street: '', building: '',
+      apartment: '', postalCode: '', notes: '', isDefault: false,
+    },
+  });
+
+  const updateAddress = (value: string, suggestion?: AddressSuggestion) => {
+    form.setValue('fullAddress', value, { shouldDirty: true, shouldValidate: true });
+    if (suggestion || selectedAddress.current) {
+      // Changing selected text invalidates its extracted fields. Never save the
+      // previous city's/street's metadata alongside a different manual address.
+      const fields = {
+        city: suggestion?.city || '',
+        street: suggestion?.street || '',
+        building: suggestion?.building || '',
+        apartment: suggestion?.flat || '',
+        postalCode: suggestion?.postalCode || '',
+      };
+      for (const key of ['city', 'street', 'building', 'apartment', 'postalCode'] as const) {
+        form.setValue(key, fields[key], { shouldDirty: true, shouldValidate: true });
+      }
+    }
+    selectedAddress.current = suggestion || null;
+  };
 
   const addMutation = useMutation({
     mutationFn: (data: z.infer<typeof addSchema>) => webApi.post<Address>('/addresses', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['/web-api/addresses'] });
       setDialogOpen(false);
-      form.reset({ label: 'Дом', fullAddress: '', city: '', isDefault: false });
+      form.reset();
+      selectedAddress.current = null;
       toast({ title: 'Адрес добавлен' });
     },
     onError: (e) => toast({ title: e instanceof Error ? e.message : 'Ошибка', variant: 'destructive' }),
@@ -132,7 +162,7 @@ export default function WebAddressesPage() {
 
       {/* Add address dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Новый адрес</DialogTitle>
           </DialogHeader>
@@ -148,7 +178,7 @@ export default function WebAddressesPage() {
                 <FormField control={form.control} name="city" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Город *</FormLabel>
-                    <FormControl><Input {...field} placeholder="Москва" /></FormControl>
+                    <FormControl><Input {...field} placeholder="Москва" data-testid="input-address-city" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -157,8 +187,19 @@ export default function WebAddressesPage() {
                 <FormItem>
                   <FormLabel>Полный адрес *</FormLabel>
                   <FormControl>
-                    <Textarea {...field} placeholder="Улица, дом, корпус, квартира" className="resize-none" rows={2} />
+                    <AddressAutocomplete
+                      ref={field.ref}
+                      value={field.value}
+                      onChange={updateAddress}
+                      onBlur={field.onBlur}
+                      placeholder="Начните вводить город, улицу и дом"
+                      testId="input-saved-address"
+                    />
                   </FormControl>
+                  <p className="text-xs text-neutral-500">
+                    Выберите подсказку DaData: город, улица, дом и индекс заполнятся автоматически.
+                    Если подсказок нет, заполните адрес и город вручную.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -166,13 +207,13 @@ export default function WebAddressesPage() {
                 <FormField control={form.control} name="apartment" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Квартира / офис</FormLabel>
-                    <FormControl><Input {...field} placeholder="42" /></FormControl>
+                    <FormControl><Input {...field} placeholder="42" data-testid="input-address-apartment" /></FormControl>
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="postalCode" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Индекс</FormLabel>
-                    <FormControl><Input {...field} placeholder="123456" /></FormControl>
+                    <FormControl><Input {...field} placeholder="123456" data-testid="input-address-postal-code" /></FormControl>
                   </FormItem>
                 )} />
               </div>
@@ -186,7 +227,7 @@ export default function WebAddressesPage() {
               )} />
               <div className="flex gap-3 pt-1">
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Отмена</Button>
-                <Button type="submit" className="flex-1 bg-amber-600 text-white" disabled={addMutation.isPending}>
+                <Button type="submit" className="flex-1 bg-amber-600 text-white" disabled={addMutation.isPending} data-testid="button-save-address">
                   {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Сохранить'}
                 </Button>
               </div>

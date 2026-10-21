@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, forwardRef, useImperativeHandle, type InputHTMLAttributes } from 'react';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { MapPin } from 'lucide-react';
@@ -15,7 +15,7 @@ export interface AddressSuggestion {
   geoLon: string | null;
 }
 
-interface AddressAutocompleteProps {
+interface AddressAutocompleteProps extends Pick<InputHTMLAttributes<HTMLInputElement>, 'id' | 'onBlur' | 'aria-describedby' | 'aria-invalid'> {
   value: string;
   onChange: (value: string, suggestion?: AddressSuggestion) => void;
   onSelect?: (suggestion: AddressSuggestion) => void;
@@ -24,45 +24,56 @@ interface AddressAutocompleteProps {
   disabled?: boolean;
 }
 
-export function AddressAutocomplete({
+export const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompleteProps>(function AddressAutocomplete({
   value,
   onChange,
   onSelect,
   placeholder = "Начните вводить адрес...",
   testId = "input-address-autocomplete",
   disabled = false,
-}: AddressAutocompleteProps) {
+  ...inputProps
+}, ref) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const requestVersion = useRef(0);
+  useImperativeHandle(ref, () => inputRef.current!);
 
   const fetchSuggestions = useCallback(async (query: string) => {
+    const version = ++requestVersion.current;
     if (query.length < 2) {
       setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
 
     setIsLoading(true);
     try {
       const response = await fetch(`/api/address/suggest?query=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error('Address suggestions unavailable');
       const data = await response.json();
+      if (version !== requestVersion.current) return;
       setSuggestions(data.suggestions || []);
       setShowSuggestions(true);
     } catch (error) {
-      console.error('Error fetching address suggestions:', error);
-      setSuggestions([]);
+      if (version === requestVersion.current) {
+        console.error('Error fetching address suggestions:', error);
+        setSuggestions([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (version === requestVersion.current) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (disabled) {
+      requestVersion.current++;
       setSuggestions([]);
       setShowSuggestions(false);
+      setIsLoading(false);
       return;
     }
 
@@ -99,6 +110,9 @@ export function AddressAutocomplete({
   }, []);
 
   const handleSelectSuggestion = (suggestion: AddressSuggestion) => {
+    requestVersion.current++;
+    setHasUserInteracted(false);
+    setIsLoading(false);
     onChange(suggestion.fullAddress, suggestion);
     if (onSelect) {
       onSelect(suggestion);
@@ -110,10 +124,15 @@ export function AddressAutocomplete({
   return (
     <div className="relative">
       <Input
+        {...inputProps}
         ref={inputRef}
         dir="ltr"
         value={value}
         onChange={(e) => {
+          requestVersion.current++;
+          setSuggestions([]);
+          setShowSuggestions(false);
+          setIsLoading(false);
           setHasUserInteracted(true);
           onChange(e.target.value);
         }}
@@ -151,4 +170,4 @@ export function AddressAutocomplete({
       )}
     </div>
   );
-}
+});

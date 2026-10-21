@@ -20,6 +20,7 @@ import { useWebCart } from '../hooks/useWebCart';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { webApi } from '../lib/webApi';
 import CheckoutAuthGate from '../components/CheckoutAuthGate';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, 'Введите имя и фамилию'),
@@ -209,14 +210,19 @@ export default function WebCheckoutPage() {
                   <FormItem>
                     <FormLabel>Полный адрес *</FormLabel>
                     <FormControl>
-                      <Textarea
-                        {...field}
-                        placeholder="Город, улица, дом, квартира, подъезд, этаж"
-                        className="resize-none"
-                        rows={3}
-                        data-testid="input-checkout-address"
+                      <AddressAutocomplete
+                        ref={field.ref}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        placeholder="Начните вводить город, улицу и дом"
+                        testId="input-checkout-address"
                       />
                     </FormControl>
+                    <p className="text-xs text-neutral-500">
+                      Выберите подсказку DaData для нормализации адреса. Если подсказок нет,
+                      введите полный адрес вручную. Укажите квартиру, подъезд и этаж.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )} />

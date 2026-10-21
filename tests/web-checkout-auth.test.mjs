@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { launchBrowser } from './helpers/browser.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const base = `https://${process.env.REPLIT_DEV_DOMAIN}`;
 const cart = {
@@ -17,18 +18,40 @@ let browser;
 before(async () => { browser = await launchBrowser(); });
 after(async () => { await browser?.close(); });
 
-async function openPage(context, { authenticated = false, registrationError = false, emptyCart = false } = {}) {
+async function openPage(context, {
+  authenticated = false, registrationError = false, emptyCart = false,
+  suggestions = [], suggestionsUnavailable = false, allowOrder = false,
+} = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
   const requests = [];
+  const savedAddresses = [];
+  let savedOrder;
   let currentUser = profile;
-  await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/web-api/*' }, { urlPattern: '*telegram.org/js/telegram-web-app.js*' }] });
+  await page.send('Fetch.enable', { patterns: [
+    { urlPattern: '*/web-api/*' }, { urlPattern: '*/api/address/suggest*' },
+    { urlPattern: '*telegram.org/js/telegram-web-app.js*' },
+  ] });
   page.on('Fetch.requestPaused', async event => {
     const path = new URL(event.request.url).pathname;
-    requests.push({ path, method: event.request.method });
+    requests.push({
+      path, method: event.request.method,
+      body: ['/web-api/addresses', '/web-api/orders'].includes(path) && event.request.postData
+        ? JSON.parse(event.request.postData) : undefined,
+    });
     let status = 200;
     let body = [];
-    if (path.endsWith('/auth/refresh')) {
+    if (path === '/api/address/suggest') {
+      status = suggestionsUnavailable ? 503 : 200;
+      body = suggestionsUnavailable ? { error: 'Suggestions unavailable' } : { suggestions };
+    } else if (path === '/web-api/addresses') {
+      if (event.request.method === 'POST') {
+        const address = { ...JSON.parse(event.request.postData), id: 'test-address', createdAt: profile.createdAt };
+        savedAddresses.push(address);
+        status = 201;
+        body = address;
+      } else body = savedAddresses;
+    } else if (path.endsWith('/auth/refresh')) {
       status = authenticated ? 200 : 401;
       body = authenticated ? { accessToken: 'test-token', user: currentUser } : { error: 'Not signed in' };
     } else if (path.endsWith('/auth/register')) {
@@ -43,7 +66,13 @@ async function openPage(context, { authenticated = false, registrationError = fa
       authenticated = true;
       body = { accessToken: 'test-token', user: currentUser };
     } else if (path === '/web-api/orders' && event.request.method === 'POST') {
-      throw new Error('These tests must never submit an order');
+      if (!allowOrder) throw new Error('This test must not submit an order');
+      // Fulfilled entirely in the browser: never create real orders or payments.
+      savedOrder = { ...JSON.parse(event.request.postData), id: 'test-order', status: 'НОВЫЙ', createdAt: profile.createdAt };
+      status = 201;
+      body = savedOrder;
+    } else if (path === '/web-api/orders/test-order') {
+      body = savedOrder;
     }
     await page.send('Fetch.fulfillRequest', {
       requestId: event.requestId, responseCode: status,
@@ -54,7 +83,7 @@ async function openPage(context, { authenticated = false, registrationError = fa
   await page.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `localStorage.setItem('dgs-web-cart', ${JSON.stringify(JSON.stringify(emptyCart ? { ...cart, state: { items: [], itemCount: 0, subtotal: 0 } } : cart))});`,
   });
-  return { page, requests };
+  return { page, requests, savedAddresses };
 }
 
 const selector = id => `[data-testid="${id}"]`;
@@ -145,4 +174,85 @@ test('reauthentication preserves contact edits and the delivery draft', async co
   assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-checkout-name'))}).value`), 'Custom recipient');
   assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-checkout-address'))}).value`), 'Test delivery address, building 1');
   await assertCartPreserved(page);
+});
+
+const normalizedAddress = {
+  fullAddress: 'г Москва, ул Тверская, д 1, кв 42',
+  city: 'Москва', street: 'Тверская', building: '1', flat: '42',
+  postalCode: '125009', fiasId: 'test-fias', geoLat: '55.76', geoLon: '37.61',
+};
+
+test('checkout uses the Telegram DaData endpoint and submits the selected normalized address', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, suggestions: [normalizedAddress], allowOrder: true,
+  });
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await page.wait(exists('input-checkout-address'));
+  await page.fill(selector('input-checkout-address'), 'Москва Тверская 1');
+  await page.click(selector('address-suggestion-0'));
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-checkout-address'))}).value`), normalizedAddress.fullAddress);
+  await delay(500);
+  assert.equal(await page.evaluate(exists('address-suggestions-list')), false);
+  assert.equal(requests.filter(request => request.path === '/api/address/suggest').length, 1);
+  await page.fill(selector('input-checkout-phone'), '+79990000000');
+  await page.click(selector('button-place-order'));
+  await page.wait(`location.pathname === '/web/order-success/test-order'`);
+  const order = requests.find(request => request.path === '/web-api/orders' && request.method === 'POST');
+  assert.equal(order.body.deliveryAddress, normalizedAddress.fullAddress);
+});
+
+test('address book saves normalized city, street, building, apartment and postal code', async context => {
+  const { page, requests, savedAddresses } = await openPage(context, {
+    authenticated: true, suggestions: [normalizedAddress],
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-add-address'));
+  await page.fill(selector('input-saved-address'), 'Москва Тверская 1');
+  await page.click(selector('address-suggestion-0'));
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-address-city'))}).value`), 'Москва');
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-address-postal-code'))}).value`), '125009');
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-address-apartment'))}).value`), '42');
+  await page.click(selector('button-save-address'));
+  await page.wait(`!!document.querySelector('[data-testid="card-address-test-address"]')`);
+  const saved = requests.find(request => request.path === '/web-api/addresses' && request.method === 'POST');
+  assert.equal(saved.body.fullAddress, normalizedAddress.fullAddress);
+  for (const key of ['city', 'street', 'building', 'postalCode']) {
+    assert.equal(saved.body[key], normalizedAddress[key]);
+  }
+  assert.equal(saved.body.apartment, '42');
+  assert.equal(savedAddresses.length, 1);
+});
+
+test('editing a selected address does not retain structured data from the previous selection', async context => {
+  const { page, requests } = await openPage(context, { authenticated: true, suggestions: [normalizedAddress] });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-add-address'));
+  await page.fill(selector('input-saved-address'), 'Москва Тверская 1');
+  await page.click(selector('address-suggestion-0'));
+  await page.fill(selector('input-saved-address'), 'Санкт-Петербург, Невский проспект, д 2');
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-address-city'))}).value`), '');
+  await page.fill(selector('input-address-city'), 'Санкт-Петербург');
+  await page.click(selector('button-save-address'));
+  await page.wait(`!!document.querySelector('[data-testid="card-address-test-address"]')`);
+  const saved = requests.find(request => request.path === '/web-api/addresses' && request.method === 'POST');
+  assert.equal(saved.body.city, 'Санкт-Петербург');
+  for (const key of ['street', 'building', 'postalCode', 'apartment']) assert.equal(saved.body[key], '');
+});
+
+test('unavailable suggestions preserve manual address entry and do not block checkout', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, suggestionsUnavailable: true, allowOrder: true,
+  });
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await page.wait(exists('input-checkout-address'));
+  const manualAddress = 'Москва, улица Тверская, дом 1, квартира 42';
+  await page.fill(selector('input-checkout-address'), manualAddress);
+  await delay(650);
+  assert.equal(await page.evaluate(exists('address-suggestions-list')), false);
+  assert.equal(requests.filter(request => request.path === '/api/address/suggest').length, 1);
+  await page.fill(selector('input-checkout-phone'), '+79990000000');
+  await page.click(selector('button-place-order'));
+  await page.wait(`location.pathname === '/web/order-success/test-order'`);
+  const order = requests.find(request => request.path === '/web-api/orders' && request.method === 'POST');
+  assert.equal(order.body.deliveryAddress, manualAddress);
 });
