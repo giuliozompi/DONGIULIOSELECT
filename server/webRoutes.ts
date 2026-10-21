@@ -14,6 +14,7 @@ import { storage } from './storage';
 import { createWebCategorySchema, updateWebCategorySchema } from './utils/web-category-input';
 import { isValidOrderQuantity } from '../shared/order-quantity';
 import { registerWebAddressUpdate } from './webAddressRoutes';
+import { registerWebReorder } from './webReorderRoutes';
 import {
   hashPassword,
   verifyPassword,
@@ -558,6 +559,8 @@ export function registerWebRoutes(app: Express) {
       return res.status(500).json({ error: 'Ошибка создания заказа' });
     }
   });
+
+  registerWebReorder(app, db, requireWebAuth);
 
   // GET /web-api/orders
   app.get('/web-api/orders', requireWebAuth, async (req: Request, res: Response) => {

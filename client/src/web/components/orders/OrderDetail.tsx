@@ -9,6 +9,7 @@ import {
   PaymentGuidance,
 } from './order-view';
 import type { CustomerOrder } from './order-view';
+import { RepeatOrderButton } from './RepeatOrderButton';
 
 export function OrderDetail({ order }: { order: CustomerOrder }) {
   const discount = Number(order.discount ?? 0);
@@ -27,6 +28,7 @@ export function OrderDetail({ order }: { order: CustomerOrder }) {
           </div>
           <OrderStatus status={order.status} />
         </div>
+        <div className="mt-5"><RepeatOrderButton orderId={order.id} /></div>
         {courierWasCalled && (
           <p className="mt-5 max-w-2xl border-l-2 border-[#b79d69] pl-3 text-sm leading-relaxed text-[#766e5e]">
             Магазин оформил вызов курьера. Этот статус сам по себе не подтверждает, что заказ уже забран или находится в пути.

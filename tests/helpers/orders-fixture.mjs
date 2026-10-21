@@ -22,11 +22,12 @@ export const historyOrder = {
 // service workers so no order, payment, email or real customer record is touched.
 export async function ordersPage(browser, context, {
   orders = [customerOrder, historyOrder], authenticated = true, listFailure = false,
+  reorderFailure = false, reorderDelay = 0, reorderPreview,
 } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
   const requests = [];
-  const state = { listFailure };
+  const state = { listFailure, reorderFailure, reorderPreview };
   await page.send('Fetch.enable', { patterns: [
     { urlPattern: '*/web-api/*' }, { urlPattern: '*/api/*' },
     { urlPattern: '*telegram.org/js/telegram-web-app.js*' },
@@ -48,6 +49,19 @@ export async function ordersPage(browser, context, {
     } else if (path === '/web-api/orders') {
       status = state.listFailure ? 500 : 200;
       body = state.listFailure ? { error: 'Ошибка загрузки заказов' } : orders;
+    } else if (path.startsWith('/web-api/orders/') && path.endsWith('/reorder')) {
+      if (reorderDelay) await new Promise(resolve => setTimeout(resolve, reorderDelay));
+      const order = orders.find(order => order.id === path.split('/').at(-2));
+      status = state.reorderFailure ? 503 : order ? 200 : 404;
+      body = state.reorderFailure ? { error: 'Каталог временно недоступен' }
+        : !order ? { error: 'Заказ не найден' }
+        : state.reorderPreview ?? {
+          items: order.items.map((item, index) => ({
+            ...item, productName: `${item.productName} — актуальный каталог`,
+            price: index === 0 ? '2300.00' : '600.00', priceChanged: true,
+          })),
+          skipped: [],
+        };
     } else if (path.startsWith('/web-api/orders/')) {
       body = orders.find(order => order.id === path.split('/').pop());
       status = body ? 200 : 404;

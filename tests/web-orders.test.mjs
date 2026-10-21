@@ -116,3 +116,140 @@ test('long product and address strings stay readable on a narrow screen', async 
   await page.wait(exists('order-detail'));
   assert.equal(await page.evaluate('document.documentElement.scrollWidth > innerWidth'), false);
 });
+
+const repeatId = `repeat-order-${customerOrder.id}`;
+const repeatReady = `${exists(repeatId)} && !document.querySelector(${JSON.stringify(selector(repeatId))}).disabled`;
+async function cartItems(page) {
+  return page.evaluate(`JSON.parse(localStorage.getItem('dgs-web-cart') || '{"state":{"items":[]}}').state.items`);
+}
+async function seedCart(page) {
+  // Seed persistence and reload the real UI. An unversioned dynamic import
+  // during Vite HMR can create a second, detached Zustand store.
+  await page.evaluate(`localStorage.setItem('dgs-web-cart', JSON.stringify({ state: {
+    items: [
+      { productId: 'test-cheese', productName: 'Old cart cheese', price: '1000.00', unit: 'кг', quantity: 0.165 },
+      { productId: 'test-bread', productName: 'Bread', price: '100.00', unit: 'шт', quantity: 2 }
+    ], itemCount: 2, subtotal: 365
+  }, version: 0 }))`);
+  await page.send('Page.reload');
+  await page.wait(repeatReady);
+}
+
+test('repeat from the mobile list adds original quantities with fresh prices, not historical totals', async context => {
+  const { page, requests } = await ordersPage(browser, context);
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 844, deviceScaleFactor: 1, mobile: true });
+  await page.send('Page.navigate', { url: `${ordersBase}/web/account/orders` });
+  await page.wait(repeatReady);
+  assert.equal(await page.evaluate('document.documentElement.scrollWidth > innerWidth'), false);
+  const snapshot = await page.send('Page.captureScreenshot', { format: 'jpeg', quality: 80 });
+  await writeFile('/tmp/dg-repeat-list-mobile.jpg', Buffer.from(snapshot.data, 'base64'));
+  await page.click(selector(repeatId));
+  await page.wait(`location.pathname === '/web/cart'`);
+  const items = await cartItems(page);
+  assert.equal(items.length, 2);
+  assert.equal(items[0].quantity, 0.735);
+  assert.equal(items[0].price, '2300.00');
+  assert.match(items[0].productName, /актуальный каталог/);
+  assert.equal(items[1].price, '600.00');
+  assert.equal(items[1].quantity, 1);
+  assert.equal(await page.evaluate(`JSON.parse(localStorage.getItem('dgs-web-cart')).state.subtotal`), 2290.5);
+  assert.equal(requests.some(request => request.method !== 'GET' && request.path !== '/web-api/auth/refresh'), false);
+  assert.equal(requests.filter(request => request.path.endsWith('/reorder')).length, 1);
+});
+
+test('repeat from detail preserves existing cart products, sums exact weights and refreshes matching prices', async context => {
+  const { page } = await ordersPage(browser, context);
+  await page.send('Page.navigate', { url: `${ordersBase}/web/orders/${customerOrder.id}` });
+  await page.wait(repeatReady);
+  await seedCart(page);
+  await page.click(selector(repeatId));
+  await page.wait(`location.pathname === '/web/cart'`);
+  const items = await cartItems(page);
+  assert.equal(items.length, 3);
+  const cheese = items.find(item => item.productId === 'test-cheese');
+  assert.equal(cheese.quantity, 0.9);
+  assert.equal(cheese.price, '2300.00');
+  assert.equal(items.find(item => item.productId === 'test-bread').quantity, 2);
+  assert.equal(items.find(item => item.productId === 'test-bread').price, '100.00');
+});
+
+test('partially unavailable repeat adds available products and explains each skipped product', async context => {
+  const { page } = await ordersPage(browser, context, { reorderPreview: {
+    items: [{ ...customerOrder.items[0], price: '2500.00', priceChanged: true }],
+    skipped: [
+      { productId: 'test-salami', productName: 'Салями итальянская', reason: 'unavailable' },
+      { productId: 'deleted', productName: 'Удалённый сыр', reason: 'removed' },
+    ],
+  } });
+  await page.send('Page.navigate', { url: `${ordersBase}/web/account/orders` });
+  await page.wait(repeatReady);
+  await page.click(selector(repeatId));
+  await page.wait(exists('reorder-review'));
+  const content = await page.evaluate(`document.querySelector(${JSON.stringify(selector('reorder-review'))}).textContent`);
+  assert.match(content, /Заказ повторён частично/);
+  assert.match(content, /Нет в наличии/);
+  assert.match(content, /Товар больше не продаётся/);
+  assert.equal((await cartItems(page)).length, 1);
+  assert.equal((await cartItems(page))[0].price, '2500.00');
+  assert.equal(await page.evaluate('location.pathname'), '/web/account/orders');
+  await page.click(selector('reorder-go-to-cart'));
+  await page.wait(`location.pathname === '/web/cart'`);
+});
+
+test('no available products leaves the existing cart unchanged and gives an explicit explanation', async context => {
+  const { page } = await ordersPage(browser, context, { reorderPreview: {
+    items: [], skipped: customerOrder.items.map(item => ({ ...item, reason: 'unavailable' })),
+  } });
+  await page.send('Page.navigate', { url: `${ordersBase}/web/orders/${customerOrder.id}` });
+  await page.wait(repeatReady);
+  await seedCart(page);
+  const before = await cartItems(page);
+  await page.click(selector(repeatId));
+  await page.wait(exists('reorder-review'));
+  assert.match(await page.evaluate(text), /Корзина не изменена/);
+  assert.deepEqual(await cartItems(page), before);
+});
+
+test('catalogue errors do not change the cart or fall back to old prices; retry is explicit', async context => {
+  const { page, state, requests } = await ordersPage(browser, context, { reorderFailure: true });
+  await page.send('Page.navigate', { url: `${ordersBase}/web/account/orders` });
+  await page.wait(repeatReady);
+  await seedCart(page);
+  const before = await cartItems(page);
+  await page.click(selector(repeatId));
+  await page.wait(`document.body.textContent.includes('Не удалось повторить заказ')`);
+  await page.wait(repeatReady);
+  assert.deepEqual(await cartItems(page), before);
+  assert.equal(requests.filter(request => request.path.endsWith('/reorder')).length, 1);
+  state.reorderFailure = false;
+  await page.click(selector(repeatId));
+  await page.wait(`location.pathname === '/web/cart'`);
+  assert.equal((await cartItems(page)).find(item => item.productId === 'test-cheese').price, '2300.00');
+  assert.equal(requests.filter(request => request.path.endsWith('/reorder')).length, 2);
+});
+
+test('rapid clicks on two repeat buttons cannot duplicate products', async context => {
+  const { page, requests } = await ordersPage(browser, context, { reorderDelay: 300 });
+  await page.send('Page.navigate', { url: `${ordersBase}/web/account/orders` });
+  await page.wait(repeatReady);
+  await page.evaluate(`(() => {
+    document.querySelector(${JSON.stringify(selector(repeatId))}).click();
+    document.querySelector(${JSON.stringify(selector(`repeat-order-${historyOrder.id}`))}).click();
+  })()`);
+  await page.wait(`location.pathname === '/web/cart'`);
+  assert.equal(requests.filter(request => request.path.endsWith('/reorder')).length, 1);
+  assert.equal((await cartItems(page))[0].quantity, 0.735);
+});
+
+test('switching customer during a repeat request never adds the previous customer order', async context => {
+  const { page } = await ordersPage(browser, context, { reorderDelay: 700 });
+  await page.send('Page.navigate', { url: `${ordersBase}/web/account/orders` });
+  await page.wait(repeatReady);
+  await page.click(selector(repeatId));
+  await page.evaluate(`(async () => {
+    const { useWebAuth } = await import('/src/web/hooks/useWebAuth.ts');
+    useWebAuth.setState({ user: { ...useWebAuth.getState().user, id: 'other-customer' } });
+  })()`);
+  await page.wait(`document.body.textContent.includes('Аккаунт изменился')`);
+  assert.deepEqual(await cartItems(page), []);
+});

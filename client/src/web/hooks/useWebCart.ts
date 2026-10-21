@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { mergeReorderCart } from '@shared/reorder';
+import type { ReorderSkippedItem } from '@shared/reorder';
 
 export interface WebCartItem {
   productId: string;
@@ -15,6 +17,7 @@ interface WebCartState {
   itemCount: number;
   subtotal: number;
   addItem: (item: Omit<WebCartItem, 'quantity'>, qty?: number) => void;
+  addReorderItems: (items: WebCartItem[]) => { addedCount: number; skipped: ReorderSkippedItem[] };
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -46,6 +49,16 @@ export const useWebCart = create<WebCartState>()(
             : [...state.items, { ...item, quantity: qty }];
           return { items, ...calcDerived(items) };
         }),
+
+      addReorderItems: incoming => {
+        let result = { addedCount: 0, skipped: [] as ReorderSkippedItem[] };
+        set(state => {
+          const merged = mergeReorderCart(state.items, incoming);
+          result = { addedCount: merged.addedCount, skipped: merged.skipped };
+          return { items: merged.items, ...calcDerived(merged.items) };
+        });
+        return result;
+      },
 
       removeItem: (productId) =>
         set(state => {

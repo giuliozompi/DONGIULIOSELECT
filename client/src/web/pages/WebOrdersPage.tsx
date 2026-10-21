@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { webApi } from '../lib/webApi';
 import { OrderDetail } from '../components/orders/OrderDetail';
+import { RepeatOrderButton } from '../components/orders/RepeatOrderButton';
 import {
   formatOrderDate,
   formatOrderMoney,
@@ -77,8 +78,9 @@ function OrderCard({ order, onOpen }: { order: CustomerOrder; onOpen: () => void
             </p>
             <p className="mt-1 text-xs text-[#928977]">{order.items.length} {order.items.length === 1 ? 'позиция' : order.items.length >= 2 && order.items.length <= 4 ? 'позиции' : 'позиций'}</p>
           </div>
-          <div className="flex shrink-0 items-center justify-between gap-4 sm:justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
             <span className="text-lg font-semibold tabular-nums text-[#302b24]">{formatOrderMoney(order.amount)}</span>
+            <RepeatOrderButton orderId={order.id} />
             <Button
               data-testid={`open-order-${order.id}`}
               variant="ghost"
@@ -100,16 +102,16 @@ function OrderCard({ order, onOpen }: { order: CustomerOrder; onOpen: () => void
 export default function WebOrdersPage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id?: string }>();
-  const { isAuthenticated, isLoading: isAuthLoading } = useWebAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useWebAuth();
   const isDetail = Boolean(id);
 
   const listQuery = useQuery({
-    queryKey: ['/web-api/orders'],
+    queryKey: ['/web-api/orders', user?.id, 'list'],
     queryFn: () => webApi.get<CustomerOrder[]>('/orders'),
     enabled: isAuthenticated && !isDetail,
   });
   const detailQuery = useQuery({
-    queryKey: ['/web-api/orders', id],
+    queryKey: ['/web-api/orders', user?.id, id],
     queryFn: () => webApi.get<CustomerOrder>(`/orders/${encodeURIComponent(id!)}`),
     enabled: isAuthenticated && Boolean(id),
     retry: false,
