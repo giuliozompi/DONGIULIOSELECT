@@ -21,11 +21,15 @@ after(async () => { await browser?.close(); });
 async function openPage(context, {
   authenticated = false, registrationError = false, emptyCart = false,
   suggestions = [], suggestionsUnavailable = false, allowOrder = false,
+  initialAddresses = [], holdAddresses = false, addressesUnavailable = false,
+  addressesByUser = {},
 } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
   const requests = [];
-  const savedAddresses = [];
+  const savedAddresses = [...initialAddresses];
+  let releaseAddresses;
+  const addressesReady = new Promise(resolve => { releaseAddresses = resolve; });
   let savedOrder;
   let currentUser = profile;
   await page.send('Fetch.enable', { patterns: [
@@ -36,6 +40,7 @@ async function openPage(context, {
     const path = new URL(event.request.url).pathname;
     requests.push({
       path, method: event.request.method,
+      userId: authenticated ? currentUser.id : null,
       body: ['/web-api/addresses', '/web-api/orders'].includes(path) && event.request.postData
         ? JSON.parse(event.request.postData) : undefined,
     });
@@ -50,7 +55,18 @@ async function openPage(context, {
         savedAddresses.push(address);
         status = 201;
         body = address;
-      } else body = savedAddresses;
+      } else if (!authenticated) {
+        status = 401;
+        body = { error: 'Not signed in' };
+      } else {
+        // Capture the requesting identity before any delayed response.
+        body = addressesByUser[currentUser.id] || savedAddresses;
+        if (holdAddresses) await addressesReady;
+        if (addressesUnavailable) {
+          status = 503;
+          body = { error: 'Address book unavailable' };
+        }
+      }
     } else if (path.endsWith('/auth/refresh')) {
       status = authenticated ? 200 : 401;
       body = authenticated ? { accessToken: 'test-token', user: currentUser } : { error: 'Not signed in' };
@@ -83,7 +99,17 @@ async function openPage(context, {
   await page.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `localStorage.setItem('dgs-web-cart', ${JSON.stringify(JSON.stringify(emptyCart ? { ...cart, state: { items: [], itemCount: 0, subtotal: 0 } } : cart))});`,
   });
-  return { page, requests, savedAddresses };
+  return {
+    page, requests, savedAddresses, releaseAddresses,
+    async switchUser(user) {
+      currentUser = user;
+      authenticated = !!user;
+      await page.evaluate(`(async () => {
+        const { useWebAuth } = await import('/src/web/hooks/useWebAuth.ts');
+        useWebAuth.setState({ user: ${JSON.stringify(user)}, isAuthenticated: ${!!user}, isLoading: false });
+      })()`);
+    },
+  };
 }
 
 const selector = id => `[data-testid="${id}"]`;
@@ -255,4 +281,130 @@ test('unavailable suggestions preserve manual address entry and do not block che
   await page.wait(`location.pathname === '/web/order-success/test-order'`);
   const order = requests.find(request => request.path === '/web-api/orders' && request.method === 'POST');
   assert.equal(order.body.deliveryAddress, manualAddress);
+});
+
+const homeAddress = {
+  id: 'home', label: 'Дом', fullAddress: 'г Москва, ул Тестовая, д 5',
+  city: 'Москва', apartment: '42', notes: 'Подъезд 2, этаж 7, домофон 42',
+  isDefault: true, createdAt: profile.createdAt,
+};
+const officeAddress = {
+  ...homeAddress, id: 'office', label: 'Офис', isDefault: false,
+  fullAddress: 'г Москва, ул Другая, д 10, кв 8', apartment: '8', notes: null,
+};
+const checkoutValue = id => `document.querySelector(${JSON.stringify(selector(id))}).value`;
+async function chooseAddress(page, id) {
+  await page.wait(exists('select-checkout-saved-address'));
+  await page.evaluate(`(() => {
+    const select = document.querySelector(${JSON.stringify(selector('select-checkout-saved-address'))});
+    select.value = ${JSON.stringify(id)};
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+}
+
+test('saved address choice preserves apartment and courier notes in the order payload on mobile', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress, officeAddress], allowOrder: true,
+  });
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await page.wait(exists('select-checkout-saved-address'));
+  // Even the default address is never applied without the customer's choice.
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-address')), '');
+  await chooseAddress(page, 'home');
+  const expected = `${homeAddress.fullAddress}, кв. 42`;
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-address')), expected);
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-notes')), homeAddress.notes);
+  await page.fill(selector('input-checkout-phone'), '+79990000000');
+  await page.click(selector('button-place-order'));
+  await page.wait(`location.pathname === '/web/order-success/test-order'`);
+  const order = requests.find(r => r.path === '/web-api/orders' && r.method === 'POST');
+  assert.equal(order.body.deliveryAddress, expected);
+  assert.equal(order.body.deliveryNotes, homeAddress.notes);
+  assert.equal(order.userId, profile.id);
+});
+
+test('switching saved addresses avoids duplicated apartments and clears obsolete notes', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress, officeAddress], allowOrder: true,
+  });
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await chooseAddress(page, 'home');
+  await chooseAddress(page, 'office');
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-address')), officeAddress.fullAddress);
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-notes')), '');
+  await chooseAddress(page, '');
+  // Manual mode retains the fields and keeps DaData available.
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-address')), officeAddress.fullAddress);
+  await page.fill(selector('input-checkout-address'), 'Москва, новый адрес, д 9, кв 3');
+  await page.fill(selector('input-checkout-notes'), 'Позвонить за час');
+  await page.fill(selector('input-checkout-phone'), '+79990000000');
+  await page.click(selector('button-place-order'));
+  await page.wait(`location.pathname === '/web/order-success/test-order'`);
+  const order = requests.find(r => r.path === '/web-api/orders' && r.method === 'POST');
+  assert.equal(order.body.deliveryAddress, 'Москва, новый адрес, д 9, кв 3');
+  assert.equal(order.body.deliveryNotes, 'Позвонить за час');
+});
+
+test('late address loading and refetches never overwrite an edited delivery draft', async context => {
+  const { page, releaseAddresses, savedAddresses } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress], holdAddresses: true,
+  });
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await page.wait(exists('input-checkout-address'));
+  await page.fill(selector('input-checkout-address'), 'Москва, мой адрес, дом 12');
+  await page.fill(selector('input-checkout-notes'), 'Мои инструкции курьеру');
+  releaseAddresses();
+  await page.wait(exists('select-checkout-saved-address'));
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-address')), 'Москва, мой адрес, дом 12');
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-notes')), 'Мои инструкции курьеру');
+  await chooseAddress(page, 'home');
+  await page.fill(selector('input-checkout-address'), 'Москва, исправленный адрес, дом 13');
+  await page.fill(selector('input-checkout-notes'), 'Новый комментарий');
+  savedAddresses.push(officeAddress);
+  await page.evaluate(`(async () => {
+    const { queryClient } = await import('/src/lib/queryClient.ts');
+    await queryClient.invalidateQueries({ queryKey: ['/web-api/addresses'] });
+  })()`);
+  await page.wait(`!!document.querySelector('#checkout-saved-address option[value="office"]')`);
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-address')), 'Москва, исправленный адрес, дом 13');
+  assert.equal(await page.evaluate(checkoutValue('input-checkout-notes')), 'Новый комментарий');
+  assert.equal(await page.evaluate(checkoutValue('select-checkout-saved-address')), '');
+});
+
+test('address lists are authenticated and cache-isolated when customers change accounts', async context => {
+  const otherUser = { ...profile, id: 'other-customer', email: 'other@example.invalid' };
+  const otherAddress = { ...officeAddress, id: 'other-home', label: 'Другой клиент' };
+  const { page, requests, switchUser } = await openPage(context, {
+    addressesByUser: { [profile.id]: [homeAddress], [otherUser.id]: [otherAddress] },
+  });
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await page.wait(exists('input-register-firstname'));
+  assert.equal(requests.some(r => r.path === '/web-api/addresses'), false);
+  await register(page);
+  await page.wait(`!!document.querySelector('#checkout-saved-address option[value="home"]')`);
+  assert.equal(await page.evaluate(`!!document.querySelector('#checkout-saved-address option[value="other-home"]')`), false);
+  await switchUser(otherUser);
+  await page.wait(`!!document.querySelector('#checkout-saved-address option[value="other-home"]')`);
+  assert.equal(await page.evaluate(`!!document.querySelector('#checkout-saved-address option[value="home"]')`), false);
+  const addressRequests = requests.filter(r => r.path === '/web-api/addresses');
+  assert.deepEqual(addressRequests.map(r => r.userId), [profile.id, otherUser.id]);
+  // The address book shares the same customer-scoped cache as checkout.
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.wait(exists('card-address-other-home'));
+  assert.equal(await page.evaluate(exists('card-address-home')), false);
+});
+
+test('address book failure is visible and does not block manual checkout', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, addressesUnavailable: true, allowOrder: true,
+  });
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await page.wait(`document.body?.textContent.includes('Не удалось загрузить адреса')`);
+  await page.fill(selector('input-checkout-address'), 'Москва, ручной адрес, дом 11');
+  await page.fill(selector('input-checkout-phone'), '+79990000000');
+  await page.click(selector('button-place-order'));
+  await page.wait(`location.pathname === '/web/order-success/test-order'`);
+  assert.equal(requests.find(r => r.path === '/web-api/orders' && r.method === 'POST').body.deliveryAddress,
+    'Москва, ручной адрес, дом 11');
 });

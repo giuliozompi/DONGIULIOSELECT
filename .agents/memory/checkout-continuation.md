@@ -16,3 +16,11 @@ On the website, collect and normalize addresses in checkout and the address book
 **Why:** The user explicitly chose “Nel checkout e nella rubrica, senza cambiare la registrazione” when offered both alternatives.
 
 **How to apply:** Reuse the same DaData address system as the Telegram app. Do not move address collection into account creation without a new request.
+
+## Applying saved addresses
+
+Keep a customer's delivery draft intact when the address book loads or refreshes, including after authentication. Applying a saved or default address must be an explicit customer action.
+
+**Why:** The user requires reuse of saved delivery details without overwriting a draft the customer has already edited.
+
+**How to apply:** Do not auto-apply the default address on data arrival; keep manual/DaData entry available alongside the address book.

@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   ChevronRight, Loader2, Tag, X, CreditCard, Banknote, MapPin, User, Phone, Mail, MessageSquare,
 } from 'lucide-react';
@@ -21,6 +21,7 @@ import { useWebAuth } from '../hooks/useWebAuth';
 import { webApi } from '../lib/webApi';
 import CheckoutAuthGate from '../components/CheckoutAuthGate';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { savedDeliveryAddress, type SavedAddress } from '../lib/savedAddresses';
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, 'Введите имя и фамилию'),
@@ -43,12 +44,21 @@ interface PromoResult {
 export default function WebCheckoutPage() {
   const [, setLocation] = useLocation();
   const { items, subtotal, itemCount, clearCart } = useWebCart();
-  const { user } = useWebAuth();
+  const { user, isAuthenticated } = useWebAuth();
   const { toast } = useToast();
 
   const [promoInput, setPromoInput] = useState('');
   const [promoResult, setPromoResult] = useState<PromoResult | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [addressSelection, setAddressSelection] = useState<{ userId: string; id: string } | null>(null);
+  const {
+    data: addresses = [], isLoading: addressesLoading, isError: addressesError, refetch: refetchAddresses,
+  } = useQuery({
+    queryKey: ['/web-api/addresses', user?.id],
+    queryFn: () => webApi.get<SavedAddress[]>('/addresses'),
+    enabled: isAuthenticated && !!user && items.length > 0,
+    staleTime: 0,
+  });
 
   const form = useForm<CheckoutForm>({
     resolver: zodResolver(checkoutSchema),
@@ -61,6 +71,19 @@ export default function WebCheckoutPage() {
       paymentMethod: 'yookassa',
     },
   });
+
+  const selectSavedAddress = (id: string) => {
+    const address = addresses.find(address => address.id === id);
+    if (!address || !user) {
+      setAddressSelection(null);
+      return;
+    }
+    // Only a customer's explicit selection replaces delivery fields. In
+    // particular, late responses/refetches must never overwrite a draft.
+    form.setValue('deliveryAddress', savedDeliveryAddress(address), { shouldDirty: true, shouldValidate: true });
+    form.setValue('deliveryNotes', address.notes || '', { shouldDirty: true, shouldValidate: true });
+    setAddressSelection({ userId: user.id, id });
+  };
 
   useEffect(() => {
     if (items.length === 0) setLocation('/web/cart');
@@ -206,6 +229,39 @@ export default function WebCheckoutPage() {
                 <h2 className="font-semibold text-neutral-900 mb-4 flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-neutral-400" /> Адрес доставки
                 </h2>
+                {addressesLoading ? (
+                  <p role="status" className="text-sm text-neutral-500 mb-4">Загружаем сохранённые адреса...</p>
+                ) : addressesError ? (
+                  <div role="status" className="text-sm text-neutral-500 mb-4">
+                    Не удалось загрузить адреса. Введите адрес ниже или{' '}
+                    <button type="button" className="underline" onClick={() => refetchAddresses()}>
+                      попробуйте снова
+                    </button>.
+                  </div>
+                ) : addresses.length > 0 && (
+                  <div className="mb-4 space-y-2">
+                    <Label htmlFor="checkout-saved-address">Адрес из вашей адресной книги</Label>
+                    <select
+                      id="checkout-saved-address"
+                      data-testid="select-checkout-saved-address"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={addressSelection?.userId === user?.id && addresses.some(a => a.id === addressSelection?.id)
+                        ? addressSelection?.id : ''}
+                      onChange={event => selectSavedAddress(event.target.value)}
+                      aria-describedby="checkout-saved-address-help"
+                    >
+                      <option value="">Ввести или изменить адрес</option>
+                      {addresses.map(address => (
+                        <option key={address.id} value={address.id}>
+                          {address.label}{address.isDefault ? ' (по умолчанию)' : ''} — {savedDeliveryAddress(address)}
+                        </option>
+                      ))}
+                    </select>
+                    <p id="checkout-saved-address-help" className="text-xs text-neutral-500">
+                      Выбор заменит адрес и комментарий ниже данными из адресной книги. Их можно изменить перед заказом.
+                    </p>
+                  </div>
+                )}
                 <FormField control={form.control} name="deliveryAddress" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Полный адрес *</FormLabel>
@@ -213,7 +269,10 @@ export default function WebCheckoutPage() {
                       <AddressAutocomplete
                         ref={field.ref}
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={value => {
+                          setAddressSelection(null);
+                          field.onChange(value);
+                        }}
                         onBlur={field.onBlur}
                         placeholder="Начните вводить город, улицу и дом"
                         testId="input-checkout-address"
@@ -235,6 +294,10 @@ export default function WebCheckoutPage() {
                       <FormControl>
                         <Textarea
                           {...field}
+                          onChange={event => {
+                            setAddressSelection(null);
+                            field.onChange(event);
+                          }}
                           placeholder="Время доставки, код домофона, особые пожелания..."
                           className="resize-none"
                           rows={2}

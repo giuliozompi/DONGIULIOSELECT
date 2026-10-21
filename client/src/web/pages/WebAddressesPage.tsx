@@ -17,12 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { webApi } from '../lib/webApi';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
-
-interface Address {
-  id: string; label: string; fullAddress: string; city: string;
-  street?: string; building?: string; apartment?: string; postalCode?: string;
-  notes?: string; isDefault: boolean; createdAt: string;
-}
+import type { SavedAddress as Address } from '../lib/savedAddresses';
 
 const addSchema = z.object({
   label: z.string().default('Дом'),
@@ -38,16 +33,16 @@ const addSchema = z.object({
 
 export default function WebAddressesPage() {
   const [, setLocation] = useLocation();
-  const { isAuthenticated } = useWebAuth();
+  const { user, isAuthenticated } = useWebAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const selectedAddress = useRef<AddressSuggestion | null>(null);
 
   const { data: addresses = [], isLoading } = useQuery({
-    queryKey: ['/web-api/addresses'],
+    queryKey: ['/web-api/addresses', user?.id],
     queryFn: () => webApi.get<Address[]>('/addresses'),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && !!user,
   });
 
   const form = useForm<z.infer<typeof addSchema>>({
