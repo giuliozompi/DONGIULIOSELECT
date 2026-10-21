@@ -156,3 +156,28 @@ test('out-of-stock product can be selected and removed from its detail page', as
   await page.wait(selected(favorite, false));
   assert.equal(postCount(requests), 2);
 });
+
+for (const initiallySelected of [false, true]) {
+  test(`favourite tooltip explains ${initiallySelected ? 'removal' : 'adding'} on hover and keyboard focus without saving`, async context => {
+    const { page, requests } = await wishlistPage(browser, context, { initiallySelected });
+    await page.send('Page.navigate', { url: `${wishlistBase}/web/catalog` });
+    await page.wait(selected(favorite, initiallySelected));
+    const point = await page.evaluate(`(() => {
+      const rect = document.querySelector(${JSON.stringify(selector(favorite))}).getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    })()`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+    const hint = initiallySelected ? 'Удалить из избранного' : 'Добавить в избранное';
+    const visibleHint = `document.querySelector('[role="tooltip"]')?.textContent === ${JSON.stringify(hint)}`;
+    await page.wait(visibleHint);
+    assert.ok(await page.evaluate(`document.querySelector('[data-radix-popper-content-wrapper]').parentElement === document.body`));
+    assert.equal(postCount(requests), 0);
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+    await page.wait(`!document.querySelector('[role="tooltip"]')`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 1 });
+    await page.evaluate(`document.querySelector(${JSON.stringify(selector(favorite))}).focus()`);
+    await page.wait(visibleHint);
+    assert.equal(postCount(requests), 0);
+  });
+}
