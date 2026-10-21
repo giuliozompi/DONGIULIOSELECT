@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Search, Eye, Trash2, Plus, Minus, X, Percent, ChevronLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { isKilogramUnit, parseOrderQuantity } from '@shared/order-quantity';
+import { OrderWeightEditor } from '../components/OrderWeightEditor';
 
 const STATUSES = [
   { value: 'all', label: 'Все' },
@@ -105,7 +107,8 @@ export default function AdminOrders() {
   const addProdMut = useMutation({
     mutationFn: () => {
       const product = allProducts.find((p: any) => p.id === addProdId);
-      const qty = product?.unit === 'кг' ? parseFloat(addProdQty) || 0.2 : parseFloat(addProdQty) || 1;
+      const qty = parseOrderQuantity(addProdQty, product?.unit || '');
+      if (qty === null) throw new Error('Введите положительное количество; вес в кг — до 3 знаков после запятой.');
       return adminApi.addProduct(selectedId!, addProdId, qty);
     },
     onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); setAddProdDialog(false); setAddProdId(''); setAddProdQty('1'); toast({ title: 'Товар добавлен' }); },
@@ -119,10 +122,10 @@ export default function AdminOrders() {
   });
 
   function stepQty(item: any, delta: number) {
-    const isKg = item.unit === 'кг';
+    const isKg = isKilogramUnit(item.unit);
     const step = isKg ? 0.1 : 1;
-    const min = isKg ? 0.2 : 1;
-    const newQty = Math.max(min, parseFloat((item.quantity + delta * step).toFixed(1)));
+    const min = isKg ? 0.001 : 1;
+    const newQty = Math.max(min, Number((Number(item.quantity) + delta * step).toFixed(3)));
     qtyMut.mutate({ productId: item.productId, newQuantity: newQty });
   }
 
@@ -182,11 +185,15 @@ export default function AdminOrders() {
                         <p className="font-medium text-sm truncate">{item.productName}</p>
                         <p className="text-xs text-muted-foreground">{fmt(item.price)} / {item.unit}</p>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      {isKilogramUnit(item.unit) ? (
+                        <OrderWeightEditor key={`${o.id}-${item.productId}`} quantity={Number(item.quantity)}
+                          productName={item.productName} disabled={qtyMut.isPending}
+                          onSave={newQuantity => qtyMut.mutateAsync({ productId: item.productId, newQuantity })} />
+                      ) : <div className="flex items-center gap-1 shrink-0">
                         <Button size="icon" variant="outline" onClick={() => stepQty(item, -1)} disabled={qtyMut.isPending}><Minus className="h-3 w-3" /></Button>
                         <span className="w-12 text-center text-sm font-mono">{item.quantity} {item.unit}</span>
                         <Button size="icon" variant="outline" onClick={() => stepQty(item, 1)} disabled={qtyMut.isPending}><Plus className="h-3 w-3" /></Button>
-                      </div>
+                      </div>}
                       <p className="font-medium text-sm shrink-0 w-20 text-right">{fmt(parseFloat(item.price) * item.quantity)}</p>
                       <Button size="icon" variant="ghost" className="text-destructive shrink-0" onClick={() => { if (confirm('Удалить товар из заказа?')) removeProdMut.mutate(item.productId); }}><X className="h-3.5 w-3.5" /></Button>
                     </div>
@@ -267,7 +274,8 @@ export default function AdminOrders() {
               </div>
               <div className="space-y-1.5">
                 <Label>Количество</Label>
-                <Input type="number" step={allProducts.find((p: any) => p.id === addProdId)?.unit === 'кг' ? '0.1' : '1'} min={allProducts.find((p: any) => p.id === addProdId)?.unit === 'кг' ? '0.2' : '1'} value={addProdQty} onChange={e => setAddProdQty(e.target.value)} />
+                <Input type="text" inputMode="decimal" placeholder="0,735"
+                  aria-label="Количество или вес в кг" value={addProdQty} onChange={e => setAddProdQty(e.target.value)} />
               </div>
             </div>
             <DialogFooter>

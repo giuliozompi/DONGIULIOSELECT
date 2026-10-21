@@ -1,3 +1,4 @@
+import { formatOrderQuantity, isKilogramUnit, parseOrderQuantity } from '@shared/order-quantity';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -1004,7 +1005,7 @@ interface OrderEditDialogProps {
 function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: OrderEditDialogProps) {
   const { toast } = useToast();
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
-  const [newQuantity, setNewQuantity] = useState<number>(0);
+  const [newQuantity, setNewQuantity] = useState<string>('');
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [addQuantity, setAddQuantity] = useState<number>(1);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
@@ -1348,16 +1349,18 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
               <div key={item.productId} className="flex items-center justify-between gap-4 border rounded-md p-3">
                 <div className="flex-1">
                   <p className="font-medium">{item.productName}</p>
-                  <p className="text-sm text-muted-foreground">{item.price}₽ × {item.quantity} {item.unit}</p>
+                  <p className="text-sm text-muted-foreground">{item.price}₽ × {formatOrderQuantity(Number(item.quantity), item.unit)} {item.unit}</p>
                 </div>
                 
                 {editingProductId === item.productId ? (
                   <div className="flex gap-2">
                     <Input
-                      type="number"
-                      step="0.001"
+                      type="text"
+                      inputMode="decimal"
+                      aria-label={isKilogramUnit(item.unit) ? 'Вес в килограммах, до 3 знаков после запятой' : 'Количество'}
+                      placeholder={isKilogramUnit(item.unit) ? '0,735 кг' : 'Количество'}
                       value={newQuantity}
-                      onChange={(e) => setNewQuantity(parseFloat(e.target.value))}
+                      onChange={(e) => setNewQuantity(e.target.value)}
                       className="w-24"
                       disabled={!editable}
                       data-testid={`input-quantity-${item.productId}`}
@@ -1365,12 +1368,14 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
                     <Button 
                       size="sm" 
                       onClick={() => {
+                        const quantity = parseOrderQuantity(newQuantity, item.unit);
+                        if (quantity === null) return;
                         updateQuantityMutation.mutate({ 
                           productId: item.productId, 
-                          newQuantity 
+                          newQuantity: quantity
                         });
                       }}
-                      disabled={!editable}
+                      disabled={!editable || updateQuantityMutation.isPending || parseOrderQuantity(newQuantity, item.unit) === null}
                       data-testid={`button-save-quantity-${item.productId}`}
                     >
                       Сохранить
@@ -1391,7 +1396,7 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
                       variant="outline"
                       onClick={() => {
                         setEditingProductId(item.productId);
-                        setNewQuantity(item.quantity);
+                        setNewQuantity(formatOrderQuantity(Number(item.quantity), item.unit));
                       }}
                       disabled={!editable}
                       data-testid={`button-edit-quantity-${item.productId}`}

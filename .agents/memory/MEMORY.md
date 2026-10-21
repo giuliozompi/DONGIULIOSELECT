@@ -1,1 +1,2 @@
 - [Notification settings system](notification-settings.md) — global per-channel + per-user opt-out; canNotify() helper with 60s cache; fail-open design
+- [Order weighing](order-weighing.md) — operators must be able to enter actual weights in kg with three decimal places after the comma.

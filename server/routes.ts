@@ -1,3 +1,4 @@
+import { isValidOrderQuantity } from '../shared/order-quantity';
 import type { Express } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
@@ -3968,6 +3969,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const oldQuantity = order.items[itemIndex].quantity;
+      if (!isValidOrderQuantity(data.newQuantity, order.items[itemIndex].unit)) {
+        return res.status(400).json({ error: 'Вес в кг должен быть положительным и содержать не более 3 знаков после запятой.' });
+      }
       const productName = order.items[itemIndex].productName;
       
       // Aggiorna quantità

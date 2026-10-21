@@ -12,6 +12,7 @@ import { getAllChannelSettings, setChannelEnabled, getUserPreferences, setUserPr
 import { eq, and, gt, or, ilike, desc, sql, lt, gte, lte, asc } from 'drizzle-orm';
 import { storage } from './storage';
 import { createWebCategorySchema, updateWebCategorySchema } from './utils/web-category-input';
+import { isValidOrderQuantity } from '../shared/order-quantity';
 import {
   hashPassword,
   verifyPassword,
@@ -1149,6 +1150,9 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       if (!order) return res.status(404).json({ error: 'Order not found' });
       const idx = order.items.findIndex((i: any) => i.productId === productId);
       if (idx === -1) return res.status(404).json({ error: 'Product not in order' });
+      if (!isValidOrderQuantity(newQuantity, order.items[idx].unit)) {
+        return res.status(400).json({ error: 'Вес в кг должен быть положительным и содержать не более 3 знаков после запятой.' });
+      }
       const newItems = [...order.items];
       newItems[idx] = { ...newItems[idx], quantity: newQuantity };
       const totals = calcOrderTotal(newItems, order.discountType, order.discountValue);
@@ -1164,6 +1168,9 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       if (!order) return res.status(404).json({ error: 'Order not found' });
       if (!product) return res.status(404).json({ error: 'Product not found' });
       const qty = quantity ?? (product.unit === 'кг' ? 0.2 : 1);
+      if (!isValidOrderQuantity(qty, product.unit)) {
+        return res.status(400).json({ error: 'Вес в кг должен быть положительным и содержать не более 3 знаков после запятой.' });
+      }
       const newItems = [...order.items, { productId: product.id, productName: product.name, quantity: qty, price: product.price, unit: product.unit }];
       const totals = calcOrderTotal(newItems, order.discountType, order.discountValue);
       const updated = await storage.updateOrder(req.params.id, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
