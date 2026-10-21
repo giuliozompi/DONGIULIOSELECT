@@ -2,3 +2,4 @@
 - [Order weighing](order-weighing.md) — operators must be able to enter actual weights in kg with three decimal places after the comma.
 - [Guest checkout](checkout-continuation.md) — new customers must register and resume checkout without losing their cart or draft.
 - [Browser test isolation](browser-test-isolation.md) — service workers can bypass page-level API mocks; enforce isolation before registration or payment tests.
+- [Favorites symbol](favorites-symbol.md) — website favorites use a selectable yellow cheese slice with holes, not a heart.

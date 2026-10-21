@@ -10,6 +10,7 @@
     "check": "tsc",
     "test:checkout-auth": "node --test tests/web-checkout-auth.test.mjs",
     "test:orders": "node --test tests/web-orders.test.mjs",
+    "test:wishlist": "node --test tests/web-wishlist.test.mjs",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

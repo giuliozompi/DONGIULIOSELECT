@@ -4,6 +4,7 @@ import { ShoppingCart, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useWebCart } from '../hooks/useWebCart';
+import WebFavoriteButton from './WebFavoriteButton';
 
 interface Product {
   id: string;
@@ -113,6 +114,9 @@ export default function WebProductCard({ product }: Props) {
             <Badge variant="secondary">Нет в наличии</Badge>
           </div>
         )}
+
+        <WebFavoriteButton productId={product.id} productName={product.name}
+          className="absolute right-2 top-2 z-10" />
 
         {/* Dot indicators */}
         {hasMultiple && (

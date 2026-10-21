@@ -126,7 +126,8 @@ export async function launchBrowser() {
         if (process.exitCode !== null) resolve();
         else process.once('exit', resolve);
       });
-      await rm(profile, { recursive: true, force: true });
+      // Chromium subprocesses can flush files just after the launcher exits.
+      await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
   };
 }

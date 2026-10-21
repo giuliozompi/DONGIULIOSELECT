@@ -1,46 +1,32 @@
+import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Heart, ShoppingCart, Trash2 } from 'lucide-react';
+import { ShoppingCart } from 'lucide-react';
+import { CheeseSliceIcon } from '@/components/CheeseSliceIcon';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { useWebCart } from '../hooks/useWebCart';
-import { webApi } from '../lib/webApi';
-
-interface WishlistItem {
-  id: string;
-  productId: string;
-  createdAt: string;
-  product: {
-    id: string; name: string; slug: string; price: string; priceOld?: string;
-    unit: string; images: string[]; inStock: boolean;
-  };
-}
+import { useWebWishlist } from '../hooks/useWebWishlist';
+import WebFavoriteButton from '../components/WebFavoriteButton';
+import WebAuthModal from '../components/WebAuthModal';
 
 export default function WebWishlistPage() {
   const [, setLocation] = useLocation();
-  const { isAuthenticated } = useWebAuth();
+  const { isAuthenticated, isLoading: authLoading } = useWebAuth();
   const { addItem } = useWebCart();
-  const qc = useQueryClient();
+  const [authOpen, setAuthOpen] = useState(false);
+  const { items, isLoading, isError, refetch } = useWebWishlist();
+  const visibleCount = items.filter(item => item.product).length;
 
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ['/web-api/wishlist'],
-    queryFn: () => webApi.get<WishlistItem[]>('/wishlist'),
-    enabled: isAuthenticated,
-  });
-
-  const toggleMutation = useMutation({
-    mutationFn: (productId: string) =>
-      webApi.post<{ inWishlist: boolean }>(`/wishlist/${productId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['/web-api/wishlist'] }),
-  });
+  if (authLoading) return <div role="status" className="p-8 text-center">Загрузка избранного…</div>;
 
   if (!isAuthenticated) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-        <Heart className="w-12 h-12 mx-auto text-neutral-200 mb-3" />
+        <CheeseSliceIcon className="w-12 h-12 mx-auto mb-3" />
         <p className="text-neutral-500 mb-4">Войдите, чтобы видеть избранные товары</p>
-        <Button className="bg-amber-600 text-white" onClick={() => setLocation('/web')}>На главную</Button>
+        <Button className="bg-amber-600 text-white" onClick={() => setAuthOpen(true)}>Войти или зарегистрироваться</Button>
+        {authOpen && <WebAuthModal open onClose={() => setAuthOpen(false)} />}
       </div>
     );
   }
@@ -48,7 +34,7 @@ export default function WebWishlistPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       <h1 className="text-2xl font-bold text-neutral-900 mb-6">
-        Избранное {items.length > 0 && <span className="text-neutral-400 font-normal">({items.length})</span>}
+        Избранное {visibleCount > 0 && <span className="text-neutral-400 font-normal">({visibleCount})</span>}
       </h1>
 
       {isLoading ? (
@@ -57,9 +43,14 @@ export default function WebWishlistPage() {
             <div key={i} className="rounded-xl bg-neutral-100 animate-pulse aspect-[3/4]" />
           ))}
         </div>
-      ) : items.length === 0 ? (
+      ) : isError ? (
+        <div role="alert" className="py-12 text-center">
+          <p className="mb-4 text-neutral-600">Не удалось загрузить избранное</p>
+          <Button variant="outline" onClick={() => void refetch()} data-testid="button-retry-wishlist">Повторить</Button>
+        </div>
+      ) : visibleCount === 0 ? (
         <div className="text-center py-16">
-          <Heart className="w-12 h-12 mx-auto text-neutral-200 mb-3" />
+          <CheeseSliceIcon className="w-12 h-12 mx-auto mb-3" />
           <p className="font-medium text-neutral-600">Нет избранных товаров</p>
           <p className="text-sm text-neutral-400 mt-1 mb-6">Добавляйте товары в избранное, чтобы не потерять</p>
           <Button className="bg-amber-600 text-white" onClick={() => setLocation('/web/catalog')}>
@@ -68,8 +59,9 @@ export default function WebWishlistPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {items.filter(i => i.product).map(item => {
+          {items.map(item => {
             const p = item.product;
+            if (!p) return null;
             const price = parseFloat(p.price);
             const priceOld = p.priceOld ? parseFloat(p.priceOld) : null;
             const discount = priceOld ? Math.round((1 - price / priceOld) * 100) : null;
@@ -97,13 +89,9 @@ export default function WebWishlistPage() {
                       -{discount}%
                     </Badge>
                   )}
-                  <button
-                    onClick={e => { e.stopPropagation(); toggleMutation.mutate(item.productId); }}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 flex items-center justify-center text-red-500 hover:bg-red-50"
-                    data-testid={`button-remove-wishlist-${item.productId}`}
-                  >
-                    <Heart className="w-3.5 h-3.5 fill-red-500" />
-                  </button>
+                  <WebFavoriteButton productId={item.productId} productName={p.name}
+                    className="absolute top-2 right-2"
+                    testId={`button-remove-wishlist-${item.productId}`} />
                 </div>
 
                 {/* Info */}

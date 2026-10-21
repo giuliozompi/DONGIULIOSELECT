@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  User, Mail, Phone, Lock, LogOut, ChevronRight, Package, MapPin, Heart, Check,
+  User, Mail, Phone, Lock, LogOut, ChevronRight, Package, MapPin, Check,
   MessageCircle, Link2, Link2Off, Loader2, Copy, ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { webApi } from '../lib/webApi';
+import { CheeseSliceIcon } from '@/components/CheeseSliceIcon';
 
 const profileSchema = z.object({
   firstName: z.string().min(1, 'Введите имя').max(50),
@@ -86,7 +87,7 @@ export default function WebAccountPage() {
 
   const menuItems = [
     { icon: Package, label: 'Мои заказы', href: '/web/account/orders' },
-    { icon: Heart, label: 'Избранное', href: '/web/wishlist' },
+    { icon: CheeseSliceIcon, label: 'Избранное', href: '/web/wishlist' },
     { icon: MapPin, label: 'Адреса доставки', href: '/web/account/addresses' },
   ];
 

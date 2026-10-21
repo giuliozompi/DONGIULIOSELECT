@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
-import { ShoppingCart, Search, Heart, User, ChevronDown, Menu, X, LogOut, Package, MapPin } from 'lucide-react';
+import { ShoppingCart, Search, User, ChevronDown, Menu, X, LogOut, Package, MapPin } from 'lucide-react';
+import { CheeseSliceIcon } from '@/components/CheeseSliceIcon';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { useWebCart } from '../hooks/useWebCart';
 import { Button } from '@/components/ui/button';
@@ -93,8 +94,8 @@ export default function WebHeader() {
               </Button>
 
               {isAuthenticated && (
-                <Button size="icon" variant="ghost" onClick={() => setLocation('/web/wishlist')}>
-                  <Heart className="w-4 h-4" />
+                <Button size="icon" variant="ghost" aria-label="Избранное" onClick={() => setLocation('/web/wishlist')}>
+                  <CheeseSliceIcon className="!h-6 !w-6" filled={location === '/web/wishlist'} />
                 </Button>
               )}
 

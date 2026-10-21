@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Plus, Minus, ShoppingCart, Heart, ArrowLeft, Package, ChevronLeft } from 'lucide-react';
+import { ChevronRight, Plus, Minus, ShoppingCart, ArrowLeft, Package, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -9,6 +9,7 @@ import { useWebCart } from '../hooks/useWebCart';
 import { webApi } from '../lib/webApi';
 import { useWebMeta } from '../hooks/useWebMeta';
 import { ProductJsonLd, BreadcrumbJsonLd } from '../components/WebJsonLd';
+import WebFavoriteButton from '../components/WebFavoriteButton';
 
 interface Product {
   id: string; name: string; slug: string; price: string; priceOld?: string;
@@ -214,6 +215,8 @@ export default function WebProductPage() {
               </div>
             </div>
           )}
+
+          <WebFavoriteButton productId={product.id} productName={product.name} showLabel />
 
           {/* Cart control */}
           <div className="flex items-center gap-3">
