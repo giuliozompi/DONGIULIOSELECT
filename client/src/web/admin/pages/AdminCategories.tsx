@@ -28,7 +28,11 @@ export default function AdminCategories() {
     queryFn: () => adminApi.getCategories(),
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['/web-api/admin/categories'] });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['/web-api/admin/categories'] });
+    qc.invalidateQueries({ queryKey: ['/web-api/categories'] });
+    qc.invalidateQueries({ queryKey: ['/api/categories'] });
+  };
 
   const createMut = useMutation({
     mutationFn: (d: any) => adminApi.createCategory(d),

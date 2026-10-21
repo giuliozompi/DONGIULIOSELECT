@@ -11,6 +11,7 @@ import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, produ
 import { getAllChannelSettings, setChannelEnabled, getUserPreferences, setUserPreference } from './services/notification-settings';
 import { eq, and, gt, or, ilike, desc, sql, lt, gte, lte, asc } from 'drizzle-orm';
 import { storage } from './storage';
+import { createWebCategorySchema, updateWebCategorySchema } from './utils/web-category-input';
 import {
   hashPassword,
   verifyPassword,
@@ -872,7 +873,7 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
 
   app.post('/web-api/admin/categories', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
-      const body = z.object({ name: z.string().min(1), slug: z.string().min(1), imageUrl: z.string().optional(), parentId: z.string().optional(), sortOrder: z.number().optional(), isVisible: z.boolean().optional() }).parse(req.body);
+      const body = createWebCategorySchema.parse(req.body);
       const [cat] = await db.insert(categories).values({ id: randomUUID(), ...body, isVisible: body.isVisible ?? true, sortOrder: body.sortOrder ?? 0 }).returning();
       res.status(201).json(cat);
     } catch(e) { res.status(400).json({ error: String(e) }); }
@@ -880,7 +881,7 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
 
   app.patch('/web-api/admin/categories/:id', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
-      const body = z.object({ name: z.string().min(1).optional(), slug: z.string().optional(), imageUrl: z.string().optional().nullable(), parentId: z.string().optional().nullable(), sortOrder: z.number().optional(), isVisible: z.boolean().optional() }).parse(req.body);
+      const body = updateWebCategorySchema.parse(req.body);
       const [cat] = await db.update(categories).set(body).where(eq(categories.id, req.params.id)).returning();
       if (!cat) return res.status(404).json({ error: 'Not found' });
       res.json(cat);
