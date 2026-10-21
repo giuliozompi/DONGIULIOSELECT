@@ -22,6 +22,7 @@ interface AddressAutocompleteProps extends Pick<InputHTMLAttributes<HTMLInputEle
   placeholder?: string;
   testId?: string;
   disabled?: boolean;
+  suggestOnFocus?: boolean;
 }
 
 export const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompleteProps>(function AddressAutocomplete({
@@ -31,6 +32,7 @@ export const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompl
   placeholder = "Начните вводить адрес...",
   testId = "input-address-autocomplete",
   disabled = false,
+  suggestOnFocus = false,
   ...inputProps
 }, ref) {
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
@@ -140,6 +142,9 @@ export const AddressAutocomplete = forwardRef<HTMLInputElement, AddressAutocompl
         data-testid={testId}
         disabled={disabled}
         autoComplete="off"
+        onFocus={() => {
+          if (suggestOnFocus) setHasUserInteracted(true);
+        }}
       />
       
       {!disabled && showSuggestions && suggestions.length > 0 && (

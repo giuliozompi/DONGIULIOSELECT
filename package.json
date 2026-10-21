@@ -11,6 +11,7 @@
     "test:checkout-auth": "node --test tests/web-checkout-auth.test.mjs",
     "test:orders": "node --test tests/web-orders.test.mjs",
     "test:wishlist": "node --test tests/web-wishlist.test.mjs",
+    "test:addresses": "node --import tsx --test tests/web-addresses-api.test.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

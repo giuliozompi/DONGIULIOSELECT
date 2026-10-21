@@ -22,7 +22,7 @@ async function openPage(context, {
   authenticated = false, registrationError = false, emptyCart = false,
   suggestions = [], suggestionsUnavailable = false, allowOrder = false,
   initialAddresses = [], holdAddresses = false, addressesUnavailable = false,
-  addressesByUser = {},
+  addressesByUser = {}, addressUpdateError = false,
 } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
@@ -41,7 +41,7 @@ async function openPage(context, {
     requests.push({
       path, method: event.request.method,
       userId: authenticated ? currentUser.id : null,
-      body: ['/web-api/addresses', '/web-api/orders'].includes(path) && event.request.postData
+      body: (path.startsWith('/web-api/addresses') || path === '/web-api/orders') && event.request.postData
         ? JSON.parse(event.request.postData) : undefined,
     });
     let status = 200;
@@ -66,6 +66,18 @@ async function openPage(context, {
           status = 503;
           body = { error: 'Address book unavailable' };
         }
+      }
+    } else if (path.startsWith('/web-api/addresses/') && event.request.method === 'PATCH') {
+      const index = savedAddresses.findIndex(address => address.id === path.split('/').pop());
+      if (addressUpdateError) {
+        status = 500;
+        body = { error: 'Не удалось сохранить адрес' };
+      } else if (index < 0) {
+        status = 404;
+        body = { error: 'Адрес не найден' };
+      } else {
+        savedAddresses[index] = { ...savedAddresses[index], ...JSON.parse(event.request.postData) };
+        body = savedAddresses[index];
       }
     } else if (path.endsWith('/auth/refresh')) {
       status = authenticated ? 200 : 401;
@@ -292,6 +304,113 @@ const officeAddress = {
   ...homeAddress, id: 'office', label: 'Офис', isDefault: false,
   fullAddress: 'г Москва, ул Другая, д 10, кв 8', apartment: '8', notes: null,
 };
+
+test('address editing prefills all fields, saves the same record and preserves apartment and notes', async context => {
+  const initial = { ...homeAddress, street: 'ул Тестовая', building: '5', postalCode: '123456' };
+  const { page, requests, savedAddresses } = await openPage(context, {
+    authenticated: true, initialAddresses: [initial],
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-edit-address-home'));
+  for (const [id, expected] of [
+    ['input-saved-address', initial.fullAddress], ['input-address-city', initial.city],
+    ['input-address-apartment', initial.apartment], ['input-address-postal-code', initial.postalCode],
+    ['input-address-notes', initial.notes],
+  ]) {
+    assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector(id))}).value`), expected);
+  }
+  await page.fill(selector('input-address-notes'), 'Новый код домофона');
+  await page.click(selector('button-save-address'));
+  await page.wait(`!document.querySelector('[role="dialog"]')`);
+  const patch = requests.find(r => r.method === 'PATCH');
+  assert.equal(patch.path, '/web-api/addresses/home');
+  assert.equal(patch.body.apartment, '42');
+  assert.equal(patch.body.street, initial.street);
+  assert.equal(patch.body.building, initial.building);
+  assert.equal(patch.body.notes, 'Новый код домофона');
+  assert.equal(savedAddresses.length, 1);
+  assert.equal(savedAddresses[0].id, initial.id);
+  await page.wait(`document.querySelector('[data-testid="card-address-home"]').textContent.includes('Новый код домофона')`);
+});
+
+test('existing address normalization requires selection and saving; absent flat preserves the saved apartment', async context => {
+  const suggestion = { ...normalizedAddress, flat: null };
+  const { page, requests, savedAddresses } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress], suggestions: [suggestion],
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-edit-address-home'));
+  await page.click(selector('input-saved-address'));
+  await page.click(selector('address-suggestion-0'));
+  assert.equal(requests.filter(r => r.method === 'PATCH').length, 0);
+  assert.equal(savedAddresses[0].fullAddress, homeAddress.fullAddress);
+  await page.click(selector('button-save-address'));
+  await page.wait(`!document.querySelector('[role="dialog"]')`);
+  const patch = requests.find(r => r.method === 'PATCH');
+  for (const field of ['fullAddress', 'city', 'street', 'building', 'postalCode']) {
+    assert.equal(patch.body[field], suggestion[field]);
+  }
+  assert.equal(patch.body.apartment, homeAddress.apartment);
+  assert.equal(patch.body.notes, homeAddress.notes);
+});
+
+test('cancel, Escape and dialog close discard address edits, including a selected normalization', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress], suggestions: [normalizedAddress],
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  for (const close of ['cancel', 'escape', 'close']) {
+    await page.click(selector('button-edit-address-home'));
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="input-saved-address"]').value`), homeAddress.fullAddress);
+    await page.click(selector('input-saved-address'));
+    await page.click(selector('address-suggestion-0'));
+    await page.fill(selector('input-address-notes'), 'Discard me');
+    if (close === 'cancel') await page.click(selector('button-cancel-address'));
+    else if (close === 'escape') {
+      await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+      await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+    } else {
+      await page.evaluate(`Array.from(document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent.trim() === 'Close').click()`);
+    }
+    await page.wait(`!document.querySelector('[role="dialog"]')`);
+  }
+  assert.equal(requests.filter(r => ['PATCH', 'POST', 'DELETE'].includes(r.method) && r.path.includes('/addresses')).length, 0);
+  await page.click(selector('button-add-address'));
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="input-saved-address"]').value`), '');
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="input-address-notes"]').value`), '');
+});
+
+test('manual changes to a saved address clear obsolete structure but retain apartment and notes', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, initialAddresses: [{ ...homeAddress, street: 'Старая', building: '5', postalCode: '123456' }],
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-edit-address-home'));
+  await page.fill(selector('input-saved-address'), 'Санкт-Петербург, Невский проспект, д 2');
+  await page.fill(selector('input-address-city'), 'Санкт-Петербург');
+  await page.click(selector('button-save-address'));
+  await page.wait(`!document.querySelector('[role="dialog"]')`);
+  const patch = requests.find(r => r.method === 'PATCH');
+  for (const field of ['street', 'building', 'postalCode']) assert.equal(patch.body[field], '');
+  assert.equal(patch.body.apartment, homeAddress.apartment);
+  assert.equal(patch.body.notes, homeAddress.notes);
+});
+
+test('failed address save retains the draft and permits retry or cancellation', async context => {
+  const { page, savedAddresses } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress], addressUpdateError: true,
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-edit-address-home'));
+  await page.fill(selector('input-address-notes'), 'Unsaved draft');
+  await page.click(selector('button-save-address'));
+  await page.wait(`document.body.textContent.includes('Не удалось сохранить адрес')`);
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="input-address-notes"]').value`), 'Unsaved draft');
+  assert.equal(savedAddresses[0].notes, homeAddress.notes);
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-save-address"]').disabled`), false);
+  await page.click(selector('button-cancel-address'));
+  await page.wait(`!document.querySelector('[role="dialog"]')`);
+});
 const checkoutValue = id => `document.querySelector(${JSON.stringify(selector(id))}).value`;
 async function chooseAddress(page, id) {
   await page.wait(exists('select-checkout-saved-address'));

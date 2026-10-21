@@ -13,6 +13,7 @@ import { eq, and, gt, or, ilike, desc, sql, lt, gte, lte, asc } from 'drizzle-or
 import { storage } from './storage';
 import { createWebCategorySchema, updateWebCategorySchema } from './utils/web-category-input';
 import { isValidOrderQuantity } from '../shared/order-quantity';
+import { registerWebAddressUpdate } from './webAddressRoutes';
 import {
   hashPassword,
   verifyPassword,
@@ -443,6 +444,7 @@ export function registerWebRoutes(app: Express) {
   });
 
   // ── ADDRESSES ─────────────────────────────────────────────
+  registerWebAddressUpdate(app, db, requireWebAuth);
 
   // GET /web-api/addresses
   app.get('/web-api/addresses', requireWebAuth, async (req: Request, res: Response) => {
