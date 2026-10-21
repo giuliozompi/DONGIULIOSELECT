@@ -3,12 +3,10 @@ import { ShoppingCart, Plus, Minus, Trash2, ArrowRight, ChevronRight } from 'luc
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useWebCart } from '../hooks/useWebCart';
-import { useWebAuth } from '../hooks/useWebAuth';
 
 export default function WebCartPage() {
   const [, setLocation] = useLocation();
   const { items, subtotal, itemCount, updateQuantity, removeItem, clearCart } = useWebCart();
-  const { isAuthenticated } = useWebAuth();
 
   if (items.length === 0) {
     return (
@@ -140,7 +138,7 @@ export default function WebCartPage() {
 
             <Button
               className="w-full mt-4 bg-amber-600 hover:bg-amber-700 text-white"
-              onClick={() => setLocation(isAuthenticated ? '/web/checkout' : '/web/checkout')}
+              onClick={() => setLocation('/web/checkout')}
               data-testid="button-checkout"
             >
               Оформить заказ <ArrowRight className="w-4 h-4 ml-2" />

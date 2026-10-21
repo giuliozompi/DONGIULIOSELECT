@@ -47,7 +47,7 @@ export const useWebAuth = create<AuthState>((set, get) => ({
       true
     );
     setAccessToken(res.accessToken);
-    set({ user: res.user, accessToken: res.accessToken, isAuthenticated: true });
+    set({ user: res.user, accessToken: res.accessToken, isAuthenticated: true, isLoading: false });
   },
 
   register: async (data) => {
@@ -57,7 +57,7 @@ export const useWebAuth = create<AuthState>((set, get) => ({
       true
     );
     setAccessToken(res.accessToken);
-    set({ user: res.user, accessToken: res.accessToken, isAuthenticated: true });
+    set({ user: res.user, accessToken: res.accessToken, isAuthenticated: true, isLoading: false });
   },
 
   logout: async () => {

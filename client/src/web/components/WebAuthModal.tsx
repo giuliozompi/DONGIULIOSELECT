@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -36,6 +36,9 @@ interface Props {
 export default function WebAuthModal({ open, onClose, defaultTab = 'login' }: Props) {
   const [tab, setTab] = useState<string>(defaultTab);
   const [showPassword, setShowPassword] = useState(false);
+  useEffect(() => {
+    if (open) setTab(defaultTab);
+  }, [open, defaultTab]);
   const { login, register } = useWebAuth();
   const { toast } = useToast();
 
@@ -64,7 +67,7 @@ export default function WebAuthModal({ open, onClose, defaultTab = 'login' }: Pr
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-center text-lg">
             <span className="text-amber-700">Don Giulio Select</span>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useWebCart } from '../hooks/useWebCart';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { webApi } from '../lib/webApi';
+import CheckoutAuthGate from '../components/CheckoutAuthGate';
 
 const checkoutSchema = z.object({
   customerName: z.string().min(2, 'Введите имя и фамилию'),
@@ -41,7 +42,7 @@ interface PromoResult {
 export default function WebCheckoutPage() {
   const [, setLocation] = useLocation();
   const { items, subtotal, itemCount, clearCart } = useWebCart();
-  const { user, isAuthenticated } = useWebAuth();
+  const { user } = useWebAuth();
   const { toast } = useToast();
 
   const [promoInput, setPromoInput] = useState('');
@@ -59,6 +60,24 @@ export default function WebCheckoutPage() {
       paymentMethod: 'yookassa',
     },
   });
+
+  useEffect(() => {
+    if (items.length === 0) setLocation('/web/cart');
+  }, [items.length, setLocation]);
+
+  // Registration can complete while this page is already mounted. Fill only
+  // untouched contact fields; preserve any checkout draft entered by the customer.
+  useEffect(() => {
+    if (!user) return;
+    const contact = {
+      customerName: `${user.firstName}${user.lastName ? ' ' + user.lastName : ''}`,
+      customerPhone: user.phone || '',
+      customerEmail: user.email || '',
+    };
+    for (const field of ['customerName', 'customerPhone', 'customerEmail'] as const) {
+      if (!form.getFieldState(field).isDirty) form.setValue(field, contact[field]);
+    }
+  }, [user, form]);
 
   const discountAmount = promoResult?.valid && promoResult.discountPercent
     ? Math.round(subtotal * promoResult.discountPercent / 100)
@@ -113,23 +132,10 @@ export default function WebCheckoutPage() {
     setPromoInput('');
   };
 
-  if (items.length === 0) {
-    setLocation('/web/cart');
-    return null;
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-        <p className="text-neutral-600 mb-4">Для оформления заказа необходимо войти в аккаунт</p>
-        <Button className="bg-amber-600 text-white" onClick={() => setLocation('/web/cart')}>
-          Назад в корзину
-        </Button>
-      </div>
-    );
-  }
+  if (items.length === 0) return null;
 
   return (
+    <CheckoutAuthGate>
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1 text-xs text-neutral-500 mb-6">
@@ -378,5 +384,6 @@ export default function WebCheckoutPage() {
         </form>
       </Form>
     </div>
+    </CheckoutAuthGate>
   );
 }
