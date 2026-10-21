@@ -65,9 +65,13 @@ export interface TelegramMessage {
 }
 
 export async function sendTelegramMessage(params: TelegramMessage): Promise<boolean> {
+  return (await sendTelegramMessageDetailed(params)).sent;
+}
+
+async function sendTelegramMessageDetailed(params: TelegramMessage): Promise<{ sent: boolean; error?: string }> {
   if (!TELEGRAM_BOT_TOKEN) {
     console.error('TELEGRAM_BOT_TOKEN not configured');
-    return false;
+    return { sent: false, error: 'Telegram: токен бота не настроен.' };
   }
 
   try {
@@ -87,13 +91,13 @@ export async function sendTelegramMessage(params: TelegramMessage): Promise<bool
 
     if (!response.ok || !data.ok) {
       console.error('Telegram API error:', data);
-      return false;
+      return { sent: false, error: `Telegram: ${data.description || `HTTP ${response.status}`}` };
     }
 
-    return true;
+    return { sent: true };
   } catch (error) {
     console.error('Error sending Telegram message:', error);
-    return false;
+    return { sent: false, error: 'Telegram: ошибка соединения с API.' };
   }
 }
 
@@ -103,6 +107,15 @@ export async function sendPaymentLink(
   amount: string,
   paymentUrl: string
 ): Promise<boolean> {
+  return (await sendPaymentLinkDetailed(chatId, orderId, amount, paymentUrl)).sent;
+}
+
+export async function sendPaymentLinkDetailed(
+  chatId: string,
+  orderId: string,
+  amount: string,
+  paymentUrl: string
+): Promise<{ sent: boolean; error?: string }> {
   const message = `
 🛒 <b>Ваш заказ готов к оплате!</b>
 
@@ -115,7 +128,7 @@ ${paymentUrl}
 Ссылка действительна в течение 15 минут.
   `.trim();
 
-  return sendTelegramMessage({
+  return sendTelegramMessageDetailed({
     chatId,
     text: message,
     parseMode: 'HTML',

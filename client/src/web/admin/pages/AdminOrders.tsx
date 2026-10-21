@@ -13,6 +13,8 @@ import { Search, Eye, Trash2, Plus, Minus, X, Percent, ChevronLeft } from 'lucid
 import { useToast } from '@/hooks/use-toast';
 import { isKilogramUnit, parseOrderQuantity } from '@shared/order-quantity';
 import { OrderWeightEditor } from '../components/OrderWeightEditor';
+import { PaymentLinkNotice } from '@/components/admin/PaymentLinkNotice';
+import type { PaymentNotificationFields } from '@shared/payment-link-delivery';
 
 const STATUSES = [
   { value: 'all', label: 'Все' },
@@ -58,6 +60,7 @@ export default function AdminOrders() {
   const [addProdDialog, setAddProdDialog] = useState(false);
   const [addProdId, setAddProdId] = useState('');
   const [addProdQty, setAddProdQty] = useState('1');
+  const [paymentNotices, setPaymentNotices] = useState<Record<string, PaymentNotificationFields>>({});
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['/web-api/admin/orders', statusFilter, search],
@@ -82,7 +85,14 @@ export default function AdminOrders() {
 
   const statusMut = useMutation({
     mutationFn: ({ status }: any) => adminApi.updateOrderStatus(selectedId!, status),
-    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); toast({ title: 'Статус обновлён' }); },
+    onSuccess: (updated: any) => {
+      inv();
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/notification-logs/order'] });
+      qc.setQueryData(['/web-api/admin/orders', updated.id], updated);
+      setPaymentNotices(notices => ({ ...notices, [updated.id]: updated }));
+      toast({ title: updated.warning ? 'Проверьте отправку ссылки' : 'Статус обновлён',
+        description: updated.warning, variant: updated.warning ? 'destructive' : 'default' });
+    },
     onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
@@ -143,6 +153,7 @@ export default function AdminOrders() {
         </div>
 
         {loadOrder && <div className="text-center py-8 text-muted-foreground">Загрузка...</div>}
+        <PaymentLinkNotice notice={paymentNotices[selectedId]} />
 
         {o && (
           <>

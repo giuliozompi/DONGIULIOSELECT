@@ -18,6 +18,8 @@
 import { storage } from '../storage';
 import { canNotify } from './notification-settings';
 import { logOrderNotification } from './notification-logger';
+import { sendOrderPaymentLink } from './payment-link-delivery';
+import { paymentLinkOrderUpdate, type PaymentDeliverySummary } from '../../shared/payment-link-delivery';
 
 export interface StatusChangeResult {
   order: any;
@@ -26,6 +28,7 @@ export interface StatusChangeResult {
   paymentUrl?: string;
   warning?: string;
   error?: string;
+  paymentDelivery?: PaymentDeliverySummary;
 }
 
 export async function processOrderStatusChange(
@@ -35,8 +38,17 @@ export async function processOrderStatusChange(
   const order = await storage.getOrderById(orderId);
   if (!order) throw new Error('Order not found');
 
+  const requestsPaymentLink = newStatus === 'СОБРАН' || newStatus === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ';
+  const shouldSendPaymentLink = requestsPaymentLink && !['cash_on_delivery', 'cash'].includes(order.paymentMethod);
+  if (shouldSendPaymentLink && ['ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН', 'ВОЗВРАТ', 'УДАЛЕНО'].includes(order.status)) {
+    throw new Error('Нельзя отправлять ссылку на оплату для оплаченного или завершённого заказа.');
+  }
+  if (newStatus === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ' && !shouldSendPaymentLink) {
+    throw new Error('Ссылка на онлайн-оплату недоступна для оплаты наличными.');
+  }
+
   // ── Persist the new status ────────────────────────────────────────────────
-  const updatedOrder = await storage.updateOrder(orderId, { status: newStatus });
+  const updatedOrder = await storage.updateOrder(orderId, { status: shouldSendPaymentLink ? 'СОБРАН' : newStatus });
 
   // ── ОПЛАЧЕН ──────────────────────────────────────────────────────────────
   if (newStatus === 'ОПЛАЧЕН') {
@@ -74,7 +86,7 @@ export async function processOrderStatusChange(
   }
 
   // ── СОБРАН (online payment) → generate & send payment link ───────────────
-  if (newStatus === 'СОБРАН' && order.paymentMethod !== 'cash_on_delivery') {
+  if (shouldSendPaymentLink) {
     console.log(`🔄 [OrderStatus] Order ${orderId} → СОБРАН, creating payment link...`);
     try {
       let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
@@ -156,57 +168,16 @@ export async function processOrderStatusChange(
         confirmationUrl = paymentIntent.redirectUrl || '';
       }
 
-      // Send link via Telegram (respects global + per-user toggle)
-      if (await canNotify('telegram', order.userId)) {
-        try {
-          const { sendPaymentLink } = await import('./telegram-bot');
-          const sent = await sendPaymentLink(order.userId, orderId, order.amount, confirmationUrl);
-          await logOrderNotification({ event: 'payment_link', channel: 'telegram', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: sent ? 'sent' : 'failed', details: order.amount });
-          console.log(sent ? '✅ [OrderStatus] Payment link sent via Telegram' : '⚠️ [OrderStatus] Telegram bot not configured');
-        } catch (e) {
-          console.warn('⚠️ [OrderStatus] Telegram payment link failed:', e);
-          await logOrderNotification({ event: 'payment_link', channel: 'telegram', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(e) });
-        }
-      }
-
-      // Send link via Email (respects global + per-user toggle; requires customerEmail)
-      if (order.customerEmail && await canNotify('email', order.userId)) {
-        try {
-          const { sendPaymentLinkEmail } = await import('./email');
-          await sendPaymentLinkEmail(order.customerEmail, orderId, order.customerName, order.amount, confirmationUrl);
-          await logOrderNotification({ event: 'payment_link', channel: 'email', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'sent', details: order.amount });
-          console.log('✅ [OrderStatus] Payment link sent via Email');
-        } catch (e) {
-          console.warn('⚠️ [OrderStatus] Email payment link failed:', e);
-          await logOrderNotification({ event: 'payment_link', channel: 'email', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(e) });
-        }
-      }
-
-      // Send link via WhatsApp (respects global + per-user toggle)
-      if (await canNotify('whatsapp', order.userId)) {
-        try {
-          const { sendPaymentLinkWhatsApp } = await import('./whatsapp');
-          const sent = await sendPaymentLinkWhatsApp(order.customerPhone, orderId, order.customerName, order.amount, confirmationUrl);
-          await logOrderNotification({ event: 'payment_link', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: sent ? 'sent' : 'failed', details: order.amount });
-          if (sent) console.log('✅ [OrderStatus] Payment link sent via WhatsApp');
-        } catch (e) {
-          console.warn('⚠️ [OrderStatus] WhatsApp payment link failed:', e);
-          await logOrderNotification({ event: 'payment_link', channel: 'whatsapp', recipient: 'customer', userId: order.userId, orderId, customerName: order.customerName, customerPhone: order.customerPhone, status: 'failed', details: String(e) });
-        }
-      }
-
-      // Finalize — set status to ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ
-      await storage.updateOrder(orderId, {
-        status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
-        paymentId: paymentIntent!.id,
-        paymentLinkSentAt: new Date(),
-      });
+      const paymentDelivery = await sendOrderPaymentLink(order, confirmationUrl);
+      const savedOrder = await storage.updateOrder(orderId, paymentLinkOrderUpdate(paymentDelivery, paymentIntent!.id));
 
       console.log(`✅ [OrderStatus] Payment link flow complete for order ${orderId}`);
       return {
-        order: { ...updatedOrder, status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ' },
-        status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
-        paymentLinkSent: true,
+        order: savedOrder,
+        status: savedOrder!.status,
+        paymentLinkSent: paymentDelivery.paymentLinkSent,
+        paymentDelivery,
+        warning: paymentDelivery.warning,
         paymentUrl: confirmationUrl,
       };
     } catch (e) {
@@ -216,8 +187,8 @@ export async function processOrderStatusChange(
         order: { ...updatedOrder, status: 'СОБРАН' },
         status: 'СОБРАН',
         paymentLinkSent: false,
-        warning: 'Stato aggiornato a СОБРАН, ma la creazione del link pagamento ha fallito. Generalo manualmente.',
-        error: e instanceof Error ? e.message : String(e),
+        warning: 'Заказ собран, но создание или отправка ссылки на оплату не завершены. Проверьте журнал сервера перед повторной попыткой.',
+        error: 'Не удалось создать или отправить ссылку. Проверьте журнал сервера.',
       };
     }
   }

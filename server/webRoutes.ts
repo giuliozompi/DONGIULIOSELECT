@@ -1136,7 +1136,7 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       }).parse(req.body);
       const { processOrderStatusChange } = await import('./services/order-status-automation');
       const result = await processOrderStatusChange(req.params.id, status);
-      res.json(result.order);
+      res.json({ ...result.order, paymentDelivery: result.paymentDelivery, paymentLinkSent: result.paymentLinkSent, paymentUrl: result.paymentUrl, warning: result.warning, error: result.error });
     } catch(e: any) {
       if (e.message === 'Order not found') return res.status(404).json({ error: 'Not found' });
       res.status(400).json({ error: String(e) });

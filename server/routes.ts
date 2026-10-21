@@ -1,4 +1,6 @@
 import { isValidOrderQuantity } from '../shared/order-quantity';
+import { sendOrderPaymentLink } from './services/payment-link-delivery';
+import { paymentLinkOrderUpdate } from '../shared/payment-link-delivery';
 import type { Express } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
@@ -2759,7 +2761,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { processOrderStatusChange } = await import('./services/order-status-automation');
       const result = await processOrderStatusChange(orderId, status);
 
-      res.json(result.order);
+      res.json({ ...result.order, paymentDelivery: result.paymentDelivery, paymentLinkSent: result.paymentLinkSent, paymentUrl: result.paymentUrl, warning: result.warning, error: result.error });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
@@ -2964,53 +2966,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Invia link pagamento via Telegram
-      let notificationsSent = { telegram: false, email: false };
+      const paymentDelivery = await sendOrderPaymentLink(order, confirmationUrl);
+      const notificationsSent = Object.fromEntries(paymentDelivery.channels.map(result => [result.channel, result.status === 'sent']));
+      await storage.updateOrder(orderId, paymentLinkOrderUpdate(paymentDelivery, paymentIntent!.id));
       
-      try {
-        const { sendPaymentLink } = await import('./services/telegram-bot');
-        const telegramSent = await sendPaymentLink(
-          order.userId,
-          orderId,
-          order.amount,
-          confirmationUrl
-        );
-        if (telegramSent) {
-          console.log(`✅ [Order ${orderId}] Payment link sent via Telegram`);
-          notificationsSent.telegram = true;
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via Telegram:`, error instanceof Error ? error.message : error);
-      }
-      
-      // Invia link pagamento via email
-      if (order.customerEmail) {
-        try {
-          const { sendPaymentLinkEmail } = await import('./services/email');
-          await sendPaymentLinkEmail(
-            order.customerEmail,
-            orderId,
-            order.customerName,
-            order.amount,
-            confirmationUrl
-          );
-          console.log(`✅ [Order ${orderId}] Payment link sent via email`);
-          notificationsSent.email = true;
-        } catch (error) {
-          console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via email:`, error instanceof Error ? error.message : error);
-        }
-      }
-      
-      // Aggiorna stato ordine
-      await storage.updateOrderStatus(orderId, 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ', (paymentIntent?.raw as any)?.yookassaPaymentId);
-      
-      console.log(`✅ [Order ${orderId}] Successfully converted to online payment and sent link`);
+      console.log(`[Order ${orderId}] Converted to online payment; notification accepted=${paymentDelivery.paymentLinkSent}`);
       
       res.json({
         success: true,
         paymentMethod: 'yookassa',
         paymentLink: confirmationUrl,
+        paymentDelivery,
+        paymentLinkSent: paymentDelivery.paymentLinkSent,
+        warning: paymentDelivery.warning,
         notificationsSent,
-        message: 'Order converted to online payment and link sent',
+        message: paymentDelivery.warning || 'Ссылка создана; сервис уведомлений принял сообщение.',
       });
       
     } catch (error) {
@@ -3202,76 +3172,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Invia link pagamento via Telegram
       console.log(`📱 [Order ${orderId}] Step 7/8: Sending notifications...`);
-      let notificationsSent = { telegram: false, email: false, whatsapp: false };
-      
-      try {
-        const { sendPaymentLink } = await import('./services/telegram-bot');
-        const telegramSent = await sendPaymentLink(
-          order.userId,
-          orderId,
-          order.amount,
-          confirmationUrl
-        );
-        if (telegramSent) {
-          console.log(`✅ [Order ${orderId}] Payment link sent via Telegram`);
-          notificationsSent.telegram = true;
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via Telegram:`, error instanceof Error ? error.message : error);
-      }
-      
-      // Invia link pagamento via email
-      if (order.customerEmail) {
-        try {
-          const { sendPaymentLinkEmail } = await import('./services/email');
-          await sendPaymentLinkEmail(
-            order.customerEmail,
-            orderId,
-            order.customerName,
-            order.amount,
-            confirmationUrl
-          );
-          console.log(`✅ [Order ${orderId}] Payment link sent via email`);
-          notificationsSent.email = true;
-        } catch (error) {
-          console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via email:`, error instanceof Error ? error.message : error);
-        }
-      }
-      
-      // Invia link pagamento via WhatsApp
-      if (await canNotify('whatsapp', order.userId)) try {
-        const { sendPaymentLinkWhatsApp } = await import('./services/whatsapp');
-        const whatsappSent = await sendPaymentLinkWhatsApp(
-          order.customerPhone,
-          orderId,
-          order.customerName,
-          order.amount,
-          confirmationUrl
-        );
-        if (whatsappSent) {
-          console.log(`✅ [Order ${orderId}] Payment link sent via WhatsApp`);
-          notificationsSent.whatsapp = true;
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Order ${orderId}] Failed to send payment link via WhatsApp:`, error instanceof Error ? error.message : error);
-      }
-      
-      console.log(`📊 [Order ${orderId}] Notifications sent: Telegram=${notificationsSent.telegram}, Email=${notificationsSent.email}, WhatsApp=${notificationsSent.whatsapp}`);
+      const paymentDelivery = await sendOrderPaymentLink(order, confirmationUrl);
       
       // Aggiorna ordine
       console.log(`💾 [Order ${orderId}] Step 8/8: Updating order status...`);
-      const updatedOrder = await storage.updateOrder(orderId, {
-        status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
-        paymentId: paymentIntent.id,
-        paymentLinkSentAt: new Date(),
-      });
+      const updatedOrder = await storage.updateOrder(orderId, paymentLinkOrderUpdate(paymentDelivery, paymentIntent.id));
       
-      console.log(`✅ [Order ${orderId}] Payment link generation completed successfully!\n`);
+      console.log(`[Order ${orderId}] Payment link generated; notification accepted=${paymentDelivery.paymentLinkSent}`);
       
       res.json({
         ...updatedOrder,
         paymentUrl: confirmationUrl,
-        paymentLinkSent: true,
+        paymentLinkSent: paymentDelivery.paymentLinkSent,
+        paymentDelivery,
+        warning: paymentDelivery.warning,
       });
     } catch (error) {
       console.log(`❌ [Order ${req.params.id}] Payment link generation FAILED: ${error instanceof Error ? error.message : String(error)}`);

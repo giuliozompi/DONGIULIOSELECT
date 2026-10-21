@@ -1,4 +1,6 @@
 import { formatOrderQuantity, isKilogramUnit, parseOrderQuantity } from '@shared/order-quantity';
+import { PaymentLinkNotice } from '@/components/admin/PaymentLinkNotice';
+import type { PaymentNotificationFields } from '@shared/payment-link-delivery';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -1006,6 +1008,8 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
   const { toast } = useToast();
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [newQuantity, setNewQuantity] = useState<string>('');
+  const [paymentNotice, setPaymentNotice] = useState<PaymentNotificationFields | null>(null);
+  useEffect(() => setPaymentNotice(null), [order.id]);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [addQuantity, setAddQuantity] = useState<number>(1);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
@@ -1248,9 +1252,11 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
+      setPaymentNotice(data);
       toast({ 
-        title: '✅ Ссылка на оплату создана', 
-        description: 'Ссылка на оплату успешно создана и отправлена клиенту.',
+        title: data.warning ? 'Проверьте отправку ссылки' : 'Ссылка на оплату создана',
+        description: data.warning || 'Сервис уведомлений принял сообщение. Доставка клиенту не подтверждена.',
+        variant: data.warning ? 'destructive' : 'default',
       });
     },
     onError: (error: any) => {
@@ -1275,9 +1281,11 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
+      setPaymentNotice(data);
       toast({ 
-        title: '✅ Оплата изменена на онлайн', 
-        description: 'Способ оплаты изменен на онлайн и ссылка отправлена клиенту.',
+        title: data.warning ? 'Оплата изменена; проверьте отправку ссылки' : 'Оплата изменена на онлайн',
+        description: data.warning || 'Сервис уведомлений принял сообщение. Доставка клиенту не подтверждена.',
+        variant: data.warning ? 'destructive' : 'default',
       });
     },
     onError: (error: any) => {
@@ -1341,6 +1349,7 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
           </div>
         )}
 
+        <PaymentLinkNotice notice={paymentNotice} />
         <div className="space-y-6 py-4">
           {/* Products */}
           <div className="space-y-3">
@@ -1985,6 +1994,7 @@ function canChangeOrderStatus(status: string, isMasterAdmin: boolean): boolean {
 
 function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   const { toast } = useToast();
+  const [statusPaymentNotice, setStatusPaymentNotice] = useState<(PaymentNotificationFields & { id?: string }) | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showDeleted, setShowDeleted] = useState<boolean>(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
@@ -2031,11 +2041,14 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
   // Update status mutation
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
-      return await apiRequest('PATCH', `/api/admin/orders/${orderId}/status`, { status });
+      const res = await apiRequest('PATCH', `/api/admin/orders/${orderId}/status`, { status });
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
-      toast({ title: '✅ Статус обновлен' });
+      setStatusPaymentNotice(data);
+      toast({ title: data.warning ? 'Проверьте отправку ссылки' : 'Статус обновлен',
+        description: data.warning, variant: data.warning ? 'destructive' : 'default' });
     },
     onError: (error: any) => {
       toast({ 
@@ -2334,6 +2347,12 @@ function OrdersManager({ isMasterAdmin }: { isMasterAdmin: boolean }) {
 
   return (
     <div className="space-y-6">
+      {statusPaymentNotice?.id && (statusPaymentNotice.warning || statusPaymentNotice.paymentDelivery) && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Заказ #{statusPaymentNotice.id.slice(-6).toUpperCase()}</p>
+          <PaymentLinkNotice notice={statusPaymentNotice} />
+        </div>
+      )}
       {/* Filter */}
       <Card>
         <CardHeader>

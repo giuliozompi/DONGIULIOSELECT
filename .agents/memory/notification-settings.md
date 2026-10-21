@@ -22,7 +22,13 @@ description: How global channel toggles and per-user opt-outs work; where the co
 2. WhatsApp to customer: order_created, payment_link (two endpoints), status_change
 3. Telegram to customer: status_change
 
-Email customer/manager notifications are NOT wrapped (email rarely needs disabling).
+## Payment-link reporting semantics
+
+Treat provider acceptance as an accepted send, not proof of delivery to the customer. Preserve partial channel failures in operator-facing warnings even if another channel accepts the message.
+
+**Why:** Customers reported missing payment links while the admin reported success; a boolean email failure had been ignored, and Telegram rejection did not prevent an unconditional success state.
+
+**How to apply:** Keep payment creation, provider acceptance, and confirmed customer delivery distinct when extending notifications or admin status transitions. Do not reinterpret old `sent` records as delivery receipts.
 
 ## Admin UI
 - Settings page → "Уведомления" tab (master admin only): global toggles per channel
