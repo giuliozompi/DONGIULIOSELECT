@@ -7,7 +7,6 @@ import { backfillHistoricalData } from './services/analytics-aggregation';
 import cookieParser from 'cookie-parser';
 import { ObjectStorageService } from './objectStorage';
 import { db } from './db';
-import { webUsers, webSessions, oauthAccounts, webWishlists, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs, userAddresses } from '../shared/schema';
 import { getAllChannelSettings, setChannelEnabled, getUserPreferences, setUserPreference } from './services/notification-settings';
 import { eq, and, gt, or, ilike, desc, sql, lt, gte, lte, asc } from 'drizzle-orm';
 import { storage } from './storage';
@@ -31,6 +30,8 @@ import {
 } from './services/web-auth';
 
 // ─── Middleware ─────────────────────────────────────────────
+import { registerWebWishlistRoutes } from './webWishlistRoutes';
+import { webUsers, webSessions, oauthAccounts, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs, userAddresses } from '../shared/schema';
 
 export async function requireWebAdmin(req: Request, res: Response, next: any) {
   const webUser = (req as any).webUser as JwtPayload | undefined;
@@ -405,44 +406,7 @@ export function registerWebRoutes(app: Express) {
 
   // ── WISHLIST ──────────────────────────────────────────────
 
-  // GET /web-api/wishlist
-  app.get('/web-api/wishlist', requireWebAuth, async (req: Request, res: Response) => {
-    try {
-      const { sub } = (req as any).webUser as JwtPayload;
-      const items = await db.select({
-        id: webWishlists.id,
-        productId: webWishlists.productId,
-        createdAt: webWishlists.createdAt,
-        product: products,
-      }).from(webWishlists)
-        .leftJoin(products, eq(webWishlists.productId, products.id))
-        .where(eq(webWishlists.userId, sub));
-      return res.json(items);
-    } catch (err) {
-      return res.status(500).json({ error: 'Ошибка сервера' });
-    }
-  });
-
-  // POST /web-api/wishlist/:productId
-  app.post('/web-api/wishlist/:productId', requireWebAuth, async (req: Request, res: Response) => {
-    try {
-      const { sub } = (req as any).webUser as JwtPayload;
-      const { productId } = req.params;
-
-      const existing = await db.select().from(webWishlists)
-        .where(and(eq(webWishlists.userId, sub), eq(webWishlists.productId, productId)));
-      if (existing.length > 0) {
-        await db.delete(webWishlists)
-          .where(and(eq(webWishlists.userId, sub), eq(webWishlists.productId, productId)));
-        return res.json({ inWishlist: false });
-      }
-
-      await db.insert(webWishlists).values({ id: randomUUID(), userId: sub, productId });
-      return res.json({ inWishlist: true });
-    } catch (err) {
-      return res.status(500).json({ error: 'Ошибка сервера' });
-    }
-  });
+  registerWebWishlistRoutes(app, db, requireWebAuth);
 
   // ── ADDRESSES ─────────────────────────────────────────────
   registerWebAddressUpdate(app, db, requireWebAuth);

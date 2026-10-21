@@ -79,6 +79,7 @@ async function request<T>(
 
 export const webApi = {
   get: <T>(path: string) => request<T>('GET', path),
+  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   post: <T>(path: string, body?: unknown, skipAuth = false) =>
     request<T>('POST', path, body, skipAuth),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),

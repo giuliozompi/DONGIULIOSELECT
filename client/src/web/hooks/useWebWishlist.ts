@@ -21,13 +21,15 @@ export interface WishlistItem {
   product: WishlistProduct | null;
 }
 
+type WishlistChange = { id: string; inWishlist: boolean };
+
 export function useWebWishlist(productId?: string) {
   const { user, isAuthenticated } = useWebAuth();
   const client = useQueryClient();
   const { toast } = useToast();
   // Never reuse a previous customer's selected products after an account switch.
   const queryKey = ['/web-api/wishlist', user?.id];
-  const mutationKey = ['web-wishlist-toggle', user?.id];
+  const mutationKey = ['web-wishlist-set', user?.id];
   const query = useQuery({
     queryKey,
     queryFn: () => webApi.get<WishlistItem[]>('/wishlist'),
@@ -37,12 +39,18 @@ export function useWebWishlist(productId?: string) {
   });
   const pending = useIsMutating({
     mutationKey,
-    predicate: mutation => productId === undefined || mutation.state.variables === productId,
+    predicate: mutation => productId === undefined || (mutation.state.variables as WishlistChange)?.id === productId,
   }) > 0;
   const mutation = useMutation({
     mutationKey,
-    mutationFn: (id: string) => webApi.post<{ inWishlist: boolean }>(`/wishlist/${encodeURIComponent(id)}`),
-    // This API toggles rather than sets membership: retrying a POST could undo it.
+    mutationFn: ({ id, inWishlist }: WishlistChange) => {
+      const path = `/wishlist/${encodeURIComponent(id)}`;
+      return inWishlist
+        ? webApi.put<{ inWishlist: boolean }>(path)
+        : webApi.delete<{ inWishlist: boolean }>(path);
+    },
+    // Retried transport requests preserve the original explicit intent.
+    // Keep automatic query-library retries disabled to avoid repeated error toasts.
     retry: false,
     onSuccess: result => {
       toast({ title: result.inWishlist ? 'Добавлено в избранное' : 'Удалено из избранного' });
@@ -61,8 +69,11 @@ export function useWebWishlist(productId?: string) {
     if (!isAuthenticated || !user?.id) return;
     const alreadyPending = client.getMutationCache()
       .findAll({ mutationKey, exact: true, status: 'pending' })
-      .some(entry => entry.state.variables === id);
-    if (!alreadyPending) mutation.mutate(id);
+      .some(entry => (entry.state.variables as WishlistChange)?.id === id);
+    if (!alreadyPending && query.isSuccess) {
+      const inWishlist = !(query.data ?? []).some(item => item.productId === id);
+      mutation.mutate({ id, inWishlist });
+    }
   };
 
   return {

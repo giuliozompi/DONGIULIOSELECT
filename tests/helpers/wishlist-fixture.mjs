@@ -43,13 +43,13 @@ export async function wishlistPage(browser, context, {
         : [...(favorites.get(state.userId) ?? [])].map(id => ({
           id: `favorite-${id}`, productId: id, createdAt: wishlistUser.createdAt, product,
         }));
-    } else if (path === `/web-api/wishlist/${product.id}` && event.request.method === 'POST') {
+    } else if (path === `/web-api/wishlist/${product.id}` && ['PUT', 'DELETE'].includes(event.request.method)) {
       await delay(toggleDelay);
       if (state.toggleFailure) { status = 500; body = { error: 'Не удалось сохранить' }; }
       else {
         const selected = favorites.get(state.userId) ?? new Set();
-        if (selected.has(product.id)) selected.delete(product.id);
-        else selected.add(product.id);
+        if (event.request.method === 'PUT') selected.add(product.id);
+        else selected.delete(product.id);
         favorites.set(state.userId, selected);
         body = { inWishlist: selected.has(product.id) };
       }

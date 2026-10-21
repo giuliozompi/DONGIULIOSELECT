@@ -12,8 +12,10 @@
     "test:orders": "node --test tests/web-orders.test.mjs",
     "test:reorder": "node --import tsx --test tests/web-reorder.test.ts",
     "test:wishlist": "node --test tests/web-wishlist.test.mjs",
+    "test:wishlist-api": "node --import tsx --test tests/web-wishlist-api.test.ts",
     "test:addresses": "node --import tsx --test tests/web-addresses-api.test.ts",
-    "db:push": "drizzle-kit push"
+    "db:check-wishlist-duplicates": "node scripts/check-wishlist-duplicates.mjs",
+    "db:push": "npm run db:check-wishlist-duplicates && drizzle-kit push"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.2",

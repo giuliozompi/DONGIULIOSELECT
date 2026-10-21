@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb, date } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb, date, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1149,7 +1149,9 @@ export const webWishlists = pgTable("web_wishlists", {
   userId: varchar("user_id").notNull().references(() => webUsers.id, { onDelete: 'cascade' }),
   productId: varchar("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, table => [
+  uniqueIndex("web_wishlists_user_product_unique").on(table.userId, table.productId),
+]);
 
 export const insertWebWishlistSchema = createInsertSchema(webWishlists).omit({ id: true, createdAt: true });
 export type InsertWebWishlist = z.infer<typeof insertWebWishlistSchema>;
