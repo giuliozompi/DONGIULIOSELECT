@@ -14,6 +14,8 @@ import { createWebCategorySchema, updateWebCategorySchema } from './utils/web-ca
 import { isValidOrderQuantity } from '../shared/order-quantity';
 import { registerWebAddressUpdate } from './webAddressRoutes';
 import { registerWebReorder } from './webReorderRoutes';
+import { registerAdminPaymentLinks } from './adminPaymentLinkRoutes';
+import { getPaymentLinkStates } from './services/payment-link-attempts';
 import {
   hashPassword,
   verifyPassword,
@@ -1074,6 +1076,8 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
 
   // ── ORDERS ─────────────────────────────────────────────────
 
+  registerAdminPaymentLinks(app, requireWebAuth, requireWebAdmin);
+
   app.get('/web-api/admin/orders', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
       const { status, search } = req.query as { status?: string; search?: string };
@@ -1086,7 +1090,9 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
           o.customerPhone?.toLowerCase().includes(q)
         );
       }
-      res.json(allOrders);
+      res.set('Cache-Control', 'no-store');
+      const states = await getPaymentLinkStates(allOrders);
+      res.json(allOrders.map(order => ({ ...order, paymentLinkState: states[order.id] })));
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
   });
 
@@ -1094,7 +1100,8 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
     try {
       const order = await storage.getOrderById(req.params.id);
       if (!order) return res.status(404).json({ error: 'Not found' });
-      res.json(order);
+      res.set('Cache-Control', 'no-store');
+      res.json({ ...order, paymentLinkState: (await getPaymentLinkStates([order]))[order.id] });
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
   });
 
@@ -1105,7 +1112,8 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       }).parse(req.body);
       const { processOrderStatusChange } = await import('./services/order-status-automation');
       const result = await processOrderStatusChange(req.params.id, status);
-      res.json({ ...result.order, paymentDelivery: result.paymentDelivery, paymentLinkSent: result.paymentLinkSent, paymentUrl: result.paymentUrl, warning: result.warning, error: result.error });
+      res.json({ ...result.order, paymentDelivery: result.paymentDelivery, paymentLinkSent: result.paymentLinkSent, paymentUrl: result.paymentUrl, warning: result.warning, error: result.error,
+        paymentLinkState: (await getPaymentLinkStates([result.order]))[result.order.id] });
     } catch(e: any) {
       if (e.message === 'Order not found') return res.status(404).json({ error: 'Not found' });
       res.status(400).json({ error: String(e) });

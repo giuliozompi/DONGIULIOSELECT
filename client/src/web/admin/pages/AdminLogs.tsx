@@ -17,6 +17,7 @@ const EVENT_LABELS: Record<string, string> = {
   order_paid: 'Оплата',
   status_change: 'Смена статуса',
   payment_link: 'Ссылка оплаты',
+  payment_link_attempt: 'Попытка отправки ссылки',
 };
 
 const CHANNEL_COLORS: Record<string, string> = {
@@ -84,7 +85,14 @@ function OrderNotifLogsTab() {
     <div className="space-y-2 mt-3">
       {logs.length === 0 && <p className="text-center py-8 text-muted-foreground">Логи не найдены</p>}
       {logs.map((log: any, i: number) => {
-        const isFailed = log.status === 'failed';
+        const isFailed = ['failed', 'partial', 'unknown'].includes(log.status);
+        let details = log.details;
+        try {
+          const parsed = JSON.parse(log.details || '{}');
+          details = parsed.detail || parsed.error || parsed.summary?.warning ||
+            (parsed.summary?.channels ? parsed.summary.channels.map((c: any) =>
+              `${c.channel}: ${c.status === 'sent' ? 'принято сервисом' : c.status === 'failed' ? 'ошибка' : 'пропущено'} — ${c.detail}`).join('; ') : '');
+        } catch {}
         return (
           <Card key={log.id || i} className={isFailed ? 'border-destructive/30' : ''}>
             <CardContent className="p-3">
@@ -122,16 +130,16 @@ function OrderNotifLogsTab() {
                   </div>
 
                   {/* Row 3: error details (only when failed and details is an error string) */}
-                  {isFailed && log.details && !['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'delivered', 'completed', 'cancelled'].includes(log.details) && (
+                  {isFailed && details && (
                     <p className="text-xs text-destructive bg-destructive/5 rounded px-2 py-1 font-mono break-all">
-                      {log.details}
+                      {details}
                     </p>
                   )}
 
                   {/* Row 3b: details when it's a status or amount (not an error) */}
-                  {log.details && (isFailed ? ['pending', 'confirmed', 'preparing', 'ready', 'delivering', 'delivered', 'completed', 'cancelled'].includes(log.details) : true) && !isFailed && log.details && (
+                  {!isFailed && details && (
                     <p className="text-xs text-muted-foreground">
-                      {log.details}
+                      {details}
                     </p>
                   )}
                 </div>
@@ -141,7 +149,9 @@ function OrderNotifLogsTab() {
                   variant={isFailed ? 'destructive' : 'default'}
                   className="text-xs shrink-0"
                 >
-                  {isFailed ? 'Ошибка' : 'OK'}
+                  {log.status === 'pending' ? 'Выполняется' : log.status === 'unknown' ? 'Не подтверждено'
+                    : log.status === 'partial' ? 'Частично' : isFailed ? 'Ошибка'
+                    : ['payment_link', 'payment_link_attempt'].includes(log.event) ? 'Принято сервисом' : 'OK'}
                 </Badge>
               </div>
             </CardContent>

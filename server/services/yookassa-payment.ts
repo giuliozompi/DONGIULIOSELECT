@@ -235,10 +235,11 @@ export async function createYooKassaPayment(
  * @param paymentId - ID del pagamento YooKassa
  * @returns Payment object
  */
-export async function getYooKassaPayment(paymentId: string): Promise<YooKassaPayment> {
+export async function getYooKassaPayment(paymentId: string, signal?: AbortSignal): Promise<YooKassaPayment> {
   try {
     const response = await fetch(`${YOOKASSA_API_URL}/payments/${paymentId}`, {
       method: 'GET',
+      signal,
       headers: {
         'Authorization': getAuthHeader(),
         'Content-Type': 'application/json',

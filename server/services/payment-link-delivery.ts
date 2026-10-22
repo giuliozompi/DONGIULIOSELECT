@@ -49,7 +49,36 @@ export async function deliverPaymentLink(order: PaymentOrder, url: string, deps:
   return summarizePaymentDelivery(results);
 }
 
-export async function sendOrderPaymentLink(order: PaymentOrder, url: string) {
+export async function sendOrderPaymentLink(order: PaymentOrder, url: string | (() => Promise<string>)) {
+  const { reservePaymentLinkAttempt, finishPaymentLinkAttempt, PaymentLinkPreparationError } = await import('./payment-link-attempts');
+  const { storage } = await import('../storage');
+  const current = await storage.getOrderById(order.id);
+  if (!current) throw new Error('Заказ не найден.');
+  if (['ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН', 'ВОЗВРАТ', 'УДАЛЕНО'].includes(current.status)) {
+    throw new PaymentLinkPreparationError('Нельзя отправлять ссылку для оплаченного или завершённого заказа.');
+  }
+  // Durable, fail-closed reservation: all web and Telegram callers share this limit.
+  const attemptId = await reservePaymentLinkAttempt(current);
+  let sending = false;
+  try {
+    const resolvedUrl = typeof url === 'function' ? await url() : url;
+    if (!/^https?:\/\//i.test(resolvedUrl)) throw new PaymentLinkPreparationError('Платёжный сервис не вернул корректную ссылку.');
+    sending = true;
+    const summary = await sendUntrackedPaymentLink(order, resolvedUrl, attemptId);
+    await finishPaymentLinkAttempt(attemptId, summary);
+    return summary;
+  } catch (error) {
+    const detail = error instanceof PaymentLinkPreparationError
+      ? error.message : sending
+        ? 'Результат отправки не подтверждён. Проверьте каналы перед повторной попыткой.'
+        : 'Не удалось проверить или подготовить платёжную ссылку. Сообщения не отправлены.';
+    try { await finishPaymentLinkAttempt(attemptId, undefined, detail, sending); }
+    catch { console.error('[PaymentDelivery] Attempt outcome could not be persisted'); }
+    throw new PaymentLinkPreparationError(detail);
+  }
+}
+
+async function sendUntrackedPaymentLink(order: PaymentOrder, url: string, attemptId: string) {
   const { canNotify } = await import('./notification-settings');
   const { logOrderNotification } = await import('./notification-logger');
   return deliverPaymentLink(order, url, {
@@ -71,7 +100,7 @@ export async function sendOrderPaymentLink(order: PaymentOrder, url: string) {
       event: 'payment_link', recipient: 'customer', channel: result.channel,
       userId: order.userId, orderId: order.id, customerName: order.customerName,
       customerPhone: order.customerPhone, status: result.status === 'sent' ? 'sent' : 'failed',
-      details: result.detail,
+      details: JSON.stringify({ paymentAttemptId: attemptId, detail: result.detail }),
     }),
   });
 }

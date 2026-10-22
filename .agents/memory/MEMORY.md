@@ -1,4 +1,5 @@
 - [Notification settings system](notification-settings.md) — global per-channel + per-user opt-out; canNotify() helper with 60s cache; fail-open design
+- [Payment link resends](payment-link-resends.md) — persistent admin sending history, shared anti-spam limits, and reuse of existing valid payments.
 - [Order weighing](order-weighing.md) — operators must be able to enter actual weights in kg with three decimal places after the comma.
 - [Guest checkout](checkout-continuation.md) — new customers must register and resume checkout without losing their cart or draft.
 - [Browser test isolation](browser-test-isolation.md) — service workers can bypass page-level API mocks; enforce isolation before registration or payment tests.

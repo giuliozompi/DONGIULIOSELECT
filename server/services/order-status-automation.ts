@@ -48,7 +48,8 @@ export async function processOrderStatusChange(
   }
 
   // ── Persist the new status ────────────────────────────────────────────────
-  const updatedOrder = await storage.updateOrder(orderId, { status: shouldSendPaymentLink ? 'СОБРАН' : newStatus });
+  // Payment preparation runs only after the persistent sending reservation.
+  const updatedOrder = shouldSendPaymentLink ? order : await storage.updateOrder(orderId, { status: newStatus });
 
   // ── ОПЛАЧЕН ──────────────────────────────────────────────────────────────
   if (newStatus === 'ОПЛАЧЕН') {
@@ -90,8 +91,10 @@ export async function processOrderStatusChange(
     console.log(`🔄 [OrderStatus] Order ${orderId} → СОБРАН, creating payment link...`);
     try {
       let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
-      let confirmationUrl: string;
+      let confirmationUrl = '';
 
+      const paymentDelivery = await sendOrderPaymentLink(order, async () => {
+      await storage.updateOrder(orderId, { status: 'СОБРАН' });
       if (!paymentIntent || paymentIntent.status !== 'pending') {
         const { createYooKassaPayment, formatYooKassaAmount, createReceipt } = await import('./yookassa-payment');
 
@@ -168,7 +171,8 @@ export async function processOrderStatusChange(
         confirmationUrl = paymentIntent.redirectUrl || '';
       }
 
-      const paymentDelivery = await sendOrderPaymentLink(order, confirmationUrl);
+      return confirmationUrl;
+      });
       const savedOrder = await storage.updateOrder(orderId, paymentLinkOrderUpdate(paymentDelivery, paymentIntent!.id));
 
       console.log(`✅ [OrderStatus] Payment link flow complete for order ${orderId}`);
@@ -182,10 +186,10 @@ export async function processOrderStatusChange(
       };
     } catch (e) {
       console.error(`❌ [OrderStatus] Auto-СОБРАН payment link failed for ${orderId}:`, e);
-      // Status stays СОБРАН — never fail the whole call
+      const currentOrder = await storage.getOrderById(orderId) || updatedOrder || order;
       return {
-        order: { ...updatedOrder, status: 'СОБРАН' },
-        status: 'СОБРАН',
+        order: currentOrder,
+        status: currentOrder.status,
         paymentLinkSent: false,
         warning: 'Заказ собран, но создание или отправка ссылки на оплату не завершены. Проверьте журнал сервера перед повторной попыткой.',
         error: 'Не удалось создать или отправить ссылку. Проверьте журнал сервера.',

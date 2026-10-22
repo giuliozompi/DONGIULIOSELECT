@@ -17,7 +17,7 @@ export const storage = {
 };
 export const canNotify = async () => false;
 export const logOrderNotification = async () => {};
-export const sendOrderPaymentLink = async () => { fixture.sendCalls++; return fixture.summary; };
+export const sendOrderPaymentLink = async (_, prepare) => { if (typeof prepare === 'function') await prepare(); fixture.sendCalls++; return fixture.summary; };
 export const createYooKassaPayment = async () => { fixture.createCalls++; throw new Error('fake provider unavailable'); };
 export const formatYooKassaAmount = value => value.toFixed(2);
 export const createReceipt = () => ({ items: [] });

@@ -9,12 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Search, Eye, Trash2, Plus, Minus, X, Percent, ChevronLeft } from 'lucide-react';
+import { Search, Eye, Trash2, Plus, Minus, X, Percent, ChevronLeft, AlertCircle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { isKilogramUnit, parseOrderQuantity } from '@shared/order-quantity';
 import { OrderWeightEditor } from '../components/OrderWeightEditor';
+import { PaymentLinkControls } from '../components/PaymentLinkControls';
 import { PaymentLinkNotice } from '@/components/admin/PaymentLinkNotice';
 import type { PaymentNotificationFields } from '@shared/payment-link-delivery';
+import type { PaymentLinkState } from '@shared/payment-link-attempts';
 
 const STATUSES = [
   { value: 'all', label: 'Все' },
@@ -62,15 +64,17 @@ export default function AdminOrders() {
   const [addProdQty, setAddProdQty] = useState('1');
   const [paymentNotices, setPaymentNotices] = useState<Record<string, PaymentNotificationFields>>({});
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, isError: ordersError, error: ordersQueryError, refetch: refetchOrders } = useQuery({
     queryKey: ['/web-api/admin/orders', statusFilter, search],
     queryFn: () => adminApi.getOrders(statusFilter !== 'all' ? statusFilter : undefined, search || undefined),
+    refetchInterval: 12_000,
   });
 
-  const { data: order, isLoading: loadOrder } = useQuery({
+  const { data: order, isLoading: loadOrder, isError: orderError, error: orderQueryError, refetch: refetchOrder } = useQuery({
     queryKey: ['/web-api/admin/orders', selectedId],
     queryFn: () => adminApi.getOrder(selectedId!),
     enabled: !!selectedId,
+    refetchInterval: 12_000,
   });
 
   const { data: allProducts = [] } = useQuery({
@@ -83,12 +87,38 @@ export default function AdminOrders() {
     qc.invalidateQueries({ queryKey: ['/web-api/admin/orders'] });
   };
 
+  const preservePaymentState = (id: string, updated: any) => {
+    const existing = qc.getQueryData<any>(['/web-api/admin/orders', id]);
+    if (existing?.paymentLinkState && !updated?.paymentLinkState) {
+      qc.setQueryData(['/web-api/admin/orders', id], { ...updated, paymentLinkState: existing.paymentLinkState });
+    } else {
+      qc.setQueryData(['/web-api/admin/orders', id], updated);
+    }
+  };
+
+  const resendPaymentLinkMut = useMutation({
+    mutationFn: (id: string) => adminApi.resendPaymentLink(id),
+    onSuccess: (_result: any, id: string) => {
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/orders'] });
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/orders', id] });
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/notification-logs/order'] });
+      toast({ title: 'Запрос на отправку выполнен', description: 'Обновляем сохранённую историю попыток.' });
+    },
+    onError: (e: any, id: string) => {
+      // Failed HTTP requests may still have persisted an attempt on the server.
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/orders'] });
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/orders', id] });
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/notification-logs/order'] });
+      toast({ title: 'Не удалось отправить ссылку', description: e.message || 'Обновите состояние и проверьте историю попыток.', variant: 'destructive' });
+    },
+  });
+
   const statusMut = useMutation({
     mutationFn: ({ status }: any) => adminApi.updateOrderStatus(selectedId!, status),
     onSuccess: (updated: any) => {
       inv();
       qc.invalidateQueries({ queryKey: ['/web-api/admin/notification-logs/order'] });
-      qc.setQueryData(['/web-api/admin/orders', updated.id], updated);
+      preservePaymentState(updated.id, updated);
       setPaymentNotices(notices => ({ ...notices, [updated.id]: updated }));
       toast({ title: updated.warning ? 'Проверьте отправку ссылки' : 'Статус обновлён',
         description: updated.warning, variant: updated.warning ? 'destructive' : 'default' });
@@ -98,19 +128,19 @@ export default function AdminOrders() {
 
   const qtyMut = useMutation({
     mutationFn: ({ productId, newQuantity }: any) => adminApi.updateQuantity(selectedId!, productId, newQuantity),
-    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); },
+    onSuccess: (updated: any) => { inv(); preservePaymentState(selectedId!, updated); },
     onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
   const removeProdMut = useMutation({
     mutationFn: (productId: string) => adminApi.removeProduct(selectedId!, productId),
-    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); },
+    onSuccess: (updated: any) => { inv(); preservePaymentState(selectedId!, updated); },
     onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
   const discountMut = useMutation({
     mutationFn: () => adminApi.applyDiscount(selectedId!, discType, discValue),
-    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); setDiscountDialog(false); toast({ title: 'Скидка применена' }); },
+    onSuccess: (updated: any) => { inv(); preservePaymentState(selectedId!, updated); setDiscountDialog(false); toast({ title: 'Скидка применена' }); },
     onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
@@ -121,7 +151,7 @@ export default function AdminOrders() {
       if (qty === null) throw new Error('Введите положительное количество; вес в кг — до 3 знаков после запятой.');
       return adminApi.addProduct(selectedId!, addProdId, qty);
     },
-    onSuccess: (updated: any) => { inv(); qc.setQueryData(['/web-api/admin/orders', selectedId], updated); setAddProdDialog(false); setAddProdId(''); setAddProdQty('1'); toast({ title: 'Товар добавлен' }); },
+    onSuccess: (updated: any) => { inv(); preservePaymentState(selectedId!, updated); setAddProdDialog(false); setAddProdId(''); setAddProdQty('1'); toast({ title: 'Товар добавлен' }); },
     onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
@@ -139,7 +169,7 @@ export default function AdminOrders() {
     qtyMut.mutate({ productId: item.productId, newQuantity: newQty });
   }
 
-  if (selectedId && (loadOrder || order)) {
+  if (selectedId) {
     const o = order;
     return (
       <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
@@ -152,11 +182,25 @@ export default function AdminOrders() {
           {o && <Badge className={`ml-auto ${STATUS_COLORS[o.status] || ''}`}>{STATUSES.find(s => s.value === o.status)?.label || o.status}</Badge>}
         </div>
 
-        {loadOrder && <div className="text-center py-8 text-muted-foreground">Загрузка...</div>}
+        {loadOrder && !o && <div className="text-center py-8 text-muted-foreground">Загрузка заказа…</div>}
+        {orderError && (
+          <div role="alert" className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div className="flex-1"><p className="font-medium">Не удалось загрузить заказ и историю отправки</p><p className="mt-1 text-muted-foreground">{(orderQueryError as Error)?.message || 'Проверьте соединение и попробуйте ещё раз.'}</p></div>
+            <Button variant="outline" size="sm" onClick={() => refetchOrder()}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Повторить</Button>
+          </div>
+        )}
         <PaymentLinkNotice notice={paymentNotices[selectedId]} />
 
         {o && (
           <>
+            <PaymentLinkControls
+              orderId={o.id}
+              state={orderError ? undefined : o.paymentLinkState as PaymentLinkState | undefined}
+              sending={resendPaymentLinkMut.isPending && resendPaymentLinkMut.variables === o.id}
+              onResend={() => resendPaymentLinkMut.mutate(o.id)}
+              onRefresh={() => refetchOrder()}
+            />
             <Card>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -317,8 +361,15 @@ export default function AdminOrders() {
       </div>
 
       {isLoading && <div className="text-center py-8 text-muted-foreground">Загрузка...</div>}
+      {ordersError && (
+        <div role="alert" className="flex items-start gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div className="flex-1"><p className="font-medium">Не удалось загрузить заказы и состояние ссылок</p><p className="mt-1 text-muted-foreground">{(ordersQueryError as Error)?.message || 'Проверьте соединение и попробуйте ещё раз.'}</p></div>
+          <Button variant="outline" size="sm" onClick={() => refetchOrders()}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Повторить</Button>
+        </div>
+      )}
 
-      <div className="rounded-md border overflow-hidden">
+      <div className="rounded-md border overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
@@ -327,6 +378,7 @@ export default function AdminOrders() {
               <th className="text-left p-3 font-medium hidden md:table-cell">Дата</th>
               <th className="text-right p-3 font-medium">Сумма</th>
               <th className="text-center p-3 font-medium">Статус</th>
+              <th className="text-left p-3 font-medium">Ссылка</th>
               <th className="p-3" />
             </tr>
           </thead>
@@ -342,13 +394,23 @@ export default function AdminOrders() {
                     {STATUSES.find(s => s.value === o.status)?.label || o.status}
                   </span>
                 </td>
+                <td className="p-3" onClick={e => e.stopPropagation()}>
+                  <PaymentLinkControls
+                    compact
+                    orderId={o.id}
+                    state={ordersError ? undefined : o.paymentLinkState as PaymentLinkState | undefined}
+                    sending={resendPaymentLinkMut.isPending && resendPaymentLinkMut.variables === o.id}
+                    onResend={() => resendPaymentLinkMut.mutate(o.id)}
+                    onRefresh={() => refetchOrders()}
+                  />
+                </td>
                 <td className="p-3">
                   <Button size="icon" variant="ghost" onClick={e => { e.stopPropagation(); setSelectedId(o.id); }}><Eye className="h-3.5 w-3.5" /></Button>
                 </td>
               </tr>
             ))}
-            {orders.length === 0 && !isLoading && (
-              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Заказы не найдены</td></tr>
+            {orders.length === 0 && !isLoading && !ordersError && (
+              <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Заказы не найдены</td></tr>
             )}
           </tbody>
         </table>

@@ -68,6 +68,8 @@ export const adminApi = {
   getOrder: (id: string) => webApi.get<any>(`${A}/orders/${id}`),
   updateOrderStatus: (id: string, status: string) =>
     webApi.patch<any>(`${A}/orders/${id}/status`, { status }),
+  resendPaymentLink: (id: string) =>
+    webApi.post<any>(`${A}/orders/${encodeURIComponent(id)}/resend-payment-link`),
   updateQuantity: (id: string, productId: string, newQuantity: number) =>
     webApi.post<any>(`${A}/orders/${id}/update-quantity`, { productId, newQuantity }),
   addProduct: (id: string, productId: string, quantity?: number) =>
