@@ -10,7 +10,7 @@ export interface WebUserProfile {
   avatar?: string;
   isEmailVerified: boolean;
   marketingConsent: boolean;
-  telegramUserId?: string;
+  telegramUserId?: string | null;
   createdAt: string;
 }
 
@@ -23,6 +23,8 @@ interface AuthState {
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<boolean>;
+  reloadProfile: () => Promise<WebUserProfile | null>;
+  unlinkTelegram: () => Promise<void>;
   updateProfile: (data: Partial<WebUserProfile>) => Promise<void>;
 }
 
@@ -86,5 +88,30 @@ export const useWebAuth = create<AuthState>((set, get) => ({
   updateProfile: async (data) => {
     const res = await webApi.patch<{ user: WebUserProfile }>('/auth/profile', data);
     set({ user: res.user });
+  },
+
+  reloadProfile: async () => {
+    const owner = get().user?.id;
+    const session = get().accessToken;
+    if (!owner || !get().isAuthenticated) return null;
+    const res = await webApi.get<{ user: WebUserProfile }>('/auth/me');
+    // Returning from Telegram must not rotate the session or resurrect a
+    // logged-out profile. Ignore a response belonging to a previous account.
+    const current = get();
+    if (!current.isAuthenticated || current.user?.id !== owner ||
+      current.accessToken !== session || res.user.id !== owner) return null;
+    set({ user: res.user });
+    return res.user;
+  },
+
+  unlinkTelegram: async () => {
+    const owner = get().user?.id;
+    const session = get().accessToken;
+    if (!owner || !get().isAuthenticated) throw new Error('Требуется авторизация.');
+    await webApi.delete(`/auth/link-telegram?profileId=${encodeURIComponent(owner)}`);
+    const current = get();
+    if (current.isAuthenticated && current.user?.id === owner && current.accessToken === session) {
+      set({ user: { ...current.user, telegramUserId: null } });
+    }
   },
 }));
