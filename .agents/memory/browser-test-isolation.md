@@ -15,8 +15,8 @@ Tests must not assume that importing an unversioned source URL accesses the appl
 
 **How to apply:** Prefer UI interactions or seed browser persistence and reload for hydration; assert the rendered UI and persisted state rather than a potentially detached imported store.
 
-The default Chromium launcher can intermittently stall in this workspace even when the app is responding normally.
+Browser startup and screenshot capture can intermittently stall in this workspace even when the app is responding normally.
 
-**Why:** Browser startup and navigation timed out with the default executable, while the already-installed Playwright Chromium completed the same tests.
+**Why:** Browser startup and navigation have timed out independently of successful HTTP and renderer checks. On an earlier occasion, an alternative Playwright Chromium completed the same tests.
 
-**How to apply:** When diagnosing browser-only timeouts, check that the app responds first, then use `CHROMIUM_PATH` with an available installed Chromium executable. Discover its current location rather than saving a versioned system path.
+**How to apply:** Check app HTTP responses before diagnosing a browser timeout as an application failure. Discover an alternative installed Chromium before using `CHROMIUM_PATH`; never assume the previous alternative is still installed. If no alternative is available and both launch/capture paths fail, use the renderer tests and state that visual verification is incomplete instead of repeatedly retrying the browser.

@@ -81,6 +81,9 @@ export async function renderOrderPrintDocument(order: Order, format: OrderPrintF
   const financial = format === 'order-summary' ? financialDetails(order) : null;
   const rows = order.items.map((item, i) => `<tr><td class="check">${format === 'packing-list' ? '□' : i + 1}</td>
     <td>${escapeHtml(item.productName)}</td><td class="qty">${quantity(item)}</td>
+    ${format === 'packing-list' ? `<td class="assembled" data-field="assembled-quantity"><span class="assembly-space">
+      <span class="write-line"></span><span class="unit">${isKilogramUnit(item.unit) ? 'кг' : escapeHtml(item.unit)}</span>
+      </span></td>` : ''}
     ${financial ? `<td class="price">${money(financial.prices[i])} / ${escapeHtml(item.unit)}</td>
     <td class="price">${money(financial.lines[i])}</td>` : ''}</tr>`).join('');
   const qr = await QRCode.toString(order.id, { type: 'svg', errorCorrectionLevel: 'M', margin: 1, width: 256 });
@@ -93,10 +96,12 @@ export async function renderOrderPrintDocument(order: Order, format: OrderPrintF
   const heading = format === 'packing-list' ? 'Лист сборки заказа'
     : format === 'order-summary' ? 'Заказ с ценами' : 'Этикетка заказа';
   const list = format !== 'label'
-    ? `<section><h2>${financial ? 'Товары в заказе' : 'Товары к сборке'} · ${order.items.length}</h2>
-         <table><thead><tr><th></th><th>Наименование</th><th>Количество / вес</th>
+     ? `<section><h2>${financial ? 'Товары в заказе' : 'Товары к сборке'} · ${order.items.length}</h2>
+          ${format === 'packing-list' ? '<p class="packing-note">Заказанное количество указано для сверки. Фактическое количество впишите после сборки.</p>' : ''}
+          <table><thead><tr><th></th><th>Наименование</th><th>${format === 'packing-list' ? 'Заказано клиентом' : 'Количество / вес'}</th>
+          ${format === 'packing-list' ? '<th>Собрано оператором</th>' : ''}
          ${financial ? '<th class="price">Цена за единицу</th><th class="price">Сумма</th>' : ''}</tr></thead>
-         <tbody>${rows || `<tr><td colspan="${financial ? 5 : 3}">Нет товаров</td></tr>`}</tbody></table></section>
+          <tbody>${rows || `<tr><td colspan="${financial ? 5 : format === 'packing-list' ? 4 : 3}">Нет товаров</td></tr>`}</tbody></table></section>
          ${financial?.totals || ''}`
     : '';
   const sheet = format === 'label'
@@ -130,6 +135,23 @@ export async function renderOrderPrintDocument(order: Order, format: OrderPrintF
       .grand-total { border-top:1px solid #111; padding-top:3mm; font-size:14pt; }
       .document-note { font-size:9pt; color:#444; } thead { display:table-header-group; }
       tr, .totals, .qr-wrap { break-inside:avoid; } header { break-inside:avoid; }
+       .packing-list section h2 { margin-bottom:2mm; }
+       .packing-list .packing-note { margin:0 0 3mm; font-size:9pt; color:#444; }
+       .packing-list table { table-layout:fixed; }
+       .packing-list th, .packing-list td { overflow-wrap:anywhere; }
+       .packing-list th { font-size:9pt; line-height:1.25; vertical-align:bottom; }
+       .packing-list th:nth-child(1), .packing-list td:nth-child(1) { width:7%; }
+       .packing-list th:nth-child(2), .packing-list td:nth-child(2) { width:34%; }
+       .packing-list th:nth-child(3), .packing-list td:nth-child(3) { width:27%; }
+       .packing-list th:nth-child(4), .packing-list td:nth-child(4) { width:32%; }
+       .packing-list td { min-height:18mm; }
+       .packing-list td.qty { text-align:left; white-space:normal; }
+       .packing-list td.assembled { height:18mm; padding:2mm; }
+       .packing-list .assembled { vertical-align:bottom; }
+       .packing-list .assembly-space { display:flex; align-items:flex-end; gap:2mm; min-height:12mm; }
+       .packing-list .write-line { flex:1; min-width:8mm; height:12mm; border-bottom:1px solid #777; }
+       .packing-list .unit { flex:none; white-space:nowrap; font-size:10pt; }
+       .packing-list tr { break-inside:avoid; page-break-inside:avoid; }
       .label-top { font-size:11pt; font-weight:bold; border-bottom:1px solid #111; padding-bottom:3mm; }
       .label-top small { display:block; font-size:7pt; font-weight:normal; margin-top:1mm; }
       .name { font-size:18pt; font-weight:bold; padding:4mm 0 2mm; }
@@ -140,5 +162,5 @@ export async function renderOrderPrintDocument(order: Order, format: OrderPrintF
       @media print { .toolbar { display:none; } body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
     </style></head><body>
     <div class="toolbar"><button type="button" onclick="window.print()">Печать</button></div>
-    <main>${sheet}</main></body></html>`;
+     <main${format === 'packing-list' ? ' class="packing-list"' : ''}>${sheet}</main></body></html>`;
 }

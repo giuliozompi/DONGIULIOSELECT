@@ -197,6 +197,35 @@ test('thermal box label shows the recipient, full UUID under QR, and a 100 x 150
   assert.ok(html.includes('не накладная перевозчика'));
 });
 
+test('packing list pairs requested quantities with empty handwritten actual quantities for each product', async () => {
+  const html = await renderOrderPrintDocument(sample, 'packing-list');
+  assert.match(html, /Заказано клиентом/);
+  assert.match(html, /Собрано оператором/);
+  assert.match(html, /0,735 кг/);
+  assert.match(html, /2 шт/);
+  const cells = [...html.matchAll(/<td\b[^>]*data-field="assembled-quantity"[^>]*>([\s\S]*?)<\/td>/g)];
+  assert.equal(cells.length, sample.items.length);
+  for (const [, content] of cells) {
+    assert.doesNotMatch(content, /\d/); // No requested amount copied into the handwritten field.
+    assert.doesNotMatch(content, /<input|value=/);
+  }
+  assert.match(cells[0][1], /кг/);
+  assert.match(cells[1][1], /шт/);
+  assert.ok(!html.includes('Цена за единицу'));
+  const summary = await renderOrderPrintDocument({ ...sample, amount: '1282.00' }, 'order-summary');
+  const label = await renderOrderPrintDocument(sample, 'label');
+  assert.ok(!summary.includes('data-field="assembled-quantity"'));
+  assert.ok(!label.includes('data-field="assembled-quantity"'));
+});
+
+test('empty packing lists retain their headers without inventing handwritten product rows', async () => {
+  const html = await renderOrderPrintDocument({ ...sample, items: [] }, 'packing-list');
+  assert.match(html, /Заказано клиентом/);
+  assert.match(html, /Собрано оператором/);
+  assert.match(html, /colspan="4">Нет товаров/);
+  assert.ok(!html.includes('data-field="assembled-quantity"'));
+});
+
 test('a voided order has no shipping label; invalid quantities never print silently', async () => {
   await assert.rejects(renderOrderPrintDocument({ ...sample, status: 'УДАЛЕНО' }, 'label'));
   await assert.rejects(renderOrderPrintDocument({ ...sample, items: [{ ...sample.items[0], quantity: NaN }] }, 'packing-list'));

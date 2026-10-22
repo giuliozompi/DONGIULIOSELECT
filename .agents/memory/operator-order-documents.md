@@ -20,3 +20,9 @@ The operator also needs a separate complete order printout including prices and 
 **Why:** The user explicitly requested printing the complete order with prices and totals.
 
 **How to apply:** Use the saved order prices and authoritative order total, not current catalogue prices. Keep customer-paid shipping explicitly separate from the goods payment, consistent with the existing checkout model.
+
+The assembly packing list must pair each product's ordered quantity/weight with blank space for the actual assembled quantity/weight, to be filled in by hand.
+
+**Why:** The user requested two data columns and explicitly chose handwritten completion on the printed sheet.
+
+**How to apply:** Keep the prepared column blank apart from the unit and writing space; never copy the requested amount into it or turn this into an automatic admin-data workflow. Preserve three-decimal kilogram quantities in the ordered column. This change applies only to the packing list, not the priced order or box label.
