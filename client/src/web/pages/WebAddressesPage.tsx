@@ -48,6 +48,7 @@ function AddressBook({ userId }: { userId: string }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
   const [deletingAddress, setDeletingAddress] = useState<Address | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
   const deleteTrigger = useRef<HTMLButtonElement | null>(null);
   const deleteInFlight = useRef(false);
   const selectedAddress = useRef<AddressSuggestion | null>(null);
@@ -143,7 +144,10 @@ function AddressBook({ userId }: { userId: string }) {
       setDeletingAddress(null);
       toast({ title: 'Адрес удалён' });
     },
-    onSettled: () => { deleteInFlight.current = false; },
+    onSettled: () => {
+      deleteInFlight.current = false;
+      if (mounted.current) setDeletePending(false);
+    },
   });
 
   const closeDeleteDialog = (open: boolean) => {
@@ -155,6 +159,9 @@ function AddressBook({ userId }: { userId: string }) {
     if (!deletingAddress || deleteInFlight.current) return;
     // Lock synchronously, before React renders the pending state.
     deleteInFlight.current = true;
+    // Mutation observers notify asynchronously. Hide the previous error and
+    // disable controls in this event's render, not in a later notification.
+    setDeletePending(true);
     deleteMutation.mutate(deletingAddress.id);
   };
 
@@ -223,7 +230,7 @@ function AddressBook({ userId }: { userId: string }) {
                   deleteMutation.reset();
                   setDeletingAddress(addr);
                 }}
-                disabled={deleteMutation.isPending}
+                disabled={deletePending}
                 aria-label={`Удалить адрес: ${addr.label}`}
                 data-testid={`button-delete-address-${addr.id}`}
               >
@@ -236,7 +243,7 @@ function AddressBook({ userId }: { userId: string }) {
 
       <AlertDialog open={!!deletingAddress} onOpenChange={closeDeleteDialog}>
         <AlertDialogContent
-          aria-busy={deleteMutation.isPending}
+          aria-busy={deletePending}
           onCloseAutoFocus={event => {
             event.preventDefault();
             if (deleteTrigger.current?.isConnected) deleteTrigger.current.focus();
@@ -253,24 +260,24 @@ function AddressBook({ userId }: { userId: string }) {
               <span className="block mt-2">Адрес будет удалён из списка сохранённых адресов.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {deleteMutation.isError && (
+          {!deletePending && deleteMutation.isError && (
             <p role="alert" className="text-sm text-red-600">
               {deleteMutation.error instanceof Error
                 ? deleteMutation.error.message : 'Не удалось удалить адрес. Попробуйте ещё раз.'}
             </p>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending} data-testid="button-cancel-delete-address">
+            <AlertDialogCancel disabled={deletePending} data-testid="button-cancel-delete-address">
               Отмена
             </AlertDialogCancel>
             <Button
               variant="destructive"
               onClick={confirmDelete}
-              disabled={deleteMutation.isPending}
+              disabled={deletePending}
               data-testid="button-confirm-delete-address"
             >
-              {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />}
-              {deleteMutation.isPending ? 'Удаление…' : 'Удалить'}
+              {deletePending && <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />}
+              {deletePending ? 'Удаление…' : 'Удалить'}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

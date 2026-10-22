@@ -14,3 +14,4 @@
 - [Telegram hosting diagnostics](telegram-transport.md) — workspace success does not prove Timeweb connectivity; ambiguous sends must not be retried automatically or leak bot URLs.
 - [Brand messaging](brand-messaging.md) — user-requested storefront copy emphasizes Italian producers in Russia and delivery throughout Russia.
 - [GitHub release access](github-release-access.md) — secure-proxy pushes can require a Replit GitHub connection even with an existing PAT; connect rather than bypass.
+- [Async mutation controls](async-mutation-controls.md) — observer notifications can lag request locks; retries must not expose stale errors with enabled controls.

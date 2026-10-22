@@ -83,6 +83,7 @@ async function openPage(context, {
       if (holdAddressDelete) await addressDeleteReady;
       const index = ownerAddresses.findIndex(address => address.id === path.split('/').pop());
       const response = addressDeleteResponses.shift();
+      if (response?.waitFor) await response.waitFor;
       if (response) {
         status = response.status;
         body = response.body;
@@ -740,16 +741,17 @@ test('address deletion can be cancelled by button or Escape with no request and 
   assert.deepEqual(savedAddresses, [homeAddress]);
 });
 
-test('failed address deletion announces the error, keeps the card and allows retry or cancel', async context => {
+test('fast failed address deletion cannot reuse a stale error to cancel an in-flight retry', async context => {
   const { page, requests, savedAddresses } = await openPage(context, {
     authenticated: true, initialAddresses: [homeAddress], addressDeleteError: true,
   });
   await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
   await page.click(selector('button-delete-address-home'));
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     await page.click(selector('button-confirm-delete-address'));
     await page.wait(`document.querySelector('[role="alertdialog"] [role="alert"]')?.textContent.includes('Не удалось удалить адрес')
-      && !document.querySelector('[data-testid="button-confirm-delete-address"]').disabled`);
+      && !document.querySelector('[data-testid="button-confirm-delete-address"]').disabled
+      && !document.querySelector('[data-testid="button-cancel-delete-address"]').disabled`);
     assert.equal(requests.filter(r => r.method === 'DELETE').length, attempt);
     assert.equal(await page.evaluate(exists('card-address-home')), true);
     assert.equal(await page.evaluate(`document.body.textContent.includes('Адрес удалён')`), false);
@@ -757,11 +759,78 @@ test('failed address deletion announces the error, keeps the card and allows ret
   }
   await page.click(selector('button-cancel-delete-address'));
   await page.wait(`!document.querySelector('[role="alertdialog"]')`);
-  await page.click(selector('button-delete-address-home'));
-  await page.wait(`!!document.querySelector('[role="alertdialog"]')`);
-  assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"] [role="alert"]')`), false);
-  assert.equal(await page.evaluate(exists('card-address-home')), true);
+  await page.wait(`document.activeElement?.dataset.testid === 'button-delete-address-home'`);
+  assert.equal(requests.filter(r => r.method === 'DELETE').length, 3);
+  assert.deepEqual(savedAddresses, [homeAddress]);
 });
+
+for (const mobile of [false, true]) {
+  for (const cancel of ['button', 'Escape']) {
+    const suffix = !mobile && cancel === 'button' ? '' : ` (${mobile ? 'mobile' : 'desktop'}, ${cancel})`;
+    test(`failed address deletion announces the error, keeps the card and allows retry or cancel${suffix}`, async context => {
+      const releases = [];
+      const responses = [1, 2].map(() => ({
+        status: 500, body: { error: 'Не удалось удалить адрес' },
+        waitFor: new Promise(resolve => releases.push(resolve)),
+      }));
+      context.after(() => releases.forEach(release => release()));
+      const { page, requests, savedAddresses } = await openPage(context, {
+        authenticated: true, initialAddresses: [homeAddress], addressDeleteResponses: responses,
+      });
+      if (mobile) {
+        await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+      }
+      await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+      await page.click(selector('button-delete-address-home'));
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        await page.click(selector('button-confirm-delete-address'));
+        await page.wait(`document.querySelector('[role="alertdialog"]')?.getAttribute('aria-busy') === 'true'`);
+        await page.wait(`(async () => {
+          const { queryClient } = await import('/src/lib/queryClient.ts');
+          return queryClient.isMutating() === 1;
+        })()`);
+        assert.equal(requests.filter(r => r.method === 'DELETE').length, attempt);
+        assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-confirm-delete-address"]').disabled`), true);
+        assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-cancel-delete-address"]').disabled`), true);
+        assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"] [role="alert"]')`), false);
+        // Escape and a second activation cannot close or duplicate a pending request.
+        await page.evaluate(`document.querySelector('[data-testid="button-confirm-delete-address"]').click()`);
+        await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+        await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+        assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"]')`), true);
+        assert.equal(requests.filter(r => r.method === 'DELETE').length, attempt);
+        releases[attempt - 1]();
+        await page.wait(`document.querySelector('[role="alertdialog"] [role="alert"]')?.textContent.includes('Не удалось удалить адрес')
+          && !document.querySelector('[data-testid="button-confirm-delete-address"]').disabled
+          && !document.querySelector('[data-testid="button-cancel-delete-address"]').disabled`);
+        assert.equal(await page.evaluate(exists('card-address-home')), true);
+        assert.equal(await page.evaluate(`document.body.textContent.includes('Адрес удалён')`), false);
+        assert.deepEqual(savedAddresses, [homeAddress]);
+      }
+      if (cancel === 'button') {
+        await page.click(selector('button-cancel-delete-address'));
+      } else {
+        await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+        await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+      }
+      await page.wait(`!document.querySelector('[role="alertdialog"]')`);
+      await page.wait(`document.activeElement?.dataset.testid === 'button-delete-address-home'`);
+      assert.equal(requests.filter(r => r.method === 'DELETE').length, 2);
+      assert.deepEqual(savedAddresses, [homeAddress]);
+      await page.click(selector('button-delete-address-home'));
+      await page.wait(`!!document.querySelector('[role="alertdialog"]')`);
+      assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"] [role="alert"]')`), false);
+      assert.equal(await page.evaluate(exists('card-address-home')), true);
+      // A fresh confirmation can still succeed after errors and cancellation.
+      await page.click(selector('button-confirm-delete-address'));
+      await page.wait(`!document.querySelector('[role="alertdialog"]') && !document.querySelector('[data-testid="card-address-home"]')`);
+      await page.wait(`document.body.textContent.includes('Адрес удалён')`);
+      assert.deepEqual(savedAddresses, []);
+      assert.deepEqual(requests.filter(r => r.method === 'DELETE').map(r => r.path),
+        Array(3).fill('/web-api/addresses/home'));
+    });
+  }
+}
 
 for (const scenario of [
   { name: 'refresh succeeds and deletion succeeds', refreshStatus: 200 },
