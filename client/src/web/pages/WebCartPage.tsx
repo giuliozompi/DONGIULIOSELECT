@@ -3,6 +3,7 @@ import { ShoppingCart, Plus, Minus, Trash2, ArrowRight, ChevronRight } from 'luc
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useWebCart } from '../hooks/useWebCart';
+import { getCartQuantityRules, isKilogramUnit } from '@shared/order-quantity';
 
 export default function WebCartPage() {
   const [, setLocation] = useLocation();
@@ -38,9 +39,8 @@ export default function WebCartPage() {
         {/* Items list */}
         <div className="flex-1 space-y-3">
           {items.map(item => {
-            const isKg = item.unit === 'кг';
-            const step = isKg ? 0.1 : 1;
-            const minQty = isKg ? 0.2 : 1;
+            const isKg = isKilogramUnit(item.unit);
+            const { step, initial: minQty } = getCartQuantityRules(item.unit);
             const lineTotal = parseFloat(item.price) * item.quantity;
 
             return (
