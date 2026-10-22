@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { Order } from '@shared/schema';
 import { DELIVERY_METHOD_LABELS } from '@shared/schema';
+import { printAdminOrder, type AdminPrintFormat } from '@/lib/printAdminOrder';
 
 interface MarkingLog {
   id: string;
@@ -125,8 +126,21 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
                     (order.status === 'ОПЛАЧЕН' || order.status === 'ВЫЗВАН КУРЬЕР' || order.status === 'ПОЛУЧЕН') &&
                     !order.refundStatus;
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = (format: AdminPrintFormat) => {
+    void printAdminOrder(format, async () => {
+      const res = await apiRequest('GET', `/api/admin/orders/${order.id}/print?format=${format}`);
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }).catch((error: any) => {
+      toast({
+        title: 'Ошибка печати',
+        description: error.message || 'Не удалось загрузить документ. Попробуйте ещё раз.',
+        variant: 'destructive',
+      });
+    });
   };
 
   return (
@@ -137,16 +151,15 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
             <DialogTitle className="text-2xl">
               Заказ {order.id.slice(0, 8)}
             </DialogTitle>
-            <Button
-              onClick={handlePrint}
-              variant="outline"
-              size="sm"
-              className="print:hidden"
-              data-testid="button-print-order"
-            >
-              <Printer className="w-4 h-4 mr-2" />
-              Печать
-            </Button>
+            <div className="flex flex-wrap gap-2 print:hidden">
+              <Button onClick={() => handlePrint('packing-list')} variant="outline" size="sm" data-testid="button-print-packing-list">
+                <Printer className="w-4 h-4 mr-2" />Лист комплектации · A4
+              </Button>
+              <Button onClick={() => handlePrint('label')} variant="outline" size="sm" data-testid="button-print-order-label"
+                disabled={['УДАЛЕНО', 'ВОЗВРАТ'].includes(order.status)}>
+                <Printer className="w-4 h-4 mr-2" />Этикетка · 100 × 150 мм
+              </Button>
+            </div>
           </div>
         </DialogHeader>
 

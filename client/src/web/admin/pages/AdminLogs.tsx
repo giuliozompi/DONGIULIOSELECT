@@ -32,12 +32,16 @@ const RECIPIENT_LABELS: Record<string, string> = {
 };
 
 function ActionLogsTab() {
-  const { data: logs = [], isLoading } = useQuery({
+  const { data: logs = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['/web-api/admin/action-logs'],
     queryFn: () => adminApi.getActionLogs(),
   });
 
   if (isLoading) return <div className="text-center py-8 text-muted-foreground">Загрузка...</div>;
+  if (isError) return <div role="alert" className="mt-3 text-sm text-destructive">
+    Не удалось загрузить журнал: {(error as Error)?.message || 'Ошибка сервера'}.
+    <button type="button" className="ml-2 underline" onClick={() => refetch()}>Повторить</button>
+  </div>;
 
   return (
     <div className="space-y-2 mt-3">
@@ -48,7 +52,9 @@ function ActionLogsTab() {
             <div className="flex items-start justify-between gap-2 flex-wrap">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className="text-xs shrink-0">{log.action}</Badge>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {log.actionData?.notes === 'payment_method_changed' ? 'Изменение оплаты' : log.actionType || log.action || 'Действие'}
+                  </Badge>
                   <span className="text-xs text-muted-foreground shrink-0">{fmtDate(log.createdAt)}</span>
                 </div>
                 {log.entityType && (
@@ -56,9 +62,17 @@ function ActionLogsTab() {
                     {log.entityType} {log.entityId ? `#${String(log.entityId).slice(-6)}` : ''}
                   </p>
                 )}
-                {log.details && (
+                {log.actionData?.notes === 'payment_method_changed' ? (
+                  <p className="text-xs mt-1 text-foreground/70">
+                    {(log.actionData.oldData?.paymentMethod === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении')}
+                    {' → '}
+                    {(log.actionData.newData?.paymentMethod === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении')}
+                  </p>
+                ) : (log.actionData || log.details) && (
                   <p className="text-xs mt-1 text-foreground/70 font-mono break-all">
-                    {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
+                    {typeof (log.actionData || log.details) === 'string'
+                      ? (log.actionData || log.details)
+                      : JSON.stringify(log.actionData || log.details)}
                   </p>
                 )}
               </div>

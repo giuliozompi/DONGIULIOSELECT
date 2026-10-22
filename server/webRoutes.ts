@@ -15,6 +15,7 @@ import { isValidOrderQuantity } from '../shared/order-quantity';
 import { registerWebAddressUpdate } from './webAddressRoutes';
 import { registerWebReorder } from './webReorderRoutes';
 import { registerAdminPaymentLinks } from './adminPaymentLinkRoutes';
+import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
 import { getPaymentLinkStates } from './services/payment-link-attempts';
 import { telegramLinkCodeHandler, saveWebTelegramLink, unlinkWebTelegram } from './services/web-telegram-link';
 import { issueTelegramLinkCode, verifyTelegramLinkCode } from './utils/telegram-link-code';
@@ -1061,6 +1062,8 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   // ── ORDERS ─────────────────────────────────────────────────
 
   registerAdminPaymentLinks(app, requireWebAuth, requireWebAdmin);
+  registerAdminOrderOperatorRoutes(app, '/web-api', [requireWebAuth, requireWebAdmin],
+    req => ((req as any).webUser as JwtPayload | undefined)?.sub);
 
   app.get('/web-api/admin/orders', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
@@ -1087,6 +1090,15 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       res.set('Cache-Control', 'no-store');
       res.json({ ...order, paymentLinkState: (await getPaymentLinkStates([order]))[order.id] });
     } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  });
+
+  app.get('/web-api/admin/orders/:id/logs', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      res.json(await storage.getOrderChangeLogs(req.params.id));
+    } catch (err) {
+      res.status(500).json({ error: 'Не удалось загрузить историю изменений заказа.' });
+    }
   });
 
   app.patch('/web-api/admin/orders/:id/status', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {

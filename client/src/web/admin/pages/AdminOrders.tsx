@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Search, Eye, Trash2, Plus, Minus, X, Percent, ChevronLeft, AlertCircle, RefreshCw } from 'lucide-react';
+import { Search, Eye, Trash2, Plus, Minus, X, Percent, ChevronLeft, AlertCircle, RefreshCw, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { isKilogramUnit, parseOrderQuantity } from '@shared/order-quantity';
 import { OrderWeightEditor } from '../components/OrderWeightEditor';
@@ -17,6 +17,7 @@ import { PaymentLinkControls } from '../components/PaymentLinkControls';
 import { PaymentLinkNotice } from '@/components/admin/PaymentLinkNotice';
 import type { PaymentNotificationFields } from '@shared/payment-link-delivery';
 import type { PaymentLinkState } from '@shared/payment-link-attempts';
+import { printAdminOrder, type AdminPrintFormat } from '@/lib/printAdminOrder';
 
 const STATUSES = [
   { value: 'all', label: 'Все' },
@@ -75,6 +76,12 @@ export default function AdminOrders() {
     queryFn: () => adminApi.getOrder(selectedId!),
     enabled: !!selectedId,
     refetchInterval: 12_000,
+  });
+
+  const { data: orderLogs = [], isError: orderLogsError, error: orderLogsQueryError, refetch: refetchOrderLogs } = useQuery<any[]>({
+    queryKey: ['/web-api/admin/orders', selectedId, 'logs'],
+    queryFn: () => adminApi.getOrderLogs(selectedId!),
+    enabled: !!selectedId,
   });
 
   const { data: allProducts = [] } = useQuery({
@@ -161,6 +168,32 @@ export default function AdminOrders() {
     onError: (e: any) => toast({ title: 'Ошибка', description: e.message, variant: 'destructive' }),
   });
 
+  const paymentMethodMut = useMutation({
+    mutationFn: (paymentMethod: 'yookassa' | 'cash_on_delivery') =>
+      adminApi.updatePaymentMethod(selectedId!, paymentMethod),
+    onSuccess: (updated: any) => {
+      preservePaymentState(updated.id, updated);
+      inv();
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/orders', updated.id, 'logs'] });
+      toast({ title: 'Способ оплаты изменён', description: 'Изменение сохранено в истории заказа.' });
+    },
+    onError: (e: any) => {
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/orders', selectedId] });
+      toast({ title: 'Не удалось изменить способ оплаты', description: e.message || 'Обновите заказ и попробуйте снова.', variant: 'destructive' });
+    },
+  });
+
+  const startPrint = (format: AdminPrintFormat) => {
+    void printAdminOrder(format, () => adminApi.getOrderPrint(selectedId!, format)).catch((e: any) => {
+      toast({ title: 'Ошибка печати', description: e.message || 'Не удалось получить документ.', variant: 'destructive' });
+    });
+  };
+
+  const paymentChangeBlocked = (o: any) =>
+    ['ОПЛАЧЕН', 'ВОЗВРАТ', 'УДАЛЕНО', 'ПОЛУЧЕН', 'ВЫЗВАН КУРЬЕР', 'ЗАВЕРШЕН', 'ЗАВЕРШЁН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ'].includes(o.status) ||
+    !!o.refundStatus ||
+    !!o.paymentId || !!o.paymentLinkSentAt || !!o.refundId || !!o.receiptId;
+
   function stepQty(item: any, delta: number) {
     const isKg = isKilogramUnit(item.unit);
     const step = isKg ? 0.1 : 1;
@@ -218,10 +251,66 @@ export default function AdminOrders() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div><p className="text-muted-foreground text-xs">Клиент</p><p className="font-medium">{o.customerName || '—'}</p></div>
                   <div><p className="text-muted-foreground text-xs">Телефон</p><p className="font-medium">{o.customerPhone || '—'}</p></div>
-                  <div><p className="text-muted-foreground text-xs">Оплата</p><p className="font-medium capitalize">{o.paymentMethod || '—'}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Оплата</p><p className="font-medium">
+                    {o.paymentMethod === 'yookassa' ? 'Онлайн (ЮKassa)' : ['cash', 'cash_on_delivery'].includes(o.paymentMethod) ? 'Наличными при получении' : o.paymentMethod || '—'}
+                  </p></div>
                   <div><p className="text-muted-foreground text-xs">Доставка</p><p className="font-medium capitalize">{o.deliveryType || '—'}</p></div>
                   {o.deliveryAddress && <div className="col-span-2"><p className="text-muted-foreground text-xs">Адрес</p><p className="font-medium">{o.deliveryAddress}</p></div>}
                 </div>
+                <Separator />
+                <div className="space-y-2">
+                  <Label htmlFor="order-payment-method">Способ оплаты</Label>
+                  <Select
+                    value={o.paymentMethod === 'cash' ? 'cash_on_delivery' : o.paymentMethod || 'yookassa'}
+                    onValueChange={value => {
+                      const next = value as 'yookassa' | 'cash_on_delivery';
+                      const current = o.paymentMethod === 'cash' ? 'cash_on_delivery' : o.paymentMethod;
+                      if (next !== current && confirm(`Изменить способ оплаты с «${current === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении'}» на «${next === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении'}»?`)) {
+                        paymentMethodMut.mutate(next);
+                      }
+                    }}
+                    disabled={paymentChangeBlocked(o) || paymentMethodMut.isPending}
+                  >
+                    <SelectTrigger id="order-payment-method"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yookassa">Онлайн (ЮKassa)</SelectItem>
+                      <SelectItem value="cash_on_delivery">Наличными при получении</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {paymentChangeBlocked(o) && <p className="text-xs text-muted-foreground">Способ оплаты нельзя менять для оплаченного, ожидающего оплаты (ссылка уже отправлена), возвращённого или завершённого заказа.</p>}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-base">Печать заказа</CardTitle></CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                <Button variant="outline" data-testid="button-print-packing-list" onClick={() => startPrint('packing-list')}><Printer className="h-4 w-4 mr-2" />Лист комплектации · A4</Button>
+                <Button variant="outline" data-testid="button-print-order-label" disabled={['УДАЛЕНО', 'ВОЗВРАТ'].includes(o.status)}
+                  onClick={() => startPrint('label')}><Printer className="h-4 w-4 mr-2" />Этикетка · 100 × 150 мм</Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-base">История смены оплаты</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {orderLogsError ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    Не удалось загрузить историю изменений: {(orderLogsQueryError as Error)?.message || 'Ошибка сервера'}.
+                    <Button size="sm" variant="ghost" onClick={() => refetchOrderLogs()}>Повторить</Button>
+                  </p>
+                ) : orderLogs.filter((log: any) => log.changeType === 'payment_method_changed').length === 0
+                  ? <p className="text-sm text-muted-foreground">Изменений способа оплаты пока нет.</p>
+                  : orderLogs.filter((log: any) => log.changeType === 'payment_method_changed').map((log: any) => (
+                    <div key={log.id} className="border-l-2 pl-3 py-1 text-sm">
+                      <p className="font-medium">
+                        {log.changeData?.oldPaymentMethod === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении'}
+                        {' → '}
+                        {log.changeData?.newPaymentMethod === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{fmtDate(log.createdAt)} · оператор {log.adminUserId || '—'}</p>
+                    </div>
+                  ))}
               </CardContent>
             </Card>
 

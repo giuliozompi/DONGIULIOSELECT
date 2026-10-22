@@ -561,6 +561,10 @@ export const orderChangeLogs = pgTable("order_change_logs", {
     // Per shipping_settings_changed
     customerPaysShipping?: boolean;
     shippingPaymentMethod?: 'card' | 'cash';
+
+    // Per payment_method_changed
+    oldPaymentMethod?: string;
+    newPaymentMethod?: string;
     
     // Per Yandex delivery integration (yandex_go_created, yandex_dostavka_created, etc)
     savedToCustomer?: boolean;

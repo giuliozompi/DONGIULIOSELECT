@@ -1,6 +1,8 @@
 import { isValidOrderQuantity } from '../shared/order-quantity';
 import { sendOrderPaymentLink } from './services/payment-link-delivery';
 import { paymentLinkOrderUpdate } from '../shared/payment-link-delivery';
+import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
+import { changeOrderPaymentMethod, OrderPaymentMethodError } from './services/order-payment-method';
 import type { Express } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
@@ -2699,6 +2701,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ==================== ADMIN ORDER MANAGEMENT ====================
+  registerAdminOrderOperatorRoutes(app, '/api', [verifyTelegramInitData, requireAdmin],
+    req => req.userId);
   
   // GET /api/admin/orders - Ottieni tutti gli ordini (ADMIN ONLY)
   app.get("/api/admin/orders", verifyTelegramInitData, requireAdmin, async (req, res) => {
@@ -2838,15 +2842,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`📋 [Order ${orderId}] Converting from ${order.paymentMethod} to online payment...`);
       
-      // Aggiorna il metodo di pagamento a "yookassa" (online)
-      await storage.updateOrder(orderId, {
-        paymentMethod: 'yookassa',
-      });
-      
-      console.log(`✅ [Order ${orderId}] Payment method converted to yookassa`);
-      
-      // Ora genera e invia il link di pagamento
-      // Step 0: Check YooKassa credentials
+      // Validate the provider before changing anything. The payment method,
+      // order history, and administrator audit are then committed together.
       const { checkYooKassaCredentials, createYooKassaPayment, formatYooKassaAmount, createReceipt } = await import('./services/yookassa-payment');
       const credCheck = checkYooKassaCredentials();
       if (!credCheck.ok) {
@@ -2856,6 +2853,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           details: credCheck.error 
         });
       }
+
+      await changeOrderPaymentMethod(orderId, 'yookassa', userId);
+      console.log(`✅ [Order ${orderId}] Payment method converted to yookassa`);
       
       // Verifica se esiste già un payment intent per questo ordine
       let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
@@ -2966,7 +2966,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Invia link pagamento via Telegram
-      const paymentDelivery = await sendOrderPaymentLink(order, confirmationUrl);
+      const convertedOrder = { ...order, paymentMethod: 'yookassa' };
+      const paymentDelivery = await sendOrderPaymentLink(convertedOrder, confirmationUrl);
       const notificationsSent = Object.fromEntries(paymentDelivery.channels.map(result => [result.channel, result.status === 'sent']));
       await storage.updateOrder(orderId, paymentLinkOrderUpdate(paymentDelivery, paymentIntent!.id));
       
@@ -2984,6 +2985,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
     } catch (error) {
+      if (error instanceof OrderPaymentMethodError) {
+        return res.status(error.status).json({ error: error.message });
+      }
       console.error('Error converting order to online payment:', error);
       res.status(500).json({ error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' });
     }

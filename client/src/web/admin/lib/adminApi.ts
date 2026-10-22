@@ -66,6 +66,12 @@ export const adminApi = {
     return webApi.get<any[]>(`${A}/orders${qs ? `?${qs}` : ''}`);
   },
   getOrder: (id: string) => webApi.get<any>(`${A}/orders/${id}`),
+  updatePaymentMethod: (id: string, paymentMethod: 'yookassa' | 'cash_on_delivery') =>
+    webApi.patch<any>(`${A}/orders/${encodeURIComponent(id)}/payment-method`, { paymentMethod }),
+  getOrderLogs: (id: string) =>
+    webApi.get<any[]>(`${A}/orders/${encodeURIComponent(id)}/logs`),
+  getOrderPrint: (id: string, format: 'packing-list' | 'label') =>
+    webApi.get<{ html: string }>(`${A}/orders/${encodeURIComponent(id)}/print?format=${format}`),
   updateOrderStatus: (id: string, status: string) =>
     webApi.patch<any>(`${A}/orders/${id}/status`, { status }),
   resendPaymentLink: (id: string) =>

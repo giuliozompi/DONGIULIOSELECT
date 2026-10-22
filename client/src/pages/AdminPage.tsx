@@ -33,7 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient, getAuthHeaders } from '@/lib/queryClient';
 import { insertCategorySchema, insertProductSchema, insertPickupAddressSchema, ORDER_STATUSES, type Category, type Product, type Order, type Admin, type ProductAssociation, type AdminActionLog, type PickupAddress, DELIVERY_METHOD_LABELS, DELIVERY_METHODS } from '@shared/schema';
-import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3, CreditCard, Download } from 'lucide-react';
+import { Trash2, Edit, Plus, Package, PackageX, Truck, CheckCircle2, XCircle, Settings, ClipboardList, FolderTree, Link, ShoppingCart, Users, FileText, Upload, ImagePlus, AlertTriangle, Search, MapPin, Star, Phone, User, Loader2, Eye, EyeOff, BarChart3, Printer, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
@@ -48,6 +48,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { SubmitHandler } from 'react-hook-form';
 import { format } from 'date-fns';
 import AnalyticsManager from '@/components/admin/AnalyticsManager';
+import { printAdminOrder, type AdminPrintFormat } from '@/lib/printAdminOrder';
 
 // Nota: Telegram types già definiti in lib/telegram.ts
 
@@ -1073,7 +1074,7 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
   });
 
   // Fetch order logs
-  const { data: logs = [] } = useQuery<any[]>({
+  const { data: logs = [], isError: logsError, refetch: refetchLogs } = useQuery<any[]>({
     queryKey: ['/api/admin/orders', order.id, 'logs'],
     enabled: open,
   });
@@ -1268,34 +1269,51 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
     },
   });
 
-  // Convert cash to online payment mutation
-  const convertToOnlinePaymentMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest('POST', `/api/admin/orders/${order.id}/convert-to-online-payment`, {});
+  const paymentMethodMutation = useMutation({
+    mutationFn: async (paymentMethod: 'yookassa' | 'cash_on_delivery') => {
+      const res = await fetch(`/api/admin/orders/${order.id}/payment-method`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentMethod }),
+      });
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.details || error.error || 'Failed to convert payment');
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Не удалось изменить способ оплаты. Обновите заказ и попробуйте снова.');
       }
-      return await res.json();
+      return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
-      setPaymentNotice(data);
-      toast({ 
-        title: data.warning ? 'Оплата изменена; проверьте отправку ссылки' : 'Оплата изменена на онлайн',
-        description: data.warning || 'Сервис уведомлений принял сообщение. Доставка клиенту не подтверждена.',
-        variant: data.warning ? 'destructive' : 'default',
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id, 'logs'] });
+      toast({ title: 'Способ оплаты изменён', description: 'Изменение сохранено в истории заказа.' });
     },
     onError: (error: any) => {
-      toast({ 
-        title: 'Ошибка конвертации', 
-        description: error.message || 'Не удалось изменить способ оплаты',
-        variant: 'destructive' 
-      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders', order.id] });
+      toast({ title: 'Не удалось изменить способ оплаты', description: error.message || 'Обновите заказ и попробуйте снова.', variant: 'destructive' });
     },
   });
+
+  const paymentChangeBlocked =
+    ['ОПЛАЧЕН', 'ВОЗВРАТ', 'УДАЛЕНО', 'ПОЛУЧЕН', 'ВЫЗВАН КУРЬЕР', 'ЗАВЕРШЕН', 'ЗАВЕРШЁН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ'].includes(displayOrder.status) ||
+    !!displayOrder.refundStatus ||
+    !!displayOrder.paymentId ||
+    !!displayOrder.paymentLinkSentAt ||
+    !!displayOrder.refundId ||
+    !!displayOrder.receiptId;
+
+  const startOrderPrint = (format: AdminPrintFormat) => {
+    void printAdminOrder(format, async () => {
+      const res = await apiRequest('GET', `/api/admin/orders/${order.id}/print?format=${format}`);
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    }).catch((error: any) => {
+      toast({ title: 'Ошибка печати', description: error.message || 'Не удалось получить документ.', variant: 'destructive' });
+    });
+  };
 
   // Refund order mutation
   const refundOrderMutation = useMutation({
@@ -1767,38 +1785,35 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
             </div>
           )}
 
-          {/* Convert Cash to Online Payment Button - Show for cash payment orders in СОБРАН status */}
-          {displayOrder.status === 'СОБРАН' && 
-           (displayOrder.paymentMethod === 'cash_on_delivery' || displayOrder.paymentMethod === 'cash') && (
-            <div className="border rounded-md p-4 bg-amber-500/10 border-amber-500/30">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <h4 className="font-semibold text-sm mb-1">Изменить на онлайн-оплату</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Клиент хочет оплатить онлайн вместо наличных? Нажмите для создания ссылки на оплату.
-                  </p>
-                </div>
-                <Button
-                  onClick={() => convertToOnlinePaymentMutation.mutate()}
-                  disabled={convertToOnlinePaymentMutation.isPending}
-                  variant="default"
-                  data-testid="button-convert-to-online"
-                >
-                  {convertToOnlinePaymentMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Конвертация...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      Перевести на онлайн
-                    </>
-                  )}
-                </Button>
-              </div>
+          <div className="border rounded-md p-4 space-y-3">
+            <div>
+              <Label className="text-sm font-semibold">Способ оплаты</Label>
+              <p className="text-xs text-muted-foreground mt-1">Изменение только обновит способ оплаты заказа — платёжная ссылка не создаётся и клиенту не отправляется.</p>
             </div>
-          )}
+            <Select
+              value={displayOrder.paymentMethod === 'cash' ? 'cash_on_delivery' : displayOrder.paymentMethod || 'yookassa'}
+              disabled={paymentChangeBlocked || paymentMethodMutation.isPending}
+              onValueChange={value => {
+                const next = value as 'yookassa' | 'cash_on_delivery';
+                const current = displayOrder.paymentMethod === 'cash' ? 'cash_on_delivery' : displayOrder.paymentMethod;
+                if (next !== current && confirm(`Подтвердите смену способа оплаты на ${next === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении'}?`)) {
+                  paymentMethodMutation.mutate(next);
+                }
+              }}
+            >
+              <SelectTrigger aria-label="Способ оплаты заказа"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="yookassa">Онлайн (ЮKassa)</SelectItem>
+                <SelectItem value="cash_on_delivery">Наличными при получении</SelectItem>
+              </SelectContent>
+            </Select>
+            {paymentChangeBlocked && <p className="text-xs text-muted-foreground">Нельзя менять оплату оплаченного, ожидающего оплаты (ссылка уже отправлена), возвращённого или завершённого заказа.</p>}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button type="button" data-testid="button-print-packing-list" variant="outline" size="sm" onClick={() => startOrderPrint('packing-list')}><Printer className="w-4 h-4 mr-2" />Лист комплектации · A4</Button>
+              <Button type="button" data-testid="button-print-order-label" variant="outline" size="sm" disabled={['УДАЛЕНО', 'ВОЗВРАТ'].includes(displayOrder.status)}
+                onClick={() => startOrderPrint('label')}><Printer className="w-4 h-4 mr-2" />Этикетка · 100 × 150 мм</Button>
+            </div>
+          </div>
 
           {/* Refund Status Display (if refunded) */}
           {displayOrder.refundStatus && (
@@ -1900,6 +1915,12 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
           )}
 
           {/* Change Logs */}
+          {logsError && (
+            <div role="alert" className="text-sm text-destructive">
+              Не удалось загрузить историю изменений.
+              <Button type="button" variant="ghost" size="sm" onClick={() => refetchLogs()}>Повторить</Button>
+            </div>
+          )}
           {logs.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-semibold">История изменений</h3>
@@ -1910,8 +1931,13 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
                       {format(new Date(log.createdAt), 'dd.MM.yyyy HH:mm')} • {log.changeType}
                     </p>
                     <p className="text-muted-foreground">
-                      {JSON.stringify(log.changeData, null, 2)}
+                      {log.changeType === 'payment_method_changed'
+                        ? `${log.changeData?.oldPaymentMethod === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении'} → ${log.changeData?.newPaymentMethod === 'yookassa' ? 'Онлайн (ЮKassa)' : 'Наличными при получении'}`
+                        : typeof log.changeData === 'string' ? log.changeData : JSON.stringify(log.changeData, null, 2)}
                     </p>
+                    {log.changeType === 'payment_method_changed' && (
+                      <p className="text-xs text-muted-foreground mt-1">Оператор: {log.adminUserId || '—'}</p>
+                    )}
                   </div>
                 ))}
               </div>
