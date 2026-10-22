@@ -24,6 +24,7 @@ async function openPage(context, {
   initialAddresses = [], holdAddresses = false, addressesUnavailable = false,
   addressesByUser = {}, addressUpdateError = false,
   addressDeleteError = false, holdAddressDelete = false,
+  addressDeleteResponses = [], refreshResponses = [],
   holdSuggestions = false,
   orderResponses = [],
   promoValidation = { valid: true, discountPercent: 10 },
@@ -48,6 +49,7 @@ async function openPage(context, {
     const path = new URL(event.request.url).pathname;
     requests.push({
       path, method: event.request.method,
+      authorization: event.request.headers.Authorization,
       userId: authenticated ? currentUser.id : null,
       body: (path.startsWith('/web-api/addresses') || path === '/web-api/orders') && event.request.postData
         ? JSON.parse(event.request.postData) : undefined,
@@ -79,7 +81,11 @@ async function openPage(context, {
     } else if (path.startsWith('/web-api/addresses/') && event.request.method === 'DELETE') {
       if (holdAddressDelete) await addressDeleteReady;
       const index = savedAddresses.findIndex(address => address.id === path.split('/').pop());
-      if (addressDeleteError) {
+      const response = addressDeleteResponses.shift();
+      if (response) {
+        status = response.status;
+        body = response.body;
+      } else if (addressDeleteError) {
         status = 500;
         body = { error: 'Не удалось удалить адрес' };
       } else if (index < 0) {
@@ -103,8 +109,10 @@ async function openPage(context, {
         body = savedAddresses[index];
       }
     } else if (path.endsWith('/auth/refresh')) {
-      status = authenticated ? 200 : 401;
-      body = authenticated ? { accessToken: 'test-token', user: currentUser } : { error: 'Not signed in' };
+      const response = refreshResponses.shift();
+      status = response ? response.status : authenticated ? 200 : 401;
+      body = response ? response.body
+        : authenticated ? { accessToken: 'test-token', user: currentUser } : { error: 'Not signed in' };
     } else if (path.endsWith('/auth/register')) {
       if (registrationError) { status = 409; body = { error: 'Email уже зарегистрирован' }; }
       else {
@@ -680,6 +688,74 @@ test('failed address deletion announces the error, keeps the card and allows ret
   assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"] [role="alert"]')`), false);
   assert.equal(await page.evaluate(exists('card-address-home')), true);
 });
+
+for (const scenario of [
+  { name: 'refresh succeeds and deletion succeeds', refreshStatus: 200 },
+  { name: 'refresh fails', refreshStatus: 401, error: 'Сессия истекла' },
+  { name: 'refresh succeeds but deletion fails', refreshStatus: 200,
+    retryStatus: 500, error: 'Не удалось удалить адрес' },
+  { name: 'refresh succeeds but deletion is still unauthorized', refreshStatus: 200,
+    retryStatus: 401, error: 'Сессия истекла' },
+]) {
+  test(`expired session during address deletion: ${scenario.name}`, async context => {
+    const { page, requests, savedAddresses, releaseAddressDelete } = await openPage(context, {
+      authenticated: true, initialAddresses: [homeAddress, officeAddress], holdAddressDelete: true,
+      addressDeleteResponses: [
+        { status: 401, body: { error: 'Сессия истекла' } },
+        ...(scenario.retryStatus
+          ? [{ status: scenario.retryStatus, body: { error: scenario.error } }] : []),
+      ],
+      refreshResponses: [
+        // Session restoration on page load must succeed before it expires on DELETE.
+        { status: 200, body: { accessToken: 'test-token', user: profile } },
+        { status: scenario.refreshStatus, body: scenario.refreshStatus === 200
+          ? { accessToken: 'test-refreshed-token', user: profile }
+          : { error: 'Refresh session expired' } },
+      ],
+    });
+    context.after(releaseAddressDelete);
+    await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+    await page.click(selector('button-delete-address-home'));
+    assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+    assert.equal(requests.filter(r => r.path === '/web-api/auth/refresh').length, 1);
+    await page.click(selector('button-confirm-delete-address'));
+    await page.wait(`document.querySelector('[data-testid="button-confirm-delete-address"]').disabled`);
+    assert.equal(await page.evaluate(exists('card-address-home')), true);
+    assert.equal(await page.evaluate(`document.body.textContent.includes('Адрес удалён')`), false);
+    assert.deepEqual(savedAddresses, [homeAddress, officeAddress]);
+    releaseAddressDelete();
+
+    if (scenario.error) {
+      await page.wait(`document.querySelector('[role="alertdialog"] [role="alert"]')?.textContent === ${JSON.stringify(scenario.error)}
+        && !document.querySelector('[data-testid="button-confirm-delete-address"]').disabled`);
+      assert.equal(await page.evaluate(exists('card-address-home')), true);
+      assert.equal(await page.evaluate(`document.body.textContent.includes('Адрес удалён')`), false);
+      assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-cancel-delete-address"]').disabled`), false);
+      assert.deepEqual(savedAddresses, [homeAddress, officeAddress]);
+    } else {
+      await page.wait(`!document.querySelector('[role="alertdialog"]') && !document.querySelector('[data-testid="card-address-home"]')`);
+      await page.wait(`document.body.textContent.includes('Адрес удалён')`);
+      assert.deepEqual(savedAddresses, [officeAddress]);
+    }
+    assert.equal(await page.evaluate(exists('card-address-office')), true);
+    assert.equal(await page.evaluate('location.pathname'), '/web/account/addresses');
+    // A failed refresh must not retry DELETE; a second 401 must not start a loop.
+    const lifecycle = requests.filter(r => r.method === 'DELETE' || r.path === '/web-api/auth/refresh');
+    assert.deepEqual(lifecycle.map(r => [r.method, r.path]), [
+      ['POST', '/web-api/auth/refresh'],
+      ['DELETE', '/web-api/addresses/home'],
+      ['POST', '/web-api/auth/refresh'],
+      ...(scenario.refreshStatus === 200 ? [['DELETE', '/web-api/addresses/home']] : []),
+    ]);
+    const deletions = lifecycle.filter(r => r.method === 'DELETE');
+    assert.equal(deletions[0].authorization, 'Bearer test-token');
+    if (scenario.refreshStatus === 200) {
+      assert.equal(deletions[1].authorization, 'Bearer test-refreshed-token');
+    }
+    assert.equal(await page.evaluate(`sessionStorage.getItem('dgs_web_access_token')`),
+      scenario.refreshStatus === 200 ? 'test-refreshed-token' : null);
+  });
+}
 
 test('address editing prefills all fields, saves the same record and preserves apartment and notes', async context => {
   const initial = { ...homeAddress, street: 'ул Тестовая', building: '5', postalCode: '123456' };
