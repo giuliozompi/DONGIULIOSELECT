@@ -24,6 +24,7 @@ async function openPage(context, {
   initialAddresses = [], holdAddresses = false, addressesUnavailable = false,
   addressesByUser = {}, addressUpdateError = false,
   addressDeleteError = false, holdAddressDelete = false,
+  holdSuggestions = false,
 } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
@@ -33,6 +34,8 @@ async function openPage(context, {
   const addressesReady = new Promise(resolve => { releaseAddresses = resolve; });
   let releaseAddressDelete;
   const addressDeleteReady = new Promise(resolve => { releaseAddressDelete = resolve; });
+  let releaseSuggestions;
+  const suggestionsReady = new Promise(resolve => { releaseSuggestions = resolve; });
   let savedOrder;
   let currentUser = profile;
   await page.send('Fetch.enable', { patterns: [
@@ -50,6 +53,7 @@ async function openPage(context, {
     let status = 200;
     let body = [];
     if (path === '/api/address/suggest') {
+      if (holdSuggestions) await suggestionsReady;
       status = suggestionsUnavailable ? 503 : 200;
       body = suggestionsUnavailable ? { error: 'Suggestions unavailable' } : { suggestions };
     } else if (path === '/web-api/addresses') {
@@ -129,7 +133,7 @@ async function openPage(context, {
     source: `localStorage.setItem('dgs-web-cart', ${JSON.stringify(JSON.stringify(emptyCart ? { ...cart, state: { items: [], itemCount: 0, subtotal: 0 } } : cart))});`,
   });
   return {
-    page, requests, savedAddresses, releaseAddresses, releaseAddressDelete,
+    page, requests, savedAddresses, releaseAddresses, releaseAddressDelete, releaseSuggestions,
     async switchUser(user) {
       currentUser = user;
       authenticated = !!user;
@@ -236,6 +240,191 @@ const normalizedAddress = {
   city: 'Москва', street: 'Тверская', building: '1', flat: '42',
   postalCode: '125009', fiasId: 'test-fias', geoLat: '55.76', geoLon: '37.61',
 };
+
+async function pressKey(page, key) {
+  const code = { ArrowDown: 40, ArrowUp: 38, Enter: 13, Escape: 27, Tab: 9 }[key];
+  await page.send('Input.dispatchKeyEvent', {
+    type: 'keyDown', key, windowsVirtualKeyCode: code,
+    ...(key === 'Enter' ? { text: '\r' } : {}),
+  });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key, windowsVirtualKeyCode: code });
+}
+
+async function comboboxState(page, id) {
+  return page.evaluate(`(() => {
+    const input = document.querySelector(${JSON.stringify(selector(id))});
+    const activeId = input.getAttribute('aria-activedescendant');
+    const list = document.getElementById(input.getAttribute('aria-controls'));
+    const active = activeId && document.getElementById(activeId);
+    return {
+      role: input.getAttribute('role'), expanded: input.getAttribute('aria-expanded'),
+      autocomplete: input.getAttribute('aria-autocomplete'), listRole: list?.getAttribute('role'),
+      active: active?.getAttribute('data-testid') || null,
+      selected: active?.getAttribute('aria-selected') || null,
+      focused: document.activeElement === input, value: input.value,
+      labelled: !!document.querySelector('label[for="' + input.id + '"]'),
+      description: input.getAttribute('aria-describedby'),
+    };
+  })()`);
+}
+
+const alternateAddress = {
+  ...normalizedAddress, fullAddress: 'г Москва, ул Тверская, д 2, кв 7',
+  building: '2', flat: '7', fiasId: 'test-fias-2',
+};
+
+test('address book keyboard navigation keeps focus, requires explicit selection and never submits the open popup', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, suggestions: [normalizedAddress, alternateAddress],
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-add-address'));
+  await page.click(selector('input-saved-address'));
+  const draft = 'Москва Тверская';
+  await page.fill(selector('input-saved-address'), draft);
+  await page.wait(exists('address-suggestions-list'));
+  let state = await comboboxState(page, 'input-saved-address');
+  assert.equal(state.role, 'combobox');
+  assert.equal(state.autocomplete, 'list');
+  assert.equal(state.listRole, 'listbox');
+  assert.equal(state.expanded, 'true');
+  assert.equal(state.active, null);
+  assert.equal(state.labelled, true);
+  assert.ok(state.description);
+  await pressKey(page, 'Enter');
+  assert.equal((await comboboxState(page, 'input-saved-address')).value, draft);
+  await pressKey(page, 'ArrowDown');
+  assert.equal((await comboboxState(page, 'input-saved-address')).active, 'address-suggestion-0');
+  await pressKey(page, 'ArrowDown');
+  assert.equal((await comboboxState(page, 'input-saved-address')).active, 'address-suggestion-1');
+  await pressKey(page, 'ArrowDown');
+  assert.equal((await comboboxState(page, 'input-saved-address')).active, 'address-suggestion-0');
+  await pressKey(page, 'ArrowUp');
+  state = await comboboxState(page, 'input-saved-address');
+  assert.equal(state.active, 'address-suggestion-1');
+  assert.equal(state.selected, 'true');
+  assert.equal(state.focused, true);
+  assert.equal(state.value, draft);
+  // Typing invalidates the highlighted result, even if the next response is identical.
+  await page.fill(selector('input-saved-address'), `${draft} 2`);
+  assert.equal((await comboboxState(page, 'input-saved-address')).active, null);
+  await page.wait(exists('address-suggestions-list'));
+  assert.equal((await comboboxState(page, 'input-saved-address')).active, null);
+  await pressKey(page, 'ArrowUp');
+  // IME confirmation must not choose an address or consume its key event.
+  assert.equal(await page.evaluate(`(() => {
+    const event = new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true });
+    document.activeElement.dispatchEvent(event);
+    return event.defaultPrevented;
+  })()`), false);
+  assert.equal((await comboboxState(page, 'input-saved-address')).expanded, 'true');
+  await pressKey(page, 'Enter');
+  state = await comboboxState(page, 'input-saved-address');
+  assert.equal(state.value, alternateAddress.fullAddress);
+  assert.equal(state.expanded, 'false');
+  assert.equal(state.active, null);
+  assert.equal(state.focused, true);
+  assert.equal(requests.some(r => r.path === '/web-api/addresses' && r.method === 'POST'), false);
+  await page.click(selector('button-save-address'));
+  await page.wait(exists('card-address-test-address'));
+  const saved = requests.find(r => r.path === '/web-api/addresses' && r.method === 'POST');
+  assert.equal(saved.body.building, alternateAddress.building);
+  assert.equal(saved.body.apartment, alternateAddress.flat);
+});
+
+test('editing an address supports Escape, Tab and fresh keyboard selection without saving implicitly', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress], suggestions: [normalizedAddress, alternateAddress],
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-edit-address-home'));
+  await page.click(selector('input-saved-address'));
+  await page.wait(exists('address-suggestions-list'));
+  await pressKey(page, 'ArrowUp');
+  assert.equal((await comboboxState(page, 'input-saved-address')).active, 'address-suggestion-1');
+  await pressKey(page, 'Escape');
+  assert.equal((await comboboxState(page, 'input-saved-address')).value, homeAddress.fullAddress);
+  assert.equal(await page.evaluate(`!!document.querySelector('[role="dialog"]')`), true);
+  await delay(400);
+  assert.equal(await page.evaluate(exists('address-suggestions-list')), false);
+  await pressKey(page, 'Tab');
+  await page.click(selector('input-saved-address'));
+  await page.wait(exists('address-suggestions-list'));
+  assert.equal((await comboboxState(page, 'input-saved-address')).active, null);
+  await pressKey(page, 'ArrowDown');
+  await pressKey(page, 'Tab');
+  assert.equal((await comboboxState(page, 'input-saved-address')).expanded, 'false');
+  assert.equal((await comboboxState(page, 'input-saved-address')).focused, false);
+  assert.notEqual(await page.evaluate(`document.activeElement.getAttribute('role')`), 'option');
+  await page.click(selector('input-saved-address'));
+  await page.wait(exists('address-suggestions-list'));
+  await pressKey(page, 'ArrowDown');
+  await pressKey(page, 'Enter');
+  assert.equal(requests.some(r => r.method === 'PATCH'), false);
+  await page.click(selector('button-save-address'));
+  await page.wait(`!document.querySelector('[role="dialog"]')`);
+  assert.equal(requests.find(r => r.method === 'PATCH').body.fullAddress, normalizedAddress.fullAddress);
+});
+
+test('Escape during debounce cancels suggestions; another Escape still closes the address dialog', async context => {
+  const { page, requests } = await openPage(context, { authenticated: true, suggestions: [normalizedAddress] });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-add-address'));
+  await page.click(selector('input-saved-address'));
+  await page.fill(selector('input-saved-address'), 'Москва');
+  await pressKey(page, 'Escape');
+  await delay(450);
+  assert.equal(await page.evaluate(`!!document.querySelector('[role="dialog"]')`), true);
+  assert.equal(requests.some(r => r.path === '/api/address/suggest'), false);
+  await pressKey(page, 'Escape');
+  await page.wait(`!document.querySelector('[role="dialog"]')`);
+  assert.equal(requests.some(r => r.path === '/web-api/addresses' && r.method === 'POST'), false);
+});
+
+test('checkout keyboard selection prevents premature orders and preserves normal Enter submission after selection', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, suggestions: [normalizedAddress, alternateAddress], allowOrder: true,
+  });
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await page.wait(exists('input-checkout-address'));
+  await page.fill(selector('input-checkout-phone'), '+79990000000');
+  await page.click(selector('input-checkout-address'));
+  await page.fill(selector('input-checkout-address'), 'Москва Тверская');
+  await page.wait(exists('address-suggestions-list'));
+  await pressKey(page, 'Enter');
+  await pressKey(page, 'ArrowDown');
+  await pressKey(page, 'Enter');
+  assert.equal(requests.some(r => r.path === '/web-api/orders' && r.method === 'POST'), false);
+  assert.equal((await comboboxState(page, 'input-checkout-address')).value, normalizedAddress.fullAddress);
+  await pressKey(page, 'Enter');
+  await page.wait(`location.pathname === '/web/order-success/test-order'`);
+  const orders = requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST');
+  assert.equal(orders.length, 1);
+  assert.equal(orders[0].body.deliveryAddress, normalizedAddress.fullAddress);
+});
+
+for (const dismissKey of ['Escape', 'Tab']) {
+  test(`late suggestions stay closed after ${dismissKey} without changing the checkout draft`, async context => {
+    const { page, requests, releaseSuggestions } = await openPage(context, {
+      authenticated: true, suggestions: [normalizedAddress], holdSuggestions: true,
+    });
+    context.after(releaseSuggestions);
+    await page.send('Page.navigate', { url: `${base}/web/checkout` });
+    await page.wait(exists('input-checkout-address'));
+    await page.click(selector('input-checkout-address'));
+    await page.fill(selector('input-checkout-address'), 'Москва, ручной адрес');
+    await page.wait(`!!document.querySelector('[data-testid="input-checkout-address"]').parentElement.querySelector('.animate-spin')`);
+    await pressKey(page, dismissKey);
+    releaseSuggestions();
+    await delay(500);
+    const state = await comboboxState(page, 'input-checkout-address');
+    assert.equal(state.expanded, 'false');
+    assert.equal(state.active, null);
+    assert.equal(state.value, 'Москва, ручной адрес');
+    assert.equal(await page.evaluate(exists('address-suggestions-list')), false);
+    assert.equal(requests.filter(r => r.path === '/api/address/suggest').length, 1);
+  });
+}
 
 test('checkout uses the Telegram DaData endpoint and submits the selected normalized address', async context => {
   const { page, requests } = await openPage(context, {
