@@ -15,6 +15,7 @@ async function seedMarketingSettings() {
       .onConflictDoNothing();
   } catch (error) {
     console.error('❌ Failed to seed marketing settings:', error);
+    throw error;
   }
 }
 

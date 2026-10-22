@@ -5,7 +5,7 @@
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
 
-export async function runMigrations(): Promise<void> {
+export async function runMigrations(): Promise<boolean> {
   try {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS notification_channel_settings (
@@ -41,7 +41,9 @@ export async function runMigrations(): Promise<void> {
       END $$;
     `);
     console.log('✅ DB migrations applied (notification settings tables ready)');
+    return true;
   } catch (error) {
     console.error('⚠️ DB migration error (non-fatal):', error);
+    return false;
   }
 }

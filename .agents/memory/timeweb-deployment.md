@@ -36,6 +36,18 @@ A verified GitHub branch update is not proof that Timeweb is serving that update
 
 **How to apply:** Check the actual public frontend bundle and a corresponding protected read-only API route. HTTP 200 alone is insufficient: a missing API route may return the SPA HTML instead of JSON. For an unauthenticated protected endpoint, an authentication error in JSON establishes more than a successful HTML fallback. Obtain the Timeweb deployment outcome/build log before assuming a source-code or browser-cache problem.
 
+The expected release identity must come from the intended build's log or its saved
+artifacts, never by copying the identity currently returned by the public domain.
+The compiled artifact identity need not equal the Git commit, and independently
+built artifacts may differ across build environments.
+
+**Why:** Using the live response as the expected value would falsely approve an
+old release; a successful local build is not the artifact Timeweb actually serves.
+
+**How to apply:** Associate the intended Timeweb build outcome with its emitted
+identity before running a bounded post-release check. A public asset check does
+not establish that an authenticated customer's UI works.
+
 ## Portable dependency lockfiles
 
 Before sending dependency changes to Timeweb, ensure committed download URLs refer to the public npm artifacts, not the workspace's internal package-firewall hostname. Keep exact versions and integrity values intact.

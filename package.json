@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
     "prebuild": "node --test tests/deployment-lockfile.test.mjs",
-    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "node scripts/build.mjs",
+    "release:check": "node scripts/check-release.mjs",
+    "test:release": "node --import tsx --test tests/release-health.test.ts tests/release-check.test.mjs",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "test:checkout-auth": "node --test tests/web-checkout-auth.test.mjs",

@@ -80,7 +80,7 @@ export function serveStatic(app: Express) {
     distPath = path.resolve(process.cwd(), "dist", "public");
   }
 
-  if (!fs.existsSync(distPath)) {
+  if (!fs.existsSync(path.join(distPath, "index.html"))) {
     // Don't throw — a throw here prevents server.listen() from ever being
     // called. Log the warning and serve a plain 503 for all frontend routes
     // so at least the API (including /ping and /healthz) keeps working.
@@ -91,7 +91,7 @@ export function serveStatic(app: Express) {
     app.use("*", (_req, res) => {
       res.status(503).send("Frontend build not found. Run the build step first.");
     });
-    return;
+    return false;
   }
 
   app.use(express.static(distPath));
@@ -100,4 +100,5 @@ export function serveStatic(app: Express) {
   app.use("*", (_req, res) => {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
+  return true;
 }

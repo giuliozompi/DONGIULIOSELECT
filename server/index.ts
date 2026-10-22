@@ -12,6 +12,9 @@ import { startReengagementCron } from "./services/reengagement-cron";
 import { startWelcomeCron } from "./services/welcome-cron";
 import { getIntegrationsSummary } from "./integrations-status";
 import { runMigrations } from "./services/db-migrations";
+import { registerReleaseHealth, startup, buildId } from "./release-health";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 // Configura timezone UTC+3 (Mosca) per tutto il server
 process.env.TZ = 'Europe/Moscow';
@@ -23,6 +26,7 @@ app.use(express.urlencoded({ extended: false }));
 // Minimal liveness probe — registered before everything else so it responds
 // even if seeding or route-registration is still in progress.
 app.get("/ping", (_req, res) => res.type("text/plain").send("pong"));
+registerReleaseHealth(app, () => db.execute(sql`SELECT 1`));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -56,10 +60,14 @@ app.use((req, res, next) => {
 
 (async () => {
   // ── DB Migrations (non-blocking, best-effort) ───────────────────────────
-  await runMigrations().catch(e => console.error('Migration error:', e));
+  await runMigrations().then(ok => { startup.migrations = ok ? 'ready' : 'failed'; }).catch(e => {
+    startup.migrations = 'failed';
+    console.error('Migration error:', e);
+  });
 
   // ── Seed (non-blocking, best-effort) ────────────────────────────────────
-  const seedPromise = seedDatabase().catch((error) => {
+  const seedPromise = seedDatabase().then(() => { startup.seed = 'ready'; }).catch((error) => {
+    startup.seed = 'failed';
     console.error('⚠️ Database seeding failed:', error);
   });
   await Promise.race([
@@ -74,7 +82,9 @@ app.use((req, res, next) => {
   let server: ReturnType<typeof createServer>;
   try {
     server = await registerRoutes(app);
+    startup.routes = 'ready';
   } catch (err) {
+    startup.routes = 'failed';
     console.error('❌ registerRoutes failed — starting in API-only degraded mode:', err);
     server = createServer(app);
   }
@@ -112,9 +122,11 @@ app.use((req, res, next) => {
     if (!useProductionServing) {
       await setupVite(app, server);
     } else {
-      serveStatic(app);
+      if (!serveStatic(app)) throw new Error('Frontend build missing');
     }
+    startup.frontend = 'ready';
   } catch (err) {
+    startup.frontend = 'failed';
     console.error('❌ Static/Vite setup failed — frontend unavailable, API still running:', err);
   }
 
@@ -124,6 +136,7 @@ app.use((req, res, next) => {
   const port = parseInt(process.env.PORT || '3000', 10);
   server.listen({ port, host: "0.0.0.0" }, () => {
     log(`serving on port ${port}`);
+    log(`buildId=${buildId}`);
     log(`serving ${hasClientBuild ? "compiled build" : "dev (Vite)"}`);
     log(getIntegrationsSummary());
 
