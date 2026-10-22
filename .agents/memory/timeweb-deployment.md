@@ -21,3 +21,9 @@ Verify the database actually configured as `DATABASE_URL` in Timeweb before send
 **Why:** An available Neon connection and the workspace connection identified different databases. A successful workspace migration therefore did not establish that Timeweb had the required schema.
 
 **How to apply:** Establish the live connection from Timeweb's configuration, inspect schema readiness read-only, and obtain separate authorization before production schema changes. Keep deployment-triggering pushes on hold while the prerequisite remains unverified.
+
+The user supplied `TIMEWEB_DATABASE_URL` specifically for the live Timeweb database of dongiulioselect.ru. This is distinct from the workspace and the previously available Neon connection.
+
+**Why:** The user provided it through the secure secrets flow to identify the database actually used by Timeweb.
+
+**How to apply:** Use that secret only for authorized production work; default to read-only checks and never replace the workspace connection with it.
