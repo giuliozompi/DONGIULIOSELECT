@@ -79,8 +79,9 @@ async function openPage(context, {
         }
       }
     } else if (path.startsWith('/web-api/addresses/') && event.request.method === 'DELETE') {
+      const ownerAddresses = addressesByUser[currentUser.id] || savedAddresses;
       if (holdAddressDelete) await addressDeleteReady;
-      const index = savedAddresses.findIndex(address => address.id === path.split('/').pop());
+      const index = ownerAddresses.findIndex(address => address.id === path.split('/').pop());
       const response = addressDeleteResponses.shift();
       if (response) {
         status = response.status;
@@ -92,7 +93,7 @@ async function openPage(context, {
         status = 404;
         body = { error: 'Адрес не найден' };
       } else {
-        savedAddresses.splice(index, 1);
+        ownerAddresses.splice(index, 1);
         status = 204;
         body = undefined;
       }
@@ -600,6 +601,79 @@ const officeAddress = {
   ...homeAddress, id: 'office', label: 'Офис', isDefault: false,
   fullAddress: 'г Москва, ул Другая, д 10, кв 8', apartment: '8', notes: null,
 };
+
+for (const signOutFirst of [false, true]) {
+  test(`account change clears an open address deletion confirmation${signOutFirst ? ' through sign-out' : ''}`, async context => {
+    const otherUser = { ...profile, id: 'other-web-user' };
+    const otherAddress = { ...officeAddress, id: 'other-office' };
+    const addressesByUser = { [profile.id]: [homeAddress], [otherUser.id]: [otherAddress] };
+    const { page, requests, switchUser } = await openPage(context, {
+      authenticated: true, addressesByUser,
+    });
+    await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+    await page.click(selector('button-delete-address-home'));
+    await page.wait(`document.querySelector('[role="alertdialog"]')?.textContent.includes(${JSON.stringify(homeAddress.fullAddress)})`);
+    if (signOutFirst) await switchUser(null);
+    await switchUser(otherUser);
+    await page.wait(exists('card-address-other-office'));
+    assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"]')`), false);
+    assert.equal(await page.evaluate(`document.body.textContent.includes(${JSON.stringify(homeAddress.fullAddress)})`), false);
+    assert.equal(await page.evaluate(`document.body.textContent.includes(${JSON.stringify(homeAddress.notes)})`), false);
+    await page.click(selector('button-delete-address-other-office'));
+    await page.wait(`document.querySelector('[role="alertdialog"]')?.textContent.includes(${JSON.stringify(otherAddress.fullAddress)})`);
+    await page.click(selector('button-cancel-delete-address'));
+    await page.wait(`!document.querySelector('[role="alertdialog"]')`);
+    assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+    assert.deepEqual(addressesByUser, { [profile.id]: [homeAddress], [otherUser.id]: [otherAddress] });
+  });
+}
+
+for (const fails of [false, true]) {
+  test(`late address DELETE ${fails ? 'failure' : 'success'} cannot affect another account's confirmation or address book`, async context => {
+    const otherUser = { ...profile, id: 'other-web-user' };
+    // Matching record IDs must not allow a stale response to affect the new owner.
+    const otherAddress = { ...officeAddress, id: homeAddress.id };
+    const addressesByUser = { [profile.id]: [homeAddress], [otherUser.id]: [otherAddress] };
+    const { page, requests, switchUser, releaseAddressDelete } = await openPage(context, {
+      authenticated: true, addressesByUser, holdAddressDelete: true,
+      addressDeleteResponses: fails ? [{ status: 500, body: { error: 'Old account deletion failed' } }] : [],
+    });
+    context.after(releaseAddressDelete);
+    await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+    await page.click(selector('button-delete-address-home'));
+    await page.click(selector('button-confirm-delete-address'));
+    await page.wait(`document.querySelector('[data-testid="button-confirm-delete-address"]').disabled`);
+    assert.equal(requests.filter(r => r.method === 'DELETE').length, 1);
+    await switchUser(otherUser);
+    await page.wait(`document.querySelector('[data-testid="card-address-home"]')?.textContent.includes(${JSON.stringify(otherAddress.fullAddress)})`);
+    assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"]')`), false);
+    assert.equal(await page.evaluate(`document.body.textContent.includes(${JSON.stringify(homeAddress.fullAddress)})`), false);
+    await page.click(selector('button-delete-address-home'));
+    await page.wait(`document.querySelector('[role="alertdialog"]')?.textContent.includes(${JSON.stringify(otherAddress.fullAddress)})`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-confirm-delete-address"]').disabled`), false);
+    const newOwnerReads = requests.filter(r => r.path === '/web-api/addresses' && r.userId === otherUser.id).length;
+    releaseAddressDelete();
+    // Wait for the old mutation and its callbacks, not just its HTTP response.
+    await page.wait(`(async () => {
+      const { queryClient } = await import('/src/lib/queryClient.ts');
+      return queryClient.getMutationCache().getAll().some(m =>
+        m.state.variables === 'home' && m.state.status === ${JSON.stringify(fails ? 'error' : 'success')});
+    })()`);
+    assert.equal(await page.evaluate(`document.querySelector('[role="alertdialog"]')?.textContent.includes(${JSON.stringify(otherAddress.fullAddress)})`), true);
+    assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"] [role="alert"]')`), false);
+    assert.equal(await page.evaluate(`document.body.textContent.includes('Адрес удалён')`), false);
+    assert.equal(await page.evaluate(`document.body.textContent.includes('Old account deletion failed')`), false);
+    assert.equal(await page.evaluate(exists('card-address-home')), true);
+    assert.equal(requests.filter(r => r.path === '/web-api/addresses' && r.userId === otherUser.id).length, newOwnerReads);
+    assert.deepEqual(addressesByUser[otherUser.id], [otherAddress]);
+    assert.deepEqual(addressesByUser[profile.id], fails ? [homeAddress] : []);
+    assert.deepEqual(requests.filter(r => r.method === 'DELETE').map(r => r.userId), [profile.id]);
+    await page.click(selector('button-confirm-delete-address'));
+    await page.wait(`!document.querySelector('[role="alertdialog"]') && !document.querySelector('[data-testid="card-address-home"]')`);
+    assert.deepEqual(addressesByUser[otherUser.id], []);
+    assert.deepEqual(requests.filter(r => r.method === 'DELETE').map(r => r.userId), [profile.id, otherUser.id]);
+  });
+}
 
 test('address deletion requires confirmation and sends only one request while pending', async context => {
   const { page, requests, savedAddresses, releaseAddressDelete } = await openPage(context, {

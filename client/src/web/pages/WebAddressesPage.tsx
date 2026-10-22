@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -36,8 +36,13 @@ const addSchema = z.object({
 });
 
 export default function WebAddressesPage() {
-  const [, setLocation] = useLocation();
   const { user, isAuthenticated } = useWebAuth();
+  // An account change discards dialogs, pending UI and references together.
+  return isAuthenticated && user ? <AddressBook key={user.id} userId={user.id} /> : null;
+}
+
+function AddressBook({ userId }: { userId: string }) {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -46,11 +51,16 @@ export default function WebAddressesPage() {
   const deleteTrigger = useRef<HTMLButtonElement | null>(null);
   const deleteInFlight = useRef(false);
   const selectedAddress = useRef<AddressSuggestion | null>(null);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const { data: addresses = [], isLoading } = useQuery({
-    queryKey: ['/web-api/addresses', user?.id],
+    queryKey: ['/web-api/addresses', userId],
     queryFn: () => webApi.get<Address[]>('/addresses'),
-    enabled: isAuthenticated && !!user,
   });
 
   const form = useForm<z.infer<typeof addSchema>>({
@@ -127,7 +137,9 @@ export default function WebAddressesPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => webApi.delete<void>(`/addresses/${id}`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['/web-api/addresses'] });
+      // The request may finish after this owner's page has been replaced.
+      qc.invalidateQueries({ queryKey: ['/web-api/addresses', userId], exact: true });
+      if (!mounted.current) return;
       setDeletingAddress(null);
       toast({ title: 'Адрес удалён' });
     },
@@ -145,8 +157,6 @@ export default function WebAddressesPage() {
     deleteInFlight.current = true;
     deleteMutation.mutate(deletingAddress.id);
   };
-
-  if (!isAuthenticated) return null;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
