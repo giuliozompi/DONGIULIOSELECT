@@ -105,3 +105,83 @@ for (const unit of ['кг', 'шт']) {
     assert.deepEqual(cart.items.find(i => i.productId === unrelated.productId), unrelated);
   });
 }
+
+const productControls = {
+  catalog: {
+    path: '/web/catalog',
+    // The card's minus button has no test id; scope the icon to this product.
+    minus: `[data-testid="card-product-${product.id}"] button:has(svg.lucide-minus)`,
+    add: `[data-testid="button-add-cart-${product.id}"]`,
+  },
+  detail: {
+    path: `/web/product/${product.slug}`,
+    minus: '[data-testid="button-qty-minus"]',
+    add: '[data-testid="button-add-to-cart"]',
+  },
+};
+
+async function assertDecrementState(page, surface, original, quantity) {
+  const controls = productControls[surface];
+  if (quantity > 0) {
+    const weighted = ['кг', 'kg'].includes(original.unit);
+    const label = weighted ? quantity.toFixed(3) : String(quantity);
+    // Check the rendered quantity, not a separately imported Zustand store.
+    await page.wait(`(() => {
+      const minus = document.querySelector(${JSON.stringify(controls.minus)});
+      const label = minus?.parentElement.querySelector(${JSON.stringify(surface === 'catalog' ? 'span' : ':scope > div > div:first-child')});
+      return label?.textContent.trim() === ${JSON.stringify(surface === 'catalog' ? `${label} ${original.unit}` : label)};
+    })()`);
+    if (surface === 'detail') {
+      const displayedTotal = `${(Number(product.price) * quantity).toLocaleString('ru-RU')} ₽`;
+      const text = await page.evaluate(`document.querySelector(${JSON.stringify(controls.minus)}).parentElement.parentElement.textContent`);
+      assert.ok(text.includes(displayedTotal), `Missing product total ${displayedTotal}: ${text}`);
+    }
+  } else {
+    await page.wait(`!!document.querySelector(${JSON.stringify(controls.add)}) && !document.querySelector(${JSON.stringify(controls.minus)})`);
+    assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(controls.add)}).disabled`), false);
+  }
+  const cart = await readCart(page);
+  // Exact equality also protects saved metadata and all unrelated items.
+  assert.deepEqual(cart, {
+    items: quantity > 0 ? [unrelated, { ...original, quantity }] : [unrelated],
+    itemCount: quantity > 0 ? 2 : 1,
+    subtotal: 1050 + Number(original.price) * quantity,
+  });
+  assert.equal(await page.evaluate('location.pathname'), controls.path, 'Minus must not open the product card');
+  return cart;
+}
+
+for (const surface of ['catalog', 'detail']) {
+  for (const unit of ['кг', 'kg', 'шт', 'уп']) {
+    const quantities = ['кг', 'kg'].includes(unit) ? [0.4, 0.3, 0.2, 0] : [2, 1, 0];
+    test(`${surface} ${unit}: minus keeps minimum quantity, then removes only this item and persists`, async context => {
+      const page = await openWishlist(context, { unit, quantity: quantities[0] });
+      const original = (await readCart(page)).items.find(i => i.productId === product.id);
+      const controls = productControls[surface];
+      await page.send('Page.navigate', { url: `${wishlistBase}${controls.path}` });
+      for (const [index, quantity] of quantities.entries()) {
+        if (index > 0) await page.click(controls.minus);
+        const cart = await assertDecrementState(page, surface, original, quantity);
+        await page.send('Page.reload');
+        await assertDecrementState(page, surface, original, quantity);
+        assert.deepEqual(await readCart(page), cart);
+      }
+    });
+  }
+
+  for (const unit of ['кг', 'kg']) {
+    test(`${surface} ${unit}: minus preserves gram precision of an existing quantity until removal`, async context => {
+      const page = await openWishlist(context, { unit, quantity: 0.735 });
+      const original = (await readCart(page)).items.find(i => i.productId === product.id);
+      const controls = productControls[surface];
+      await page.send('Page.navigate', { url: `${wishlistBase}${controls.path}` });
+      for (const [index, quantity] of [0.735, 0.635, 0.535, 0.435, 0.335, 0.235, 0].entries()) {
+        if (index > 0) await page.click(controls.minus);
+        const cart = await assertDecrementState(page, surface, original, quantity);
+        await page.send('Page.reload');
+        await assertDecrementState(page, surface, original, quantity);
+        assert.deepEqual(await readCart(page), cart);
+      }
+    });
+  }
+}
