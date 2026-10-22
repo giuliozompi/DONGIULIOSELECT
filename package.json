@@ -16,6 +16,7 @@
     "test:payment-links": "node --import tsx --test tests/admin-payment-links.test.ts tests/payment-link-tracking.test.ts server/services/payment-link-delivery.test.ts server/services/order-status-automation.test.ts",
     "test:payment-links-ui": "node --test tests/admin-payment-links.test.mjs",
     "test:telegram-link": "node --import tsx --test tests/web-telegram-link.test.ts",
+    "test:telegram-api": "node --import tsx --test tests/telegram-api.test.ts",
     "test:telegram-link-ui": "node --test tests/web-telegram-link.test.mjs",
     "test:order-operator": "node --import tsx --test tests/order-operator-tools.test.ts",
     "test:order-operator-ui": "node --test tests/admin-order-operator-ui.test.mjs",

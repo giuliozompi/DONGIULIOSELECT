@@ -1,5 +1,6 @@
 import { createHmac } from 'crypto';
 import { formatMoscowDateForNotification } from '../utils/date-formatter';
+import { sendTelegramApi } from './telegram-api';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -56,7 +57,6 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     return;
   }
 }
-const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
 export interface TelegramMessage {
   chatId: string;
@@ -69,36 +69,11 @@ export async function sendTelegramMessage(params: TelegramMessage): Promise<bool
 }
 
 async function sendTelegramMessageDetailed(params: TelegramMessage): Promise<{ sent: boolean; error?: string }> {
-  if (!TELEGRAM_BOT_TOKEN) {
-    console.error('TELEGRAM_BOT_TOKEN not configured');
-    return { sent: false, error: 'Telegram: токен бота не настроен.' };
-  }
-
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chat_id: params.chatId,
-        text: params.text,
-        parse_mode: params.parseMode || 'HTML',
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      console.error('Telegram API error:', data);
-      return { sent: false, error: `Telegram: ${data.description || `HTTP ${response.status}`}` };
-    }
-
-    return { sent: true };
-  } catch (error) {
-    console.error('Error sending Telegram message:', error);
-    return { sent: false, error: 'Telegram: ошибка соединения с API.' };
-  }
+  return sendTelegramApi('sendMessage', {
+    chat_id: params.chatId,
+    text: params.text,
+    parse_mode: params.parseMode || 'HTML',
+  }, { token: TELEGRAM_BOT_TOKEN });
 }
 
 export async function sendPaymentLink(
@@ -563,29 +538,13 @@ export async function sendMediaGroup(
   }
   if (photoUrls.length === 0) return false;
 
-  try {
-    const media = photoUrls.slice(0, 10).map((url, idx) => ({
+  const media = photoUrls.slice(0, 10).map((url, idx) => ({
       type: 'photo',
       media: url,
       ...(idx === 0 && caption ? { caption, parse_mode: 'HTML' } : {}),
     }));
 
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMediaGroup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, media }),
-    });
-
-    const data = await response.json();
-    if (!response.ok || !data.ok) {
-      console.error('Telegram sendMediaGroup error:', data);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.error('Error sending Telegram media group:', error);
-    return false;
-  }
+  return (await sendTelegramApi('sendMediaGroup', { chat_id: chatId, media }, { token: TELEGRAM_BOT_TOKEN })).sent;
 }
 
 export async function sendPhotoMessage(
@@ -598,25 +557,8 @@ export async function sendPhotoMessage(
     return false;
   }
 
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendPhoto`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        photo: photoUrl,
-        ...(caption ? { caption, parse_mode: 'HTML' } : {}),
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok || !data.ok) {
-      console.error('Telegram sendPhoto error:', data);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.error('Error sending Telegram photo:', error);
-    return false;
-  }
+  return (await sendTelegramApi('sendPhoto', {
+    chat_id: chatId, photo: photoUrl,
+    ...(caption ? { caption, parse_mode: 'HTML' } : {}),
+  }, { token: TELEGRAM_BOT_TOKEN })).sent;
 }
