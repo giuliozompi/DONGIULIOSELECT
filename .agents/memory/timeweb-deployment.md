@@ -27,3 +27,11 @@ The user supplied `TIMEWEB_DATABASE_URL` specifically for the live Timeweb datab
 **Why:** The user provided it through the secure secrets flow to identify the database actually used by Timeweb.
 
 **How to apply:** Use that secret only for authorized production work; default to read-only checks and never replace the workspace connection with it.
+
+## Verify the deployed application, not only the GitHub push
+
+A verified GitHub branch update is not proof that Timeweb is serving that update.
+
+**Why:** After a successful push, the public domain still served JavaScript without the printing controls and the new printing API path fell through to the site's HTML page.
+
+**How to apply:** Check the actual public frontend bundle and a corresponding protected read-only API route. HTTP 200 alone is insufficient: a missing API route may return the SPA HTML instead of JSON. For an unauthenticated protected endpoint, an authentication error in JSON establishes more than a successful HTML fallback. Obtain the Timeweb deployment outcome/build log before assuming a source-code or browser-cache problem.
