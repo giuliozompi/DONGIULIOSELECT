@@ -15,7 +15,9 @@ export default function WebFooter() {
               <span className="text-white font-semibold">Don Giulio Select</span>
             </div>
             <p className="text-sm text-neutral-400 leading-relaxed">
-              Премиальные итальянские деликатесы с доставкой по России. Подлинный вкус Италии у вас дома.
+              Премиальные итальянские деликатесы, произведённые итальянцами в России.
+              <br />
+              Подлинный вкус Италии у вас дома с доставкой по России.
             </p>
           </div>
 

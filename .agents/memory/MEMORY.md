@@ -12,3 +12,4 @@
 - [Keyboard popups](keyboard-popups.md) — nested suggestions must consume Escape before Radix dialog capture handlers, without blocking subsequent dialog dismissal.
 - [Operator order documents](operator-order-documents.md) — payment-method edits must always be logged; packing list and named box label share the order QR and printed code.
 - [Telegram hosting diagnostics](telegram-transport.md) — workspace success does not prove Timeweb connectivity; ambiguous sends must not be retried automatically or leak bot URLs.
+- [Brand messaging](brand-messaging.md) — user-requested storefront copy emphasizes Italian producers in Russia and delivery throughout Russia.
