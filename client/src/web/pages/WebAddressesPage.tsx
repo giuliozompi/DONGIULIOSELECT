@@ -12,11 +12,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { webApi } from '../lib/webApi';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { SavedAddress as Address } from '../lib/savedAddresses';
+import { savedDeliveryAddress } from '../lib/savedAddresses';
 
 const addSchema = z.object({
   label: z.string().default('Дом'),
@@ -37,6 +42,9 @@ export default function WebAddressesPage() {
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+  const [deletingAddress, setDeletingAddress] = useState<Address | null>(null);
+  const deleteTrigger = useRef<HTMLButtonElement | null>(null);
+  const deleteInFlight = useRef(false);
   const selectedAddress = useRef<AddressSuggestion | null>(null);
 
   const { data: addresses = [], isLoading } = useQuery({
@@ -120,9 +128,23 @@ export default function WebAddressesPage() {
     mutationFn: (id: string) => webApi.delete<void>(`/addresses/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['/web-api/addresses'] });
+      setDeletingAddress(null);
       toast({ title: 'Адрес удалён' });
     },
+    onSettled: () => { deleteInFlight.current = false; },
   });
+
+  const closeDeleteDialog = (open: boolean) => {
+    if (open || deleteInFlight.current) return;
+    setDeletingAddress(null);
+  };
+
+  const confirmDelete = () => {
+    if (!deletingAddress || deleteInFlight.current) return;
+    // Lock synchronously, before React renders the pending state.
+    deleteInFlight.current = true;
+    deleteMutation.mutate(deletingAddress.id);
+  };
 
   if (!isAuthenticated) return null;
 
@@ -186,8 +208,13 @@ export default function WebAddressesPage() {
                 size="icon"
                 variant="ghost"
                 className="h-8 w-8 text-neutral-300 hover:text-red-500 shrink-0"
-                onClick={() => deleteMutation.mutate(addr.id)}
+                onClick={event => {
+                  deleteTrigger.current = event.currentTarget;
+                  deleteMutation.reset();
+                  setDeletingAddress(addr);
+                }}
                 disabled={deleteMutation.isPending}
+                aria-label={`Удалить адрес: ${addr.label}`}
                 data-testid={`button-delete-address-${addr.id}`}
               >
                 <Trash2 className="w-4 h-4" />
@@ -196,6 +223,48 @@ export default function WebAddressesPage() {
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!deletingAddress} onOpenChange={closeDeleteDialog}>
+        <AlertDialogContent
+          aria-busy={deleteMutation.isPending}
+          onCloseAutoFocus={event => {
+            event.preventDefault();
+            if (deleteTrigger.current?.isConnected) deleteTrigger.current.focus();
+            else document.querySelector<HTMLButtonElement>('[data-testid="button-add-address"]')?.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить адрес?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingAddress && <>
+                <span className="block font-medium">{deletingAddress.label}</span>
+                <span className="block">{savedDeliveryAddress(deletingAddress)}</span>
+              </>}
+              <span className="block mt-2">Адрес будет удалён из списка сохранённых адресов.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteMutation.isError && (
+            <p role="alert" className="text-sm text-red-600">
+              {deleteMutation.error instanceof Error
+                ? deleteMutation.error.message : 'Не удалось удалить адрес. Попробуйте ещё раз.'}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending} data-testid="button-cancel-delete-address">
+              Отмена
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete-address"
+            >
+              {deleteMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />}
+              {deleteMutation.isPending ? 'Удаление…' : 'Удалить'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={dialogOpen} onOpenChange={closeDialog}>
         <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">

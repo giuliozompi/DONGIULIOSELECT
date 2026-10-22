@@ -23,6 +23,7 @@ async function openPage(context, {
   suggestions = [], suggestionsUnavailable = false, allowOrder = false,
   initialAddresses = [], holdAddresses = false, addressesUnavailable = false,
   addressesByUser = {}, addressUpdateError = false,
+  addressDeleteError = false, holdAddressDelete = false,
 } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
@@ -30,6 +31,8 @@ async function openPage(context, {
   const savedAddresses = [...initialAddresses];
   let releaseAddresses;
   const addressesReady = new Promise(resolve => { releaseAddresses = resolve; });
+  let releaseAddressDelete;
+  const addressDeleteReady = new Promise(resolve => { releaseAddressDelete = resolve; });
   let savedOrder;
   let currentUser = profile;
   await page.send('Fetch.enable', { patterns: [
@@ -66,6 +69,20 @@ async function openPage(context, {
           status = 503;
           body = { error: 'Address book unavailable' };
         }
+      }
+    } else if (path.startsWith('/web-api/addresses/') && event.request.method === 'DELETE') {
+      if (holdAddressDelete) await addressDeleteReady;
+      const index = savedAddresses.findIndex(address => address.id === path.split('/').pop());
+      if (addressDeleteError) {
+        status = 500;
+        body = { error: 'Не удалось удалить адрес' };
+      } else if (index < 0) {
+        status = 404;
+        body = { error: 'Адрес не найден' };
+      } else {
+        savedAddresses.splice(index, 1);
+        status = 204;
+        body = undefined;
       }
     } else if (path.startsWith('/web-api/addresses/') && event.request.method === 'PATCH') {
       const index = savedAddresses.findIndex(address => address.id === path.split('/').pop());
@@ -105,14 +122,14 @@ async function openPage(context, {
     await page.send('Fetch.fulfillRequest', {
       requestId: event.requestId, responseCode: status,
       responseHeaders: [{ name: 'Content-Type', value: path.includes('telegram-web-app') ? 'text/javascript' : 'application/json' }],
-      body: Buffer.from(path.includes('telegram-web-app') ? '' : JSON.stringify(body)).toString('base64'),
+      body: Buffer.from(path.includes('telegram-web-app') || status === 204 ? '' : JSON.stringify(body)).toString('base64'),
     });
   });
   await page.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `localStorage.setItem('dgs-web-cart', ${JSON.stringify(JSON.stringify(emptyCart ? { ...cart, state: { items: [], itemCount: 0, subtotal: 0 } } : cart))});`,
   });
   return {
-    page, requests, savedAddresses, releaseAddresses,
+    page, requests, savedAddresses, releaseAddresses, releaseAddressDelete,
     async switchUser(user) {
       currentUser = user;
       authenticated = !!user;
@@ -304,6 +321,94 @@ const officeAddress = {
   ...homeAddress, id: 'office', label: 'Офис', isDefault: false,
   fullAddress: 'г Москва, ул Другая, д 10, кв 8', apartment: '8', notes: null,
 };
+
+test('address deletion requires confirmation and sends only one request while pending', async context => {
+  const { page, requests, savedAddresses, releaseAddressDelete } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress, officeAddress], holdAddressDelete: true,
+  });
+  context.after(releaseAddressDelete);
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-delete-address-home'));
+  await page.wait(`!!document.querySelector('[role="alertdialog"]')`);
+  const dialog = await page.evaluate(`(() => {
+    const dialog = document.querySelector('[role="alertdialog"]');
+    return {
+      title: document.getElementById(dialog.getAttribute('aria-labelledby')).textContent,
+      description: document.getElementById(dialog.getAttribute('aria-describedby')).textContent,
+    };
+  })()`);
+  assert.equal(dialog.title, 'Удалить адрес?');
+  assert.ok(dialog.description.includes(homeAddress.label));
+  assert.ok(dialog.description.includes(`${homeAddress.fullAddress}, кв. 42`));
+  assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+  // Dispatch both clicks in the same render to exercise the synchronous lock.
+  await page.evaluate(`(() => {
+    const button = document.querySelector('[data-testid="button-confirm-delete-address"]');
+    button.click(); button.click();
+  })()`);
+  await page.wait(`document.querySelector('[data-testid="button-confirm-delete-address"]').disabled`);
+  assert.equal(requests.filter(r => r.method === 'DELETE').length, 1);
+  assert.equal(requests.find(r => r.method === 'DELETE').path, '/web-api/addresses/home');
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-cancel-delete-address"]').disabled`), true);
+  assert.equal(await page.evaluate(exists('card-address-home')), true);
+  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+  assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"]')`), true);
+  releaseAddressDelete();
+  await page.wait(`!document.querySelector('[role="alertdialog"]') && !document.querySelector('[data-testid="card-address-home"]')`);
+  assert.equal(await page.evaluate(exists('card-address-office')), true);
+  assert.deepEqual(savedAddresses.map(address => address.id), ['office']);
+  assert.equal(requests.filter(r => r.method === 'DELETE').length, 1);
+  await page.wait(`document.body.textContent.includes('Адрес удалён')`);
+});
+
+test('address deletion can be cancelled by button or Escape with no request and restores focus', async context => {
+  const { page, requests, savedAddresses } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress],
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  for (const method of ['button', 'keyboard']) {
+    await page.click(selector('button-delete-address-home'));
+    await page.wait(`document.activeElement?.dataset.testid === 'button-cancel-delete-address'`);
+    if (method === 'button') {
+      await page.click(selector('button-cancel-delete-address'));
+    } else {
+      await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', shiftKey: true, modifiers: 8 });
+      await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab' });
+      assert.equal(await page.evaluate(`!!document.activeElement.closest('[role="alertdialog"]')`), true);
+      await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+      await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+    }
+    await page.wait(`!document.querySelector('[role="alertdialog"]')`);
+    await page.wait(`document.activeElement?.dataset.testid === 'button-delete-address-home'`);
+    assert.equal(await page.evaluate(exists('card-address-home')), true);
+  }
+  assert.equal(requests.filter(r => r.method === 'DELETE').length, 0);
+  assert.deepEqual(savedAddresses, [homeAddress]);
+});
+
+test('failed address deletion announces the error, keeps the card and allows retry or cancel', async context => {
+  const { page, requests, savedAddresses } = await openPage(context, {
+    authenticated: true, initialAddresses: [homeAddress], addressDeleteError: true,
+  });
+  await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+  await page.click(selector('button-delete-address-home'));
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await page.click(selector('button-confirm-delete-address'));
+    await page.wait(`document.querySelector('[role="alertdialog"] [role="alert"]')?.textContent.includes('Не удалось удалить адрес')
+      && !document.querySelector('[data-testid="button-confirm-delete-address"]').disabled`);
+    assert.equal(requests.filter(r => r.method === 'DELETE').length, attempt);
+    assert.equal(await page.evaluate(exists('card-address-home')), true);
+    assert.equal(await page.evaluate(`document.body.textContent.includes('Адрес удалён')`), false);
+    assert.deepEqual(savedAddresses, [homeAddress]);
+  }
+  await page.click(selector('button-cancel-delete-address'));
+  await page.wait(`!document.querySelector('[role="alertdialog"]')`);
+  await page.click(selector('button-delete-address-home'));
+  await page.wait(`!!document.querySelector('[role="alertdialog"]')`);
+  assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"] [role="alert"]')`), false);
+  assert.equal(await page.evaluate(exists('card-address-home')), true);
+});
 
 test('address editing prefills all fields, saves the same record and preserves apartment and notes', async context => {
   const initial = { ...homeAddress, street: 'ул Тестовая', building: '5', postalCode: '123456' };
