@@ -35,3 +35,11 @@ A verified GitHub branch update is not proof that Timeweb is serving that update
 **Why:** After a successful push, the public domain still served JavaScript without the printing controls and the new printing API path fell through to the site's HTML page.
 
 **How to apply:** Check the actual public frontend bundle and a corresponding protected read-only API route. HTTP 200 alone is insufficient: a missing API route may return the SPA HTML instead of JSON. For an unauthenticated protected endpoint, an authentication error in JSON establishes more than a successful HTML fallback. Obtain the Timeweb deployment outcome/build log before assuming a source-code or browser-cache problem.
+
+## Portable dependency lockfiles
+
+Before sending dependency changes to Timeweb, ensure committed download URLs refer to the public npm artifacts, not the workspace's internal package-firewall hostname. Keep exact versions and integrity values intact.
+
+**Why:** Installing the QR library left internal download URLs in the lockfile. Timeweb could not resolve that hostname, so its automatic dependency installation failed and it continued serving the previous release.
+
+**How to apply:** Run the lockfile portability check before releasing dependency changes. Canonicalize only the artifact URLs for external hosting; do not disable or bypass the workspace package firewall or change its registry configuration. This is a portability correction, not a response to a security-blocked package.

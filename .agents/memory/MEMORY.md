@@ -5,7 +5,7 @@
 - [Browser test isolation](browser-test-isolation.md) — service workers can bypass page-level API mocks; enforce isolation before registration or payment tests.
 - [Favorites symbol](favorites-symbol.md) — website favorites use a selectable yellow cheese slice with holes, not a heart.
 - [Repeating orders](repeating-orders.md) — repeat purchases use current catalogue prices, including matching products already in the cart, and preserve quantities.
-- [Timeweb database identity](timeweb-deployment.md) — confirm Timeweb's actual database before schema-dependent releases; workspace and Neon secrets may identify different targets.
+- [Timeweb deployment checks](timeweb-deployment.md) — confirm the live database and served release; dependency lockfiles must not contain workspace-only download URLs.
 - [Database test isolation](database-test-isolation.md) — temporary PostgreSQL fixtures must override inherited connection defaults explicitly.
 - [Telegram account linking](telegram-account-linking.md) — completed links must be recognized and visible in the personal account, without asking customers to repeat the procedure.
 - [Keyboard popups](keyboard-popups.md) — nested suggestions must consume Escape before Radix dialog capture handlers, without blocking subsequent dialog dismissal.
