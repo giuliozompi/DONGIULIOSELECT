@@ -14,6 +14,7 @@ import { createWebCategorySchema, updateWebCategorySchema } from './utils/web-ca
 import { isValidOrderQuantity } from '../shared/order-quantity';
 import { registerWebAddressUpdate } from './webAddressRoutes';
 import { registerWebReorder } from './webReorderRoutes';
+import { registerWebCheckout } from './webCheckoutRoutes';
 import { registerAdminPaymentLinks } from './adminPaymentLinkRoutes';
 import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
 import { getPaymentLinkStates } from './services/payment-link-attempts';
@@ -36,7 +37,7 @@ import {
 
 // ─── Middleware ─────────────────────────────────────────────
 import { registerWebWishlistRoutes } from './webWishlistRoutes';
-import { webUsers, webSessions, oauthAccounts, webAddresses, products, categories, orders, abandonedCartNotifications, welcomeNotifications, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs, userAddresses } from '../shared/schema';
+import { webUsers, webSessions, oauthAccounts, webAddresses, products, categories, orders, analyticsSnapshots, analyticsTopProducts, pickupAddresses, productAssociations, adminActionLogs, orderNotificationLogs, userAddresses } from '../shared/schema';
 
 export async function requireWebAdmin(req: Request, res: Response, next: any) {
   const webUser = (req as any).webUser as JwtPayload | undefined;
@@ -463,73 +464,7 @@ export function registerWebRoutes(app: Express) {
 
   // ── ORDERS ───────────────────────────────────────────────
 
-  const createOrderSchema = z.object({
-    customerName: z.string().min(1),
-    customerPhone: z.string().min(1),
-    customerEmail: z.string().email().optional().or(z.literal('')),
-    deliveryAddress: z.string().min(1),
-    deliveryNotes: z.string().optional(),
-    paymentMethod: z.enum(['yookassa', 'cash_on_delivery']),
-    items: z.array(z.object({
-      productId: z.string(),
-      productName: z.string(),
-      quantity: z.number().positive(),
-      price: z.string(),
-      unit: z.string(),
-    })).min(1),
-    amount: z.string(),
-    promoCode: z.string().optional(),
-    discountPercent: z.number().optional(),
-    discount: z.string().optional(),
-  });
-
-  // POST /web-api/orders
-  app.post('/web-api/orders', requireWebAuth, async (req: Request, res: Response) => {
-    try {
-      const { sub } = (req as any).webUser as JwtPayload;
-      const body = createOrderSchema.parse(req.body);
-
-      const [order] = await db.insert(orders).values({
-        id: randomUUID(),
-        userId: `web:${sub}`,
-        items: body.items,
-        amount: body.amount,
-        discount: body.discount || '0',
-        discountType: body.discountPercent ? 'percentage' : null,
-        discountValue: body.discountPercent ? `${body.discountPercent}%` : null,
-        customerName: body.customerName,
-        customerPhone: body.customerPhone,
-        customerEmail: body.customerEmail || null,
-        deliveryAddress: body.deliveryAddress,
-        deliveryNotes: body.deliveryNotes || null,
-        paymentMethod: body.paymentMethod,
-        status: 'ОФОРМЛЕН',
-        spinTokensAwarded: false,
-      }).returning();
-
-      // Mark promo code as used if provided
-      if (body.promoCode) {
-        const code = body.promoCode.toUpperCase();
-        if (code.startsWith('BENVENUTO-')) {
-          await db.update(welcomeNotifications)
-            .set({ status: 'used', usedInOrderId: order.id })
-            .where(eq(welcomeNotifications.discountCode, code));
-        } else {
-          await db.update(abandonedCartNotifications)
-            .set({ status: 'used', usedInOrderId: order.id })
-            .where(eq(abandonedCartNotifications.discountCode, code));
-        }
-      }
-
-      console.log(`[WebOrders] New order created: ${order.id} (user web:${sub}, amount: ${body.amount}₽)`);
-      return res.status(201).json(order);
-    } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
-      console.log('[WebOrders] Create error:', err instanceof Error ? err.message : err);
-      return res.status(500).json({ error: 'Ошибка создания заказа' });
-    }
-  });
-
+  registerWebCheckout(app, db, requireWebAuth);
   registerWebReorder(app, db, requireWebAuth);
 
   // GET /web-api/orders
@@ -554,42 +489,6 @@ export function registerWebRoutes(app: Express) {
       if (!result[0]) return res.status(404).json({ error: 'Заказ не найден' });
       return res.json(result[0]);
     } catch (err) {
-      return res.status(500).json({ error: 'Ошибка сервера' });
-    }
-  });
-
-  // ── PROMO CODE VALIDATION ─────────────────────────────────
-
-  // POST /web-api/promo/validate
-  app.post('/web-api/promo/validate', requireWebAuth, async (req: Request, res: Response) => {
-    try {
-      const { code } = z.object({ code: z.string().min(1) }).parse(req.body);
-      const upperCode = code.toUpperCase().trim();
-      const now = new Date();
-
-      // Check welcome promo codes (BENVENUTO-XXXXXX)
-      if (upperCode.startsWith('BENVENUTO-')) {
-        const rows = await db.select().from(welcomeNotifications)
-          .where(eq(welcomeNotifications.discountCode, upperCode));
-        const promo = rows[0];
-        if (!promo) return res.json({ valid: false, message: 'Промокод не найден' });
-        if (promo.status === 'used') return res.json({ valid: false, message: 'Промокод уже использован' });
-        if (promo.status === 'expired' || promo.expiresAt < now) return res.json({ valid: false, message: 'Срок действия промокода истёк' });
-        return res.json({ valid: true, discountPercent: promo.discountPercent, type: 'welcome' });
-      }
-
-      // Check abandoned cart promo codes (CART7-XXXXXX style)
-      const cartRows = await db.select().from(abandonedCartNotifications)
-        .where(eq(abandonedCartNotifications.discountCode, upperCode));
-      const cartPromo = cartRows[0];
-      if (!cartPromo) return res.json({ valid: false, message: 'Промокод не найден' });
-      if (cartPromo.status === 'used') return res.json({ valid: false, message: 'Промокод уже использован' });
-      if (cartPromo.status === 'expired' || cartPromo.expiresAt < now) {
-        return res.json({ valid: false, message: 'Срок действия промокода истёк' });
-      }
-      return res.json({ valid: true, discountPercent: cartPromo.discountPercent, type: 'cart' });
-    } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
       return res.status(500).json({ error: 'Ошибка сервера' });
     }
   });

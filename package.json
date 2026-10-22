@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "test:checkout-auth": "node --test tests/web-checkout-auth.test.mjs",
+    "test:checkout-pricing": "node --import tsx --test tests/web-checkout-pricing.test.ts",
     "test:orders": "node --test tests/web-orders.test.mjs",
     "test:reorder": "node --import tsx --test tests/web-reorder.test.ts",
     "test:payment-links": "node --import tsx --test tests/admin-payment-links.test.ts tests/payment-link-tracking.test.ts server/services/payment-link-delivery.test.ts server/services/order-status-automation.test.ts",

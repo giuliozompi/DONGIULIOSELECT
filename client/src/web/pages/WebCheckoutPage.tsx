@@ -18,7 +18,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useWebCart } from '../hooks/useWebCart';
 import { useWebAuth } from '../hooks/useWebAuth';
-import { webApi } from '../lib/webApi';
+import { webApi, WebApiError } from '../lib/webApi';
+import type { CheckoutQuote } from '@shared/checkout';
 import CheckoutAuthGate from '../components/CheckoutAuthGate';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { savedDeliveryAddress, type SavedAddress } from '../lib/savedAddresses';
@@ -43,13 +44,15 @@ interface PromoResult {
 
 export default function WebCheckoutPage() {
   const [, setLocation] = useLocation();
-  const { items, subtotal, itemCount, clearCart } = useWebCart();
+  const { items, itemCount, clearCart } = useWebCart();
   const { user, isAuthenticated } = useWebAuth();
   const { toast } = useToast();
 
   const [promoInput, setPromoInput] = useState('');
   const [promoResult, setPromoResult] = useState<PromoResult | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [revision, setRevision] = useState<{ quote: CheckoutQuote; key: string } | null>(null);
+  const [checkoutError, setCheckoutError] = useState('');
   const [addressSelection, setAddressSelection] = useState<{ userId: string; id: string } | null>(null);
   const {
     data: addresses = [], isLoading: addressesLoading, isError: addressesError, refetch: refetchAddresses,
@@ -103,16 +106,21 @@ export default function WebCheckoutPage() {
     }
   }, [user, form]);
 
-  const discountAmount = promoResult?.valid && promoResult.discountPercent
-    ? Math.round(subtotal * promoResult.discountPercent / 100)
+  const revisionKey = JSON.stringify([items, user?.id, promoResult]);
+  const quote = revision?.key === revisionKey ? revision.quote : null;
+  const summaryItems = quote?.items ?? items;
+  const summarySubtotal = quote ? Number(quote.subtotal) :
+    items.reduce((sum, item) => sum + Math.round(Number(item.price) * 100 * item.quantity), 0) / 100;
+  const discountAmount = quote ? Number(quote.discount) : promoResult?.valid && promoResult.discountPercent
+    ? Math.round(summarySubtotal * 100 * promoResult.discountPercent / 100) / 100
     : 0;
-  const finalAmount = subtotal - discountAmount;
+  const finalAmount = quote ? Number(quote.amount) : summarySubtotal - discountAmount;
 
   const createOrderMutation = useMutation({
     mutationFn: (data: CheckoutForm) =>
       webApi.post<{ id: string; status: string }>('/orders', {
         ...data,
-        items: items.map(i => ({
+        items: summaryItems.map(i => ({
           productId: i.productId,
           productName: i.productName,
           quantity: i.quantity,
@@ -120,8 +128,8 @@ export default function WebCheckoutPage() {
           unit: i.unit,
         })),
         amount: finalAmount.toFixed(2),
-        promoCode: promoResult?.valid ? promoResult.code : undefined,
-        discountPercent: promoResult?.valid ? promoResult.discountPercent : undefined,
+        promoCode: quote ? quote.promoCode : promoResult?.valid ? promoResult.code : undefined,
+        discountPercent: quote ? quote.discountPercent : promoResult?.valid ? promoResult.discountPercent : undefined,
         discount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
       }),
     onSuccess: (order) => {
@@ -129,6 +137,15 @@ export default function WebCheckoutPage() {
       setLocation(`/web/order-success/${order.id}`);
     },
     onError: (err) => {
+      if (err instanceof WebApiError && err.status === 409) {
+        const data = err.data as { code?: string; quote?: CheckoutQuote };
+        if (data.code === 'CHECKOUT_CHANGED' && data.quote) {
+          setRevision({ quote: data.quote, key: revisionKey });
+          setCheckoutError('');
+          return;
+        }
+      }
+      setCheckoutError(err instanceof Error ? err.message : 'Ошибка оформления заказа');
       toast({ title: err instanceof Error ? err.message : 'Ошибка оформления заказа', variant: 'destructive' });
     },
   });
@@ -351,17 +368,27 @@ export default function WebCheckoutPage() {
             <div className="w-full lg:w-80 shrink-0">
               <div className="bg-white rounded-xl border border-neutral-200 p-5 sticky top-24 space-y-4">
                 <h2 className="font-semibold text-neutral-900">Ваш заказ</h2>
+                {quote && (
+                  <div role="alert" data-testid="checkout-revised" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+                    <p className="font-medium">Условия заказа изменились</p>
+                    <p>{quote.message || 'Цены или итог обновлены. Проверьте товары и сумму ниже.'}</p>
+                    <p>Заказ ещё не создан, оплата не начата. Подтвердите обновлённый итог кнопкой ниже.</p>
+                  </div>
+                )}
+                {checkoutError && <div role="alert" data-testid="checkout-error" className="text-sm text-red-700">
+                  {checkoutError} <button type="button" className="underline" onClick={() => setLocation('/web/cart')}>Вернуться в корзину</button>
+                </div>}
 
                 {/* Items preview */}
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {items.map(item => (
+                  {summaryItems.map(item => (
                     <div key={item.productId} className="flex justify-between text-sm gap-2">
                       <span className="text-neutral-700 truncate flex-1">{item.productName}</span>
                       <span className="text-neutral-500 shrink-0">
                         {item.unit === 'кг' ? item.quantity.toFixed(3) : item.quantity} {item.unit}
                       </span>
                       <span className="font-medium shrink-0">
-                        {(parseFloat(item.price) * item.quantity).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽
+                        {(Math.round(parseFloat(item.price) * 100 * item.quantity) / 100).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
                       </span>
                     </div>
                   ))}
@@ -374,10 +401,10 @@ export default function WebCheckoutPage() {
                   <p className="text-sm font-medium text-neutral-700 mb-2 flex items-center gap-1.5">
                     <Tag className="w-3.5 h-3.5 text-neutral-400" /> Промокод
                   </p>
-                  {promoResult?.valid ? (
+                  {promoResult?.valid && (!quote || quote.discountPercent > 0) ? (
                     <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                      <span className="text-green-700 text-sm font-medium flex-1">{promoResult.code} (-{promoResult.discountPercent}%)</span>
-                      <button onClick={clearPromo} className="text-green-600 hover:text-green-800">
+                      <span className="text-green-700 text-sm font-medium flex-1">{promoResult.code} (-{quote?.discountPercent ?? promoResult.discountPercent}%)</span>
+                      <button type="button" onClick={clearPromo} className="text-green-600 hover:text-green-800">
                         <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -388,7 +415,7 @@ export default function WebCheckoutPage() {
                         onChange={e => setPromoInput(e.target.value.toUpperCase())}
                         placeholder="PROMO123"
                         className="text-sm h-9"
-                        onKeyDown={e => e.key === 'Enter' && handlePromoApply()}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handlePromoApply(); } }}
                         data-testid="input-promo-code"
                       />
                       <Button
@@ -412,7 +439,7 @@ export default function WebCheckoutPage() {
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between text-neutral-600">
                     <span>Товары ({itemCount})</span>
-                    <span>{subtotal.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽</span>
+                    <span>{summarySubtotal.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽</span>
                   </div>
                   {discountAmount > 0 && (
                     <div className="flex justify-between text-green-600">
@@ -430,18 +457,18 @@ export default function WebCheckoutPage() {
 
                 <div className="flex justify-between font-bold text-neutral-900">
                   <span>Итого к оплате</span>
-                  <span>{finalAmount.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽</span>
+                  <span>{finalAmount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽</span>
                 </div>
 
                 <Button
                   type="submit"
                   className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-                  disabled={createOrderMutation.isPending}
+                  disabled={createOrderMutation.isPending || promoLoading}
                   data-testid="button-place-order"
                 >
                   {createOrderMutation.isPending
                     ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Оформляем...</>
-                    : 'Оформить заказ'}
+                    : quote ? 'Подтвердить обновлённый заказ' : 'Оформить заказ'}
                 </Button>
 
                 <p className="text-xs text-neutral-400 text-center">

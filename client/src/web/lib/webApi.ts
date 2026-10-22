@@ -1,6 +1,10 @@
 const BASE = '/web-api';
 const STORAGE_KEY = 'dgs_web_access_token';
 
+export class WebApiError extends Error {
+  constructor(message: string, public status: number, public data: unknown) { super(message); }
+}
+
 let _accessToken: string | null = (() => {
   try { return sessionStorage.getItem(STORAGE_KEY); } catch { return null; }
 })();
@@ -70,7 +74,7 @@ async function request<T>(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    throw new WebApiError(err.error || `HTTP ${res.status}`, res.status, err);
   }
 
   if (res.status === 204) return undefined as T;

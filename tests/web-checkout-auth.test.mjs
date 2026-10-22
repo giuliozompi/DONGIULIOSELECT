@@ -25,6 +25,8 @@ async function openPage(context, {
   addressesByUser = {}, addressUpdateError = false,
   addressDeleteError = false, holdAddressDelete = false,
   holdSuggestions = false,
+  orderResponses = [],
+  promoValidation = { valid: true, discountPercent: 10 },
 } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
@@ -114,12 +116,20 @@ async function openPage(context, {
     } else if (path.endsWith('/auth/login')) {
       authenticated = true;
       body = { accessToken: 'test-token', user: currentUser };
+    } else if (path === '/web-api/promo/validate') {
+      body = promoValidation;
     } else if (path === '/web-api/orders' && event.request.method === 'POST') {
       if (!allowOrder) throw new Error('This test must not submit an order');
       // Fulfilled entirely in the browser: never create real orders or payments.
-      savedOrder = { ...JSON.parse(event.request.postData), id: 'test-order', status: 'НОВЫЙ', createdAt: profile.createdAt };
-      status = 201;
-      body = savedOrder;
+      const response = orderResponses.shift();
+      if (response) {
+        status = response.status;
+        body = response.body;
+      } else {
+        savedOrder = { ...JSON.parse(event.request.postData), id: 'test-order', status: 'НОВЫЙ', createdAt: profile.createdAt };
+        status = 201;
+        body = savedOrder;
+      }
     } else if (path === '/web-api/orders/test-order') {
       body = savedOrder;
     }
@@ -147,6 +157,78 @@ async function openPage(context, {
 
 const selector = id => `[data-testid="${id}"]`;
 const exists = id => `!!document.querySelector(${JSON.stringify(selector(id))})`;
+const revisedQuote = {
+  items: [{ ...cart.state.items[0], productName: 'Current cheese', price: '2400.00' }],
+  subtotal: '1764.00', amount: '1764.00', discount: '0.00', discountPercent: 0,
+};
+const changedResponse = quote => ({ status: 409, body: {
+  code: 'CHECKOUT_CHANGED', error: 'Условия заказа изменились', quote,
+} });
+async function fillCheckout(page) {
+  await page.send('Page.navigate', { url: `${base}/web/checkout` });
+  await page.wait(exists('input-checkout-name'));
+  await page.fill(selector('input-checkout-phone'), '+79999999999');
+  await page.fill(selector('input-checkout-address'), 'Test delivery address, building 1');
+}
+test('checkout pricing requires a second explicit confirmation and retains cart and draft', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, allowOrder: true, orderResponses: [changedResponse(revisedQuote)],
+  });
+  await fillCheckout(page);
+  await page.click(selector('button-place-order'));
+  await page.wait(exists('checkout-revised'));
+  assert.equal(requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST').length, 1);
+  assert.equal(await page.evaluate('location.pathname'), '/web/checkout');
+  await assertCartPreserved(page);
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-checkout-address'))}).value`), 'Test delivery address, building 1');
+  assert.match(await page.evaluate('document.body.textContent'), /Current cheese/);
+  assert.match(await page.evaluate(`document.querySelector(${JSON.stringify(selector('button-place-order'))}).textContent`), /Подтвердить обновлённый заказ/);
+  await page.click(selector('button-place-order'));
+  await page.wait(`location.pathname === '/web/order-success/test-order'`);
+  const posts = requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST');
+  assert.equal(posts.length, 2);
+  assert.equal(posts[1].body.amount, '1764.00');
+  assert.equal(posts[1].body.items[0].price, '2400.00');
+  assert.equal(posts[1].body.items[0].quantity, 0.735);
+});
+test('checkout pricing handles a second price change and invalid promo feedback without automatic retries', async context => {
+  const removedPromo = { ...revisedQuote, message: 'Промокод уже использован. Скидка удалена.' };
+  const secondQuote = { ...revisedQuote, items: [{ ...revisedQuote.items[0], price: '2500.00' }],
+    subtotal: '1837.50', amount: '1837.50' };
+  const { page, requests } = await openPage(context, {
+    authenticated: true, allowOrder: true,
+    orderResponses: [changedResponse(removedPromo), changedResponse(secondQuote)],
+  });
+  await fillCheckout(page);
+  await page.fill(selector('input-promo-code'), 'BENVENUTO-TEST');
+  await page.click(selector('button-apply-promo'));
+  await page.wait(`document.body.textContent.includes('BENVENUTO-TEST (-10%)')`);
+  await page.click(selector('button-place-order'));
+  await page.wait(exists('checkout-revised'));
+  assert.match(await page.evaluate('document.body.textContent'), /Скидка удалена/);
+  assert.equal(await page.evaluate(`document.body.textContent.includes('BENVENUTO-TEST (-10%)')`), false);
+  await page.click(selector('button-place-order'));
+  await page.wait(`document.querySelector('[data-testid="checkout-revised"]')?.textContent.includes('Цены или итог обновлены')`);
+  const posts = requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST');
+  assert.equal(posts.length, 2);
+  assert.equal(posts[0].body.promoCode, 'BENVENUTO-TEST');
+  assert.equal(posts[1].body.promoCode, undefined);
+  await assertCartPreserved(page);
+  assert.equal(await page.evaluate('location.pathname'), '/web/checkout');
+});
+test('checkout pricing shows unavailable products persistently and preserves the cart', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, allowOrder: true, orderResponses: [
+      { status: 422, body: { error: 'Товар «Test cheese» недоступен. Вернитесь в корзину и удалите его.' } },
+    ],
+  });
+  await fillCheckout(page);
+  await page.click(selector('button-place-order'));
+  await page.wait(exists('checkout-error'));
+  assert.match(await page.evaluate(`document.querySelector('[data-testid="checkout-error"]').textContent`), /недоступен/);
+  assert.equal(requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST').length, 1);
+  await assertCartPreserved(page);
+});
 async function register(page) {
   await page.wait(exists('input-register-firstname'));
   await page.fill(selector('input-register-firstname'), 'New');
