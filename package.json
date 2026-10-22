@@ -12,6 +12,7 @@
     "test:checkout-pricing": "node --import tsx --test tests/web-checkout-pricing.test.ts",
     "test:orders": "node --test tests/web-orders.test.mjs",
     "test:reorder": "node --import tsx --test tests/web-reorder.test.ts",
+    "test:repeat-guard": "node --import tsx --test tests/web-repeat-guard.test.ts && node --test tests/web-repeat-guard.test.mjs",
     "test:payment-links": "node --import tsx --test tests/admin-payment-links.test.ts tests/payment-link-tracking.test.ts server/services/payment-link-delivery.test.ts server/services/order-status-automation.test.ts",
     "test:payment-links-ui": "node --test tests/admin-payment-links.test.mjs",
     "test:telegram-link": "node --import tsx --test tests/web-telegram-link.test.ts",

@@ -72,7 +72,7 @@ for (const unit of ['кг', 'kg', ' КГ ', ' KG ', 'шт', 'уп']) {
     // Preserve the established minimum/removal behavior.
     await page.click(decrease);
     await page.wait(`!document.querySelector(${JSON.stringify(row)})`);
-    assert.deepEqual(await readCart(page), { items: [unrelated], itemCount: 1, subtotal: 1050 });
+    assert.deepEqual(await readCart(page), { items: [unrelated], itemCount: 1, subtotal: 1050, repeatedOrders: {} });
   });
 }
 

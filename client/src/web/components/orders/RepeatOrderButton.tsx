@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, RotateCcw } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import type { ReorderPreview, ReorderPreviewItem, ReorderSkipReason, ReorderSkippedItem } from '@shared/reorder';
 import { useWebAuth } from '../../hooks/useWebAuth';
@@ -27,22 +37,33 @@ export function RepeatOrderButton({ orderId }: { orderId: string }) {
   const { toast } = useToast();
   const client = useQueryClient();
   const [review, setReview] = useState<{ owner: string; items: ReorderPreviewItem[]; addedCount: number; skipped: ReorderSkippedItem[] } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ owner: string; orderId: string } | null>(null);
+  const inFlightRef = useRef(false);
   const mutationKey = ['web-repeat-order', user?.id];
   const pending = useIsMutating({ mutationKey }) > 0;
   const mutation = useMutation({
     mutationKey,
     retry: false,
-    mutationFn: ({ id }: { id: string; owner: string }) =>
-      webApi.get<ReorderPreview>(`/orders/${encodeURIComponent(id)}/reorder`),
+    mutationFn: ({ id, owner }: { id: string; owner: string; confirmed: boolean }) => {
+      if (!useWebAuth.getState().isAuthenticated || useWebAuth.getState().user?.id !== owner) {
+        throw new Error('Аккаунт изменился');
+      }
+      return webApi.get<ReorderPreview>(`/orders/${encodeURIComponent(id)}/reorder`);
+    },
     onSuccess: (data, variables) => {
       const auth = useWebAuth.getState();
       if (!auth.isAuthenticated || auth.user?.id !== variables.owner) {
         toast({ title: 'Аккаунт изменился', description: 'Войдите в нужный аккаунт и повторите действие.', variant: 'destructive' });
         return;
       }
-      const { addedCount, skipped } = useWebCart.getState().addReorderItems(
+      const { addedCount, skipped, confirmationRequired } = useWebCart.getState().addReorderItems(
         data.items.map(({ priceChanged: _changed, comparison: _comparison, ...item }) => item),
+        { owner: variables.owner, orderId: variables.id, confirmed: variables.confirmed },
       );
+      if (confirmationRequired) {
+        setConfirmation({ owner: variables.owner, orderId: variables.id });
+        return;
+      }
       const allSkipped = [...data.skipped, ...skipped];
       setReview({
         owner: variables.owner, addedCount, skipped: allSkipped,
@@ -54,7 +75,24 @@ export function RepeatOrderButton({ orderId }: { orderId: string }) {
       description: error instanceof Error ? error.message : 'Попробуйте ещё раз.',
       variant: 'destructive',
     }),
+    onSettled: () => {
+      inFlightRef.current = false;
+    },
   });
+
+  useEffect(() => {
+    if (confirmation && (!isAuthenticated || confirmation.owner !== user?.id)) {
+      setConfirmation(null);
+    }
+  }, [confirmation, isAuthenticated, user?.id]);
+
+  const startRepeat = (id: string, owner: string, confirmed: boolean) => {
+    const auth = useWebAuth.getState();
+    if (!auth.isAuthenticated || auth.user?.id !== owner || inFlightRef.current) return;
+    if (client.getMutationCache().findAll({ mutationKey: ['web-repeat-order', owner], status: 'pending' }).length) return;
+    inFlightRef.current = true;
+    mutation.mutate({ id, owner, confirmed });
+  };
 
   return (
     <>
@@ -67,14 +105,61 @@ export function RepeatOrderButton({ orderId }: { orderId: string }) {
         aria-busy={pending}
         disabled={pending || !isAuthenticated}
         onClick={() => {
-          if (!user?.id || client.getMutationCache().findAll({ mutationKey, status: 'pending' }).length) return;
-          mutation.mutate({ id: orderId, owner: user.id });
+          if (!user?.id) return;
+          const cart = useWebCart.getState();
+          const alreadyRepeated = cart.repeatedOrders[user.id]?.includes(orderId) ?? false;
+          if (alreadyRepeated && cart.items.length > 0) {
+            setConfirmation({ owner: user.id, orderId });
+            return;
+          }
+          startRepeat(orderId, user.id, false);
         }}
       >
         {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
           : <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />}
         {pending ? 'Добавляем…' : 'Повторить заказ'}
       </Button>
+      <AlertDialog
+        open={confirmation !== null && isAuthenticated && confirmation.owner === user?.id}
+        onOpenChange={open => {
+          if (!open) setConfirmation(null);
+        }}
+      >
+        <AlertDialogContent data-testid="reorder-confirmation">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Добавить товары из заказа ещё раз?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Все доступные товары и их количества из этого заказа будут добавлены в корзину повторно. Текущие товары в корзине останутся.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-testid="reorder-confirm-cancel"
+              onClick={() => setConfirmation(null)}
+            >
+              Отмена
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="reorder-confirm-add"
+              onClick={event => {
+                event.preventDefault();
+                const captured = confirmation;
+                const auth = useWebAuth.getState();
+                if (!captured || captured.owner !== user?.id || !auth.isAuthenticated || auth.user?.id !== captured.owner) {
+                  setConfirmation(null);
+                  return;
+                }
+                setConfirmation(null);
+                startRepeat(captured.orderId, captured.owner, true);
+              }}
+              disabled={pending}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              Добавить ещё раз
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={review !== null && isAuthenticated && review.owner === user?.id} onOpenChange={open => { if (!open) setReview(null); }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto" data-testid="reorder-review">
           <DialogHeader>

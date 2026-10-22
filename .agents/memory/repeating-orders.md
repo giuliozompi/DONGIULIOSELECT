@@ -14,3 +14,9 @@ Price comparisons refer only to the successfully repeated quantities, not the en
 **Why:** Historical amounts include discounts or delivery, and existing cart quantities can make a price-change total misleading. Gram/kg conversions must not appear as price increases.
 
 **How to apply:** Compare equal physical quantities with weight prices normalized to kg, and label product-only totals separately from discounts and delivery.
+
+The first successful repeat of an order adds normally; from the second attempt, ask whether the customer really wants to add the same order again before changing the cart or updating its prices.
+
+**Why:** The user reports accidental repeated clicks summing multiple copies of an order in the cart.
+
+**How to apply:** Share this protection between list and detail, remember successful repetitions per customer across navigation/reloads while the cart remains active, and require explicit confirmation each subsequent time. Cancellation must leave the cart untouched; failures and zero-added repeats must not count as success. Emptying the cart starts a new cycle.

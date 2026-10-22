@@ -13,12 +13,20 @@ export interface WebCartItem {
   image?: string;
 }
 
+export interface ReorderSource {
+  owner: string;
+  orderId: string;
+  confirmed?: boolean;
+}
+
 interface WebCartState {
   items: WebCartItem[];
   itemCount: number;
   subtotal: number;
+  repeatedOrders: Record<string, string[]>;
   addItem: (item: Omit<WebCartItem, 'quantity'>, qty?: number) => void;
-  addReorderItems: (items: WebCartItem[]) => { addedCount: number; skipped: ReorderSkippedItem[] };
+  addReorderItems: (items: WebCartItem[], source?: ReorderSource) =>
+    { addedCount: number; skipped: ReorderSkippedItem[]; confirmationRequired?: boolean };
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
@@ -37,6 +45,7 @@ export const useWebCart = create<WebCartState>()(
       items: [],
       itemCount: 0,
       subtotal: 0,
+      repeatedOrders: {},
 
       addItem: (item, qty) =>
         set(state => {
@@ -56,12 +65,21 @@ export const useWebCart = create<WebCartState>()(
           return { items, ...calcDerived(items) };
         }),
 
-      addReorderItems: incoming => {
-        let result = { addedCount: 0, skipped: [] as ReorderSkippedItem[] };
+      addReorderItems: (incoming, source) => {
+        let result: { addedCount: number; skipped: ReorderSkippedItem[]; confirmationRequired?: boolean } =
+          { addedCount: 0, skipped: [] };
         set(state => {
+          const history = state.items.length ? state.repeatedOrders : {};
+          if (source && history[source.owner]?.includes(source.orderId) && !source.confirmed) {
+            result = { addedCount: 0, skipped: [], confirmationRequired: true };
+            return state;
+          }
           const merged = mergeReorderCart(state.items, incoming);
           result = { addedCount: merged.addedCount, skipped: merged.skipped };
-          return { items: merged.items, ...calcDerived(merged.items) };
+          const repeatedOrders = source && merged.addedCount > 0
+            ? { ...history, [source.owner]: Array.from(new Set([...(history[source.owner] || []), source.orderId])) }
+            : history;
+          return { items: merged.items, ...calcDerived(merged.items), repeatedOrders };
         });
         return result;
       },
@@ -69,7 +87,7 @@ export const useWebCart = create<WebCartState>()(
       removeItem: (productId) =>
         set(state => {
           const items = state.items.filter(i => i.productId !== productId);
-          return { items, ...calcDerived(items) };
+          return { items, ...calcDerived(items), ...(items.length ? {} : { repeatedOrders: {} }) };
         }),
 
       updateQuantity: (productId, quantity) =>
@@ -77,10 +95,10 @@ export const useWebCart = create<WebCartState>()(
           const items = quantity <= 0
             ? state.items.filter(i => i.productId !== productId)
             : state.items.map(i => i.productId === productId ? { ...i, quantity } : i);
-          return { items, ...calcDerived(items) };
+          return { items, ...calcDerived(items), ...(items.length ? {} : { repeatedOrders: {} }) };
         }),
 
-      clearCart: () => set({ items: [], itemCount: 0, subtotal: 0 }),
+      clearCart: () => set({ items: [], itemCount: 0, subtotal: 0, repeatedOrders: {} }),
     }),
     { name: 'dgs-web-cart' }
   )
