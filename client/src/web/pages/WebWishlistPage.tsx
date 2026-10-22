@@ -9,11 +9,12 @@ import { useWebCart } from '../hooks/useWebCart';
 import { useWebWishlist } from '../hooks/useWebWishlist';
 import WebFavoriteButton from '../components/WebFavoriteButton';
 import WebAuthModal from '../components/WebAuthModal';
+import { formatOrderQuantity, getCartAddQuantity } from '@shared/order-quantity';
 
 export default function WebWishlistPage() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: authLoading } = useWebAuth();
-  const { addItem } = useWebCart();
+  const { addItem, items: cartItems } = useWebCart();
   const [authOpen, setAuthOpen] = useState(false);
   const { items, isLoading, isError, refetch } = useWebWishlist();
   const visibleCount = items.filter(item => item.product).length;
@@ -65,6 +66,8 @@ export default function WebWishlistPage() {
             const price = parseFloat(p.price);
             const priceOld = p.priceOld ? parseFloat(p.priceOld) : null;
             const discount = priceOld ? Math.round((1 - price / priceOld) * 100) : null;
+            const quantity = cartItems.find(i => i.productId === p.id)?.quantity ?? 0;
+            const addQuantity = `${formatOrderQuantity(getCartAddQuantity(p.unit, quantity), p.unit)} ${p.unit}`;
 
             return (
               <div
@@ -112,11 +115,19 @@ export default function WebWishlistPage() {
                       className="h-8 w-8 rounded-full bg-amber-600 hover:bg-amber-700 text-white shrink-0"
                       onClick={() => addItem({ productId: p.id, productName: p.name, price: p.price, unit: p.unit, image: p.images?.[0] })}
                       disabled={!p.inStock}
+                      aria-label={`Добавить ${addQuantity} в корзину: ${p.name}`}
+                      title={`Добавить ${addQuantity}`}
                       data-testid={`button-add-wishlist-item-${item.productId}`}
                     >
                       <ShoppingCart className="w-4 h-4" />
                     </Button>
                   </div>
+                  <p className="text-xs text-neutral-500">
+                    {p.inStock ? `Добавить: ${addQuantity}` : 'Нет в наличии'}
+                  </p>
+                  <p role="status" className="text-xs text-amber-800" data-testid={`wishlist-cart-quantity-${p.id}`}>
+                    {quantity > 0 ? `В корзине: ${formatOrderQuantity(quantity, p.unit)} ${p.unit}` : ''}
+                  </p>
                 </div>
               </div>
             );

@@ -14,14 +14,14 @@ export const wishlistUser = {
 // Fixtures never contact the database or real registration/payment services.
 export async function wishlistPage(browser, context, {
   authenticated = true, initiallySelected = false, toggleFailure = false,
-  readFailure = false, toggleDelay = 0, inStock = true,
+  readFailure = false, toggleDelay = 0, inStock = true, productOverrides = {},
 } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
   const state = { authenticated, userId: wishlistUser.id, toggleFailure, readFailure };
   const favorites = new Map([[wishlistUser.id, new Set(initiallySelected ? [wishlistProduct.id] : [])]]);
   const requests = [];
-  const product = { ...wishlistProduct, inStock };
+  const product = { ...wishlistProduct, inStock, ...productOverrides };
   await page.send('Fetch.enable', { patterns: [
     { urlPattern: '*/web-api/*' }, { urlPattern: '*/api/*' },
     { urlPattern: '*telegram.org/js/telegram-web-app.js*' },

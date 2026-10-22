@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { mergeReorderCart } from '@shared/reorder';
 import type { ReorderSkippedItem } from '@shared/reorder';
+import { getCartAddQuantity, isKilogramUnit } from '@shared/order-quantity';
 
 export interface WebCartItem {
   productId: string;
@@ -37,16 +38,21 @@ export const useWebCart = create<WebCartState>()(
       itemCount: 0,
       subtotal: 0,
 
-      addItem: (item, qty = 1) =>
+      addItem: (item, qty) =>
         set(state => {
           const existing = state.items.find(i => i.productId === item.productId);
+          const increment = qty ?? getCartAddQuantity(existing?.unit ?? item.unit, existing?.quantity);
+          const quantity = (existing?.quantity ?? 0) + increment;
+          const nextQuantity = isKilogramUnit(existing?.unit ?? item.unit)
+            ? Math.round(quantity * 1000) / 1000
+            : quantity;
           const items = existing
             ? state.items.map(i =>
                 i.productId === item.productId
-                  ? { ...i, quantity: i.quantity + qty }
+                  ? { ...i, quantity: nextQuantity }
                   : i
               )
-            : [...state.items, { ...item, quantity: qty }];
+            : [...state.items, { ...item, quantity: nextQuantity }];
           return { items, ...calcDerived(items) };
         }),
 

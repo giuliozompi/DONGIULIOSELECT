@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useWebCart } from '../hooks/useWebCart';
 import WebFavoriteButton from './WebFavoriteButton';
+import { getCartQuantityRules, isKilogramUnit } from '@shared/order-quantity';
 
 interface Product {
   id: string;
@@ -21,9 +22,6 @@ interface Product {
 interface Props {
   product: Product;
 }
-
-const STEP = 0.1;
-const MIN_KG = 0.2;
 
 export default function WebProductCard({ product }: Props) {
   const [, setLocation] = useLocation();
@@ -47,26 +45,19 @@ export default function WebProductCard({ product }: Props) {
 
   const cartItem = items.find(i => i.productId === product.id);
   const qty = cartItem?.quantity ?? 0;
-  const isKg = product.unit === 'кг' || product.unit === 'г';
-  const step = isKg ? STEP : 1;
-
-  const initialQty = isKg ? MIN_KG : 1;
-  const minQty = initialQty;
+  const isKg = isKilogramUnit(product.unit);
+  const { step, initial: minQty } = getCartQuantityRules(product.unit);
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!product.inStock) return;
-    if (qty === 0) {
-      addItem({
+    addItem({
         productId: product.id,
         productName: product.name,
         price: product.price,
         unit: product.unit,
         image: images[0],
-      }, initialQty);
-    } else {
-      updateQuantity(product.id, parseFloat((qty + step).toFixed(3)));
-    }
+    });
   };
 
   const handleMinus = (e: React.MouseEvent) => {
@@ -172,7 +163,7 @@ export default function WebProductCard({ product }: Props) {
                 <span className="text-xs font-medium min-w-[2rem] text-center text-amber-800">
                   {isKg ? qty.toFixed(3) : qty} {product.unit}
                 </span>
-                <Button size="icon" variant="ghost" className="h-6 w-6 rounded-full" onClick={handleAdd}>
+                <Button size="icon" variant="ghost" className="h-6 w-6 rounded-full" onClick={handleAdd} data-testid={`button-increase-cart-${product.id}`}>
                   <Plus className="w-3 h-3" />
                 </Button>
               </div>

@@ -10,6 +10,7 @@ import { webApi } from '../lib/webApi';
 import { useWebMeta } from '../hooks/useWebMeta';
 import { ProductJsonLd, BreadcrumbJsonLd } from '../components/WebJsonLd';
 import WebFavoriteButton from '../components/WebFavoriteButton';
+import { getCartQuantityRules, isKilogramUnit } from '@shared/order-quantity';
 
 interface Product {
   id: string; name: string; slug: string; price: string; priceOld?: string;
@@ -18,9 +19,6 @@ interface Product {
   nutrition?: { proteins: string; fats: string; carbs: string; calories: string; composition: string[]; additionalInfo: string[] };
   tasteVariations?: string[];
 }
-
-const STEP = 0.1;
-const MIN_KG = 0.2;
 
 export default function WebProductPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -84,18 +82,12 @@ export default function WebProductPage() {
 
   const cartItem = items.find(i => i.productId === product.id);
   const qty = cartItem?.quantity ?? 0;
-  const isKg = product.unit === 'кг';
-  const step = isKg ? STEP : 1;
-  const initialQty = isKg ? MIN_KG : 1;
-  const minQty = initialQty;
+  const isKg = isKilogramUnit(product.unit);
+  const { step, initial: minQty } = getCartQuantityRules(product.unit);
 
   const handleAdd = () => {
     if (!product.inStock) return;
-    if (qty === 0) {
-      addItem({ productId: product.id, productName: product.name, price: product.price, unit: product.unit, image: images[0] }, initialQty);
-    } else {
-      updateQuantity(product.id, parseFloat((qty + step).toFixed(3)));
-    }
+    addItem({ productId: product.id, productName: product.name, price: product.price, unit: product.unit, image: images[0] });
   };
   const handleMinus = () => {
     const newQty = parseFloat((qty - step).toFixed(3));
@@ -234,12 +226,12 @@ export default function WebProductPage() {
             ) : (
               <div className="flex items-center gap-3 flex-1">
                 <div className="flex items-center gap-2 bg-amber-50 rounded-xl px-3 py-2 border border-amber-200">
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleMinus}><Minus className="w-4 h-4" /></Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleMinus} aria-label="Уменьшить количество" data-testid="button-qty-minus"><Minus className="w-4 h-4" /></Button>
                   <div className="text-center min-w-[4rem]">
                     <div className="font-semibold text-amber-800">{isKg ? qty.toFixed(3) : qty}</div>
                     <div className="text-xs text-amber-600">{product.unit}</div>
                   </div>
-                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleAdd}><Plus className="w-4 h-4" /></Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleAdd} aria-label="Увеличить количество" data-testid="button-qty-plus"><Plus className="w-4 h-4" /></Button>
                 </div>
                 {totalPrice && (
                   <div className="text-right">

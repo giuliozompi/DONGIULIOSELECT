@@ -14,3 +14,9 @@ Tests must not assume that importing an unversioned source URL accesses the appl
 **Why:** Vite can give the running module a versioned URL. Importing its unversioned URL can create a second store: seeded data then appears in test assertions but never reaches the rendered app.
 
 **How to apply:** Prefer UI interactions or seed browser persistence and reload for hydration; assert the rendered UI and persisted state rather than a potentially detached imported store.
+
+The default Chromium launcher can intermittently stall in this workspace even when the app is responding normally.
+
+**Why:** Browser startup and navigation timed out with the default executable, while the already-installed Playwright Chromium completed the same tests.
+
+**How to apply:** When diagnosing browser-only timeouts, check that the app responds first, then use `CHROMIUM_PATH` with an available installed Chromium executable. Discover its current location rather than saving a versioned system path.

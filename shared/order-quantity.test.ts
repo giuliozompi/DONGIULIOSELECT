@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatOrderQuantity, isValidOrderQuantity, parseOrderQuantity } from './order-quantity';
+import { formatOrderQuantity, getCartAddQuantity, getCartQuantityRules, isValidOrderQuantity, parseOrderQuantity } from './order-quantity';
+
+test('all shop entry points share initial weights and subsequent increments', () => {
+  for (const unit of ['кг', 'kg', ' KG ', ' КГ ']) {
+    assert.deepEqual(getCartQuantityRules(unit), { initial: 0.2, step: 0.1 });
+    assert.equal(getCartAddQuantity(unit), 0.2);
+    assert.equal(getCartAddQuantity(unit, 0.735), 0.1);
+  }
+  for (const unit of ['шт', 'шт.', 'pcs', 'уп', 'г']) {
+    assert.deepEqual(getCartQuantityRules(unit), { initial: 1, step: 1 });
+    assert.equal(getCartAddQuantity(unit), 1);
+    assert.equal(getCartAddQuantity(unit, 3), 1);
+  }
+});
 
 test('accepts measured kilograms with comma or point without losing grams', () => {
   for (const text of ['0,735', '0.735', '1,234', '1.234', '0,001', '0.199', '2']) {

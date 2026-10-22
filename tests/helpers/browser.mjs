@@ -83,7 +83,7 @@ class Connection {
 
 export async function launchBrowser() {
   const profile = await mkdtemp(join(tmpdir(), 'checkout-auth-browser-'));
-  const process = spawn('chromium', [
+  const process = spawn(globalThis.process.env.CHROMIUM_PATH || 'chromium', [
     '--headless', '--no-sandbox', '--disable-dev-shm-usage',
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });

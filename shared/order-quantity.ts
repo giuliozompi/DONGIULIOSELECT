@@ -2,6 +2,18 @@ export function isKilogramUnit(unit: string): boolean {
   return ['кг', 'kg'].includes(unit.trim().toLowerCase());
 }
 
+// Quantities remain in the product's selling unit; never interpret grams as kg.
+export function getCartQuantityRules(unit: string) {
+  return isKilogramUnit(unit)
+    ? { initial: 0.2, step: 0.1 }
+    : { initial: 1, step: 1 };
+}
+
+export function getCartAddQuantity(unit: string, currentQuantity = 0): number {
+  const rules = getCartQuantityRules(unit);
+  return currentQuantity > 0 ? rules.step : rules.initial;
+}
+
 export function isValidOrderQuantity(quantity: number, unit: string): boolean {
   return Number.isFinite(quantity) && quantity > 0 && (
     !isKilogramUnit(unit) ||
