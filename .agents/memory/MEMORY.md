@@ -13,3 +13,4 @@
 - [Operator order documents](operator-order-documents.md) — payment-method edits must always be logged; packing list and named box label share the order QR and printed code.
 - [Telegram hosting diagnostics](telegram-transport.md) — workspace success does not prove Timeweb connectivity; ambiguous sends must not be retried automatically or leak bot URLs.
 - [Brand messaging](brand-messaging.md) — user-requested storefront copy emphasizes Italian producers in Russia and delivery throughout Russia.
+- [GitHub release access](github-release-access.md) — secure-proxy pushes can require a Replit GitHub connection even with an existing PAT; connect rather than bypass.
