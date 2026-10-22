@@ -6,6 +6,7 @@
 - [Favorites symbol](favorites-symbol.md) — website favorites use a selectable yellow cheese slice with holes, not a heart.
 - [Repeating orders](repeating-orders.md) — repeat purchases use current catalogue prices, including matching products already in the cart, and preserve quantities.
 - [Timeweb deployment checks](timeweb-deployment.md) — confirm the live database and served release; dependency lockfiles must not contain workspace-only download URLs.
+- [Timeweb release safety](timeweb-release-gate.md) — fail-closed, read-only compatibility checks are distinct from development preflights and cannot authorize migrations.
 - [Database test isolation](database-test-isolation.md) — temporary PostgreSQL fixtures must override inherited connection defaults explicitly.
 - [Telegram account linking](telegram-account-linking.md) — completed links must be recognized and visible in the personal account, without asking customers to repeat the procedure.
 - [Keyboard popups](keyboard-popups.md) — nested suggestions must consume Escape before Radix dialog capture handlers, without blocking subsequent dialog dismissal.

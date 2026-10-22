@@ -27,6 +27,8 @@
     "test:wishlist-api": "node --import tsx --test tests/web-wishlist-api.test.ts",
     "test:addresses": "node --import tsx --test tests/web-addresses-api.test.ts",
     "db:check-wishlist-duplicates": "node scripts/check-wishlist-duplicates.mjs",
+    "db:check-timeweb": "node scripts/check-timeweb-compatibility.mjs",
+    "test:timeweb-preflight": "node --test tests/timeweb-preflight.test.mjs",
     "db:push": "npm run db:check-wishlist-duplicates && drizzle-kit push"
   },
   "dependencies": {
