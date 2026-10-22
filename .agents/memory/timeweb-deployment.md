@@ -13,3 +13,11 @@ description: How to correctly deploy this app on Timeweb Cloud
 - `server/db.ts` uses `import pg from 'pg'` (ESM default import) with `node-postgres`.
 
 **Why:** Timeweb's Docker template has 11 steps, ending with `RUN <Команда сборки>`. docker-compose is not installed in the node:24-slim image.
+
+## Confirm the live database before schema-dependent releases
+
+Verify the database actually configured as `DATABASE_URL` in Timeweb before sending schema-dependent changes to its deployment branch. Do not assume the workspace database, Replit's managed production database, or a secret named `NEON_DATABASE_URL` identifies that target.
+
+**Why:** An available Neon connection and the workspace connection identified different databases. A successful workspace migration therefore did not establish that Timeweb had the required schema.
+
+**How to apply:** Establish the live connection from Timeweb's configuration, inspect schema readiness read-only, and obtain separate authorization before production schema changes. Keep deployment-triggering pushes on hold while the prerequisite remains unverified.

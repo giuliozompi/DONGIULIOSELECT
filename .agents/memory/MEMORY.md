@@ -4,4 +4,5 @@
 - [Browser test isolation](browser-test-isolation.md) — service workers can bypass page-level API mocks; enforce isolation before registration or payment tests.
 - [Favorites symbol](favorites-symbol.md) — website favorites use a selectable yellow cheese slice with holes, not a heart.
 - [Repeating orders](repeating-orders.md) — repeat purchases use current catalogue prices, including matching products already in the cart, and preserve quantities.
+- [Timeweb database identity](timeweb-deployment.md) — confirm Timeweb's actual database before schema-dependent releases; workspace and Neon secrets may identify different targets.
 - [Database test isolation](database-test-isolation.md) — temporary PostgreSQL fixtures must override inherited connection defaults explicitly.
