@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import express from 'express';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { orders, products } from '../shared/schema';
-import { buildReorderPreview, convertReorderQuantity, mergeReorderCart } from '../shared/reorder';
+import { buildReorderPreview, convertReorderQuantity, mergeReorderCart, summarizeReorderPrices } from '../shared/reorder';
 import { registerWebReorder } from '../server/webReorderRoutes';
 
 const source = { productId: 'cheese', productName: 'Old cheese', quantity: 0.735, price: '2000.00', unit: 'кг' };
@@ -14,7 +14,58 @@ test('preview restores exact grams and uses current price, name and image withou
   assert.deepEqual(result, { items: [{
     productId: 'cheese', productName: 'Current cheese', quantity: 0.735,
     price: '2400.00', unit: 'кг', image: 'current.jpg', priceChanged: true,
+    comparison: { oldPrice: 2000, newPrice: 2400, unit: 'кг', oldTotal: 1470, newTotal: 1764, difference: 294, status: 'increased' },
   }], skipped: [] });
+});
+
+test('price comparisons cover increases, decreases and unchanged prices for the original quantity', () => {
+  for (const [price, status, difference] of [
+    ['2400', 'increased', 294], ['1800', 'decreased', -147], ['2000', 'unchanged', 0],
+  ] as const) {
+    const result = buildReorderPreview([source], [{ ...product, price }]);
+    assert.equal(result.items[0].comparison.status, status);
+    assert.equal(result.items[0].comparison.difference, difference);
+    assert.equal(result.items[0].priceChanged, status !== 'unchanged');
+    assert.deepEqual(summarizeReorderPrices(result.items), { oldTotal: 1470, newTotal: 1470 + difference, difference });
+  }
+});
+
+test('both gram/kg conversion directions normalize price and preserve physical quantity without false changes', () => {
+  for (const [original, current, quantity] of [
+    [{ ...source, unit: 'г', price: '2', quantity: 735 }, { ...product, price: '2000' }, 0.735],
+    [source, { ...product, unit: 'г', price: '2' }, 735],
+  ] as const) {
+    const item = buildReorderPreview([original], [current]).items[0];
+    assert.equal(item.quantity, quantity);
+    assert.equal(item.priceChanged, false);
+    assert.deepEqual(item.comparison, {
+      oldPrice: 2000, newPrice: 2000, unit: 'кг', oldTotal: 1470, newTotal: 1470, difference: 0, status: 'unchanged',
+    });
+    const increased = buildReorderPreview([original], [{ ...current, price: String(Number(current.price) * 1.2) }]).items[0];
+    assert.equal(increased.comparison.difference, 294);
+    const decreased = buildReorderPreview([original], [{ ...current, price: String(Number(current.price) * 0.9) }]).items[0];
+    assert.equal(decreased.comparison.difference, -147);
+  }
+});
+
+test('product totals exclude missing items, historic discounts, delivery and unrelated cart quantities', () => {
+  const historical = { items: [source, { ...source, productId: 'missing' }], amount: '999', discount: '50', deliveryFee: '200' };
+  const result = buildReorderPreview(historical.items, [product]);
+  assert.deepEqual(summarizeReorderPrices(result.items), { oldTotal: 1470, newTotal: 1764, difference: 294 });
+  assert.equal(result.skipped[0].reason, 'removed');
+  const cart = mergeReorderCart([{ ...source, quantity: 1 }], result.items);
+  assert.equal(cart.items[0].quantity, 1.735);
+  assert.equal(summarizeReorderPrices(result.items).newTotal, 1764);
+});
+
+test('unknown historic prices do not become zero or hide current prices; totals round to kopeks', () => {
+  for (const price of [undefined, null, '', 'bad', -1, true]) {
+    const result = buildReorderPreview([{ ...source, price }], [product]);
+    assert.equal(result.items[0].comparison.status, 'unknown');
+    assert.deepEqual(summarizeReorderPrices(result.items), { oldTotal: null, newTotal: 1764, difference: null });
+  }
+  const result = buildReorderPreview([{ ...source, price: '1999.99' }], [{ ...product, price: '2000.01' }]);
+  assert.deepEqual(summarizeReorderPrices(result.items), { oldTotal: 1469.99, newTotal: 1470.01, difference: 0.02 });
 });
 
 test('missing, hidden, unavailable and invalid-price products are explicitly skipped', () => {
@@ -123,7 +174,10 @@ test('read-only reorder API obtains fresh prices on every request and prevents c
   const first = await fixture.get('own');
   assert.equal(first.status, 200);
   assert.equal(first.headers.get('cache-control'), 'no-store');
-  assert.equal((await first.json()).items[0].price, '2400.00');
+  const preview = await first.json();
+  assert.equal(preview.items[0].price, '2400.00');
+  assert.equal(preview.items[0].comparison.oldTotal, 1470);
+  assert.equal(preview.items[0].comparison.difference, 294);
   fixture.setPrice('2700.00');
   const second = await fixture.get('own');
   assert.equal((await second.json()).items[0].price, '2700.00');

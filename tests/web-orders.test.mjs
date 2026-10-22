@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { writeFile } from 'node:fs/promises';
 import { launchBrowser } from './helpers/browser.mjs';
-import { ordersBase, customerOrder, historyOrder, ordersPage } from './helpers/orders-fixture.mjs';
+import { ordersBase, customerOrder, historyOrder, ordersPage, buildReorderPreview } from './helpers/orders-fixture.mjs';
 
 let browser;
 before(async () => { browser = await launchBrowser(); });
@@ -135,6 +135,12 @@ async function seedCart(page) {
   await page.wait(repeatReady);
 }
 
+async function reviewAndOpenCart(page) {
+  await page.wait(exists('reorder-review'));
+  await page.click(selector('reorder-go-to-cart'));
+  await page.wait(`location.pathname === '/web/cart'`);
+}
+
 test('repeat from the mobile list adds original quantities with fresh prices, not historical totals', async context => {
   const { page, requests } = await ordersPage(browser, context);
   await page.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 844, deviceScaleFactor: 1, mobile: true });
@@ -144,7 +150,15 @@ test('repeat from the mobile list adds original quantities with fresh prices, no
   const snapshot = await page.send('Page.captureScreenshot', { format: 'jpeg', quality: 80 });
   await writeFile('/tmp/dg-repeat-list-mobile.jpg', Buffer.from(snapshot.data, 'base64'));
   await page.click(selector(repeatId));
-  await page.wait(`location.pathname === '/web/cart'`);
+  await page.wait(exists('reorder-price-summary'));
+  const summary = await page.evaluate(`document.querySelector('[data-testid="reorder-price-summary"]').textContent`);
+  assert.match(summary, /Цена выросла/);
+  assert.match(summary, /Скидки и доставка прежнего заказа не включены/);
+  const totals = await page.evaluate(`document.querySelector('[data-testid="reorder-product-totals"]').textContent.replace(/\\s/g, '')`);
+  assert.match(totals, /Было:1970,00₽Сейчас:2290,50₽Разница:\+320,50₽/);
+  assert.doesNotMatch(totals, /1954,73|15,27/);
+  assert.equal(await page.evaluate('document.documentElement.scrollWidth > innerWidth'), false);
+  await reviewAndOpenCart(page);
   const items = await cartItems(page);
   assert.equal(items.length, 2);
   assert.equal(items[0].quantity, 0.735);
@@ -163,7 +177,7 @@ test('repeat from detail preserves existing cart products, sums exact weights an
   await page.wait(repeatReady);
   await seedCart(page);
   await page.click(selector(repeatId));
-  await page.wait(`location.pathname === '/web/cart'`);
+  await reviewAndOpenCart(page);
   const items = await cartItems(page);
   assert.equal(items.length, 3);
   const cheese = items.find(item => item.productId === 'test-cheese');
@@ -173,9 +187,56 @@ test('repeat from detail preserves existing cart products, sums exact weights an
   assert.equal(items.find(item => item.productId === 'test-bread').price, '100.00');
 });
 
+for (const [oldUnit, oldQuantity, oldPrice, unit, quantity, currentPrice] of [
+  ['г', 735, '2', 'кг', 0.735, '2000'],
+  ['кг', 0.735, '2000', 'г', 735, '2'],
+]) {
+  test(`mobile price summary normalizes ${oldUnit} to ${unit}, showing unchanged and lower prices`, async context => {
+    const original = { ...customerOrder.items[0], unit: oldUnit, quantity: oldQuantity, price: oldPrice };
+    const reduced = { ...customerOrder.items[1] };
+    const preview = buildReorderPreview([original, reduced], [
+      { id: original.productId, name: original.productName, unit, price: currentPrice, isVisible: true, inStock: true, images: [] },
+      { id: reduced.productId, name: reduced.productName, unit: reduced.unit, price: '400', isVisible: true, inStock: true, images: [] },
+    ]);
+    const { page } = await ordersPage(browser, context, { reorderPreview: preview });
+    await page.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 844, deviceScaleFactor: 1, mobile: true });
+    await page.send('Page.navigate', { url: `${ordersBase}/web/account/orders` });
+    await page.wait(repeatReady);
+    await page.click(selector(repeatId));
+    await page.wait(exists('reorder-price-summary'));
+    const content = await page.evaluate(`document.querySelector('[data-testid="reorder-price-summary"]').textContent`);
+    assert.match(content, /Цена не изменилась/);
+    assert.match(content, /Цена снизилась/);
+    assert.doesNotMatch(content, /Цена выросла/);
+    assert.match(content.replace(/\s/g, ''), /Разница:−100,00₽/);
+    assert.equal((await cartItems(page))[0].quantity, quantity);
+    assert.equal(await page.evaluate('document.documentElement.scrollWidth > innerWidth'), false);
+    await reviewAndOpenCart(page);
+  });
+}
+
+test('cart conflicts stay excluded from the price summary and do not change the existing item', async context => {
+  const { page } = await ordersPage(browser, context);
+  await page.send('Page.navigate', { url: `${ordersBase}/web/account/orders` });
+  await page.wait(repeatReady);
+  await page.evaluate(`localStorage.setItem('dgs-web-cart', JSON.stringify({state: {items: [
+    {productId: 'test-cheese', productName: 'Incompatible cart cheese', unit: 'шт', quantity: 2, price: '99'}
+  ]}, version: 0}))`);
+  await page.send('Page.reload');
+  await page.wait(repeatReady);
+  await page.click(selector(repeatId));
+  await page.wait(exists('reorder-review'));
+  assert.match(await page.evaluate(text), /Сначала проверьте количество/);
+  const totals = await page.evaluate(`document.querySelector('[data-testid="reorder-product-totals"]').textContent.replace(/\\s/g, '')`);
+  assert.match(totals, /Было:500,00₽Сейчас:600,00₽Разница:\+100,00₽/);
+  assert.equal((await cartItems(page))[0].price, '99');
+});
+
 test('partially unavailable repeat adds available products and explains each skipped product', async context => {
   const { page } = await ordersPage(browser, context, { reorderPreview: {
-    items: [{ ...customerOrder.items[0], price: '2500.00', priceChanged: true }],
+    items: buildReorderPreview([customerOrder.items[0]], [{
+      id: 'test-cheese', name: 'Сыр', price: '2500.00', unit: 'кг', images: [], isVisible: true, inStock: true,
+    }]).items,
     skipped: [
       { productId: 'test-salami', productName: 'Салями итальянская', reason: 'unavailable' },
       { productId: 'deleted', productName: 'Удалённый сыр', reason: 'removed' },
@@ -223,7 +284,7 @@ test('catalogue errors do not change the cart or fall back to old prices; retry 
   assert.equal(requests.filter(request => request.path.endsWith('/reorder')).length, 1);
   state.reorderFailure = false;
   await page.click(selector(repeatId));
-  await page.wait(`location.pathname === '/web/cart'`);
+  await reviewAndOpenCart(page);
   assert.equal((await cartItems(page)).find(item => item.productId === 'test-cheese').price, '2300.00');
   assert.equal(requests.filter(request => request.path.endsWith('/reorder')).length, 2);
 });
@@ -236,7 +297,7 @@ test('rapid clicks on two repeat buttons cannot duplicate products', async conte
     document.querySelector(${JSON.stringify(selector(repeatId))}).click();
     document.querySelector(${JSON.stringify(selector(`repeat-order-${historyOrder.id}`))}).click();
   })()`);
-  await page.wait(`location.pathname === '/web/cart'`);
+  await reviewAndOpenCart(page);
   assert.equal(requests.filter(request => request.path.endsWith('/reorder')).length, 1);
   assert.equal((await cartItems(page))[0].quantity, 0.735);
 });

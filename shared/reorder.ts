@@ -16,9 +16,22 @@ export interface ReorderSkippedItem {
   reason: ReorderSkipReason;
 }
 export interface ReorderPreview {
-  items: (ReorderCartItem & { priceChanged: boolean })[];
+  items: ReorderPreviewItem[];
   skipped: ReorderSkippedItem[];
 }
+export interface ReorderPriceComparison {
+  oldPrice: number | null;
+  newPrice: number;
+  unit: string;
+  oldTotal: number | null;
+  newTotal: number;
+  difference: number | null;
+  status: 'increased' | 'decreased' | 'unchanged' | 'unknown';
+}
+export type ReorderPreviewItem = ReorderCartItem & {
+  priceChanged: boolean;
+  comparison: ReorderPriceComparison;
+};
 export interface ReorderCatalogProduct {
   id: string;
   name: string;
@@ -68,6 +81,35 @@ function validPrice(price: string) {
   return price.trim().length > 0 && Number.isFinite(Number(price)) && Number(price) >= 0;
 }
 
+const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+/** Compare the same physical quantity, using kg for both gram and kg prices. */
+function comparePrices(source: Record<string, unknown>, product: ReorderCatalogProduct, quantity: number): ReorderPriceComparison {
+  const weight = ['g', 'kg'].includes(unitKey(product.unit));
+  const oldPriceValid = ['string', 'number'].includes(typeof source.price) && validPrice(String(source.price));
+  const oldPrice = oldPriceValid
+    ? Number(source.price) * (unitKey(String(source.unit)) === 'g' ? 1000 : 1)
+    : null;
+  const newPrice = Number(product.price) * (unitKey(product.unit) === 'g' ? 1000 : 1);
+  const oldTotal = oldPrice === null ? null : money(Number(source.price) * Number(source.quantity));
+  const newTotal = money(Number(product.price) * quantity);
+  // Unit prices may have fractions of a kopek (e.g. sales by gram).
+  const priceDifference = oldPrice === null ? null : Math.round((newPrice - oldPrice) * 1e6) / 1e6;
+  return {
+    oldPrice, newPrice, unit: weight ? 'кг' : product.unit,
+    oldTotal, newTotal, difference: oldTotal === null ? null : money(newTotal - oldTotal),
+    status: priceDifference === null ? 'unknown' : priceDifference > 0 ? 'increased' : priceDifference < 0 ? 'decreased' : 'unchanged',
+  };
+}
+
+/** Only totals for the repeated products, never historical delivery or discounts. */
+export function summarizeReorderPrices(items: ReorderPreviewItem[]) {
+  const newTotal = money(items.reduce((sum, item) => sum + item.comparison.newTotal, 0));
+  const oldTotal = items.some(item => item.comparison.oldTotal === null)
+    ? null : money(items.reduce((sum, item) => sum + item.comparison.oldTotal!, 0));
+  return { oldTotal, newTotal, difference: oldTotal === null ? null : money(newTotal - oldTotal) };
+}
+
 export function buildReorderPreview(value: unknown, catalogue: ReorderCatalogProduct[]): ReorderPreview {
   const byId = new Map(catalogue.map(product => [product.id, product]));
   const result: ReorderPreview = { items: [], skipped: [] };
@@ -86,10 +128,12 @@ export function buildReorderPreview(value: unknown, catalogue: ReorderCatalogPro
     }
     const quantity = convertReorderQuantity(Number(source.quantity), source.unit, product.unit);
     if (quantity === null) { skip('unit_changed'); continue; }
+    const comparison = comparePrices(source, product, quantity);
     result.items.push({
       productId: product.id, productName: product.name, price: product.price,
       unit: product.unit, quantity, image: product.images?.[0],
-      priceChanged: Number(source.price) !== Number(product.price),
+      priceChanged: comparison.status !== 'unchanged',
+      comparison,
     });
   }
   return result;

@@ -1,3 +1,5 @@
+import { tsImport } from 'tsx/esm/api';
+export const { buildReorderPreview } = await tsImport('../../shared/reorder.ts', import.meta.url);
 export const ordersBase = `https://${process.env.REPLIT_DEV_DOMAIN}`;
 export const customerOrder = {
   id: 'test-order-cb7780', status: 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ',
@@ -55,13 +57,11 @@ export async function ordersPage(browser, context, {
       status = state.reorderFailure ? 503 : order ? 200 : 404;
       body = state.reorderFailure ? { error: 'Каталог временно недоступен' }
         : !order ? { error: 'Заказ не найден' }
-        : state.reorderPreview ?? {
-          items: order.items.map((item, index) => ({
-            ...item, productName: `${item.productName} — актуальный каталог`,
-            price: index === 0 ? '2300.00' : '600.00', priceChanged: true,
-          })),
-          skipped: [],
-        };
+        : state.reorderPreview ?? buildReorderPreview(order.items, order.items.map((item, index) => ({
+          id: item.productId, name: `${item.productName} — актуальный каталог`,
+          price: index === 0 ? '2300.00' : '600.00', unit: item.unit,
+          images: [], isVisible: true, inStock: true,
+        })));
     } else if (path.startsWith('/web-api/orders/')) {
       body = orders.find(order => order.id === path.split('/').pop());
       status = body ? 200 : 404;

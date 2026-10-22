@@ -5,11 +5,12 @@ import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import type { ReorderPreview, ReorderSkipReason, ReorderSkippedItem } from '@shared/reorder';
+import type { ReorderPreview, ReorderPreviewItem, ReorderSkipReason, ReorderSkippedItem } from '@shared/reorder';
 import { useWebAuth } from '../../hooks/useWebAuth';
 import { useWebCart } from '../../hooks/useWebCart';
 import { webApi } from '../../lib/webApi';
 import { getOrderReference } from './order-view';
+import { ReorderPriceSummary } from './ReorderPriceSummary';
 
 const reasons: Record<ReorderSkipReason, string> = {
   removed: 'Товар больше не продаётся',
@@ -25,7 +26,7 @@ export function RepeatOrderButton({ orderId }: { orderId: string }) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const client = useQueryClient();
-  const [review, setReview] = useState<{ addedCount: number; skipped: ReorderSkippedItem[] } | null>(null);
+  const [review, setReview] = useState<{ owner: string; items: ReorderPreviewItem[]; addedCount: number; skipped: ReorderSkippedItem[] } | null>(null);
   const mutationKey = ['web-repeat-order', user?.id];
   const pending = useIsMutating({ mutationKey }) > 0;
   const mutation = useMutation({
@@ -40,18 +41,13 @@ export function RepeatOrderButton({ orderId }: { orderId: string }) {
         return;
       }
       const { addedCount, skipped } = useWebCart.getState().addReorderItems(
-        data.items.map(({ priceChanged: _changed, ...item }) => item),
+        data.items.map(({ priceChanged: _changed, comparison: _comparison, ...item }) => item),
       );
       const allSkipped = [...data.skipped, ...skipped];
-      if (allSkipped.length || addedCount === 0) {
-        setReview({ addedCount, skipped: allSkipped });
-        return;
-      }
-      toast({
-        title: 'Товары добавлены в корзину',
-        description: 'Применены текущие цены каталога. Проверьте корзину перед оформлением.',
+      setReview({
+        owner: variables.owner, addedCount, skipped: allSkipped,
+        items: data.items.filter(item => !skipped.some(excluded => excluded.productId === item.productId)),
       });
-      setLocation('/web/cart');
     },
     onError: error => toast({
       title: 'Не удалось повторить заказ',
@@ -79,16 +75,18 @@ export function RepeatOrderButton({ orderId }: { orderId: string }) {
           : <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />}
         {pending ? 'Добавляем…' : 'Повторить заказ'}
       </Button>
-      <Dialog open={review !== null} onOpenChange={open => { if (!open) setReview(null); }}>
+      <Dialog open={review !== null && isAuthenticated && review.owner === user?.id} onOpenChange={open => { if (!open) setReview(null); }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto" data-testid="reorder-review">
           <DialogHeader>
-            <DialogTitle>{review?.addedCount ? 'Заказ повторён частично' : 'Нет товаров для повторения заказа'}</DialogTitle>
+            <DialogTitle>{review?.addedCount ? (review.skipped.length ? 'Заказ повторён частично' : 'Товары добавлены в корзину') : 'Нет товаров для повторения заказа'}</DialogTitle>
             <DialogDescription>
               {review?.addedCount
-                ? 'Доступные товары добавлены в корзину по текущим ценам. Остальные позиции не добавлены:'
+                ? 'Доступные товары добавлены в корзину по текущим ценам. Проверьте изменения перед оформлением.'
                 : 'Корзина не изменена. Товары из этого заказа сейчас нельзя добавить.'}
             </DialogDescription>
           </DialogHeader>
+          {!!review?.items.length && <ReorderPriceSummary items={review.items} />}
+          {!!review?.skipped.length && <p className="text-sm font-medium">Не добавлены:</p>}
           <ul className="space-y-3 text-sm">
             {review?.skipped.map((item, index) => (
               <li key={`${item.productId}-${index}`} className="break-words">
