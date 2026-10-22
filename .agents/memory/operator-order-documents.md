@@ -14,3 +14,9 @@ Both the packing list and the internal box label must contain the order QR, with
 **Why:** The user wants these codes scanned when dispatching parcels. The QR identifies the order; it is not a carrier tracking or shipping label.
 
 **How to apply:** Keep the same complete order identifier in both QR payloads and the human-readable text; a scan should work in order search. A4 and 100 × 150 mm are initial paper defaults, not confirmed customer-printer specifications. Do not infer successful physical printing from opening a browser print dialog.
+
+The operator also needs a separate complete order printout including prices and totals; it must not replace the price-free packing list or the box label.
+
+**Why:** The user explicitly requested printing the complete order with prices and totals.
+
+**How to apply:** Use the saved order prices and authoritative order total, not current catalogue prices. Keep customer-paid shipping explicitly separate from the goods payment, consistent with the existing checkout model.

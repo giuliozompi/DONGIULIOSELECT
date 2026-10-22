@@ -32,7 +32,7 @@ export function registerAdminOrderOperatorRoutes(
   app.get(`${path}/print`, ...guards, async (req: Request, res: Response) => {
     try {
       const { format } = z.object({
-        format: z.enum(['packing-list', 'label']),
+        format: z.enum(['packing-list', 'label', 'order-summary']),
       }).parse(req.query);
       const order = await storage.getOrderById(req.params.id);
       if (!order) return res.status(404).json({ error: 'Заказ не найден.' });

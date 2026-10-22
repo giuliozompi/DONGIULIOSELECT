@@ -1,4 +1,5 @@
 import { webApi, getAccessToken, tryRefresh } from '../../lib/webApi';
+import type { AdminPrintFormat } from '../../../lib/printAdminOrder';
 
 const A = '/admin';
 
@@ -70,7 +71,7 @@ export const adminApi = {
     webApi.patch<any>(`${A}/orders/${encodeURIComponent(id)}/payment-method`, { paymentMethod }),
   getOrderLogs: (id: string) =>
     webApi.get<any[]>(`${A}/orders/${encodeURIComponent(id)}/logs`),
-  getOrderPrint: (id: string, format: 'packing-list' | 'label') =>
+  getOrderPrint: (id: string, format: AdminPrintFormat) =>
     webApi.get<{ html: string }>(`${A}/orders/${encodeURIComponent(id)}/print?format=${format}`),
   updateOrderStatus: (id: string, status: string) =>
     webApi.patch<any>(`${A}/orders/${id}/status`, { status }),

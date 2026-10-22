@@ -143,14 +143,17 @@ test('each print action requests the fresh authenticated document for its own pa
   await page.wait('window.fixturePrintWindows[0]?.printed===1');
   await page.click('[data-testid="button-print-order-label"]');
   await page.wait('window.fixturePrintWindows[1]?.printed===1');
-  assert.deepEqual(live.prints, ['packing-list', 'label']);
+  await page.click('[data-testid="button-print-order-summary"]');
+  await page.wait('window.fixturePrintWindows[2]?.printed===1');
+  assert.deepEqual(live.prints, ['packing-list', 'label', 'order-summary']);
   const documents = await page.evaluate('window.fixturePrintWindows');
   assert.match(documents[0].html, /packing-list/);
   assert.match(documents[1].html, /label/);
+  assert.match(documents[2].html, /order-summary/);
   assert.ok(documents.every(doc => doc.html.includes(A)));
 });
 
-test('Telegram admin offers the same payment change, history, and two print formats', async context => {
+test('Telegram admin offers the same payment change, history, and three print formats', async context => {
   const { page, live } = await fixture(context, { telegram: true });
   await page.send('Page.navigate', { url: `${base}/admin?section=orders` });
   try {
@@ -180,7 +183,26 @@ test('Telegram admin offers the same payment change, history, and two print form
   await page.wait('window.fixturePrintWindows[0]?.printed===1');
   await page.click('[data-testid="button-print-order-label"]');
   await page.wait('window.fixturePrintWindows[1]?.printed===1');
-  assert.deepEqual(live.prints, ['packing-list', 'label']);
+  await page.click('[data-testid="button-print-order-summary"]');
+  await page.wait('window.fixturePrintWindows[2]?.printed===1');
+  assert.deepEqual(live.prints, ['packing-list', 'label', 'order-summary']);
+});
+
+test('Telegram order viewer also opens the complete priced order through the print helper', async context => {
+  const { page, live } = await fixture(context, { telegram: true });
+  await page.send('Page.navigate', { url: `${base}/admin?section=orders` });
+  await page.wait(`!!document.querySelector('[data-testid="button-view-order-${A}"]')`);
+  await page.click(`[data-testid="button-view-order-${A}"]`);
+  await page.wait('!!document.querySelector(\'[data-testid="dialog-order-view"] [data-testid="button-print-order-summary"]\')');
+  await page.evaluate(`window.fixturePrintWindows=[]; window.open=()=>{
+    const output={html:'',printed:0};window.fixturePrintWindows.push(output);
+    return {document:{open(){output.html=''},write(html){output.html+=html},close(){}},
+      focus(){},print(){output.printed++},closed:false};
+  }`);
+  await page.click('[data-testid="dialog-order-view"] [data-testid="button-print-order-summary"]');
+  await page.wait('window.fixturePrintWindows[0]?.printed===1');
+  assert.deepEqual(live.prints, ['order-summary']);
+  assert.match(await page.evaluate('window.fixturePrintWindows[0].html'), /order-summary/);
 });
 
 test('Telegram admin shows the server reason when a payment already exists', async context => {

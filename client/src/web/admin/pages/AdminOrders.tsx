@@ -288,6 +288,7 @@ export default function AdminOrders() {
                 <Button variant="outline" data-testid="button-print-packing-list" onClick={() => startPrint('packing-list')}><Printer className="h-4 w-4 mr-2" />Лист комплектации · A4</Button>
                 <Button variant="outline" data-testid="button-print-order-label" disabled={['УДАЛЕНО', 'ВОЗВРАТ'].includes(o.status)}
                   onClick={() => startPrint('label')}><Printer className="h-4 w-4 mr-2" />Этикетка · 100 × 150 мм</Button>
+                <Button variant="outline" data-testid="button-print-order-summary" onClick={() => startPrint('order-summary')}><Printer className="h-4 w-4 mr-2" />Заказ с ценами · A4</Button>
               </CardContent>
             </Card>
 

@@ -159,6 +159,9 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
                 disabled={['УДАЛЕНО', 'ВОЗВРАТ'].includes(order.status)}>
                 <Printer className="w-4 h-4 mr-2" />Этикетка · 100 × 150 мм
               </Button>
+              <Button onClick={() => handlePrint('order-summary')} variant="outline" size="sm" data-testid="button-print-order-summary">
+                <Printer className="w-4 h-4 mr-2" />Заказ с ценами · A4
+              </Button>
             </div>
           </div>
         </DialogHeader>

@@ -201,3 +201,61 @@ test('a voided order has no shipping label; invalid quantities never print silen
   await assert.rejects(renderOrderPrintDocument({ ...sample, status: 'УДАЛЕНО' }, 'label'));
   await assert.rejects(renderOrderPrintDocument({ ...sample, items: [{ ...sample.items[0], quantity: NaN }] }, 'packing-list'));
 });
+
+test('complete A4 order prints saved unit prices, weighed line totals, all discounts and authoritative total', async () => {
+  const html = await renderOrderPrintDocument({
+    ...sample, amount: '1150.00', discount: '50.00', paymentMethod: 'cash_on_delivery',
+    customerPhone: '+7 fixture <phone>', customerEmail: '<script>@example.invalid',
+    createdAt: new Date('2026-10-22T10:00:00Z'), customerPaysShipping: true, deliveryCost: '250.00',
+  }, 'order-summary');
+  const plain = html.replace(/\s/g, ' ');
+  assert.match(html, /@page { size: A4/);
+  assert.match(html, /Заказ с ценами/);
+  assert.match(html, /Цена за единицу/);
+  assert.match(html, /0,735 кг/);
+  assert.match(plain, /1 200,00 ₽ \/ кг/);
+  assert.match(plain, /882,00 ₽/);
+  assert.match(plain, /400,00 ₽/);
+  assert.match(plain, /1 282,00 ₽/);
+  assert.match(plain, /−132,00 ₽/); // Includes all discounts, not just the admin's 50 ₽.
+  assert.match(plain, /Итого по заказу<\/span><strong>1 150,00 ₽/);
+  assert.match(plain, /Доставка \(оплачивается отдельно\)<\/span><strong>250,00 ₽/);
+  assert.match(plain, /Общая стоимость с доставкой<\/span><strong>1 400,00 ₽/);
+  assert.match(html, /Наличными при получении/);
+  assert.match(html, /13:00:00 \(МСК\)/);
+  assert.match(html, /&lt;phone&gt;/);
+  assert.match(html, /&lt;script&gt;@example.invalid/);
+  assert.match(html, /Не является кассовым чеком/);
+  assert.match(html, new RegExp(`class="full-id">${A}`));
+  assert.ok(!html.includes('<script>@'));
+});
+
+test('complete order does not add merchant-paid shipping and retains zero-priced items', async () => {
+  const html = await renderOrderPrintDocument({
+    ...sample, amount: '0.00', paymentMethod: 'yookassa', customerPaysShipping: false,
+    deliveryCost: '500.00', items: [{ ...sample.items[0], price: '0.00' }],
+  }, 'order-summary');
+  assert.match(html, /Итого по заказу<\/span><strong>0,00 ₽/);
+  assert.ok(!html.includes('500,00'));
+  assert.ok(!html.includes('Общая стоимость с доставкой'));
+});
+
+test('unknown shipping and an upward adjustment never manufacture a discount or delivery price', async () => {
+  const html = await renderOrderPrintDocument({
+    ...sample, amount: '1300.00', customerPaysShipping: true, deliveryCost: null,
+  }, 'order-summary');
+  assert.match(html, /Корректировка суммы заказа<\/span><strong>\+18,00 ₽/);
+  assert.match(html, /Стоимость доставки ещё не определена/);
+  assert.ok(!html.includes('Скидки, бонусы'));
+});
+
+test('invalid financial data fails explicitly instead of printing NaN or a guessed total', async () => {
+  for (const amount of ['invalid', '-1.00', 'Infinity', '12.345']) {
+    await assert.rejects(renderOrderPrintDocument({ ...sample, amount }, 'order-summary'));
+  }
+  await assert.rejects(renderOrderPrintDocument({
+    ...sample, amount: '100.00', items: [{ ...sample.items[0], price: 'bad-price' }],
+  }, 'order-summary'));
+  const packing = await renderOrderPrintDocument({ ...sample, amount: '1150.00' }, 'packing-list');
+  assert.ok(!packing.includes('Цена за единицу'));
+});

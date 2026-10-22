@@ -1812,6 +1812,7 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
               <Button type="button" data-testid="button-print-packing-list" variant="outline" size="sm" onClick={() => startOrderPrint('packing-list')}><Printer className="w-4 h-4 mr-2" />Лист комплектации · A4</Button>
               <Button type="button" data-testid="button-print-order-label" variant="outline" size="sm" disabled={['УДАЛЕНО', 'ВОЗВРАТ'].includes(displayOrder.status)}
                 onClick={() => startOrderPrint('label')}><Printer className="w-4 h-4 mr-2" />Этикетка · 100 × 150 мм</Button>
+              <Button type="button" data-testid="button-print-order-summary" variant="outline" size="sm" onClick={() => startOrderPrint('order-summary')}><Printer className="w-4 h-4 mr-2" />Заказ с ценами · A4</Button>
             </div>
           </div>
 

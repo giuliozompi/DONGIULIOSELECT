@@ -1,4 +1,4 @@
-export type AdminPrintFormat = 'packing-list' | 'label';
+export type AdminPrintFormat = 'packing-list' | 'label' | 'order-summary';
 
 /**
  * Open the window during the click gesture, before awaiting the API, so browsers
@@ -11,7 +11,11 @@ export async function printAdminOrder(
   const popup = window.open('', '_blank');
   if (!popup) throw new Error('Разрешите всплывающие окна для печати заказа.');
 
-  const documentLabel = format === 'packing-list' ? 'листа комплектации A4' : 'этикетки 100 × 150 мм';
+  const documentLabel = format === 'packing-list'
+    ? 'листа комплектации A4'
+    : format === 'order-summary'
+      ? 'заказа с ценами A4'
+      : 'этикетки 100 × 150 мм';
   popup.document.open();
   popup.document.write(
     `<!doctype html><html lang="ru"><meta charset="utf-8"><title>Подготовка печати</title><body style="font:16px sans-serif;padding:24px">Подготовка ${documentLabel}…</body></html>`,
