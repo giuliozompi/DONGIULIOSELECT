@@ -27,7 +27,7 @@ async function openWishlist(context, { unit = 'кг', quantity = 0, inStock = tr
   await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `
     if (!sessionStorage.getItem('cart-seeded')) {
       localStorage.setItem('dgs-web-cart', ${JSON.stringify(JSON.stringify({
-        state: { items, itemCount: items.length, subtotal: items.reduce((s, i) => s + Number(i.price) * i.quantity, 0) },
+        state: { items, itemCount: items.length, subtotal: items.reduce((s, i) => s + Number(i.price) * i.quantity, 0), repeatedOrders: {} },
         version: 0,
       }))});
       sessionStorage.setItem('cart-seeded', 'yes');
@@ -88,20 +88,24 @@ test('unavailable favourite cannot change the cart', async context => {
   assert.deepEqual(await readCart(page), cart);
 });
 
-for (const unit of ['кг', 'шт']) {
+for (const unit of ['кг', 'kg', ' КГ ', ' KG ', 'шт', 'уп', ' ШТ ', ' УП ']) {
   test(`${unit}: wishlist, catalog and product detail increment the same cart item`, async context => {
+    const weighted = ['кг', 'kg'].includes(unit.trim().toLowerCase());
     const page = await openWishlist(context, { unit });
     await page.click(add);
     await page.send('Page.navigate', { url: `${wishlistBase}/web/catalog` });
     const card = `[data-testid="card-product-${product.id}"]`;
     await page.wait(`!!document.querySelector(${JSON.stringify(card)})`);
     await page.click(`[data-testid="button-increase-cart-${product.id}"]`);
-    assert.equal((await readCart(page)).items.find(i => i.productId === product.id).quantity, unit === 'кг' ? 0.3 : 2);
+    assert.equal((await readCart(page)).items.find(i => i.productId === product.id).quantity, weighted ? 0.3 : 2);
     await page.send('Page.navigate', { url: `${wishlistBase}/web/product/${product.slug}` });
     await page.wait(`!!document.querySelector('[data-testid="button-qty-plus"]')`);
     await page.click('[data-testid="button-qty-plus"]');
     const cart = await readCart(page);
-    assert.equal(cart.items.find(i => i.productId === product.id).quantity, unit === 'кг' ? 0.4 : 3);
+    assert.equal(cart.items.find(i => i.productId === product.id).quantity, weighted ? 0.4 : 3);
+    assert.equal(cart.items.filter(i => i.productId === product.id).length, 1);
+    assert.equal(cart.itemCount, 2);
+    assert.equal(cart.subtotal, 1050 + Number(product.price) * (weighted ? 0.4 : 3));
     assert.deepEqual(cart.items.find(i => i.productId === unrelated.productId), unrelated);
   });
 }
@@ -146,6 +150,7 @@ async function assertDecrementState(page, surface, original, quantity) {
     items: quantity > 0 ? [unrelated, { ...original, quantity }] : [unrelated],
     itemCount: quantity > 0 ? 2 : 1,
     subtotal: 1050 + Number(original.price) * quantity,
+    repeatedOrders: {},
   });
   assert.equal(await page.evaluate('location.pathname'), controls.path, 'Minus must not open the product card');
   return cart;
