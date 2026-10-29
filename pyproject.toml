@@ -1,0 +1,11 @@
+[project]
+name = "order-print-tests"
+version = "0.1.0"
+description = "PDF pagination regression checks for synthetic order documents"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.4.6",
+    "pymupdf>=2.0",
+    "zxing-cpp>=3.1.1",
+]
+
