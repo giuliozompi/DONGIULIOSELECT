@@ -31,4 +31,10 @@ La carta dei formaggi deve includere un prezzo rilevato su Internet e consentire
 
 **Why:** The user explicitly requested market-price information and administrator moderation of user contributions.
 
-**How to apply:** Include Internet price observations and user-submitted price observations in the editorial roadmap. Do not publish user price submissions without administrator approval. Market coverage and any automated price-research service still need to be defined; this request does not authorize all later public features or release steps.
+**How to apply:** Include Internet price observations and user-submitted price observations in the editorial roadmap. Do not publish user price submissions without administrator approval. Any automated price-research service still needs to be defined; this request does not authorize all later public features or release steps.
+
+Le rilevazioni dei prezzi devono coprire «Russia e altri paesi».
+
+**Why:** The user explicitly selected international coverage rather than Russia only.
+
+**How to apply:** Preserve country and original currency when designing price observations; do not restrict the feature to Russian-market prices.
