@@ -112,6 +112,12 @@ async function openPage(context, {
       }
     } else if (path.endsWith('/auth/refresh')) {
       const response = refreshResponses.shift();
+      if (response?.networkError) {
+        await page.send('Fetch.failRequest', {
+          requestId: event.requestId, errorReason: 'Failed',
+        });
+        return;
+      }
       status = response ? response.status : authenticated ? 200 : 401;
       body = response ? response.body
         : authenticated ? { accessToken: 'test-token', user: currentUser } : { error: 'Not signed in' };
@@ -835,12 +841,18 @@ for (const mobile of [false, true]) {
 for (const scenario of [
   { name: 'refresh succeeds and deletion succeeds', refreshStatus: 200 },
   { name: 'refresh fails', refreshStatus: 401, error: 'Сессия истекла' },
+  { name: 'refresh is unavailable', refreshStatus: 503, error: 'Сессия истекла' },
+  { name: 'refresh returns 200 without an access token', refreshStatus: 200,
+    refreshResponse: { status: 200, body: { user: profile } }, error: 'Сессия истекла' },
+  { name: 'refresh has a network failure',
+    refreshResponse: { networkError: true }, error: 'Сессия истекла' },
   { name: 'refresh succeeds but deletion fails', refreshStatus: 200,
     retryStatus: 500, error: 'Не удалось удалить адрес' },
   { name: 'refresh succeeds but deletion is still unauthorized', refreshStatus: 200,
     retryStatus: 401, error: 'Сессия истекла' },
 ]) {
   test(`expired session during address deletion: ${scenario.name}`, async context => {
+    const refreshSucceeds = scenario.refreshStatus === 200 && !scenario.refreshResponse;
     const { page, requests, savedAddresses, releaseAddressDelete } = await openPage(context, {
       authenticated: true, initialAddresses: [homeAddress, officeAddress], holdAddressDelete: true,
       addressDeleteResponses: [
@@ -851,7 +863,7 @@ for (const scenario of [
       refreshResponses: [
         // Session restoration on page load must succeed before it expires on DELETE.
         { status: 200, body: { accessToken: 'test-token', user: profile } },
-        { status: scenario.refreshStatus, body: scenario.refreshStatus === 200
+        scenario.refreshResponse ?? { status: scenario.refreshStatus, body: refreshSucceeds
           ? { accessToken: 'test-refreshed-token', user: profile }
           : { error: 'Refresh session expired' } },
       ],
@@ -888,15 +900,15 @@ for (const scenario of [
       ['POST', '/web-api/auth/refresh'],
       ['DELETE', '/web-api/addresses/home'],
       ['POST', '/web-api/auth/refresh'],
-      ...(scenario.refreshStatus === 200 ? [['DELETE', '/web-api/addresses/home']] : []),
+      ...(refreshSucceeds ? [['DELETE', '/web-api/addresses/home']] : []),
     ]);
     const deletions = lifecycle.filter(r => r.method === 'DELETE');
     assert.equal(deletions[0].authorization, 'Bearer test-token');
-    if (scenario.refreshStatus === 200) {
+    if (refreshSucceeds) {
       assert.equal(deletions[1].authorization, 'Bearer test-refreshed-token');
     }
     assert.equal(await page.evaluate(`sessionStorage.getItem('dgs_web_access_token')`),
-      scenario.refreshStatus === 200 ? 'test-refreshed-token' : null);
+      refreshSucceeds ? 'test-refreshed-token' : null);
   });
 }
 
