@@ -5,7 +5,10 @@ import { ArrowLeft, ArrowRight, ExternalLink, Globe2, MapPin, Play, Search, Shop
 import { editorialPublicApi, type PublicCheese, type PublicCheeseSummary, type PublicMarketPrice, type PublicVideo } from './editorialPublicApi';
 import { webApi } from '../lib/webApi';
 import { useWebCart } from '../hooks/useWebCart';
+import { useWebAuth } from '../hooks/useWebAuth';
 import { getCartQuantityRules } from '@shared/order-quantity';
+import CheesePriceSubmissions from './CheesePriceSubmissions';
+import './cheese-price-submissions.css';
 import './editorial.css';
 
 const PAGE_SIZE = 12;
@@ -282,6 +285,7 @@ function PriceRows({ prices }: { prices: PublicMarketPrice[] }) {
 }
 export function CheeseDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const priceSubmissionOwner = useWebAuth(state => state.isAuthenticated ? state.user?.id ?? 'guest' : 'guest');
   const [pricePage, setPricePage] = useState(1);
   const cheeseQuery = useQuery({ queryKey: ['/web-api/editorial/cheese', id], queryFn: () => editorialPublicApi.cheese(id!), enabled: !!id });
   const pricesQuery = useQuery({ queryKey: ['/web-api/editorial/cheese-prices', id, pricePage], queryFn: () => editorialPublicApi.prices(id!, pricePage, 10), enabled: !!id });
@@ -305,6 +309,7 @@ export function CheeseDetailPage() {
             <section className="ed-section"><div className="ed-kicker">Проверяемые материалы</div><h2>Источники</h2>{cheese.sources.length ? <ul className="ed-sources">{cheese.sources.map(url => <li key={url}><SourceLink href={url}>{url}</SourceLink></li>)}</ul> : <Empty>Источники не указаны.</Empty>}</section>
             <section className="ed-section"><div className="ed-kicker">Отдельные наблюдения</div><h2>Рыночные цены</h2><p className="ed-muted">Информационные данные, не цены и не наличие товаров в каталоге. Каждое наблюдение показывается отдельно.</p>
               {pricesQuery.isLoading ? <div className="ed-loading">Загружаем наблюдения…</div> : pricesQuery.isError ? <ErrorBox error={pricesQuery.error} retry={() => pricesQuery.refetch()} /> : priceData && priceData.items.length ? <><PriceRows prices={priceData.items} /><Pager page={priceData.page} total={priceData.total} limit={priceData.limit} onPage={setPricePage} /></> : <Empty>Одобренных наблюдений цен пока нет.</Empty>}
+              <CheesePriceSubmissions key={`${id}:${priceSubmissionOwner}`} cheeseId={id!} />
             </section>
           </div>
           <aside className="ed-product-aside"><div className="ed-kicker">Товары каталога</div><h2>В наличии в магазине</h2><p>Это текущие товары российского каталога, не подтверждение происхождения сыра.</p>{cheese.products.length ? cheese.products.map(item => <ProductPurchase item={item} key={item.id} />) : <Empty>Связанных товаров каталога нет.</Empty>}</aside>

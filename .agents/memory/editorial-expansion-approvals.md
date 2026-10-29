@@ -50,3 +50,16 @@ an already reviewed article.
 **How to apply:** Preserve explicit publish/replace/withdraw actions when extending
 the editorial workflow, including later AI-assisted drafts. Release to Timeweb
 is another approval boundary, not an effect of publishing an individual article.
+
+Customer price contributions are limited to signed-in accounts, one submission
+per 60 seconds and ten over a rolling 24 hours across all cheeses. Repeated
+identical observations from the same account are blocked for 24 hours.
+
+**Why:** The user approved these anti-abuse limits as part of the customer
+price-submission phase; they must not reset when operators correct or remove
+an observation.
+
+**How to apply:** Count original submission events independently of editable
+editorial entries. Keep submissions pending until staff approval, preserve the
+original owner-only history, and never expose internal moderation notes or
+change catalogue selling prices from a contribution.

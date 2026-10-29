@@ -11,6 +11,9 @@ import type { Server } from 'node:http';
 import { saveEditorial, deleteEditorial, moderateEditorial, listEditorial, EditorialError } from '../server/services/editorial';
 import { registerAdminEditorialRoutes } from '../server/adminEditorialRoutes';
 import { registerPublicEditorialRoutes } from '../server/publicEditorialRoutes';
+import { registerPriceSubmissionRoutes } from '../server/priceSubmissionRoutes';
+import { submitPrice, ownPriceSubmissions, PriceSubmissionLimitError } from '../server/services/price-submissions';
+import { priceSubmissionSchema } from '../shared/price-submissions';
 import { changePublication } from '../server/services/editorial-publication';
 import { publicEditorialList, publicCheeseDetail, publicCheesePrices, publicVideoDetail } from '../server/services/public-editorial';
 import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg, type CheeseData, type PriceData } from '../shared/editorial';
@@ -37,7 +40,8 @@ before(async () => {
     '-o', `-F -k ${directory} -h ''`, '-w', 'start']);
   started = true;
   database = new pg.Pool({ host: directory, port: 5432, user: 'editorial_test', database: 'postgres', max: 10 });
-  await database.query(`CREATE TABLE products(id varchar PRIMARY KEY, price numeric NOT NULL DEFAULT 100,
+  await database.query(`CREATE TABLE web_users(id varchar PRIMARY KEY);
+    CREATE TABLE products(id varchar PRIMARY KEY, price numeric NOT NULL DEFAULT 100,
       name text DEFAULT 'Test product',slug text DEFAULT 'test-product',images text[] DEFAULT '{}',
       price_old numeric,unit text DEFAULT 'кг',in_stock boolean DEFAULT true,is_visible boolean DEFAULT true,
       description_short text);
@@ -46,6 +50,7 @@ before(async () => {
       entity_type text NOT NULL, entity_id varchar, action_data jsonb NOT NULL, created_at timestamptz DEFAULT now());`);
   await database.query(await readFile('migrations/editorial-admin.sql', 'utf8'));
   await database.query(await readFile('migrations/editorial-publication.sql', 'utf8'));
+  await database.query(await readFile('migrations/editorial-price-submissions.sql', 'utf8'));
   const app = express();
   app.use(express.json());
   registerAdminEditorialRoutes(app, [
@@ -53,6 +58,10 @@ before(async () => {
     (req, res, next) => req.headers.authorization === 'test-admin' ? next() : void res.status(403).json({ error: 'admin' }),
   ], () => 'operator-test', database);
   registerPublicEditorialRoutes(app, database);
+  registerPriceSubmissionRoutes(app,
+    (req, res, next) => req.headers.authorization ? next() : void res.status(401).json({ error: 'auth' }),
+    req => ['owner-a', 'owner-b'].includes(req.headers.authorization ?? '') ? req.headers.authorization : undefined,
+    database);
   server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as any).port}/web-api/admin/editorial`;
@@ -64,7 +73,8 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 beforeEach(async () => {
-  await database.query('TRUNCATE editorial_publications,editorial_entries,admin_action_logs,products');
+  await database.query('TRUNCATE editorial_price_submissions,editorial_publications,editorial_entries,admin_action_logs,products,web_users');
+  await database.query("INSERT INTO web_users(id) VALUES('owner-a'),('owner-b')");
   await database.query("INSERT INTO products(id) VALUES('catalogue-test')");
 });
 async function api(method: string, path = '', body?: unknown, token: string | null = 'test-admin') {
@@ -180,6 +190,19 @@ test('all editorial API methods reject guests and non-admins before work', async
 });
 
 const publicFilters = { search: '', page: 1, limit: 12 };
+const observation = (store = 'Example shop') => priceSubmissionSchema.parse({
+  price: 12.5, currency: 'EUR', country: 'Италия', store, sourceUrl: '',
+  observedOn: '2026-01-01', packageQuantity: 250, packageUnit: 'g', channel: 'shop',
+});
+async function publishedCheese() {
+  const c = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database);
+  return changePublication(c.id, c.revision, true, 'operator', database);
+}
+function submissionsApi(cheeseId: string, method: string, body?: unknown, token: string | null = 'owner-a', query = '') {
+  const url = base.replace('/admin/editorial', `/editorial/cheeses/${cheeseId}/price-submissions`);
+  return fetch(`${url}${query}`, { method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: token } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+}
 function readyCheese(): CheeseData {
   return cheeseDataSchema.parse({ ...cheese(), status: 'ready', latitude: 45, longitude: 9,
     photos: ['https://example.org/cheese.jpg'], history: 'History', characteristics: 'Characteristics',
@@ -295,6 +318,119 @@ test('publication audit failure rolls back exposure; stale/concurrent publicatio
   const publishedViaApi = await api('POST', `/${v.id}/unpublish`, { revision: v.revision });
   assert.equal(publishedViaApi.status, 200);
   assert.equal((await publishedViaApi.json()).publication, null);
+});
+test('customer prices start pending; owner history reflects moderation without exposing internal fields or editing the catalogue', async () => {
+  const c = await publishedCheese();
+  const s = await submitPrice(c.id, observation(), 'owner-a', database);
+  assert.equal(s.status, 'pending');
+  assert.equal((await publicCheesePrices(c.id, 1, 20, database)).total, 0);
+  assert.equal((await ownPriceSubmissions(c.id, 'owner-a', 1, 10, database)).total, 1);
+  assert.equal((await ownPriceSubmissions(c.id, 'owner-b', 1, 10, database)).total, 0);
+  const stored = (await listEditorial('price', 0, 10, database)).items[0];
+  assert.equal((stored.data as PriceData).sourceType, 'user');
+  const approved = await moderateEditorial(s.id, stored.revision, 'approved', 'PRIVATE_ADMIN_NOTE', 'PRIVATE_MODERATOR', database);
+  let history = await ownPriceSubmissions(c.id, 'owner-a', 1, 10, database);
+  assert.equal(history.items[0].status, 'approved');
+  assert.equal(JSON.stringify(history).includes('PRIVATE_'), false);
+  assert.equal('createdBy' in history.items[0], false);
+  assert.equal((await publicCheesePrices(c.id, 1, 20, database)).items[0].pricePerKg, 50);
+  const revised = await saveEditorial('price', { ...approved.data, price: 20 }, 'operator', approved, database);
+  history = await ownPriceSubmissions(c.id, 'owner-a', 1, 10, database);
+  assert.equal(history.items[0].data.price, 12.5, 'history retains original observation, not internal edits');
+  assert.equal(history.items[0].status, 'pending');
+  await moderateEditorial(s.id, revised.revision, 'rejected', 'PRIVATE_REJECTION', 'operator', database);
+  assert.equal((await ownPriceSubmissions(c.id, 'owner-a', 1, 10, database)).items[0].status, 'rejected');
+  assert.equal((await publicCheesePrices(c.id, 1, 20, database)).total, 0);
+  assert.equal((await database.query("SELECT price FROM products WHERE id='catalogue-test'")).rows[0].price, '100');
+});
+test('customer endpoints enforce authentication, ownership, immutable server fields and strict query/body validation', async () => {
+  const c = await publishedCheese();
+  for (const [method, suffix] of [['POST', ''], ['GET', '/mine']]) {
+    const res = await submissionsApi(c.id, method, method === 'POST' ? observation() : undefined, null, suffix);
+    assert.equal(res.status, 401);
+    assert.equal(res.headers.get('cache-control'), 'private, no-store');
+  }
+  for (const field of ['userId', 'createdBy', 'sourceType', 'notes', 'moderation', 'cheeseId', 'revision'])
+    assert.equal((await submissionsApi(c.id, 'POST', { ...observation(), [field]: 'forged' })).status, 400);
+  const res = await submissionsApi(c.id, 'POST', observation());
+  assert.equal(res.status, 201);
+  assert.equal(res.headers.get('cache-control'), 'private, no-store');
+  const mine = await submissionsApi(c.id, 'GET', undefined, 'owner-a', '/mine');
+  assert.equal((await mine.json()).total, 1);
+  const other = await submissionsApi(c.id, 'GET', undefined, 'owner-b', '/mine');
+  assert.equal((await other.json()).total, 0);
+  assert.equal((await submissionsApi(c.id, 'GET', undefined, 'owner-b', '/mine?userId=owner-a')).status, 400);
+  assert.equal((await submissionsApi(c.id, 'GET', undefined, 'owner-a', '/mine?limit=200')).status, 400);
+  assert.equal((await submissionsApi(c.id, 'POST', observation())).status, 409);
+  assert.equal((await submissionsApi(c.id, 'POST', observation(), 'owner-b')).status, 201, 'duplicates are scoped to account');
+});
+test('cooldown and rolling daily quota apply across articles and survive admin edits/deletions', async () => {
+  const a = await publishedCheese(), b = await publishedCheese();
+  const first = await submitPrice(a.id, observation(), 'owner-a', database);
+  await assert.rejects(submitPrice(b.id, observation('Other'), 'owner-a', database), e =>
+    e instanceof PriceSubmissionLimitError && e.retryAfterSeconds > 0 && e.retryAfterSeconds <= 60);
+  await database.query("UPDATE editorial_price_submissions SET created_at=now()-interval '2 hours'");
+  for (let i = 1; i < 10; i++) {
+    await submitPrice(i % 2 ? b.id : a.id, observation(`Store-${i}`), 'owner-a', database);
+    await database.query("UPDATE editorial_price_submissions SET created_at=now()-interval '2 hours'");
+  }
+  let history = await ownPriceSubmissions(a.id, 'owner-a', 1, 2, database);
+  assert.equal(history.items.length, 2);
+  assert.equal(history.total, 5);
+  assert.equal(history.limits.dailyRemaining, 0);
+  const limitResponse = await submissionsApi(b.id, 'POST', observation('Eleventh'));
+  assert.equal(limitResponse.status, 429);
+  assert.ok(Number(limitResponse.headers.get('retry-after')) > 21 * 3600);
+  const old = (await listEditorial('price', 0, 20, database)).items.find(e => e.id === first.id)!;
+  await saveEditorial('price', { ...old.data, price: 99 }, 'operator', old, database);
+  await assert.rejects(submitPrice(a.id, observation(), 'owner-a', database), expectStatus(409));
+  await database.query("DELETE FROM editorial_entries WHERE kind='price'");
+  history = await ownPriceSubmissions(a.id, 'owner-a', 1, 10, database);
+  assert.equal(history.limits.dailyRemaining, 0);
+  assert.equal(history.items.every(item => item.status === 'removed'), true);
+  await assert.rejects(submitPrice(a.id, observation('New after deletion'), 'owner-a', database), expectStatus(429));
+  await database.query("UPDATE editorial_price_submissions SET created_at=now()-interval '25 hours'");
+  await submitPrice(a.id, observation(), 'owner-a', database);
+  assert.equal((await ownPriceSubmissions(a.id, 'owner-a', 1, 20, database)).limits.dailyRemaining, 9);
+});
+test('racing repeated or distinct submissions cannot bypass duplicate and interval guards', async () => {
+  const c = await publishedCheese();
+  const same = await Promise.allSettled([submitPrice(c.id, observation(), 'owner-a', database), submitPrice(c.id, observation(), 'owner-a', database)]);
+  assert.equal(same.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(same.find(r => r.status === 'rejected')!.reason.status, 409);
+  const different = await Promise.allSettled([submitPrice(c.id, observation('First'), 'owner-b', database), submitPrice(c.id, observation('Second'), 'owner-b', database)]);
+  assert.equal(different.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(different.find(r => r.status === 'rejected')!.reason.status, 429);
+  assert.equal((await database.query('SELECT count(*)::int AS count FROM editorial_price_submissions')).rows[0].count, 2);
+});
+test('failed customer audit rolls back observation and quota; unpublished articles and missing accounts cannot submit', async () => {
+  const draft = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database);
+  await assert.rejects(submitPrice(draft.id, observation(), 'owner-a', database), expectStatus(404));
+  const c = await changePublication(draft.id, draft.revision, true, 'operator', database);
+  await assert.rejects(submitPrice(c.id, observation(), 'nonexistent', database), expectStatus(401));
+  await database.query(`CREATE FUNCTION fail_submission_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'audit unavailable'; END $$;
+    CREATE TRIGGER fail_sub_audit BEFORE INSERT ON admin_action_logs FOR EACH ROW EXECUTE FUNCTION fail_submission_audit();`);
+  try { await assert.rejects(submitPrice(c.id, observation(), 'owner-a', database)); }
+  finally { await database.query('DROP TRIGGER fail_sub_audit ON admin_action_logs; DROP FUNCTION fail_submission_audit()'); }
+  assert.equal((await ownPriceSubmissions(c.id, 'owner-a', 1, 10, database)).limits.dailyRemaining, 10);
+  assert.equal((await listEditorial('price', 0, 10, database)).total, 0);
+  await submitPrice(c.id, observation(), 'owner-a', database);
+  await changePublication(c.id, c.revision, false, 'operator', database);
+  await assert.rejects(ownPriceSubmissions(c.id, 'owner-a', 1, 10, database), expectStatus(404));
+  await assert.rejects(submitPrice(c.id, observation('New'), 'owner-a', database), expectStatus(404));
+});
+test('observations validate dates, units, source and currency; canonical duplicate detection ignores casing and key order', async () => {
+  for (const invalid of [
+    { price: 0 }, { packageQuantity: 0 }, { currency: 'XXX' }, { packageUnit: 'unknown' },
+    { observedOn: '9999-01-01' }, { observedOn: '2026-02-30' }, { channel: 'online', sourceUrl: '' },
+    { sourceUrl: 'javascript:alert(1)' }, { channel: 'online', sourceUrl: 'https://user:pass@example.org' },
+  ]) assert.equal(priceSubmissionSchema.safeParse({ ...observation(), ...invalid }).success, false);
+  const c = await publishedCheese();
+  await submitPrice(c.id, observation('Example   Shop'), 'owner-a', database);
+  const reversed = Object.fromEntries(Object.entries(observation('  example shop ')).reverse());
+  await assert.rejects(submitPrice(c.id, reversed, 'owner-a', database), expectStatus(409));
+  assert.equal((await ownPriceSubmissions(c.id, 'owner-a', 2, 10, database)).items.length, 0);
 });
 test('API validation, pagination and all success operations use real database', async () => {
   assert.equal((await api('POST', '', { kind: 'video', data: { ...video(), url: 'javascript:alert(1)' } })).status, 400);

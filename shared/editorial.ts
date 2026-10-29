@@ -48,6 +48,7 @@ export const cheeseDataSchema = z.object({
     !data.sources.length || !data.photos.filter(Boolean).length || data.latitude === null))
     ctx.addIssue({ code: 'custom', message: 'Для готовой статьи нужны фото, координаты, история, характеристики, использование и источники', path: ['status'] });
 });
+export const editorialToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Moscow' }).format(new Date());
 export const priceDataSchema = z.object({
   cheeseId: z.string().uuid(), sourceType: z.enum(['internet', 'user']),
   price: z.number().positive().max(1e9),
@@ -58,7 +59,7 @@ export const priceDataSchema = z.object({
   observedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => {
     const date = new Date(`${v}T00:00:00Z`);
     return Number.isFinite(date.valueOf()) && date.toISOString().slice(0, 10) === v &&
-      v <= new Date().toISOString().slice(0, 10);
+      v <= editorialToday();
   }, 'Укажите существующую дату не позднее сегодняшней'),
   packageQuantity: z.number().positive().max(1e6),
   packageUnit: z.enum(['kg', 'g', 'piece']),

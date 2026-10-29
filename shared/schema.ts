@@ -81,6 +81,21 @@ export const categories = pgTable("categories", {
   isVisible: boolean("is_visible").notNull().default(true), // Visibilità nel frontend cliente (solo Master Admin)
 });
 
+export const editorialPriceSubmissions = pgTable('editorial_price_submissions', {
+  id: uuid('id').primaryKey(),
+  entryId: uuid('entry_id').unique().references(() => editorialEntries.id, { onDelete: 'set null' }),
+  userId: varchar('user_id').notNull().references(() => webUsers.id, { onDelete: 'cascade' }),
+  cheeseId: uuid('cheese_id').notNull(),
+  payload: jsonb('payload').notNull(),
+  fingerprint: varchar('fingerprint', { length: 64 }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index('editorial_submissions_user_created').on(table.userId, table.createdAt),
+  index('editorial_submissions_user_cheese').on(table.userId, table.cheeseId, table.createdAt),
+  check('editorial_price_submissions_payload_check', sql`jsonb_typeof(${table.payload}) = 'object'`),
+  check('editorial_price_submissions_fingerprint_check', sql`length(${table.fingerprint}) = 64`),
+]);
+
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true });
 export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;

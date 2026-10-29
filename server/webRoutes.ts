@@ -20,6 +20,7 @@ import { registerAdminPaymentLinks } from './adminPaymentLinkRoutes';
 import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
 import { registerAdminEditorialRoutes } from './adminEditorialRoutes';
 import { registerPublicEditorialRoutes } from './publicEditorialRoutes';
+import { registerPriceSubmissionRoutes } from './priceSubmissionRoutes';
 import { getPaymentLinkStates } from './services/payment-link-attempts';
 import { telegramLinkCodeHandler, saveWebTelegramLink, unlinkWebTelegram } from './services/web-telegram-link';
 import { issueTelegramLinkCode, verifyTelegramLinkCode } from './utils/telegram-link-code';
@@ -125,6 +126,7 @@ const addAddressSchema = z.object({
 
 export function registerWebRoutes(app: Express) {
   registerPublicEditorialRoutes(app);
+  registerPriceSubmissionRoutes(app, requireWebAuth, req => (req as any).webUser?.sub);
   app.use('/web-api', cookieParser());
 
   // ── AUTH ──────────────────────────────────────────────────
