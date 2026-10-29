@@ -1,5 +1,7 @@
 import { formatOrderQuantity, isKilogramUnit, parseOrderQuantity } from '@shared/order-quantity';
 import { PaymentLinkNotice } from '@/components/admin/PaymentLinkNotice';
+import { TelegramDiagnostics } from '@/components/admin/TelegramDiagnostics';
+import type { TelegramDiagnosticResult } from '@shared/telegram-diagnostics';
 import type { PaymentNotificationFields } from '@shared/payment-link-delivery';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -209,6 +211,16 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
                   <span>Логи</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => handleNavClick('settings')}
+                  className={activeSection === 'settings' ? 'bg-sidebar-accent' : ''}
+                  data-testid="button-nav-settings"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>Настройки</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
         </SidebarContent>
@@ -228,6 +240,11 @@ function AdminContent({ isMasterAdmin }: { isMasterAdmin: boolean }) {
           {activeSection === 'pickup-addresses' && <PickupAddressesManager />}
           {activeSection === 'analytics' && <AnalyticsManager />}
           {activeSection === 'logs' && <LogsManager />}
+          {activeSection === 'settings' && (
+            <TelegramDiagnostics run={async (): Promise<TelegramDiagnosticResult> =>
+              (await apiRequest('POST', '/api/admin/telegram/diagnostics')).json()
+            } />
+          )}
           {activeSection === 'admins' && isMasterAdmin && <AdminsManager />}
         </main>
       </div>

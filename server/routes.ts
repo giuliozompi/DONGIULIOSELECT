@@ -1,4 +1,5 @@
 import { isValidOrderQuantity } from '../shared/order-quantity';
+import { registerAdminTelegramDiagnostics } from './adminTelegramDiagnosticsRoutes';
 import { sendOrderPaymentLink } from './services/payment-link-delivery';
 import { paymentLinkOrderUpdate } from '../shared/payment-link-delivery';
 import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
@@ -26,6 +27,7 @@ import { logOrderNotification } from "./services/notification-logger";
 import { canNotify } from "./services/notification-settings";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerAdminTelegramDiagnostics(app, '/api', [verifyTelegramInitData, requireAdmin]);
   // ==================== NO-CACHE MIDDLEWARE FOR ADMIN ROUTES ====================
   // Previene caching HTTP 304 per dati admin mutabili
   app.use('/api/admin', (_req, res, next) => {

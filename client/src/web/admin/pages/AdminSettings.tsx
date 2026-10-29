@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { TelegramDiagnostics } from '@/components/admin/TelegramDiagnostics';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '../lib/adminApi';
 import { Button } from '@/components/ui/button';
@@ -362,6 +363,7 @@ export default function AdminSettings() {
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-4">
       <h1 className="text-2xl font-bold">Настройки</h1>
+      <TelegramDiagnostics run={adminApi.telegramDiagnostics} />
       <Tabs defaultValue="admins">
         <TabsList className="flex flex-col sm:flex-row h-auto sm:h-10 w-full sm:w-auto gap-0.5 sm:gap-0 p-1">
           <TabsTrigger value="admins" className="w-full sm:w-auto justify-start sm:justify-center text-left sm:text-center">

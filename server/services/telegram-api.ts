@@ -1,4 +1,6 @@
 import https from 'node:https';
+import { performance } from 'node:perf_hooks';
+import type { TelegramDiagnosticResult, TelegramDiagnosticCategory } from '../../shared/telegram-diagnostics';
 
 type TelegramMethod = 'sendMessage' | 'sendPhoto' | 'sendMediaGroup';
 interface ApiResponse { status: number; body: string }
@@ -53,6 +55,7 @@ const SAFE_CODES = new Set([
   'UND_ERR_HEADERS_TIMEOUT', 'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT',
   'SELF_SIGNED_CERT_IN_CHAIN', 'ERR_TLS_CERT_ALTNAME_INVALID',
   'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'EPROTO', 'ERR_SSL_WRONG_VERSION_NUMBER', 'ERR_TLS_HANDSHAKE_TIMEOUT',
   'TELEGRAM_RESPONSE_TOO_LARGE',
 ]);
 
@@ -71,7 +74,7 @@ function networkCode(error: unknown, depth = 0): string {
 function networkDescription(code: string): string {
   if (['ENOTFOUND', 'EAI_AGAIN'].includes(code)) return `не удалось определить адрес api.telegram.org — ошибка DNS (${code}).`;
   if (['ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH'].includes(code)) return `сервер магазина не может подключиться к api.telegram.org (${code}). Проверьте доступ к Telegram с хостинга.`;
-  if (code.includes('CERT') || code.includes('TLS') || code.includes('ISSUER') || code.includes('SIGNATURE')) {
+  if (code === 'EPROTO' || code.includes('SSL') || code.includes('CERT') || code.includes('TLS') || code.includes('ISSUER') || code.includes('SIGNATURE')) {
     return `ошибка защищённого соединения TLS (${code}). Проверьте сертификаты и время на сервере.`;
   }
   if (code === 'TELEGRAM_RESPONSE_TOO_LARGE') return 'API вернул слишком большой ответ. Отправка не подтверждена.';
@@ -79,6 +82,48 @@ function networkDescription(code: string): string {
   if (code === 'ETIMEDOUT' || code.includes('TIMEOUT')) return `истекло время ожидания API (${code}). ${uncertain}`;
   if (['ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET'].includes(code)) return `соединение с API прервано (${code}). ${uncertain}`;
   return `сбой сетевого запроса к api.telegram.org. ${uncertain}`;
+}
+
+// Read-only, single attempt from this process. Never return/log provider data.
+export async function probeTelegramApi(options: {
+  token?: string;
+  transport?: TelegramTransport;
+} = {}): Promise<TelegramDiagnosticResult> {
+  const start = performance.now();
+  const result = (category: TelegramDiagnosticCategory): TelegramDiagnosticResult => ({
+    ok: category === 'ok',
+    durationMs: Math.max(0, Math.round(performance.now() - start)),
+    category,
+  });
+  const token = options.token ?? process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return result('not_configured');
+  try {
+    const response = await (options.transport ?? requestTelegramJson)(
+      new URL(`https://api.telegram.org/bot${token}/getMe`), '{}', 10000,
+    );
+    // Telegram commonly uses 404 for an invalid bot token.
+    if (response.status === 401 || response.status === 404) return result('invalid_token');
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(response.body);
+      if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.ok !== 'boolean') {
+        return result('invalid_response');
+      }
+    } catch {
+      return result('invalid_response');
+    }
+    if (data.ok === false && (data.error_code === 401 || data.error_code === 404)) return result('invalid_token');
+    if (response.status >= 200 && response.status < 300 && data.ok === true) return result('ok');
+    return result('refused');
+  } catch (error) {
+    const code = networkCode(error);
+    if (['ENOTFOUND', 'EAI_AGAIN'].includes(code)) return result('dns');
+    if (code.includes('TIMEOUT') || code === 'ETIMEDOUT') return result('timeout');
+    if (code === 'EPROTO' || code.includes('SSL') || code.includes('CERT') || code.includes('TLS') || code.includes('ISSUER') || code.includes('SIGNATURE')) return result('tls');
+    if (['ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH', 'ECONNRESET', 'EPIPE', 'UND_ERR_SOCKET'].includes(code)) return result('refused');
+    if (code === 'TELEGRAM_RESPONSE_TOO_LARGE') return result('invalid_response');
+    return result('unavailable');
+  }
 }
 
 export async function sendTelegramApi(
