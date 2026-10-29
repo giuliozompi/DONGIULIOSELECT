@@ -63,3 +63,14 @@ an observation.
 editorial entries. Keep submissions pending until staff approval, preserve the
 original owner-only history, and never expose internal moderation notes or
 change catalogue selling prices from a contribution.
+
+L’operatore deve poter inserire i formaggi anche da una lista precompilata
+dall’AI, ordinata per paese di origine e importanza. Per Italia e Francia
+la lista deve essere organizzabile anche per regioni di origine.
+
+**Why:** L’utente ha richiesto questa modalità aggiuntiva per scegliere
+i formaggi da inserire nell’enciclopedia.
+
+**How to apply:** Affiancare l’elenco AI all’inserimento manuale e alla
+preparazione delle singole schede. Non trattare l’elenco come contenuto
+verificato o autorizzazione alla pubblicazione automatica.
