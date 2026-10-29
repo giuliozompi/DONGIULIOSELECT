@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, uuid, integer, decimal, boolean, timestamp, jsonb, date, uniqueIndex, index, check } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, uuid, integer, decimal, boolean, timestamp, jsonb, date, uniqueIndex, index, check, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import type { EditorialData } from './editorial';
@@ -38,6 +38,39 @@ export const editorialPublications = pgTable('editorial_publications', {
 ]);
 
 // Пользователи (Telegram users)
+export const editorialAiRuns = pgTable('editorial_ai_runs', {
+  id: uuid('id').primaryKey(),
+  kind: text('kind').notNull(),
+  status: text('status').notNull(),
+  revision: integer('revision').notNull().default(1),
+  requestId: uuid('request_id').notNull(),
+  params: jsonb('params').notNull(),
+  result: jsonb('result'),
+  model: text('model').notNull(),
+  createdBy: varchar('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  leaseUntil: timestamp('lease_until', { withTimezone: true }).notNull(),
+  error: text('error'),
+  appliedEntryId: uuid('applied_entry_id'),
+  appliedRevision: integer('applied_revision'),
+  appliedParams: jsonb('applied_params'),
+}, table => [
+  uniqueIndex('editorial_ai_runs_created_by_request_id_key').on(table.createdBy, table.requestId),
+  index('editorial_ai_runs_created').on(table.createdAt.desc()),
+  check('editorial_ai_runs_kind_check', sql`${table.kind} IN ('catalog','draft')`),
+  check('editorial_ai_runs_status_check', sql`${table.status} IN ('running','ready','failed')`),
+  check('editorial_ai_runs_revision_check', sql`${table.revision}>0`),
+]);
+export const editorialAiImports = pgTable('editorial_ai_imports', {
+  runId: uuid('run_id').notNull().references(() => editorialAiRuns.id),
+  itemId: uuid('item_id').notNull(),
+  entryId: uuid('entry_id').references(() => editorialEntries.id, { onDelete: 'set null' }),
+  nameKeys: jsonb('name_keys').$type<string[]>().notNull(),
+  countryCode: varchar('country_code', { length: 2 }).notNull(),
+  createdBy: varchar('created_by').notNull(),
+}, table => [primaryKey({ columns: [table.runId, table.itemId] })]);
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey(), // Telegram user ID
   username: text("username"),

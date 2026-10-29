@@ -74,3 +74,24 @@ i formaggi da inserire nell’enciclopedia.
 **How to apply:** Affiancare l’elenco AI all’inserimento manuale e alla
 preparazione delle singole schede. Non trattare l’elenco come contenuto
 verificato o autorizzazione alla pubblicazione automatica.
+
+L’«importanza» dell’elenco AI è una priorità editoriale soggettiva e
+modificabile, non una classifica verificata di qualità o vendite.
+
+**Why:** La richiesta riguarda l’organizzazione del lavoro redazionale;
+non autorizza a presentare valutazioni del modello come dati di mercato.
+
+**How to apply:** Conservare questa distinzione nelle future liste,
+nei filtri e nei testi mostrati agli operatori o ai clienti.
+
+Una citazione presente in una fonte dimostra la provenienza del brano,
+non la correttezza di tutte le conclusioni che l’AI ne ricava.
+
+**Why:** Un modello può indicare una fonte reale ma dedurre fatti non
+supportati; soprattutto origine tradizionale e denominazioni non
+certificano i prodotti effettivamente venduti.
+
+**How to apply:** Mantenere la revisione umana delle affermazioni e
+la distinzione tra origine del formaggio e produzione del prodotto.
+Non usare i controlli sulle citazioni per dichiarare certificazioni,
+markirovka o sicurezza alimentare automaticamente verificate.

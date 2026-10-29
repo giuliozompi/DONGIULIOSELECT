@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, ArrowRight, Check, CircleHelp, FilePlus2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { editorialApi } from '../lib/editorialApi';
 import { adminApi } from '../lib/adminApi';
+import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
 import {
   editorialSchemas, pricePerKg,
   type CheeseData, type EditorialEntry, type EditorialKind, type PriceData, type VideoData,
@@ -23,7 +24,7 @@ const nativeSelectClass = 'flex h-10 w-full rounded-md border border-input bg-ba
 const titles: Record<EditorialKind, string> = { video: 'Видео и материалы', cheese: 'Сырная энциклопедия', price: 'Цены в мире' };
 const intros: Record<EditorialKind, string> = {
   video: 'Отдельная редакция: рецепты, интервью, обзоры и места. «Готово» означает внутреннюю готовность, а не публикацию.',
-  cheese: 'Статьи о происхождении сыра и о том, где он фактически произведён — это разные сведения.',
+  cheese: 'Энциклопедия происхождения сыров: источники проверяет редактор, географию происхождения не смешиваем с местом производства.',
   price: 'Наблюдения за международными ценами. Эти данные не меняют цены и ассортимент каталога.',
 };
 const EMPTY_VIDEO: VideoData = { title: '', description: '', status: 'draft', sortOrder: 0, url: '', cover: '', category: 'recipe', cheeseIds: [] };
@@ -84,7 +85,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const cheeseQuery = useQuery({
     queryKey: ['/web-api/admin/editorial', 'all', 'cheese'],
     queryFn: () => editorialApi.all('cheese'),
-    enabled: kind === 'video' || kind === 'price',
+    enabled: kind === 'video' || kind === 'price' || Boolean(new URLSearchParams(window.location.search).get('entry')),
   });
   const videoQuery = useQuery({
     queryKey: ['/web-api/admin/editorial', 'all', 'video'],
@@ -132,6 +133,13 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const entries = listQuery.data?.items || [];
   const total = listQuery.data?.total || 0;
   const cheeses = cheeseQuery.data || [];
+  const openedLinkedEntry = useRef(false);
+  const linkedEntry = new URLSearchParams(window.location.search).get('entry');
+  useEffect(() => {
+    if (kind !== 'cheese' || !linkedEntry || !cheeseQuery.data || openedLinkedEntry.current) return;
+    const target = cheeseQuery.data.find(value => value.id === linkedEntry);
+    if (target) { openedLinkedEntry.current = true; openEdit(target); }
+  }, [kind, linkedEntry, cheeseQuery.data]);
   const videos = videoQuery.data || [];
   const products = productsQuery.data || [];
   const relationLoading = cheeseQuery.isLoading || videoQuery.isLoading || productsQuery.isLoading;
@@ -294,8 +302,10 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
         <div className="mb-6 flex gap-3 border border-[#d9d7ca] bg-[#eae9df] p-4 text-sm leading-5 text-[#59645d]">
           <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-[#a05d41]" />
-          <p><strong className="font-semibold text-[#36483f]">Рамки этого этапа.</strong> Публичные редакционные страницы доступны только в DEVELOPMENT-превью. Пользовательская форма отправки и AI/автоматический поиск не активны; сообщения пользователей оператор фиксирует вручную. Статус «Готово» означает редакционную готовность, но не публикацию: опубликованные материалы требуют отдельного действия.</p>
+          <p><strong className="font-semibold text-[#36483f]">Работа редакции.</strong> AI-каталог и черновые предложения по указанным оператором источникам доступны в DEVELOPMENT. Это непроверенные подсказки: оператор сверяет факты и цитаты, а публикация всегда выполняется отдельным действием. Статус «Готово» означает редакционную готовность, но не публикацию.</p>
         </div>
+
+        {kind === 'cheese' && <EditorialAiCatalog onImported={() => { void invalidateEditorial(); }} />}
 
         {kind === 'price' && <div className="mb-6 rounded-md border-l-4 border-[#b66b48] bg-[#f0e6d9] px-4 py-3 text-sm text-[#684b3d]">Рыночные наблюдения никогда не изменяют цену или доступность товара в каталоге. Новая и отредактированная запись цены всегда возвращается в очередь проверки.</div>}
 
@@ -313,7 +323,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                     ? (relatedPriceCheese ? entryName(relatedPriceCheese) : 'Наблюдение цены')
                     : entryName(entry);
                   const relatedCheese = entry.kind === 'video' ? cheeses.find(item => item.id === (entry.data as VideoData).cheeseIds[0]) : null;
-                  return <Card key={entry.id} className="overflow-hidden border-[#deddd2] bg-[#fbfaf6] shadow-[0_2px_10px_rgba(42,55,47,0.035)]">
+                  return <Card id={`entry-${entry.id}`} key={entry.id} className="overflow-hidden border-[#deddd2] bg-[#fbfaf6] shadow-[0_2px_10px_rgba(42,55,47,0.035)]">
                     <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:p-5">
                       {entry.kind === 'video' && (entry.data as VideoData).cover && <img src={(entry.data as VideoData).cover} alt="" className="h-20 w-28 rounded object-cover" />}
                       <div className="min-w-0 flex-1">
@@ -339,6 +349,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                         <Button size="icon" variant="ghost" className="text-[#9d4d3f] hover:bg-[#f7e9e4]" aria-label={`Удалить ${rowTitle}`} disabled={requestBusy} onClick={() => { void deleteEntry(entry, rowTitle); }}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </CardContent>
+                    {kind === 'cheese' && <div className="px-4 pb-4 md:px-5"><CheeseAiDraft entry={entry} onApplied={() => { void invalidateEditorial(); }} /></div>}
                   </Card>;
                 })}
               </div>}
