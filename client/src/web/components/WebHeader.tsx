@@ -47,6 +47,8 @@ export default function WebHeader() {
     { label: 'Каталог', href: '/web/catalog' },
     { label: 'О нас', href: '/web/about' },
     { label: 'Доставка', href: '/web/delivery' },
+    { label: 'Видеотека', href: '/web/videos' },
+    { label: 'Атлас сыров', href: '/web/cheeses' },
   ];
 
   return (
@@ -65,7 +67,7 @@ export default function WebHeader() {
             </Link>
 
             {/* Desktop nav */}
-            <nav className="hidden md:flex items-center gap-6">
+            <nav className="hidden md:flex items-center gap-4 lg:gap-6">
               {navLinks.map(l => (
                 <Link key={l.href} href={l.href} className={`text-sm font-medium transition-colors hover:text-amber-700 ${
                   location.startsWith(l.href) ? 'text-amber-700' : 'text-neutral-600'

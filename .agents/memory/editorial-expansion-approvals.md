@@ -38,3 +38,15 @@ Le rilevazioni dei prezzi devono coprire «Russia e altri paesi».
 **Why:** The user explicitly selected international coverage rather than Russia only.
 
 **How to apply:** Preserve country and original currency when designing price observations; do not restrict the feature to Russian-market prices.
+
+Editorial publication is a separate explicit decision from marking a draft ready.
+Keep the last published version visible while operators edit its draft; neither
+editing nor readiness alone should replace the public version.
+
+**Why:** Draft editing and public visibility must remain independent, so an operator
+can prepare incomplete changes without accidentally publishing them or removing
+an already reviewed article.
+
+**How to apply:** Preserve explicit publish/replace/withdraw actions when extending
+the editorial workflow, including later AI-assisted drafts. Release to Timeweb
+is another approval boundary, not an effect of publishing an individual article.

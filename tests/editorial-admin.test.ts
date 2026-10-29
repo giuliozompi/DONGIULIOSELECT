@@ -10,6 +10,9 @@ import express from 'express';
 import type { Server } from 'node:http';
 import { saveEditorial, deleteEditorial, moderateEditorial, listEditorial, EditorialError } from '../server/services/editorial';
 import { registerAdminEditorialRoutes } from '../server/adminEditorialRoutes';
+import { registerPublicEditorialRoutes } from '../server/publicEditorialRoutes';
+import { changePublication } from '../server/services/editorial-publication';
+import { publicEditorialList, publicCheeseDetail, publicCheesePrices, publicVideoDetail } from '../server/services/public-editorial';
 import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg, type CheeseData, type PriceData } from '../shared/editorial';
 
 const exec = promisify(execFile);
@@ -34,17 +37,22 @@ before(async () => {
     '-o', `-F -k ${directory} -h ''`, '-w', 'start']);
   started = true;
   database = new pg.Pool({ host: directory, port: 5432, user: 'editorial_test', database: 'postgres', max: 10 });
-  await database.query(`CREATE TABLE products(id varchar PRIMARY KEY, price numeric NOT NULL DEFAULT 100);
+  await database.query(`CREATE TABLE products(id varchar PRIMARY KEY, price numeric NOT NULL DEFAULT 100,
+      name text DEFAULT 'Test product',slug text DEFAULT 'test-product',images text[] DEFAULT '{}',
+      price_old numeric,unit text DEFAULT 'кг',in_stock boolean DEFAULT true,is_visible boolean DEFAULT true,
+      description_short text);
     CREATE TABLE admin_action_logs(
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), admin_user_id varchar NOT NULL, action_type text NOT NULL,
       entity_type text NOT NULL, entity_id varchar, action_data jsonb NOT NULL, created_at timestamptz DEFAULT now());`);
   await database.query(await readFile('migrations/editorial-admin.sql', 'utf8'));
+  await database.query(await readFile('migrations/editorial-publication.sql', 'utf8'));
   const app = express();
   app.use(express.json());
   registerAdminEditorialRoutes(app, [
     (req, res, next) => req.headers.authorization ? next() : void res.status(401).json({ error: 'auth' }),
     (req, res, next) => req.headers.authorization === 'test-admin' ? next() : void res.status(403).json({ error: 'admin' }),
   ], () => 'operator-test', database);
+  registerPublicEditorialRoutes(app, database);
   server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as any).port}/web-api/admin/editorial`;
@@ -56,7 +64,7 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 beforeEach(async () => {
-  await database.query('TRUNCATE editorial_entries,admin_action_logs,products');
+  await database.query('TRUNCATE editorial_publications,editorial_entries,admin_action_logs,products');
   await database.query("INSERT INTO products(id) VALUES('catalogue-test')");
 });
 async function api(method: string, path = '', body?: unknown, token: string | null = 'test-admin') {
@@ -163,11 +171,130 @@ test('all editorial API methods reject guests and non-admins before work', async
   for (const [method, path, body] of [
     ['GET', '?kind=video', undefined], ['POST', '', {}], ['PATCH', `/${id}`, {}],
     ['DELETE', `/${id}?revision=1`, undefined], ['POST', `/${id}/moderate`, {}],
+    ['POST', `/${id}/publish`, {}], ['POST', `/${id}/unpublish`, {}],
   ] as const) {
     assert.equal((await api(method, path, body, null)).status, 401);
     assert.equal((await api(method, path, body, 'test-client')).status, 403);
   }
   assert.equal((await listEditorial('video', 0, 50, database)).total, 0);
+});
+
+const publicFilters = { search: '', page: 1, limit: 12 };
+function readyCheese(): CheeseData {
+  return cheeseDataSchema.parse({ ...cheese(), status: 'ready', latitude: 45, longitude: 9,
+    photos: ['https://example.org/cheese.jpg'], history: 'History', characteristics: 'Characteristics',
+    culinaryUses: 'Uses', sources: ['https://example.org/source'] });
+}
+test('only explicitly published snapshots are public; edits stay private until republish and withdraw is immediate', async () => {
+  let c = await saveEditorial('cheese', readyCheese(), 'PRIVATE_ACTOR', undefined, database);
+  assert.equal((await publicEditorialList('cheese', publicFilters, database)).total, 0);
+  await assert.rejects(publicCheeseDetail(c.id, database), expectStatus(404));
+  c = await changePublication(c.id, c.revision, true, 'PRIVATE_PUBLISHER', database);
+  assert.equal(c.revision, 2);
+  assert.equal(c.publication?.publishedRevision, 2);
+  const published = await publicCheeseDetail(c.id, database);
+  assert.equal(published.title, 'Test cheese');
+  assert.equal(JSON.stringify(published).includes('PRIVATE_'), false);
+  assert.equal('status' in published, false);
+  assert.equal('revision' in published, false);
+  c = await saveEditorial('cheese', { ...cheese(), title: 'PRIVATE_DRAFT_TITLE' }, 'PRIVATE_EDITOR', c, database);
+  assert.equal(c.revision, 3);
+  assert.equal(c.publication?.publishedRevision, 2);
+  assert.equal((await publicCheeseDetail(c.id, database)).title, 'Test cheese');
+  assert.equal((await publicEditorialList('cheese', { ...publicFilters, search: 'PRIVATE_DRAFT' }, database)).total, 0);
+  await assert.rejects(changePublication(c.id, c.revision, true, 'operator', database), expectStatus(409));
+  c = await saveEditorial('cheese', { ...readyCheese(), title: 'New published title' }, 'operator', c, database);
+  c = await changePublication(c.id, c.revision, true, 'operator', database);
+  assert.equal((await publicCheeseDetail(c.id, database)).title, 'New published title');
+  await assert.rejects(deleteEditorial(c.id, c.revision, 'operator', database), expectStatus(409));
+  await changePublication(c.id, c.revision, false, 'operator', database);
+  assert.equal((await publicEditorialList('cheese', publicFilters, database)).total, 0);
+  await assert.rejects(publicCheesePrices(c.id, 1, 20, database), expectStatus(404));
+});
+test('public relationships use both published directions and exclude unpublished related content', async () => {
+  let c = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database);
+  let v = await saveEditorial('video', { ...video(), status: 'ready', cheeseIds: [c.id] }, 'operator', undefined, database);
+  const secret = await saveEditorial('video', { ...video(), title: 'PRIVATE_VIDEO' }, 'operator', undefined, database);
+  c = await saveEditorial('cheese', { ...readyCheese(), videoIds: [secret.id] }, 'operator', c, database);
+  c = await changePublication(c.id, c.revision, true, 'operator', database);
+  v = await changePublication(v.id, v.revision, true, 'operator', database);
+  assert.deepEqual((await publicCheeseDetail(c.id, database)).relatedVideos.map(r => r.id), [v.id]);
+  assert.deepEqual((await publicVideoDetail(v.id, database)).relatedCheeses.map(r => r.id), [c.id]);
+  assert.equal(JSON.stringify(await publicCheeseDetail(c.id, database)).includes('PRIVATE_VIDEO'), false);
+  await changePublication(v.id, v.revision, false, 'operator', database);
+  assert.equal((await publicCheeseDetail(c.id, database)).relatedVideos.length, 0);
+  await assert.rejects(publicVideoDetail(v.id, database), expectStatus(404));
+});
+test('public market prices expose approved observations only, no internal notes, and live catalogue values', async () => {
+  let c = await saveEditorial('cheese', { ...readyCheese(), productIds: ['catalogue-test'] }, 'operator', undefined, database);
+  c = await changePublication(c.id, c.revision, true, 'operator', database);
+  const a = await saveEditorial('price', { ...price(c.id), notes: 'PRIVATE_PRICE_NOTE' }, 'PRIVATE_AUTHOR', undefined, database);
+  await saveEditorial('price', { ...price(c.id), store: 'PRIVATE_PENDING_STORE' }, 'operator', undefined, database);
+  const rejected = await saveEditorial('price', { ...price(c.id), store: 'PRIVATE_REJECTED_STORE' }, 'operator', undefined, database);
+  await moderateEditorial(rejected.id, rejected.revision, 'rejected', 'PRIVATE_REJECTION', 'operator', database);
+  const approved = await moderateEditorial(a.id, a.revision, 'approved', 'PRIVATE_MODERATOR_NOTE', 'operator', database);
+  const publicPrices = await publicCheesePrices(c.id, 1, 20, database);
+  assert.equal(publicPrices.total, 1);
+  assert.equal(publicPrices.items[0].pricePerKg, 50);
+  assert.equal(JSON.stringify(publicPrices).includes('PRIVATE_'), false);
+  assert.deepEqual((await publicCheesePrices(c.id, 2, 20, database)).items, []);
+  await database.query("UPDATE products SET price=170,unit='шт.',in_stock=false WHERE id='catalogue-test'");
+  let detail = await publicCheeseDetail(c.id, database);
+  assert.equal(detail.products[0].price, '170');
+  assert.equal(detail.products[0].inStock, false);
+  assert.equal(detail.products[0].unit, 'шт.');
+  await database.query("UPDATE products SET is_visible=false WHERE id='catalogue-test'");
+  assert.equal((await publicCheeseDetail(c.id, database)).products.length, 0);
+  await saveEditorial('price', { ...price(c.id), price: 500 }, 'operator', approved, database);
+  assert.equal((await publicCheesePrices(c.id, 1, 20, database)).total, 0);
+});
+test('public APIs have pagination/search/filter/map and reject malformed queries without exposing drafts', async () => {
+  let c = await saveEditorial('cheese', { ...readyCheese(), region: 'Ломбардия' }, 'operator', undefined, database);
+  c = await changePublication(c.id, c.revision, true, 'operator', database);
+  await saveEditorial('cheese', { ...readyCheese(), title: 'SECRET_DRAFT' }, 'operator', undefined, database);
+  let v = await saveEditorial('video', { ...video(), status: 'ready', category: 'places' }, 'operator', undefined, database);
+  v = await changePublication(v.id, v.revision, true, 'operator', database);
+  const publicBase = base.replace('/admin/editorial', '/editorial');
+  const list = await fetch(`${publicBase}/cheeses?search=${encodeURIComponent('Ломбардия')}&country=${encodeURIComponent('Италия')}`);
+  assert.equal(list.headers.get('cache-control'), 'no-store');
+  const data = await list.json();
+  assert.equal(data.total, 1);
+  assert.deepEqual(data.countries, ['Италия']);
+  assert.equal(JSON.stringify(data).includes('SECRET_DRAFT'), false);
+  assert.equal((await (await fetch(`${publicBase}/cheeses?page=2&limit=1`)).json()).items.length, 0);
+  assert.equal((await (await fetch(`${publicBase}/videos?category=places`)).json()).total, 1);
+  assert.equal((await (await fetch(`${publicBase}/videos?category=recipe`)).json()).total, 0);
+  const map = await (await fetch(`${publicBase}/map`)).json();
+  assert.equal(map.items[0].latitude, 45);
+  assert.equal(map.items[0].longitude, 9);
+  assert.equal(map.truncated, false);
+  assert.equal('history' in map.items[0], false);
+  for (const path of ['/videos?category=invalid', '/cheeses?limit=1000', '/videos/not-uuid', '/cheeses?search[]=x'])
+    assert.equal((await fetch(`${publicBase}${path}`)).status, 400);
+  const draft = await saveEditorial('video', video(), 'operator', undefined, database);
+  assert.equal((await fetch(`${publicBase}/videos/${draft.id}`)).status, 404);
+});
+test('publication audit failure rolls back exposure; stale/concurrent publication cannot override newer decisions', async () => {
+  let v = await saveEditorial('video', { ...video(), status: 'ready' }, 'operator', undefined, database);
+  await database.query(`CREATE FUNCTION fail_publication_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'audit unavailable'; END $$;
+    CREATE TRIGGER fail_pub_audit BEFORE INSERT ON admin_action_logs FOR EACH ROW EXECUTE FUNCTION fail_publication_audit();`);
+  try {
+    await assert.rejects(changePublication(v.id, v.revision, true, 'operator', database));
+    assert.equal((await publicEditorialList('video', publicFilters, database)).total, 0);
+  } finally {
+    await database.query('DROP TRIGGER fail_pub_audit ON admin_action_logs; DROP FUNCTION fail_publication_audit()');
+  }
+  const results = await Promise.allSettled([
+    changePublication(v.id, v.revision, true, 'operator', database),
+    changePublication(v.id, v.revision, true, 'other-operator', database),
+  ]);
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  v = results.find(r => r.status === 'fulfilled')!.value;
+  await assert.rejects(changePublication(v.id, v.revision - 1, false, 'operator', database), expectStatus(409));
+  const publishedViaApi = await api('POST', `/${v.id}/unpublish`, { revision: v.revision });
+  assert.equal(publishedViaApi.status, 200);
+  assert.equal((await publishedViaApi.json()).publication, null);
 });
 test('API validation, pagination and all success operations use real database', async () => {
   assert.equal((await api('POST', '', { kind: 'video', data: { ...video(), url: 'javascript:alert(1)' } })).status, 400);

@@ -50,6 +50,7 @@ function dateLabel(value: string) {
 }
 function statusLabel(entry: EditorialEntry) {
   if (entry.kind === 'price') return entry.moderation === 'approved' ? 'Одобрено' : entry.moderation === 'rejected' ? 'Отклонено' : 'На проверке';
+  if (entry.publication) return entry.publication.publishedRevision === entry.revision ? 'Опубликовано' : 'Опубликовано · изменения не опубликованы';
   return (entry.data as VideoData | CheeseData).status === 'ready' ? 'Готово · не опубликовано' : 'Черновик';
 }
 function entryName(entry: EditorialEntry) {
@@ -119,6 +120,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     mutationFn: ({ entry, value, note }: { entry: EditorialEntry; value: 'approved' | 'rejected'; note: string }) => editorialApi.moderate(entry, value, note),
     onSuccess: async () => { await invalidateEditorial(); setModerationTarget(null); setModerationNote(''); toast({ title: decision === 'approved' ? 'Цена одобрена' : 'Цена отклонена' }); },
   });
+  const publishMutation = useMutation({
+    mutationFn: (entry: EditorialEntry) => editorialApi.publish(entry),
+    onSuccess: async () => { await invalidateEditorial(); toast({ title: 'Материал опубликован' }); },
+  });
+  const unpublishMutation = useMutation({
+    mutationFn: (entry: EditorialEntry) => editorialApi.unpublish(entry),
+    onSuccess: async () => { await invalidateEditorial(); toast({ title: 'Материал снят с публикации' }); },
+  });
   const saving = requestBusy || createMutation.isPending || updateMutation.isPending || uploading;
   const entries = listQuery.data?.items || [];
   const total = listQuery.data?.total || 0;
@@ -126,7 +135,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const videos = videoQuery.data || [];
   const products = productsQuery.data || [];
   const relationLoading = cheeseQuery.isLoading || videoQuery.isLoading || productsQuery.isLoading;
-  const busyError = createMutation.error || updateMutation.error || deleteMutation.error || moderateMutation.error;
+  const busyError = createMutation.error || updateMutation.error || deleteMutation.error || moderateMutation.error || publishMutation.error || unpublishMutation.error;
 
   function openCreate() {
     if (requestLock.current) return;
@@ -213,6 +222,23 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     } catch { /* mutation error is shown in the moderation dialog */ }
     finally { requestLock.current = false; setRequestBusy(false); }
   }
+  async function changePublication(entry: EditorialEntry, action: 'publish' | 'unpublish') {
+    if (requestLock.current) return;
+    const title = entryName(entry);
+    const question = action === 'publish'
+      ? `Опубликовать «${title}»?${entry.publication ? ' Текущая публичная версия будет заменена.' : ''}`
+      : `Снять «${title}» с публикации?`;
+    if (!window.confirm(question)) return;
+    publishMutation.reset();
+    unpublishMutation.reset();
+    requestLock.current = true;
+    setRequestBusy(true);
+    try {
+      if (action === 'publish') await publishMutation.mutateAsync(entry);
+      else await unpublishMutation.mutateAsync(entry);
+    } catch { /* mutation error is shown in the workspace alert */ }
+    finally { requestLock.current = false; setRequestBusy(false); }
+  }
   function updateListError(error: unknown) {
     toast({ title: 'Ошибка', description: errorText(error), variant: 'destructive' });
   }
@@ -268,7 +294,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
         <div className="mb-6 flex gap-3 border border-[#d9d7ca] bg-[#eae9df] p-4 text-sm leading-5 text-[#59645d]">
           <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-[#a05d41]" />
-          <p><strong className="font-semibold text-[#36483f]">Рамки этого этапа.</strong> Публичные редакционные страницы, пользовательская форма отправки и AI/автоматический поиск сейчас не активированы. Сообщения пользователей оператор фиксирует вручную. Готовность материалов — только внутренний статус.</p>
+          <p><strong className="font-semibold text-[#36483f]">Рамки этого этапа.</strong> Публичные редакционные страницы доступны только в DEVELOPMENT-превью. Пользовательская форма отправки и AI/автоматический поиск не активны; сообщения пользователей оператор фиксирует вручную. Статус «Готово» означает редакционную готовность, но не публикацию: опубликованные материалы требуют отдельного действия.</p>
         </div>
 
         {kind === 'price' && <div className="mb-6 rounded-md border-l-4 border-[#b66b48] bg-[#f0e6d9] px-4 py-3 text-sm text-[#684b3d]">Рыночные наблюдения никогда не изменяют цену или доступность товара в каталоге. Новая и отредактированная запись цены всегда возвращается в очередь проверки.</div>}
@@ -277,7 +303,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
         {listQuery.isLoading ? <div className="space-y-3" aria-label="Загрузка записей">{[0, 1, 2].map(i => <div key={i} className="h-24 animate-pulse rounded-lg bg-[#e5e3d9]" />)}</div> :
           listQuery.isError ? <Card className="border-[#dfdcd0] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center gap-3 py-12 text-center"><AlertCircle className="h-8 w-8 text-[#a05d41]" /><p className="font-medium">Не удалось загрузить записи</p><Button variant="outline" onClick={() => listQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Повторить</Button></CardContent></Card> :
-            entries.length === 0 ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center py-16 text-center"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e6ebe4] text-[#315647]"><FilePlus2 className="h-5 w-5" /></div><h2 className="font-serif text-xl">Пока нет записей</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Создайте первую запись редакции. Публикация на публичной стороне не входит в этот этап.</p><Button className="mt-5 bg-[#315647] hover:bg-[#244537]" onClick={openCreate}>Создать запись</Button></CardContent></Card> :
+            entries.length === 0 ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center py-16 text-center"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e6ebe4] text-[#315647]"><FilePlus2 className="h-5 w-5" /></div><h2 className="font-serif text-xl">Пока нет записей</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Создайте первую запись редакции. Публичные страницы доступны только в DEVELOPMENT-превью; публикация выполняется отдельно от статуса «Готово».</p><Button className="mt-5 bg-[#315647] hover:bg-[#244537]" onClick={openCreate}>Создать запись</Button></CardContent></Card> :
               <div className="space-y-3">
                 {entries.map(entry => {
                   const data = entry.data as FormData;
@@ -307,6 +333,8 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
                         {kind === 'price' && entry.moderation === 'pending' && <Button size="sm" variant="outline" disabled={requestBusy} onClick={() => { if (requestLock.current) return; moderateMutation.reset(); setModerationTarget(entry); setModerationNote(''); setDecision('approved'); }}><Check className="mr-1.5 h-4 w-4" />Проверить</Button>}
+                        {entry.kind !== 'price' && entry.publication && <Button size="sm" variant="outline" disabled={requestBusy} onClick={() => { void changePublication(entry, 'unpublish'); }}>Снять с публикации</Button>}
+                        {entry.kind !== 'price' && (entry.data as VideoData | CheeseData).status === 'ready' && (!entry.publication || entry.publication.publishedRevision !== entry.revision) && <Button size="sm" disabled={requestBusy} className="bg-[#315647] text-white hover:bg-[#244537]" onClick={() => { void changePublication(entry, 'publish'); }}>{entry.publication ? 'Опубликовать изменения' : 'Опубликовать'}</Button>}
                         <Button size="sm" variant="outline" disabled={requestBusy} onClick={() => openEdit(entry)}><Pencil className="mr-1.5 h-4 w-4" />Изменить</Button>
                         <Button size="icon" variant="ghost" className="text-[#9d4d3f] hover:bg-[#f7e9e4]" aria-label={`Удалить ${rowTitle}`} disabled={requestBusy} onClick={() => { void deleteEntry(entry, rowTitle); }}><Trash2 className="h-4 w-4" /></Button>
                       </div>

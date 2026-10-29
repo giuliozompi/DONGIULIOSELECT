@@ -78,6 +78,7 @@ export interface EditorialEntry {
   moderation: 'pending' | 'approved' | 'rejected' | null;
   moderationNote: string; createdBy: string; updatedBy: string;
   createdAt: string; updatedAt: string;
+  publication: { publishedAt: string; publishedRevision: number } | null;
 }
 export function pricePerKg(data: PriceData): number | null {
   if (data.packageUnit === 'piece') return null;

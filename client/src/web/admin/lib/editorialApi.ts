@@ -13,6 +13,10 @@ export const editorialApi = {
     webApi.delete<void>(`${base}/${record.id}?revision=${record.revision}`),
   moderate: (record: EditorialEntry, decision: 'approved' | 'rejected', note: string) =>
     webApi.post<EditorialEntry>(`${base}/${record.id}/moderate`, { revision: record.revision, decision, note }),
+  publish: (record: EditorialEntry) =>
+    webApi.post<EditorialEntry>(`${base}/${record.id}/publish`, { revision: record.revision }),
+  unpublish: (record: EditorialEntry) =>
+    webApi.post<EditorialEntry>(`${base}/${record.id}/unpublish`, { revision: record.revision }),
   all: async (kind: EditorialKind) => {
     const entries: EditorialEntry[] = [];
     let offset = 0;

@@ -24,6 +24,19 @@ export const editorialEntries = pgTable('editorial_entries', {
     (${table.kind} <> 'price' AND ${table.moderation} IS NULL)`),
 ]);
 
+export const editorialPublications = pgTable('editorial_publications', {
+  entryId: uuid('entry_id').primaryKey().references(() => editorialEntries.id),
+  kind: text('kind').notNull(),
+  data: jsonb('data').$type<EditorialData>().notNull(),
+  publishedRevision: integer('published_revision').notNull(),
+  publishedAt: timestamp('published_at', { withTimezone: true }).notNull().defaultNow(),
+  publishedBy: varchar('published_by').notNull(),
+}, table => [
+  index('editorial_publications_kind').on(table.kind),
+  check('editorial_publications_kind_check', sql`${table.kind} IN ('video', 'cheese')`),
+  check('editorial_publications_published_revision_check', sql`${table.publishedRevision} > 0`),
+]);
+
 // Пользователи (Telegram users)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey(), // Telegram user ID

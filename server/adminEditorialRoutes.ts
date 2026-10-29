@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { editorialKinds } from '../shared/editorial';
 import { pool } from './db';
 import { EditorialError, listEditorial, saveEditorial, deleteEditorial, moderateEditorial } from './services/editorial';
+import { changePublication } from './services/editorial-publication';
 
 const kind = z.enum(editorialKinds);
 const idSchema = z.string().uuid();
@@ -43,6 +44,12 @@ export function registerAdminEditorialRoutes(app: Express, guards: RequestHandle
       note: z.string().trim().min(1).max(2000) }).strict().parse(req.body);
     res.json(await moderateEditorial(idSchema.parse(req.params.id), body.revision, body.decision, body.note, operator, database));
   }));
+  for (const [action, publish] of [['publish', true], ['unpublish', false]] as const) {
+    app.post(`${base}/:id/${action}`, ...guards, handle(async (req, res, operator) => {
+      const body = z.object({ revision }).strict().parse(req.body);
+      res.json(await changePublication(idSchema.parse(req.params.id), body.revision, publish, operator, database));
+    }));
+  }
   app.delete(`${base}/:id`, ...guards, handle(async (req, res, operator) => {
     const body = z.object({ revision: z.coerce.number().int().positive() }).strict().parse(req.query);
     await deleteEditorial(idSchema.parse(req.params.id), body.revision, operator, database);

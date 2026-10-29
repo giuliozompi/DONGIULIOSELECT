@@ -32,6 +32,7 @@ import AdminVideos from './admin/pages/AdminVideos';
 import AdminCheeses from './admin/pages/AdminCheeses';
 import AdminMarketPrices from './admin/pages/AdminMarketPrices';
 import { useWebAuth } from './hooks/useWebAuth';
+import { CheeseAtlasPage, CheeseDetailPage, VideoDetailPage, VideosPage } from './editorial/EditorialPages';
 
 function WebAuthInit() {
   const { refresh } = useWebAuth();
@@ -96,6 +97,10 @@ function WebRouter() {
           <Route path="/web/delivery" component={WebDeliveryPage} />
           <Route path="/web/legal" component={WebLegalPage} />
           <Route path="/web/privacy" component={WebPrivacyPage} />
+          <Route path="/web/videos/:id" component={VideoDetailPage} />
+          <Route path="/web/videos" component={VideosPage} />
+          <Route path="/web/cheeses/:id" component={CheeseDetailPage} />
+          <Route path="/web/cheeses" component={CheeseAtlasPage} />
           <Route component={WebNotFoundPage} />
         </Switch>
       </main>

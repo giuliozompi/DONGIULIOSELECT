@@ -29,6 +29,8 @@ export default function WebFooter() {
               <li><Link href="/web/catalog?category=cheese" className="hover:text-white transition-colors">Сыры</Link></li>
               <li><Link href="/web/catalog?category=charcuterie" className="hover:text-white transition-colors">Колбасы и мясо</Link></li>
               <li><Link href="/web/catalog?category=pasta" className="hover:text-white transition-colors">Паста и ризотто</Link></li>
+              <li><Link href="/web/videos" className="hover:text-white transition-colors">Видеотека Don Giulio</Link></li>
+              <li><Link href="/web/cheeses" className="hover:text-white transition-colors">Энциклопедия сыров</Link></li>
             </ul>
           </div>
 
