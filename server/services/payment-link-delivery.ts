@@ -8,7 +8,7 @@ interface PaymentOrder {
   customerPhone: string;
   customerEmail?: string | null;
 }
-interface SendResult { sent: boolean; error?: string }
+interface SendResult { sent: boolean; error?: string; retryAt?: string; deferred?: boolean }
 interface Dependencies {
   canNotify: (channel: PaymentChannel, userId: string) => Promise<boolean>;
   send: (channel: PaymentChannel) => Promise<SendResult>;
@@ -33,7 +33,8 @@ export async function deliverPaymentLink(order: PaymentOrder, url: string, deps:
       const sent = await deps.send(channel);
       result = {
         channel,
-        status: sent.sent ? 'sent' : 'failed',
+        status: sent.sent ? 'sent' : sent.deferred ? 'skipped' : 'failed',
+        ...(sent.retryAt ? { retryAt: sent.retryAt } : {}),
         detail: sent.sent
           ? 'Сервис принял сообщение. Доставка клиенту не подтверждена.'
           : sent.error || 'Сервис не подтвердил отправку. Проверьте конфигурацию и журнал сервера.',
@@ -100,7 +101,7 @@ async function sendUntrackedPaymentLink(order: PaymentOrder, url: string, attemp
       event: 'payment_link', recipient: 'customer', channel: result.channel,
       userId: order.userId, orderId: order.id, customerName: order.customerName,
       customerPhone: order.customerPhone, status: result.status === 'sent' ? 'sent' : 'failed',
-      details: JSON.stringify({ paymentAttemptId: attemptId, detail: result.detail }),
+      details: JSON.stringify({ paymentAttemptId: attemptId, detail: result.detail, retryAt: result.retryAt }),
     }),
   });
 }

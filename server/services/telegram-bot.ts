@@ -1,6 +1,10 @@
 import { createHmac } from 'crypto';
 import { formatMoscowDateForNotification } from '../utils/date-formatter';
-import { sendTelegramApi } from './telegram-api';
+import { sendTelegramApi, type TelegramSendResult } from './telegram-api';
+import { telegramRateLimits } from './telegram-rate-limits';
+
+const sendBotApi: typeof sendTelegramApi = (method, payload, options) =>
+  telegramRateLimits.send(TELEGRAM_BOT_TOKEN, () => sendTelegramApi(method, payload, options));
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -68,8 +72,8 @@ export async function sendTelegramMessage(params: TelegramMessage): Promise<bool
   return (await sendTelegramMessageDetailed(params)).sent;
 }
 
-async function sendTelegramMessageDetailed(params: TelegramMessage): Promise<{ sent: boolean; error?: string }> {
-  return sendTelegramApi('sendMessage', {
+async function sendTelegramMessageDetailed(params: TelegramMessage): Promise<TelegramSendResult> {
+  return sendBotApi('sendMessage', {
     chat_id: params.chatId,
     text: params.text,
     parse_mode: params.parseMode || 'HTML',
@@ -90,7 +94,7 @@ export async function sendPaymentLinkDetailed(
   orderId: string,
   amount: string,
   paymentUrl: string
-): Promise<{ sent: boolean; error?: string }> {
+): Promise<TelegramSendResult> {
   const message = `
 🛒 <b>Ваш заказ готов к оплате!</b>
 
@@ -544,7 +548,7 @@ export async function sendMediaGroup(
       ...(idx === 0 && caption ? { caption, parse_mode: 'HTML' } : {}),
     }));
 
-  return (await sendTelegramApi('sendMediaGroup', { chat_id: chatId, media }, { token: TELEGRAM_BOT_TOKEN })).sent;
+  return (await sendBotApi('sendMediaGroup', { chat_id: chatId, media }, { token: TELEGRAM_BOT_TOKEN })).sent;
 }
 
 export async function sendPhotoMessage(
@@ -557,7 +561,7 @@ export async function sendPhotoMessage(
     return false;
   }
 
-  return (await sendTelegramApi('sendPhoto', {
+  return (await sendBotApi('sendPhoto', {
     chat_id: chatId, photo: photoUrl,
     ...(caption ? { caption, parse_mode: 'HTML' } : {}),
   }, { token: TELEGRAM_BOT_TOKEN })).sent;

@@ -49,11 +49,11 @@ export function PaymentLinkControls({
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!state?.retryAt) return;
+    if (!state?.retryAt && !state?.telegramRetryAt) return;
     setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [state?.retryAt]);
+  }, [state?.retryAt, state?.telegramRetryAt]);
 
   const serverOffset = useMemo(() => state?.serverNow ? new Date(state.serverNow).getTime() - Date.now() : 0, [state?.serverNow]);
   const retryMs = state?.retryAt ? new Date(state.retryAt).getTime() - (now + serverOffset) : 0;
@@ -113,6 +113,13 @@ export function PaymentLinkControls({
         {!countdown && state.retryAt && <span> · Можно после {dateTime(state.retryAt)}</span>}
       </p>
       {!state.canSend && state.reason && <p className="text-amber-800 dark:text-amber-300">{state.reason}</p>}
+      {state.telegramRetryAt && (
+        <p className="text-amber-800 dark:text-amber-300" role="status">
+          {new Date(state.telegramRetryAt).getTime() > now + serverOffset
+            ? <>Telegram приостановлен до {dateTime(state.telegramRetryAt)}. Другие каналы доступны с учётом общего лимита отправок.</>
+            : <>Пауза Telegram завершена. Новая отправка — только вручную с учётом общего лимита.</>}
+        </p>
+      )}
       {sending && <p className="flex items-center gap-1.5 text-muted-foreground"><LoaderCircle className="h-3 w-3 animate-spin" />Запрос отправляется…</p>}
     </div>
   );
@@ -156,7 +163,7 @@ export function PaymentLinkControls({
                           {item.summary.channels.map((channel, index) => (
                             <li key={`${item.id}-${channel.channel}-${index}`} className="flex items-start gap-1.5 text-xs">
                               <span className="mt-0.5">{resultIcon(channel.status)}</span>
-                              <span><strong>{channelName(channel.channel)}:</strong> {channel.status === 'sent' ? 'принято сервисом' : channel.status === 'failed' ? 'ошибка' : 'пропущено'}{channel.detail ? ` — ${channel.detail}` : ''}</span>
+                              <span><strong>{channelName(channel.channel)}:</strong> {channel.status === 'sent' ? 'принято сервисом' : channel.status === 'failed' ? 'ошибка' : 'пропущено'}{channel.detail ? ` — ${channel.detail}` : ''}{channel.retryAt && ` · Доступен после ${dateTime(channel.retryAt)}`}</span>
                             </li>
                           ))}
                         </ul>

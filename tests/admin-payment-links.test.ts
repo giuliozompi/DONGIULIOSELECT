@@ -13,6 +13,9 @@ import { buildPaymentLinkState } from '../shared/payment-link-attempts';
 import { summarizePaymentDelivery } from '../shared/payment-link-delivery';
 import { getPaymentLinkStates, reservePaymentLinkAttempt, finishPaymentLinkAttempt, PaymentAttemptBlocked, recordAcceptedPaymentLink } from '../server/services/payment-link-attempts';
 import { registerAdminPaymentLinks } from '../server/adminPaymentLinkRoutes';
+import { withTelegramRateLimit, getTelegramRetryAt } from '../server/services/telegram-rate-limits';
+import { sendTelegramApi } from '../server/services/telegram-api';
+import { deliverPaymentLink } from '../server/services/payment-link-delivery';
 
 // Private temporary Postgres; never inherit production/workspace PG defaults.
 const exec = promisify(execFile);
@@ -97,6 +100,112 @@ beforeEach(async () => {
 
 const post = (role = 'admin', id = 'fixture-order') => fetch(`${base}/${id}/resend-payment-link`, {
   method: 'POST', headers: role ? { Authorization: role } : {},
+});
+
+const botToken = '424242:simulated-not-a-real-credential';
+const limitedSend = (seconds = 1200) => sendTelegramApi('sendMessage', {}, {
+  token: botToken, log() {},
+  transport: async () => ({ status: 429, body: JSON.stringify({
+    ok: false, error_code: 429, description: 'Too Many Requests', parameters: { retry_after: seconds },
+  }) }),
+});
+
+test('bot-wide 429 survives fresh connections and token rotation, without blocking other channels or orders', async () => {
+  order.customerEmail = 'fixture@example.invalid';
+  const id = await reservePaymentLinkAttempt(order, database);
+  let telegramCalls = 0;
+  const summary = await deliverPaymentLink(order, 'https://example.invalid/payment', {
+    canNotify: async () => true,
+    send: async channel => channel === 'telegram'
+      ? withTelegramRateLimit(botToken, async () => { telegramCalls++; return limitedSend(); }, database)
+      : { sent: true },
+    log: async () => {},
+  });
+  await finishPaymentLinkAttempt(id, summary, undefined, false, database);
+  assert.equal(telegramCalls, 1);
+  assert.equal(summary.paymentLinkSent, true);
+  assert.ok(summary.warning);
+  assert.ok(Date.parse(summary.channels[0].retryAt!) > Date.now() + 19 * 60_000);
+
+  // No process-local state is needed: simulate a restarted app with a fresh pool.
+  const freshPool = new pg.Pool({ host: directory, port: 5432, database: 'postgres', user: 'payment_test' });
+  try {
+    const freshDb = drizzle({ client: freshPool, schema });
+    const retryAt = await getTelegramRetryAt(freshDb, '424242:rotated-fixture');
+    assert.equal(retryAt, summary.channels[0].retryAt);
+    const originalToken = process.env.TELEGRAM_BOT_TOKEN;
+    process.env.TELEGRAM_BOT_TOKEN = botToken;
+    try {
+      const states = await getPaymentLinkStates([order, { ...order, id: 'another-order' }], freshDb);
+      assert.equal(states[order.id].history[0].status, 'partial');
+      assert.deepEqual(states[order.id].history[0].summary, summary);
+      assert.equal(states['another-order'].canSend, true);
+      assert.equal(states['another-order'].telegramRetryAt, retryAt);
+    } finally {
+      if (originalToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
+      else process.env.TELEGRAM_BOT_TOKEN = originalToken;
+    }
+    const next = await deliverPaymentLink({ ...order, id: 'another-order' }, 'https://example.invalid/payment', {
+      canNotify: async () => true,
+      send: async channel => channel === 'telegram'
+        ? withTelegramRateLimit('424242:rotated-fixture', async () => { telegramCalls++; return { sent: true }; }, freshDb)
+        : { sent: true },
+      log: async () => {},
+    });
+    assert.equal(telegramCalls, 1);
+    assert.equal(next.channels[0].status, 'skipped');
+    assert.equal(next.channels[0].retryAt, retryAt);
+    assert.deepEqual(next.channels.slice(1).map(channel => channel.status), ['sent', 'sent']);
+    assert.ok(next.warning);
+  } finally { await freshPool.end(); }
+});
+
+test('concurrent requests for different chats share one durable bot pause, while another bot remains available', async () => {
+  let calls = 0;
+  const results = await Promise.all(Array.from({ length: 10 }, () =>
+    withTelegramRateLimit(botToken, async () => {
+      calls++;
+      await new Promise(resolve => setTimeout(resolve, 20));
+      return limitedSend();
+    }, database)));
+  assert.equal(calls, 1);
+  assert.equal(results.filter(result => result.deferred).length, 9);
+  assert.equal(new Set(results.map(result => result.retryAt)).size, 1);
+  assert.equal((await withTelegramRateLimit('424243:other-bot', async () => ({ sent: true }), database)).sent, true);
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM order_notification_logs WHERE event='telegram_rate_limit'`)).rows[0].n, 1);
+});
+
+test('pause expiry permits only a new manual call, and a later 429 extends the persisted deadline', async () => {
+  await withTelegramRateLimit(botToken, () => limitedSend(172800), database);
+  assert.ok(Date.parse((await getTelegramRetryAt(database, botToken))!) > Date.now() + 86400_000);
+  await pool.query(`UPDATE order_notification_logs SET details=$1 WHERE event='telegram_rate_limit'`,
+    [JSON.stringify({ retryAt: new Date(Date.now() - 1).toISOString() })]);
+  let calls = 0;
+  const read = await getTelegramRetryAt(database, botToken);
+  assert.ok(Date.parse(read!) < Date.now());
+  assert.equal(calls, 0); // Reads and elapsed time never trigger provider calls.
+  const renewed = await withTelegramRateLimit(botToken, async () => { calls++; return limitedSend(2400); }, database);
+  assert.equal(calls, 1);
+  assert.ok(Date.parse(renewed.retryAt!) > Date.now() + 39 * 60_000);
+});
+
+test('unavailable or invalid pause persistence fails closed only for Telegram', async () => {
+  let calls = 0;
+  const unavailable = { transaction: async () => { throw new Error('fixture database down'); } } as any;
+  const send = async () => { calls++; return { sent: true }; };
+  const summary = await deliverPaymentLink(order, 'https://example.invalid/payment', {
+    canNotify: async () => true,
+    send: channel => channel === 'telegram'
+      ? withTelegramRateLimit(botToken, send, unavailable) : Promise.resolve({ sent: true }),
+    log: async () => {},
+  });
+  assert.equal(calls, 0);
+  assert.equal(summary.paymentLinkSent, true);
+  assert.equal(summary.channels[0].status, 'failed');
+  await withTelegramRateLimit(botToken, () => limitedSend(), database);
+  await pool.query(`UPDATE order_notification_logs SET details='invalid json' WHERE event='telegram_rate_limit'`);
+  assert.equal((await withTelegramRateLimit(botToken, send, database)).sent, false);
+  assert.equal(calls, 0);
 });
 
 test('20 competing database reservations allow exactly one attempt across connections', async () => {

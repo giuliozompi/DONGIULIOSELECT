@@ -14,3 +14,10 @@ Do not automatically retry an ambiguous Telegram send. A timeout or reset after 
 **Why:** Repeating a payment-link notification blindly can duplicate messages and bypass the operator's deliberate resend policy.
 
 **How to apply:** Report such outcomes as unconfirmed, preserve persistent resend limits, and keep retry manual. Never log raw Bot API URLs or error objects: the bot credential is embedded in the URL.
+
+## Provider-requested pauses
+Treat Telegram's `retry_after` as a bot-wide outgoing notification pause, separate from per-order resend limits. Keep its absolute expiry durable, and coordinate sends across application instances. Never pause email or WhatsApp because Telegram is limited.
+
+**Why:** Telegram's error does not identify whether the limit is specific to a chat or global; conservatively pausing the bot avoids repeatedly violating the provider's request. A process-local timer loses the restriction on restart. Bot identity, rather than the rotating credential, must identify the restriction.
+
+**How to apply:** Preserve the pause independently of individual orders and their bounded history. Expiry only permits a deliberate new send; it never initiates one. Read-only bot diagnostics are not outgoing customer notifications.

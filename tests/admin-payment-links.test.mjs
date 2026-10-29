@@ -10,7 +10,7 @@ let browser;
 before(async () => { browser = await launchBrowser(); });
 after(async () => { await browser?.close(); });
 
-async function fixture(context, { failure = false, cooldown = false, loadFailure = false } = {}) {
+async function fixture(context, { failure = false, cooldown = false, loadFailure = false, telegramPauseMs } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
   const live = { posts: 0, failure, loadFailure };
@@ -29,6 +29,7 @@ async function fixture(context, { failure = false, cooldown = false, loadFailure
     canSend: !cooldown, serverNow: new Date().toISOString(), attemptsInHour: cooldown ? 1 : 0, limit: 3,
     retryAt: cooldown ? new Date(Date.now() + 60_000).toISOString() : undefined,
     reason: cooldown ? 'Пауза между отправками — 5 минут.' : undefined,
+    telegramRetryAt: telegramPauseMs === undefined ? undefined : new Date(Date.now() + telegramPauseMs).toISOString(),
     history: [{ id: 'old-attempt', at: new Date(Date.now() - 7_200_000).toISOString(), status: 'failed', summary }],
   };
   await page.send('Fetch.enable', { patterns: [
@@ -60,7 +61,8 @@ async function fixture(context, { failure = false, cooldown = false, loadFailure
     } else if (event.request.method !== 'GET') {
       await page.send('Fetch.failRequest', { requestId: event.requestId, errorReason: 'BlockedByClient' });
       throw new Error(`Unexpected mutation blocked: ${path}`);
-    } else if (path.startsWith('/web-api/admin/orders')) {
+    } else if (path.endsWith('/logs')) result = [];
+    else if (path.startsWith('/web-api/admin/orders')) {
       if (live.loadFailure) { status = 500; result = { error: 'Fixture history unavailable' }; }
       else {
         const enriched = { ...order, paymentLinkState: { ...live.state, serverNow: new Date().toISOString() } };
@@ -80,7 +82,11 @@ async function open(page) {
   await page.send('Page.navigate', { url: `${base}/web/admin/orders` });
   await page.wait(`!!document.querySelector(${JSON.stringify(action)})`);
 }
-const openDetail = page => page.click('tbody tr');
+async function openDetail(page) {
+  // Click the ID, not the row centre which may land on a resend/refresh button.
+  await page.click('tbody tr td:first-child');
+  await page.wait(`${body}.includes('Недавняя история')`);
+}
 
 test('list and detail display persistent sending errors and channel outcomes after reload', async context => {
   const { page } = await fixture(context);
@@ -154,4 +160,16 @@ test('history fetch errors are visible and cannot be mistaken for never sent', a
   await page.wait(`!!document.querySelector('[role="alert"]')`);
   assert.match(await page.evaluate(body), /Не удалось загрузить/);
   assert.equal(await page.evaluate(`!!document.querySelector(${JSON.stringify(action)})`), false);
+});
+
+test('bot pause is visible in list and detail without disabling other channels or sending on expiry', async context => {
+  const { page, live } = await fixture(context, { telegramPauseMs: 8000 });
+  await open(page);
+  assert.match(await page.evaluate(body), /Telegram приостановлен до/);
+  assert.match(await page.evaluate(body), /Другие каналы доступны/);
+  assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(action)}).disabled`), false);
+  await openDetail(page);
+  await page.wait(`${body}.includes('Telegram приостановлен до')`);
+  await page.wait(`${body}.includes('Пауза Telegram завершена')`, 12000);
+  assert.equal(live.posts, 0);
 });

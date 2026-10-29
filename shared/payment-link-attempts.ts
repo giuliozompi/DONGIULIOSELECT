@@ -35,6 +35,7 @@ export interface PaymentLinkOrder {
   paymentLinkSentAt?: string | Date | null;
 }
 export interface PaymentLinkState {
+  telegramRetryAt?: string;
   serverNow: string;
   canSend: boolean;
   reason?: string;

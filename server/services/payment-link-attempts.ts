@@ -4,6 +4,7 @@ import { db } from '../db';
 import { orderNotificationLogs, orders } from '../../shared/schema';
 import { buildPaymentLinkState, type PaymentAttemptDetails, type PaymentAttemptEvent, type PaymentLinkOrder, type PaymentLinkState } from '../../shared/payment-link-attempts';
 import type { PaymentDeliverySummary, paymentLinkOrderUpdate } from '../../shared/payment-link-delivery';
+import { getTelegramRetryAt } from './telegram-rate-limits';
 
 type Executor = Pick<typeof db, 'execute'>;
 type EventRow = PaymentAttemptEvent & { orderId: string };
@@ -44,9 +45,10 @@ async function eventsFor(executor: Executor, ids: string[]): Promise<EventRow[]>
 
 export async function getPaymentLinkStates(orders: PaymentLinkOrder[], database = db): Promise<Record<string, PaymentLinkState>> {
   const events = await eventsFor(database, orders.map(order => order.id));
+  const telegramRetryAt = await getTelegramRetryAt(database);
   const now = Date.now();
   return Object.fromEntries(orders.map(order => [
-    order.id, buildPaymentLinkState(order, events.filter(event => event.orderId === order.id), now),
+    order.id, { ...buildPaymentLinkState(order, events.filter(event => event.orderId === order.id), now), telegramRetryAt },
   ]));
 }
 
@@ -74,7 +76,7 @@ export async function reservePaymentLinkAttempt(order: PaymentLinkOrder, databas
 export async function finishPaymentLinkAttempt(id: string, summary?: PaymentDeliverySummary, error?: string, uncertain = false, database = db) {
   const status = summary
     ? summary.paymentLinkSent
-      ? summary.channels.some(channel => channel.status === 'failed') ? 'partial' : 'sent'
+      ? summary.channels.some(channel => channel.status === 'failed' || channel.retryAt) ? 'partial' : 'sent'
       : 'failed'
     : uncertain ? 'unknown' : 'failed';
   const details: PaymentAttemptDetails = { version: 1, summary, error };

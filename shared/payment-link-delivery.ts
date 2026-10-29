@@ -3,6 +3,7 @@ export interface PaymentChannelResult {
   channel: PaymentChannel;
   status: 'sent' | 'failed' | 'skipped';
   detail: string;
+  retryAt?: string;
 }
 export interface PaymentDeliverySummary {
   channels: PaymentChannelResult[];
@@ -18,7 +19,7 @@ export interface PaymentNotificationFields {
 
 export function summarizePaymentDelivery(channels: PaymentChannelResult[]): PaymentDeliverySummary {
   const paymentLinkSent = channels.some(channel => channel.status === 'sent');
-  const failures = channels.filter(channel => channel.status === 'failed');
+  const failures = channels.filter(channel => channel.status === 'failed' || channel.retryAt);
   const warning = !paymentLinkSent
     ? 'Ссылка создана, но ни один канал не подтвердил отправку. Свяжитесь с клиентом.'
     : failures.length

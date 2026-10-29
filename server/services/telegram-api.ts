@@ -5,7 +5,13 @@ import type { TelegramDiagnosticResult, TelegramDiagnosticCategory } from '../..
 type TelegramMethod = 'sendMessage' | 'sendPhoto' | 'sendMediaGroup';
 interface ApiResponse { status: number; body: string }
 export type TelegramTransport = (url: URL, body: string, timeoutMs: number) => Promise<ApiResponse>;
-interface SendResult { sent: boolean; error?: string }
+export interface TelegramSendResult {
+  sent: boolean;
+  error?: string;
+  retryAfterSeconds?: number;
+  retryAt?: string;
+  deferred?: boolean;
+}
 // Fresh IPv4 connections avoid an unusable IPv6 route or a stale pooled socket.
 // Do not change process-wide DNS/TLS settings or retry an ambiguous POST.
 const agent = new https.Agent({ keepAlive: false });
@@ -134,7 +140,7 @@ export async function sendTelegramApi(
     transport?: TelegramTransport;
     log?: (event: Record<string, unknown>) => void;
   } = {},
-): Promise<SendResult> {
+): Promise<TelegramSendResult> {
   const token = options.token ?? process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return { sent: false, error: 'Telegram: токен бота не настроен.' };
   const log = options.log ?? (event => console.error('[Telegram API]', event));
@@ -167,7 +173,13 @@ export async function sendTelegramApi(
     ? data.description.split(token).join('[redacted]').replace(/bot\d+:[A-Za-z0-9_-]+/g, 'bot[redacted]').slice(0, 300)
     : `HTTP ${response.status}`;
   const wait = data.parameters?.retry_after;
-  const retry = typeof wait === 'number' && Number.isInteger(wait) && wait > 0 && wait <= 86400
-    ? ` Повторите не ранее чем через ${wait} сек.` : '';
-  return { sent: false, error: `Telegram: ${description}${retry}` };
+  // retry_after is seconds, not milliseconds. Do not truncate a valid long pause.
+  const retryAfterSeconds = (response.status === 429 || data.error_code === 429)
+    && typeof wait === 'number' && Number.isSafeInteger(wait) && wait > 0
+    && wait <= (8.64e15 - Date.now()) / 1000 ? wait : undefined;
+  const retry = retryAfterSeconds ? ` Повторите не ранее чем через ${retryAfterSeconds} сек.` : '';
+  return {
+    sent: false, error: `Telegram: ${description}${retry}`,
+    ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
+  };
 }

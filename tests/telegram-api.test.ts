@@ -85,6 +85,22 @@ test('Telegram rate-limit instructions are visible without retrying the POST', a
     token, log() {}, transport: reply(429, { ok: false, description: 'Too Many Requests', parameters: { retry_after: 600 } }),
   });
   assert.match(result.error!, /600 сек/);
+  assert.equal(result.retryAfterSeconds, 600);
+});
+
+test('retry_after accepts long provider pauses but rejects invalid values and non-429 errors', async () => {
+  for (const wait of [0, -1, 1.2, '600', null, 1e20]) {
+    const result = await sendTelegramApi('sendMessage', payload, {
+      token, log() {}, transport: reply(429, { ok: false, parameters: { retry_after: wait } }),
+    });
+    assert.equal(result.retryAfterSeconds, undefined);
+  }
+  for (const [status, error_code, expected] of [[429, undefined, 172800], [200, 429, 172800], [403, 403, undefined]]) {
+    const result = await sendTelegramApi('sendMessage', payload, {
+      token, log() {}, transport: reply(status!, { ok: false, error_code, parameters: { retry_after: 172800 } }),
+    });
+    assert.equal(result.retryAfterSeconds, expected);
+  }
 });
 
 test('transport uses IPv4, a fresh verified HTTPS connection, JSON and a bounded deadline', async context => {
@@ -126,6 +142,8 @@ test('deadline covers a request stuck before the response, without sending a sec
 
 test('message, photo and album callers all use the common transport without exposing the real token', async context => {
   process.env.TELEGRAM_BOT_TOKEN = token;
+  const { telegramRateLimits } = await import('../server/services/telegram-rate-limits');
+  context.mock.method(telegramRateLimits, 'send', async (_token, send) => send());
   const bot = await import('../server/services/telegram-bot');
   const methods: string[] = [];
   context.mock.method(https, 'request', ((options: any, callback: any) => {
@@ -143,4 +161,12 @@ test('message, photo and album callers all use the common transport without expo
   assert.equal(await bot.sendPhotoMessage('fixture-chat', 'https://images.example.invalid/photo.jpg'), true);
   assert.equal(await bot.sendMediaGroup('fixture-chat', ['https://images.example.invalid/photo.jpg']), true);
   assert.deepEqual(methods, ['sendMessage', 'sendPhoto', 'sendMediaGroup']);
+});
+
+test('bot detailed payment result preserves structured pause information', async context => {
+  const { telegramRateLimits } = await import('../server/services/telegram-rate-limits');
+  const paused = { sent: false, retryAfterSeconds: 1200, retryAt: '2026-10-29T12:20:00.000Z', error: 'Fixture 429' };
+  context.mock.method(telegramRateLimits, 'send', async () => paused);
+  const bot = await import('../server/services/telegram-bot');
+  assert.deepEqual(await bot.sendPaymentLinkDetailed('fixture-chat', 'fixture-order', '100', 'https://example.invalid'), paused);
 });
