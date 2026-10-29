@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from 'express';
+import { registerAdminTelegramDiagnostics } from './adminTelegramDiagnosticsRoutes';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import path from 'path';
@@ -636,6 +637,7 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   }
 
   // GET /web-api/admin/check
+  registerAdminTelegramDiagnostics(app, '/web-api', [requireWebAuth, requireWebAdmin]);
   app.get('/web-api/admin/check', requireWebAuth, requireWebAdmin, (req: Request, res: Response) => {
     res.json({ ok: true, isMasterAdmin: !!(req as any).isWebMasterAdmin });
   });

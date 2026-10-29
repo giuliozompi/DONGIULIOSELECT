@@ -1,10 +1,12 @@
 import { webApi, getAccessToken, tryRefresh } from '../../lib/webApi';
 import type { AdminPrintFormat } from '../../../lib/printAdminOrder';
+import type { TelegramDiagnosticResult } from '@shared/telegram-diagnostics';
 
 const A = '/admin';
 
 export const adminApi = {
   check: () => webApi.get<{ ok: boolean; isMasterAdmin: boolean }>(`${A}/check`),
+  telegramDiagnostics: () => webApi.post<TelegramDiagnosticResult>(`${A}/telegram/diagnostics`),
 
   // Analytics
   analyticsSummary: (startDate: string, endDate: string) =>
