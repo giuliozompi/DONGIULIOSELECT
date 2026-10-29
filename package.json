@@ -12,6 +12,7 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "test:checkout-auth": "node --test tests/web-checkout-auth.test.mjs",
+    "test:web-api-refresh": "node --import tsx --test tests/web-api-refresh.test.ts",
     "test:telegram-address-keyboard": "node --test tests/telegram-address-keyboard.test.mjs",
     "test:checkout-pricing": "node --import tsx --test tests/web-checkout-pricing.test.ts",
     "test:orders": "node --test tests/web-orders.test.mjs",
