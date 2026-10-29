@@ -18,6 +18,7 @@ import { registerWebReorder } from './webReorderRoutes';
 import { registerWebCheckout } from './webCheckoutRoutes';
 import { registerAdminPaymentLinks } from './adminPaymentLinkRoutes';
 import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
+import { registerAdminEditorialRoutes } from './adminEditorialRoutes';
 import { getPaymentLinkStates } from './services/payment-link-attempts';
 import { telegramLinkCodeHandler, saveWebTelegramLink, unlinkWebTelegram } from './services/web-telegram-link';
 import { issueTelegramLinkCode, verifyTelegramLinkCode } from './utils/telegram-link-code';
@@ -963,6 +964,8 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   // ── ORDERS ─────────────────────────────────────────────────
 
   registerAdminPaymentLinks(app, requireWebAuth, requireWebAdmin);
+  registerAdminEditorialRoutes(app, [requireWebAuth, requireWebAdmin],
+    req => ((req as any).webUser as JwtPayload | undefined)?.sub);
   registerAdminOrderOperatorRoutes(app, '/web-api', [requireWebAuth, requireWebAdmin],
     req => ((req as any).webUser as JwtPayload | undefined)?.sub);
 

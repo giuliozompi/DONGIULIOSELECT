@@ -28,6 +28,9 @@ import AdminOrders from './admin/pages/AdminOrders';
 import AdminClients from './admin/pages/AdminClients';
 import AdminLogs from './admin/pages/AdminLogs';
 import AdminSettings from './admin/pages/AdminSettings';
+import AdminVideos from './admin/pages/AdminVideos';
+import AdminCheeses from './admin/pages/AdminCheeses';
+import AdminMarketPrices from './admin/pages/AdminMarketPrices';
 import { useWebAuth } from './hooks/useWebAuth';
 
 function WebAuthInit() {
@@ -53,6 +56,9 @@ function AdminRouter() {
         <Route path="/web/admin/clients" component={AdminClients} />
         <Route path="/web/admin/logs" component={AdminLogs} />
         <Route path="/web/admin/settings" component={AdminSettings} />
+        <Route path="/web/admin/videos" component={AdminVideos} />
+        <Route path="/web/admin/cheeses" component={AdminCheeses} />
+        <Route path="/web/admin/market-prices" component={AdminMarketPrices} />
         <Route component={AdminDashboard} />
       </Switch>
     </WebAdminLayout>

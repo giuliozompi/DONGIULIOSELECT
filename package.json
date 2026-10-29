@@ -25,6 +25,8 @@
     "test:telegram-link-ui": "node --test tests/web-telegram-link.test.mjs",
     "test:order-operator": "node --import tsx --test tests/order-operator-tools.test.ts",
     "test:order-operator-ui": "node --test tests/admin-order-operator-ui.test.mjs",
+    "test:editorial": "node --import tsx --test tests/editorial-admin.test.ts",
+    "test:editorial-ui": "node --test tests/editorial-admin-ui.test.mjs",
     "test:wishlist": "node --test tests/web-wishlist.test.mjs",
     "test:wishlist-quantity": "node --test tests/web-wishlist-quantity.test.mjs",
     "test:cart-quantity": "node --test tests/web-cart-quantity.test.mjs",

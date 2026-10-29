@@ -5,7 +5,7 @@ import { adminApi } from './lib/adminApi';
 import { useWebAuth } from '../hooks/useWebAuth';
 import {
   LayoutDashboard, Tag, Package, ShoppingCart, Users,
-  FileText, Settings, LogOut, Menu, Shield, ChevronRight, Eye, EyeOff,
+  FileText, Settings, LogOut, Menu, Shield, ChevronRight, Eye, EyeOff, Video, BookOpen, TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,9 @@ const NAV = [
   { path: '/web/admin', label: 'Дашборд', icon: LayoutDashboard, exact: true },
   { path: '/web/admin/categories', label: 'Категории', icon: Tag },
   { path: '/web/admin/products', label: 'Товары', icon: Package },
+  { path: '/web/admin/videos', label: 'Видео', icon: Video },
+  { path: '/web/admin/cheeses', label: 'Сыры', icon: BookOpen },
+  { path: '/web/admin/market-prices', label: 'Цены в мире', icon: TrendingUp },
   { path: '/web/admin/orders', label: 'Заказы', icon: ShoppingCart },
   { path: '/web/admin/clients', label: 'Клиенты', icon: Users },
   { path: '/web/admin/logs', label: 'Логи', icon: FileText },

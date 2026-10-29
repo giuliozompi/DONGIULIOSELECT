@@ -1,7 +1,28 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb, date, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, uuid, integer, decimal, boolean, timestamp, jsonb, date, uniqueIndex, index, check } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import type { EditorialData } from './editorial';
+
+export const editorialEntries = pgTable('editorial_entries', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  kind: text('kind').notNull(),
+  data: jsonb('data').$type<EditorialData>().notNull(),
+  revision: integer('revision').notNull().default(1),
+  moderation: text('moderation'),
+  moderationNote: text('moderation_note').notNull().default(''),
+  createdBy: varchar('created_by').notNull(),
+  updatedBy: varchar('updated_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index('editorial_entries_kind_updated').on(table.kind, table.updatedAt.desc()),
+  check('editorial_entries_kind_check', sql`${table.kind} IN ('video', 'cheese', 'price')`),
+  check('editorial_entries_revision_check', sql`${table.revision} > 0`),
+  check('editorial_entries_moderation_check', sql`${table.moderation} IN ('pending', 'approved', 'rejected')`),
+  check('editorial_entries_check', sql`(${table.kind} = 'price' AND ${table.moderation} IS NOT NULL) OR
+    (${table.kind} <> 'price' AND ${table.moderation} IS NULL)`),
+]);
 
 // Пользователи (Telegram users)
 export const users = pgTable("users", {
