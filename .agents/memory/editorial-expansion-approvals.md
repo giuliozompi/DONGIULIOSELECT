@@ -14,3 +14,9 @@ For the first version, the user chose «Video già pubblicati» on YouTube and T
 **Why:** The user explicitly selected this scope when asked which video mode to include initially.
 
 **How to apply:** Keep the initial video proposal focused on existing published videos. Treat direct uploads and live streaming as separate future extensions requiring approval; this choice itself does not authorize implementation.
+
+Confirmed editorial scope: initial content in Russian; a world map initially focused on Italian cheeses but supporting other countries; a pilot of five videos and 10–15 cheeses, prioritizing links to the existing catalogue. Cheese articles include photographs, origin, history, characteristics, culinary uses and related purchasable products. AI prepares source-based drafts for operator review before publication. Purchases use the existing catalogue's prices, availability and weight rules.
+
+**Why:** The user explicitly approved this proposed scope.
+
+**How to apply:** Preserve these boundaries when proposing individual implementation phases. Scope approval alone does not authorize subsequent design, development or release phases.
