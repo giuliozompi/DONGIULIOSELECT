@@ -70,6 +70,28 @@ class Connection {
     await this.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...point, button: 'left', clickCount: 1 });
     await this.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...point, button: 'left', clickCount: 1 });
   }
+  async setViewport({ width, height, mobile = false, deviceScaleFactor = 1 }) {
+    await this.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor, mobile });
+    await this.send('Emulation.setTouchEmulationEnabled', { enabled: mobile });
+  }
+  async tap(selector) {
+    await this.wait(`!!document.querySelector(${JSON.stringify(selector)})`);
+    const point = await this.evaluate(`(async () => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const rect = element.getBoundingClientRect();
+      const x = rect.x + rect.width / 2, y = rect.y + rect.height / 2;
+      if (element.disabled || !rect.width || !rect.height ||
+          x < 0 || x >= innerWidth || y < 0 || y >= innerHeight ||
+          !element.contains(document.elementFromPoint(x, y))) {
+        throw new Error('Touch target is disabled, hidden, outside the viewport or covered: ' + ${JSON.stringify(selector)});
+      }
+      return { x, y };
+    })()`);
+    await this.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+    await this.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  }
   async fill(selector, value) {
     await this.evaluate(`(() => {
       const input = document.querySelector(${JSON.stringify(selector)});
@@ -112,7 +134,7 @@ export async function launchBrowser() {
       // outside page-level interception and accidentally reach real APIs.
       await page.send('Network.enable');
       await page.send('Network.setBypassServiceWorker', { bypass: true });
-      await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 1000, deviceScaleFactor: 1, mobile: false });
+      await page.setViewport({ width: 1280, height: 1000 });
       page.close = async () => {
         page.socket.close();
         await root.send('Target.disposeBrowserContext', { browserContextId });
