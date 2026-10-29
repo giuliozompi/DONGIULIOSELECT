@@ -10,9 +10,9 @@ export const cheeses = [
 ];
 
 export function Header({ active }: { active: string }) {
-  const links = [['Видео','Videos'],['Карта сыров','CheeseMap'],['Истории','CheeseStory'],['Редакция','EditorialAdmin']];
+  const links = [['Видео Don Giulio','Videos'],['Атлас сыров','CheeseMap'],['Статья · демо','CheeseStory'],['Редакция · демо','EditorialAdmin']];
   return <header className="dg-top"><div className="dg-shell dg-top-in">
-    <a href="/__mockup/preview/editorial/Videos" className="dg-brand"><span className="dg-seal">DG</span><span><strong>Don Giulio Select</strong><small>bottega di formaggi · прототип</small></span></a>
+    <a href="/__mockup/preview/editorial/Videos" className="dg-brand"><span className="dg-seal">DG</span><span><strong>Don Giulio Select</strong><small>bottega · storie di gusto · прототип</small></span></a>
     <nav className="dg-nav">{links.map(([label,to])=><a key={to} href={`/__mockup/preview/editorial/${to}`} className={active===to?'active':''}>{label}</a>)}</nav>
     <span className="dg-demo">Демо · не магазин</span>
   </div></header>;

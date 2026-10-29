@@ -39,16 +39,31 @@ try {
 
   await visit('CheeseStory', '?cheese=camembert');
   await page.wait('document.querySelector(".dg h1")?.innerText.includes("Камамбер")');
+  assert.match(await page.evaluate('document.body.innerText'), /необязательн/i);
+  assert.equal(await page.evaluate('document.querySelectorAll("iframe").length'), 0);
   console.log('PASS article corresponds to selected cheese');
 
   await visit('EditorialAdmin');
+  assert.equal(await page.evaluate('document.querySelector("#video-cheese-link").value'), '');
+  assert.equal(await page.evaluate('document.querySelector("#video-cheese-link").required'), false);
   await page.fill('#editor-title', 'Тест редактора — демо');
   await page.click('button[aria-label="Добавить источник"]');
   await page.wait('document.body.innerText.includes("Ссылка добавлена только")');
   assert.equal(await page.evaluate('document.querySelector("#editor-title").value'), 'Тест редактора — демо');
+  await page.evaluate('Array.from(document.querySelectorAll("button")).find(e => /Статья атласа|История сыра/.test(e.textContent)).click()');
+  await page.wait('!!document.querySelector("#article-related-video")');
+  assert.equal(await page.evaluate('document.querySelector("#article-related-video").disabled'), true);
   console.log('PASS admin input and explicit local-only demo feedback');
 
   await visit('Videos');
+  assert.equal(await page.evaluate('document.querySelectorAll("button[aria-pressed]").length'), 4);
+  for (let i = 0; i < 4; i++) {
+    await page.evaluate(`document.querySelectorAll('button[aria-pressed]')[${i}].click()`);
+    await page.wait(`document.querySelectorAll('button[aria-pressed]')[${i}].getAttribute('aria-pressed') === 'true'`);
+    assert.equal(await page.evaluate('document.querySelectorAll(\'button[aria-pressed="true"]\').length'), 1);
+    assert.match(await page.evaluate('document.querySelector("p[aria-live]").textContent'), /нет проверенных роликов/);
+  }
+  console.log('PASS four independent video categories, honest unverified contents, optional cheese/media relations');
   assert.equal(await page.evaluate('document.querySelectorAll("iframe").length'), 0);
   await page.evaluate('Array.from(document.querySelectorAll("button")).find(e => e.textContent.includes("Открыть плейлист")).click()');
   await page.wait('!!document.querySelector("iframe")');

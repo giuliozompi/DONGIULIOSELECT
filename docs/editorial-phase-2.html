@@ -25,12 +25,14 @@ code{background:#eee7da;padding:1px 5px;border-radius:4px}li{margin:7px 0}.badge
 <div class="notice"><strong>Limite dell’approvazione:</strong> il lavoro riguarda esclusivamente progettazione e anteprime. Nessuna nuova tabella o migrazione, modifica al sito pubblico, attivazione di servizi a pagamento o invio su GitHub. Le fasi successive richiedono approvazione separata.</div>
 
 <h2>1. Perimetro confermato</h2>
+<p><strong>Due sezioni autonome:</strong> <em>Video Don Giulio</em> raccoglie le attività di Don Giulio: videoricette, interviste, recensioni di prodotti e visite/recensioni di luoghi come magazzini, mercati e ristoranti. Non è una videoteca dedicata soltanto ai formaggi. La <em>Carta dei formaggi</em> è una sezione distinta, con una propria navigazione e propri contenuti enciclopedici.</p>
 <p>Contenuti in russo; video già pubblicati su YouTube e Telegram; mappa mondiale inizialmente concentrata sui formaggi italiani, aperta agli altri Paesi. Progetto pilota successivo: cinque video e 10–15 formaggi. L’AI prepara bozze con fonti, sottoposte a revisione umana. I prodotti collegati usano prezzi, disponibilità e regole di peso del catalogo esistente.</p>
 <p>Le fotografie e le informazioni presenti nelle anteprime sono dimostrative. Le fotografie provengono dal catalogo del negozio e non provano l’origine o la certificazione di un formaggio tradizionale.</p>
 
 <h2>2. Percorsi proposti</h2>
 <div class="card"><strong>Video:</strong> elenco → scelta del contenuto → caricamento esplicito del lettore, se disponibile → collegamento alla fonte. Un contenuto non incorporabile non deve mostrare un finto lettore funzionante.</div>
 <div class="card"><strong>Enciclopedia:</strong> mappa o elenco → fotografia e anteprima del formaggio → articolo completo → prodotti realmente collegati → carrello esistente. Ricerca, filtri ed elenco devono funzionare anche senza utilizzare la mappa.</div>
+<p><strong>Collegamento facoltativo, non dipendenza:</strong> una scheda del formaggio può includere uno o più video pertinenti, scelti dalla videoteca Don Giulio oppure tramite collegamenti esterni validati. Una scheda senza video resta completa e acquistabile; un video può essere pubblicato senza alcun formaggio associato. Non colleghiamo automaticamente la playlist o il post forniti a un formaggio senza verificarne il contenuto.</p>
 <div class="card"><strong>Admin:</strong> bozza manuale o proposta AI → controllo delle fonti e dei dati → revisione → pubblicazione autorizzata. Salvataggio, generazione AI e pubblicazione nelle anteprime non sono operazioni reali.</div>
 
 <h2>3. Verifica dei collegamenti forniti</h2>
@@ -78,7 +80,8 @@ code{background:#eee7da;padding:1px 5px;border-radius:4px}li{margin:7px 0}.badge
 <tr><td>Cucina</td><td>Utilizzi consigliati, modalità di servizio e abbinamenti, separati dalle informazioni fattuali documentate.</td></tr>
 <tr><td>Fonti e revisione</td><td>Fonte, editore, collegamento, data di controllo e fatti supportati; origine manuale/AI; revisore e stato editoriale.</td></tr>
 <tr><td>Prodotti collegati</td><td>Identificativi del catalogo, tipo di relazione ed etichetta commerciale corretta; collegamento confermato dall’operatore, mai dedotto automaticamente dal solo nome.</td></tr>
-<tr><td>Video</td><td>Fornitore e tipo (video, playlist o post), collegamento originale validato, titolo/descrizione verificati, copertina con diritti, argomenti, eventuali formaggi collegati e stato di pubblicazione.</td></tr>
+<tr><td>Scheda video autonoma</td><td>Rubrica (videoricette, interviste, recensioni di prodotti, luoghi), fornitore e tipo (video, playlist o post), collegamento originale validato, titolo/descrizione verificati, copertina con diritti, argomenti e stato di pubblicazione. Formaggi collegati facoltativi, mai obbligatori per pubblicare il video.</td></tr>
+<tr><td>Media facoltativi nella scheda del formaggio</td><td>Video della videoteca selezionati dall’operatore e/o collegamenti esterni pertinenti e validati. Se non esistono collegamenti verificati, nell’articolo pubblico non compare una sezione video vuota. La pubblicazione dell’articolo e i prodotti acquistabili non dipendono dalla presenza di media.</td></tr>
 </tbody></table></div>
 
 <h2>6. Regole editoriali e commerciali</h2>
@@ -104,7 +107,7 @@ code{background:#eee7da;padding:1px 5px;border-radius:4px}li{margin:7px 0}.badge
 
 <h2>8. Verifiche delle anteprime e limite di rilascio</h2>
 <p>Build del prototipo riuscita. Verificate le quattro pagine a 1280 e 390 pixel, senza scorrimento orizzontale e con disposizione a colonna singola sul telefono. Controllati: fotografie sulla geografia reale, selezione del formaggio, collegamento all’articolo corretto, ricerca e risultato vuoto, campi admin dimostrativi, caricamento del lettore solo su richiesta e assenza di chiamate alle API del negozio durante queste prove. La riproduzione effettiva dei filmati non è certificata da questi controlli.</p>
-<div class="notice"><strong>Attenzione per un futuro rilascio:</strong> la preparazione dell’area di anteprima ha evidenziato un problema di isolamento delle dipendenze. Il ripristino tramite il vecchio lockfile npm è stato bloccato dal filtro di sicurezza su un pacchetto transitivo. La protezione non è stata aggirata; l’ambiente di sviluppo è stato ripristinato con versioni consentite dal manifest e l’anteprima ha dipendenze locali. Il manifest e il lockfile npm del sito non sono stati modificati. Prima di un nuovo rilascio occorre un lavoro separato e approvato sulla riproducibilità delle installazioni; questa progettazione non lo autorizza.</div>
+<div class="notice"><strong>Manutenzione dell’ambiente, separata dal progetto:</strong> un’integrazione automatica di lavoro Telegram ha evidenziato pacchetti bloccati per sicurezza nel vecchio lockfile. Il ripristino automatico è ora riuscito aggiornando le risoluzioni entro gli intervalli già consentiti dal manifest, senza aggirare il filtro e mantenendo npm. Il negozio e l’anteprima installano ciascuno le proprie dipendenze; la preparazione automatica non esegue più modifiche allo schema del database. Questa manutenzione non autorizza l’implementazione delle sezioni editoriali né un rilascio pubblico.</div>
 
 <h2>9. Fonti del confronto</h2>
 <ol>

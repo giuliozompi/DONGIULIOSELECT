@@ -20,3 +20,9 @@ Confirmed editorial scope: initial content in Russian; a world map initially foc
 **Why:** The user explicitly approved this proposed scope.
 
 **How to apply:** Preserve these boundaries when proposing individual implementation phases. Scope approval alone does not authorize subsequent design, development or release phases.
+
+«Video e carta dei formaggi sono due sezioni separate». La sezione video riporta le attività di Don Giulio: videoricette, interviste, recensioni di prodotti e/o locali, quali magazzini, mercati e ristoranti. La carta dei formaggi è distaccata dalla sezione video, ma una scheda può contenere video e/o collegamenti a video pertinenti a quel formaggio.
+
+**Why:** The user clarified that the cheese-centric video mockup narrowed the intended video section incorrectly.
+
+**How to apply:** Give the videoteca its own broad identity, categories and navigation. Neither section depends on the other: cheese associations are optional for a video, and relevant media is optional in a cheese article. Do not assign an unverified playlist or post to a sample cheese merely to fill the related-video area.

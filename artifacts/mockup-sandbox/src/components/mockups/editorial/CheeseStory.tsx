@@ -21,6 +21,10 @@ export function CheeseStory() {
           <h1 className="dg-title">{item.title}<span style={{display:'block',fontSize:18,fontStyle:'italic',color:'var(--muted)',letterSpacing:0,marginTop:10}}>{item.latin}</span></h1>
           <p className="dg-sub" style={{fontSize:13}}>Разговор о месте, ремесле и характере — без путаницы между европейским происхождением и сегодняшним продуктом.</p>
           <div style={{marginTop:19}}><DemoNotice>Демонстрационная статья: сведения и указанные источники требуют редакторской проверки. Это не утверждённая энциклопедическая публикация.</DemoNotice></div>
+          <div className="dg-card" style={{padding:16,marginTop:12}}>
+            <div className="dg-kicker">Связанные материалы · необязательно</div>
+            <p style={{fontSize:11,lineHeight:1.7,color:'var(--muted)',margin:'7px 0 0'}}>К статье можно добавить действительно относящееся к этому сыру видео из видеотеки или проверенную внешнюю ссылку. Сейчас таких подтверждённых материалов нет — общий плейлист не связан с этой статьёй автоматически.</p>
+          </div>
         </div>
         <figure style={{margin:0,position:'relative',height:310,background:'#e7dfcd',overflow:'hidden'}}>
           <img src={item.image} alt={`Иллюстрация российского каталожного продукта ${item.title}`} className="dg-image"/>
@@ -53,7 +57,7 @@ export function CheeseStory() {
         </aside>
       </section>
       <section style={{borderTop:'1px solid var(--line)',marginTop:30,paddingTop:22}}>
-        <div className="dg-kicker">Продолжить знакомство</div><div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:12}}>
+        <div className="dg-kicker">Другие статьи атласа</div><div style={{display:'flex',gap:12,flexWrap:'wrap',marginTop:12}}>
           {cheeses.filter(c=>c.id!==id).map(c=><button key={c.id} onClick={()=>jump(c.id)} className="dg-card" style={{display:'flex',alignItems:'center',gap:12,padding:10,cursor:'pointer',color:'var(--ink)',textAlign:'left'}}><img src={c.image} alt="" style={{width:48,height:48,objectFit:'cover'}}/><span><strong style={{fontSize:12}}>{c.title}</strong><span style={{display:'block',fontSize:10,color:'var(--muted)',marginTop:3}}>{c.country}</span></span></button>)}
         </div>
       </section>
