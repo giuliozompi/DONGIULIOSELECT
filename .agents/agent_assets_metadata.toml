@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "gWGM5xcnRKLkeuHFz8Huf"
+uri = "file://docs/editorial-phase-2.html"
+type = "html"
+title = "Video ed enciclopedia dei formaggi — progetto del punto 2"
+description = "Anteprime, struttura delle pagine, dati editoriali, verifica dei collegamenti video e confronto dei servizi e dei costi."
+logical_id = "a368e4a8-1bce-49ed-b7bd-b1883d270499"
+content_hash = "sha256:b48322f44c3740db23d361ea04327b259be4e1a5d8ca71aaaf6587cda938a1c1"
+size = 14666
+mtime_ms = 1793277360855
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b46fb5dd-cef8-459f-80c4-2994811a8fb4/a368e4a8-1bce-49ed-b7bd-b1883d270499/5b2ac7ee-974a-4e1e-86d6-0eb6bb3bad9c"
+storage_version_token = "1793277511754280"
+content_type = "text/html"

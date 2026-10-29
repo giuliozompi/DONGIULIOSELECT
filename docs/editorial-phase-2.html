@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="it">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Don Giulio Select — Progetto video ed enciclopedia</title>
+<style>
+:root{color-scheme:light;font:16px/1.65 system-ui,sans-serif;color:#29251e;background:#f5f1e8}
+*{box-sizing:border-box}body{max-width:1080px;margin:0 auto;padding:40px 24px 70px}
+header{border-bottom:3px solid #aa620e;padding-bottom:25px}h1{font-size:clamp(26px,4vw,42px);line-height:1.2;max-width:850px}
+h2{margin-top:40px;font-size:25px}h3{font-size:19px;margin-top:24px}
+.eyebrow{color:#91510a;font-weight:700;letter-spacing:.09em;text-transform:uppercase;font-size:12px}
+.notice{background:#fff8e8;border-left:4px solid #aa620e;padding:16px 20px;margin:22px 0}
+.card{background:#fffdf8;border:1px solid #dfd6c6;border-radius:12px;padding:20px;margin:16px 0}
+.table{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:14px;text-align:left;vertical-align:top;border-bottom:1px solid #ded5c5}th{background:#eee6d8}
+a{color:#8c4c08;text-underline-offset:3px;overflow-wrap:anywhere}small,.muted{color:#675e51}
+code{background:#eee7da;padding:1px 5px;border-radius:4px}li{margin:7px 0}.badge{display:inline-block;background:#e9efdf;padding:3px 10px;border-radius:20px;font-size:12px}
+@media print{body{padding:0;background:white}h2,h3{break-after:avoid}.card,tr{break-inside:avoid}a{color:inherit}.notice{background:white}}
+</style>
+<header>
+<div class="eyebrow">Don Giulio Select · Punto 2</div>
+<h1>Video ed enciclopedia geografica dei formaggi</h1>
+<p>Proposta di progettazione, struttura editoriale, verifica preliminare delle fonti video e confronto dei servizi.</p>
+<span class="badge">Prototipi isolati · nessuna pubblicazione</span>
+</header>
+<div class="notice"><strong>Limite dell’approvazione:</strong> il lavoro riguarda esclusivamente progettazione e anteprime. Nessuna nuova tabella o migrazione, modifica al sito pubblico, attivazione di servizi a pagamento o invio su GitHub. Le fasi successive richiedono approvazione separata.</div>
+
+<h2>1. Perimetro confermato</h2>
+<p>Contenuti in russo; video già pubblicati su YouTube e Telegram; mappa mondiale inizialmente concentrata sui formaggi italiani, aperta agli altri Paesi. Progetto pilota successivo: cinque video e 10–15 formaggi. L’AI prepara bozze con fonti, sottoposte a revisione umana. I prodotti collegati usano prezzi, disponibilità e regole di peso del catalogo esistente.</p>
+<p>Le fotografie e le informazioni presenti nelle anteprime sono dimostrative. Le fotografie provengono dal catalogo del negozio e non provano l’origine o la certificazione di un formaggio tradizionale.</p>
+
+<h2>2. Percorsi proposti</h2>
+<div class="card"><strong>Video:</strong> elenco → scelta del contenuto → caricamento esplicito del lettore, se disponibile → collegamento alla fonte. Un contenuto non incorporabile non deve mostrare un finto lettore funzionante.</div>
+<div class="card"><strong>Enciclopedia:</strong> mappa o elenco → fotografia e anteprima del formaggio → articolo completo → prodotti realmente collegati → carrello esistente. Ricerca, filtri ed elenco devono funzionare anche senza utilizzare la mappa.</div>
+<div class="card"><strong>Admin:</strong> bozza manuale o proposta AI → controllo delle fonti e dei dati → revisione → pubblicazione autorizzata. Salvataggio, generazione AI e pubblicazione nelle anteprime non sono operazioni reali.</div>
+
+<h2>3. Verifica dei collegamenti forniti</h2>
+<h3>YouTube: playlist, non singolo video</h3>
+<p><a href="https://www.youtube.com/playlist?list=PLr2lpSOEo-7IyZFeC_BR3xx5gox3EWDWZ">Apri la playlist fornita</a>.</p>
+<ul>
+<li>La documentazione ufficiale supporta l’incorporamento di playlist. La pagina del lettore è stata raggiunta via HTTP.</li>
+<li>La richiesta pubblica oEmbed per questa playlist ha restituito <code>Unauthorized</code>: non è stato possibile confermarne titolo, elenco dei video o disponibilità tramite questa interfaccia.</li>
+<li>Una risposta HTTP del lettore non dimostra che i filmati siano riproducibili: restano da confermare disponibilità effettiva, permessi di incorporamento e funzionamento sulle reti dei clienti.</li>
+<li>Proposta: caricamento del lettore su richiesta, senza riproduzione automatica, e collegamento visibile alla playlist originale. Nessuna nuova YouTube Data API è necessaria per il semplice lettore; un’eventuale sincronizzazione automatica sarà separata.</li>
+</ul>
+<h3>Telegram: il post indicato richiede l’apertura di Telegram</h3>
+<p><a href="https://t.me/dongiulioselect/128">Apri il post fornito</a>.</p>
+<ul>
+<li>Il widget ufficiale del post è raggiungibile e riconosce canale e numero del messaggio.</li>
+<li>Nell’HTML verificato compare <code>message_media_not_supported</code> con il messaggio “Please open Telegram to view this post”. Non espone un video riproducibile nel widget.</li>
+<li>Questo esito riguarda il post fornito, non tutti i contenuti Telegram. Non dimostra che il contenuto sia cancellato o che non funzioni nell’app Telegram.</li>
+<li>Proposta: per questo post, pulsante “Apri su Telegram”; per riprodurre il medesimo contenuto nel sito servirà un equivalente incorporabile su YouTube o un altro post supportato. Non scaricare né ripubblicare automaticamente il file.</li>
+</ul>
+<p class="muted">Verifica preliminare dal workspace, non prova di accessibilità da una rete russa né collaudo end-to-end della riproduzione audio/video.</p>
+
+<h2>4. Servizi e costi</h2>
+<p>Tariffe consultate il 29 ottobre 2026, in USD dove indicato. Sono riferimenti di listino, non un preventivo contrattuale; disponibilità commerciale, pagamenti, tasse e tariffe vanno riconfermati prima dell’attivazione.</p>
+<div class="table"><table>
+<thead><tr><th>Componente</th><th>Proposta / alternativa</th><th>Costo e limiti</th></tr></thead>
+<tbody>
+<tr><td>Mappa consigliata per la prima versione</td><td>Geografia vettoriale Natural Earth ospitata insieme al sito; fotografie associate a coordinate. Nessuna mappa stradale è richiesta.</td><td>Dati di pubblico dominio: nessun canone o quota API cartografica. Restano il normale traffico e le risorse dell’hosting. Confini generalizzati, non adatti a individuare indirizzi o delimitazioni legali DOP.</td></tr>
+<tr><td>Mappa con cartografia dettagliata</td><td>Leaflet e un fornitore di tasselli, ad esempio MapTiler.</td><td>Leaflet è open source. MapTiler Flex: $30/mese più eventuali eccedenze; listino con 25.000 sessioni SDK o quote API secondo l’integrazione. Il piano gratuito è presentato per prototipi/uso personale o non commerciale: non considerarlo automaticamente adatto al negozio.</td></tr>
+<tr><td>Tasselli pubblici OpenStreetMap</td><td>Non consigliati come dipendenza garantita del negozio.</td><td>Nessuno SLA; attribuzione e caching obbligatori, divieto di download massivo/offline. Dati aperti non significa infrastruttura gratuita illimitata.</td></tr>
+<tr><td>Riproduzione video</td><td>Lettori ufficiali e collegamenti alle fonti.</td><td>Nessun nostro servizio aggiuntivo di distribuzione video nella prima versione. Dipendenze e restrizioni delle piattaforme restano applicabili; non è streaming autonomo e non aggira blocchi di rete.</td></tr>
+<tr><td>Assistente editoriale AI</td><td>Valutare il collegamento OpenRouter già presente; modello da selezionare con prove di qualità.</td><td>Esempio di listino, non modello già approvato: GPT‑4.1 Mini, $0,40/M token in ingresso e $1,60/M in uscita. Nessuna generazione reale eseguita in questa fase.</td></tr>
+</tbody></table></div>
+<h3>Esempio trasparente del costo AI</h3>
+<p>Con 3.000 token di ingresso e 1.500 di uscita: <code>3.000 × 0,40 / 1.000.000 + 1.500 × 1,60 / 1.000.000 = $0,0036</code> per singola generazione. Quindici generazioni: circa $0,054. Sono escluse ricerca delle fonti, strumenti web, immagini, tentativi aggiuntivi, ricariche/commissioni e revisione umana. La dimensione effettiva delle schede potrebbe essere maggiore; questo non è il costo complessivo del progetto.</p>
+<p><strong>Raccomandazione:</strong> cartografia vettoriale locale e video esterni per la prima versione; nessun nuovo abbonamento cartografico/streaming finché non emerge una necessità concreta. L’AI si usa in fase editoriale, non a ogni visita del cliente.</p>
+
+<h2>5. Struttura proposta delle schede</h2>
+<div class="table"><table>
+<thead><tr><th>Gruppo</th><th>Dati da gestire</th></tr></thead>
+<tbody>
+<tr><td>Identità</td><td>Nome originale, nome russo, sinonimi, identificativo leggibile per il collegamento alla pagina, riassunto.</td></tr>
+<tr><td>Geografia</td><td>Paese/i e regioni di origine; uno o più punti rappresentativi, con indicazione di posizione approssimativa. Origine tradizionale distinta dal produttore commerciale.</td></tr>
+<tr><td>Immagini</td><td>Fotografia principale e galleria; descrizione accessibile; autore, provenienza e diritti d’uso; indicazione delle immagini illustrative.</td></tr>
+<tr><td>Storia e caratteristiche</td><td>Storia, tradizioni, latte, lavorazione, stagionatura, consistenza, gusto e peculiarità. Dati non verificati segnalati, non inventati per completare la scheda.</td></tr>
+<tr><td>Cucina</td><td>Utilizzi consigliati, modalità di servizio e abbinamenti, separati dalle informazioni fattuali documentate.</td></tr>
+<tr><td>Fonti e revisione</td><td>Fonte, editore, collegamento, data di controllo e fatti supportati; origine manuale/AI; revisore e stato editoriale.</td></tr>
+<tr><td>Prodotti collegati</td><td>Identificativi del catalogo, tipo di relazione ed etichetta commerciale corretta; collegamento confermato dall’operatore, mai dedotto automaticamente dal solo nome.</td></tr>
+<tr><td>Video</td><td>Fornitore e tipo (video, playlist o post), collegamento originale validato, titolo/descrizione verificati, copertina con diritti, argomenti, eventuali formaggi collegati e stato di pubblicazione.</td></tr>
+</tbody></table></div>
+
+<h2>6. Regole editoriali e commerciali</h2>
+<ul>
+<li>Fonti preferite: consorzi ufficiali, disciplinari e produttori documentati. Il modello è uno strumento per redigere, non una fonte alimentare autorevole di per sé.</li>
+<li>Prima della scelta del modello: confronto su tre schede con fonti note, valutando correttezza, qualità del russo e capacità di dichiarare i dati sconosciuti.</li>
+<li>Non attribuire DOP/IGP, certificazioni, allergeni o valori nutrizionali al prodotto venduto sulla base di una descrizione generica del formaggio.</li>
+<li>Una scheda storica su Gorgonzola non rende automaticamente equivalente o DOP un formaggio erborinato di pecora realizzato in Russia. Relazioni “ispirato a” e “equivalente” richiedono etichette e revisione appropriate.</li>
+<li>Se il catalogo non dispone del luogo di produzione come dato strutturato, servirà una gestione esplicita e verificata in una fase successiva, non una deduzione AI.</li>
+<li>Prezzi, disponibilità e unità si leggono dal catalogo al momento dell’acquisto; non mantenere copie commerciali indipendenti nell’enciclopedia.</li>
+<li>I clienti non acquistano un “tipo enciclopedico”: selezionano un prodotto identificato, con le sue informazioni e condizioni effettive.</li>
+</ul>
+
+<h2>7. Vincoli per le fasi di realizzazione</h2>
+<ul>
+<li>Riutilizzare le API del negozio, il carrello e il sistema di autenticazione esistenti; non sostituire database o infrastruttura.</li>
+<li>Pubblicare solo contenuti approvati; permessi editoriali espliciti e log delle modifiche.</li>
+<li>Accettare URL video validati per fornitore, non codice HTML arbitrario. Proteggere testo e immagini da inserimenti non sicuri.</li>
+<li>Mappa alternativa in elenco, controlli da tastiera, fotografie e lettori caricati solo quando necessari; segnalazioni comprensibili quando un servizio esterno non risponde.</li>
+<li>Verificare la riproduzione da reti e dispositivi reali dei clienti in Russia. Da questo ambiente non è possibile certificarla.</li>
+<li>Ogni migrazione futura e ogni rilascio richiedono l’approvazione prevista dalla roadmap e i controlli Timeweb già in uso.</li>
+</ul>
+
+<h2>8. Verifiche delle anteprime e limite di rilascio</h2>
+<p>Build del prototipo riuscita. Verificate le quattro pagine a 1280 e 390 pixel, senza scorrimento orizzontale e con disposizione a colonna singola sul telefono. Controllati: fotografie sulla geografia reale, selezione del formaggio, collegamento all’articolo corretto, ricerca e risultato vuoto, campi admin dimostrativi, caricamento del lettore solo su richiesta e assenza di chiamate alle API del negozio durante queste prove. La riproduzione effettiva dei filmati non è certificata da questi controlli.</p>
+<div class="notice"><strong>Attenzione per un futuro rilascio:</strong> la preparazione dell’area di anteprima ha evidenziato un problema di isolamento delle dipendenze. Il ripristino tramite il vecchio lockfile npm è stato bloccato dal filtro di sicurezza su un pacchetto transitivo. La protezione non è stata aggirata; l’ambiente di sviluppo è stato ripristinato con versioni consentite dal manifest e l’anteprima ha dipendenze locali. Il manifest e il lockfile npm del sito non sono stati modificati. Prima di un nuovo rilascio occorre un lavoro separato e approvato sulla riproducibilità delle installazioni; questa progettazione non lo autorizza.</div>
+
+<h2>9. Fonti del confronto</h2>
+<ol>
+<li><a href="https://developers.google.com/youtube/player_parameters">YouTube — lettori incorporati e parametri delle playlist</a></li>
+<li><a href="https://core.telegram.org/widgets/post">Telegram — widget ufficiale dei post pubblici</a></li>
+<li><a href="https://t.me/dongiulioselect/128?embed=1&amp;mode=tme">Widget del post Telegram verificato</a></li>
+<li><a href="https://www.naturalearthdata.com/about/terms-of-use/">Natural Earth — dati di pubblico dominio, anche per uso commerciale</a></li>
+<li><a href="https://leafletjs.com/">Leaflet — libreria cartografica</a></li>
+<li><a href="https://www.maptiler.com/cloud/pricing/">MapTiler — listino e limiti dei piani</a></li>
+<li><a href="https://operations.osmfoundation.org/policies/tiles/">OpenStreetMap Foundation — condizioni del servizio pubblico di tasselli</a></li>
+<li><a href="https://openrouter.ai/openai/gpt-4.1-mini">OpenRouter — esempio di modello e tariffe consultate</a></li>
+</ol>
+<footer><hr><p class="muted">Documento di progettazione. Nessun contenuto alimentare o servizio qui proposto è automaticamente approvato per la pubblicazione. Il punto successivo resta soggetto a consenso esplicito.</p></footer>
+</html>
