@@ -682,13 +682,20 @@ for (const fails of [false, true]) {
   });
 }
 
-test('address deletion requires confirmation and sends only one request while pending', async context => {
+for (const mobile of [false, true]) {
+  for (const lastAddress of [false, true]) {
+test(`address deletion requires confirmation and sends only one request while pending (${mobile ? 'mobile' : 'desktop'}, ${lastAddress ? 'last address' : 'other cards remain'})`, async context => {
+  const remainingAddresses = lastAddress ? [] : [officeAddress];
   const { page, requests, savedAddresses, releaseAddressDelete } = await openPage(context, {
-    authenticated: true, initialAddresses: [homeAddress, officeAddress], holdAddressDelete: true,
+    authenticated: true, initialAddresses: [homeAddress, ...remainingAddresses], holdAddressDelete: true,
   });
   context.after(releaseAddressDelete);
+  await page.setViewport(mobile
+    ? { width: 390, height: 844, mobile: true }
+    : { width: 1280, height: 900 });
   await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
-  await page.click(selector('button-delete-address-home'));
+  if (mobile) await page.tap(selector('button-delete-address-home'));
+  else await page.click(selector('button-delete-address-home'));
   await page.wait(`!!document.querySelector('[role="alertdialog"]')`);
   const dialog = await page.evaluate(`(() => {
     const dialog = document.querySelector('[role="alertdialog"]');
@@ -716,11 +723,17 @@ test('address deletion requires confirmation and sends only one request while pe
   assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"]')`), true);
   releaseAddressDelete();
   await page.wait(`!document.querySelector('[role="alertdialog"]') && !document.querySelector('[data-testid="card-address-home"]')`);
-  assert.equal(await page.evaluate(exists('card-address-office')), true);
-  assert.deepEqual(savedAddresses.map(address => address.id), ['office']);
+  await page.wait(`document.activeElement === document.querySelector('[data-testid="button-add-address"]')`);
+  assert.equal(await page.evaluate(exists('button-delete-address-home')), false);
+  assert.equal(await page.evaluate(exists('card-address-office')), !lastAddress);
+  assert.equal(await page.evaluate(`document.querySelectorAll('[data-testid^="card-address-"]').length`), remainingAddresses.length);
+  assert.equal(await page.evaluate(`document.body.textContent.includes('Нет сохранённых адресов')`), lastAddress);
+  assert.deepEqual(savedAddresses, remainingAddresses);
   assert.equal(requests.filter(r => r.method === 'DELETE').length, 1);
   await page.wait(`document.body.textContent.includes('Адрес удалён')`);
 });
+  }
+}
 
 test('address deletion can be cancelled by button or Escape with no request and restores focus', async context => {
   const { page, requests, savedAddresses } = await openPage(context, {
