@@ -64,9 +64,12 @@ export const useWebCart = create<WebCartState>()(
       addItem: (item, qty) =>
         set(state => {
           const existing = state.items.find(i => i.productId === item.productId);
-          const increment = qty ?? getCartAddQuantity(existing?.unit ?? item.unit, existing?.quantity);
+          // A catalogue update cannot change the meaning of a saved quantity.
+          // Keep the saved unit/price together until the row is removed.
+          const unit = existing?.unit ?? item.unit;
+          const increment = qty ?? getCartAddQuantity(unit, existing?.quantity);
           const quantity = (existing?.quantity ?? 0) + increment;
-          const nextQuantity = isKilogramUnit(existing?.unit ?? item.unit)
+          const nextQuantity = isKilogramUnit(unit)
             ? Math.round(quantity * 1000) / 1000
             : quantity;
           const items = existing

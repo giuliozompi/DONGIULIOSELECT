@@ -443,7 +443,7 @@ const card = `[data-testid="card-product-${product.id}"]`;
 const productRow = `[data-testid="cart-item-${product.id}"]`;
 const normalize = text => text.replace(/\s+/g, ' ').trim();
 
-async function assertContinuity(page, surface, unit, quantity) {
+async function assertContinuity(page, surface, unit, quantity, catalogPrice = product.price) {
   const weighted = ['кг', 'kg'].includes(unit.trim().toLowerCase());
   const label = weighted ? quantity.toFixed(3) : String(quantity);
   const selector = surface === 'catalog'
@@ -472,15 +472,96 @@ async function assertContinuity(page, surface, unit, quantity) {
     assert.equal(normalize(total), normalize(money(state.subtotal)));
     assert.equal(normalize(summary), normalize(`Итого${money(state.subtotal)}`));
   } else if (surface === 'detail') {
+    const unitLabel = await page.evaluate(`document.querySelector('[data-testid="button-qty-plus"]').parentElement.querySelector('.text-xs').textContent`);
+    assert.equal(unitLabel, unit);
     const total = await page.evaluate(`document.querySelector('[data-testid="button-qty-plus"]').parentElement.parentElement.querySelector('.text-right .font-bold').textContent`);
     assert.equal(normalize(total), normalize(money(state.subtotal)));
   } else {
     // The catalogue shows a unit price, not a line total.
     assert.equal(await page.evaluate(`document.querySelectorAll(${JSON.stringify(card)}).length`), 1);
     const price = await page.evaluate(`document.querySelector(${JSON.stringify(card)}).querySelector('.font-semibold').textContent`);
-    assert.equal(normalize(price), normalize(money(Number(product.price))));
+    assert.equal(normalize(price), normalize(money(Number(catalogPrice))));
   }
   return state;
+}
+
+for (const [savedUnit, catalogUnit] of [['кг', 'шт'], ['шт', 'кг'], ['kg', 'уп'], ['уп', 'kg']]) {
+  for (const surface of ['catalog', 'detail']) {
+    test(`${surface}: saved ${savedUnit} survives catalogue change to ${catalogUnit} until removal`, async context => {
+      const { page, product: catalogue } = await wishlistPage(browser, context, {
+        authenticated: false, productOverrides: { unit: savedUnit },
+      });
+      const initial = ['кг', 'kg'].includes(savedUnit) ? 0.2 : 1;
+      const step = initial === 0.2 ? 0.1 : 1;
+      const path = surface === 'catalog' ? '/web/catalog' : `/web/product/${product.slug}`;
+      const plus = surface === 'catalog'
+        ? `[data-testid="button-increase-cart-${product.id}"]` : '[data-testid="button-qty-plus"]';
+      const minus = surface === 'catalog'
+        ? `${card} button:has(svg.lucide-minus)` : '[data-testid="button-qty-minus"]';
+      const add = surface === 'catalog'
+        ? `[data-testid="button-add-cart-${product.id}"]` : '[data-testid="button-add-to-cart"]';
+      const notice = `[data-testid="cart-unit-notice-${product.id}"]`;
+      await page.send('Page.navigate', { url: `${wishlistBase}${path}` });
+      await page.click(add);
+      await assertContinuity(page, surface, savedUnit, initial);
+
+      // Only the API response changes: never re-seed or migrate persistence.
+      Object.assign(catalogue, { unit: catalogUnit, price: '7300.00' });
+      await page.send('Page.reload');
+      await assertContinuity(page, surface, savedUnit, initial, catalogue.price);
+      await page.wait(`document.querySelector(${JSON.stringify(notice)})?.textContent.includes(${JSON.stringify(catalogUnit)})`);
+      for (let count = 1; count <= 3; count++) {
+        await page.click(plus);
+        await assertContinuity(page, surface, savedUnit, Number((initial + count * step).toFixed(3)), catalogue.price);
+      }
+      await page.click(minus);
+      const quantity = Number((initial + 2 * step).toFixed(3));
+      await assertContinuity(page, surface, savedUnit, quantity, catalogue.price);
+      await page.click('header button:has(svg.lucide-shopping-cart)');
+      await assertContinuity(page, 'cart', savedUnit, quantity);
+      await page.click(`[data-testid="button-increase-${product.id}"]`);
+      await assertContinuity(page, 'cart', savedUnit, Number((quantity + step).toFixed(3)));
+      await page.click(`[data-testid="button-decrease-${product.id}"]`);
+      await assertContinuity(page, 'cart', savedUnit, quantity);
+      await page.click('[data-testid="button-checkout"] ~ button');
+      await assertContinuity(page, 'catalog', savedUnit, quantity, catalogue.price);
+      await page.click(`${card} p`);
+      await assertContinuity(page, 'detail', savedUnit, quantity);
+      await page.send('Page.reload');
+      await assertContinuity(page, 'detail', savedUnit, quantity);
+
+      // The minimum is also from the saved unit. Test removal in the source
+      // surface so both card and detail decrement paths are exercised.
+      if (surface === 'catalog') {
+        await page.send('Page.navigate', { url: `${wishlistBase}/web/catalog` });
+        await assertContinuity(page, surface, savedUnit, quantity, catalogue.price);
+      }
+      for (const next of [Number((initial + step).toFixed(3)), initial]) {
+        await page.click(minus);
+        await assertContinuity(page, surface, savedUnit, next, catalogue.price);
+      }
+      await page.click(minus);
+      await page.wait(`!!document.querySelector(${JSON.stringify(add)})`);
+      const empty = await readCart(page);
+      assert.deepEqual(empty.items, []);
+      assert.equal(empty.itemCount, 0);
+      assert.equal(empty.subtotal, 0);
+      assert.equal(await page.evaluate(`!!document.querySelector(${JSON.stringify(notice)})`), false);
+
+      // Explicit removal followed by a new addition adopts the new unit and
+      // its price/minimum, without resurrecting or duplicating the old row.
+      await page.click(add);
+      const nextInitial = ['кг', 'kg'].includes(catalogUnit) ? 0.2 : 1;
+      const expected = [{
+        productId: product.id, productName: product.name, price: catalogue.price,
+        unit: catalogUnit, quantity: nextInitial,
+      }];
+      await page.click('header button:has(svg.lucide-shopping-cart)');
+      await assertSharedCart([page], expected);
+      await page.send('Page.reload');
+      await assertSharedCart([page], expected);
+    });
+  }
 }
 
 for (const surface of ['catalog', 'detail']) {

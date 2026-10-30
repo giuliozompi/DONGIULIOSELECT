@@ -69,5 +69,7 @@ export async function wishlistPage(browser, context, {
       body: Buffer.from(path.includes('telegram-web-app') ? '' : JSON.stringify(body)).toString('base64'),
     });
   });
-  return { page, state, favorites, requests };
+  // Mutable catalogue snapshot lets tests model an admin changing the product
+  // while an existing cart retains its original selling unit.
+  return { page, state, favorites, requests, product };
 }

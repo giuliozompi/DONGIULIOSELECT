@@ -2,6 +2,11 @@ export function isKilogramUnit(unit: string): boolean {
   return ['кг', 'kg'].includes(unit.trim().toLowerCase());
 }
 
+export function areCartUnitsEqual(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase() ||
+    (isKilogramUnit(left) && isKilogramUnit(right));
+}
+
 // Quantities remain in the product's selling unit; never interpret grams as kg.
 export function getCartQuantityRules(unit: string) {
   return isKilogramUnit(unit)

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useWebCart } from '../hooks/useWebCart';
 import WebFavoriteButton from './WebFavoriteButton';
-import { getCartQuantityRules, isKilogramUnit } from '@shared/order-quantity';
+import { areCartUnitsEqual, getCartQuantityRules, isKilogramUnit } from '@shared/order-quantity';
 
 interface Product {
   id: string;
@@ -45,8 +45,10 @@ export default function WebProductCard({ product }: Props) {
 
   const cartItem = items.find(i => i.productId === product.id);
   const qty = cartItem?.quantity ?? 0;
-  const isKg = isKilogramUnit(product.unit);
-  const { step, initial: minQty } = getCartQuantityRules(product.unit);
+  const cartUnit = cartItem?.unit ?? product.unit;
+  const unitChanged = !areCartUnitsEqual(cartUnit, product.unit);
+  const isKg = isKilogramUnit(cartUnit);
+  const { step, initial: minQty } = getCartQuantityRules(cartUnit);
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -161,7 +163,7 @@ export default function WebProductCard({ product }: Props) {
                   <Minus className="w-3 h-3" />
                 </Button>
                 <span className="text-xs font-medium min-w-[2rem] text-center text-amber-800">
-                  {isKg ? qty.toFixed(3) : qty} {product.unit}
+                  {isKg ? qty.toFixed(3) : qty} {cartUnit}
                 </span>
                 <Button size="icon" variant="ghost" className="h-6 w-6 rounded-full" onClick={handleAdd} data-testid={`button-increase-cart-${product.id}`}>
                   <Plus className="w-3 h-3" />
@@ -170,6 +172,11 @@ export default function WebProductCard({ product }: Props) {
             )}
           </div>
         </div>
+        {unitChanged && (
+          <p className="text-xs text-amber-800" role="status" data-testid={`cart-unit-notice-${product.id}`}>
+            В корзине — {cartUnit}, в каталоге — {product.unit}. Чтобы сменить единицу, удалите товар из корзины и добавьте заново.
+          </p>
+        )}
       </div>
     </div>
   );

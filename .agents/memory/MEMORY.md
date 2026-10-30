@@ -17,3 +17,4 @@
 - [Preview dependency isolation](preview-dependency-isolation.md) — legacy npm projects need truly local sandbox dependencies and verification of both runtimes after scaffolding.
 - [GitHub release access](github-release-access.md) — secure-proxy pushes can require a Replit GitHub connection even with an existing PAT; connect rather than bypass.
 - [Async mutation controls](async-mutation-controls.md) — observer notifications can lag request locks; retries must not expose stale errors with enabled controls.
+- [Selling-unit changes](selling-unit-changes.md) — an unchanged product ID does not authorize converting a saved quantity to another selling unit.

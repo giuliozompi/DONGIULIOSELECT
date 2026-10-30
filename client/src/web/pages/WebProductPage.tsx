@@ -10,7 +10,7 @@ import { webApi } from '../lib/webApi';
 import { useWebMeta } from '../hooks/useWebMeta';
 import { ProductJsonLd, BreadcrumbJsonLd } from '../components/WebJsonLd';
 import WebFavoriteButton from '../components/WebFavoriteButton';
-import { getCartQuantityRules, isKilogramUnit } from '@shared/order-quantity';
+import { areCartUnitsEqual, getCartQuantityRules, isKilogramUnit } from '@shared/order-quantity';
 
 interface Product {
   id: string; name: string; slug: string; price: string; priceOld?: string;
@@ -82,8 +82,10 @@ export default function WebProductPage() {
 
   const cartItem = items.find(i => i.productId === product.id);
   const qty = cartItem?.quantity ?? 0;
-  const isKg = isKilogramUnit(product.unit);
-  const { step, initial: minQty } = getCartQuantityRules(product.unit);
+  const cartUnit = cartItem?.unit ?? product.unit;
+  const unitChanged = !areCartUnitsEqual(cartUnit, product.unit);
+  const isKg = isKilogramUnit(cartUnit);
+  const { step, initial: minQty } = getCartQuantityRules(cartUnit);
 
   const handleAdd = () => {
     if (!product.inStock) return;
@@ -98,7 +100,9 @@ export default function WebProductPage() {
   const price = parseFloat(product.price);
   const priceOld = product.priceOld ? parseFloat(product.priceOld) : null;
   const discountPct = priceOld ? Math.round((1 - price / priceOld) * 100) : null;
-  const totalPrice = qty > 0 ? (price * qty).toFixed(2) : null;
+  // A price per new selling unit cannot be multiplied by the old quantity.
+  const cartPrice = unitChanged && cartItem ? parseFloat(cartItem.price) : price;
+  const totalPrice = qty > 0 ? (cartPrice * qty).toFixed(2) : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -229,7 +233,7 @@ export default function WebProductPage() {
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleMinus} aria-label="Уменьшить количество" data-testid="button-qty-minus"><Minus className="w-4 h-4" /></Button>
                   <div className="text-center min-w-[4rem]">
                     <div className="font-semibold text-amber-800">{isKg ? qty.toFixed(3) : qty}</div>
-                    <div className="text-xs text-amber-600">{product.unit}</div>
+                    <div className="text-xs text-amber-600">{cartUnit}</div>
                   </div>
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleAdd} aria-label="Увеличить количество" data-testid="button-qty-plus"><Plus className="w-4 h-4" /></Button>
                 </div>
@@ -242,6 +246,13 @@ export default function WebProductPage() {
               </div>
             )}
           </div>
+
+          {unitChanged && (
+            <p className="text-xs text-amber-800" role="status" data-testid={`cart-unit-notice-${product.id}`}>
+              В корзине — {cartUnit}, в каталоге — {product.unit}. Итого рассчитано по цене в корзине: {cartPrice.toLocaleString('ru-RU')} ₽ / {cartUnit}.
+              {' '}Чтобы сменить единицу, удалите товар из корзины и добавьте заново.
+            </p>
+          )}
 
           {/* Description */}
           {product.descriptionShort && (
