@@ -166,6 +166,236 @@ async function assertQuantity(page, original, quantity) {
   assert.ok(summary.includes(money(state.subtotal)), summary);
 }
 
+async function assertSharedCart(pages, items) {
+  const subtotal = items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
+  for (const page of pages) {
+    await page.wait(`document.querySelectorAll('[data-testid^="cart-item-"]').length === ${items.length}`);
+    for (const item of items) {
+      const label = `${['кг', 'kg'].includes(item.unit.trim().toLowerCase()) ? item.quantity.toFixed(3) : item.quantity} ${item.unit}`;
+      const selector = `[data-testid="cart-item-${item.productId}"]`;
+      await page.wait(`document.querySelector(${JSON.stringify(selector)})?.textContent.includes(${JSON.stringify(label)})`);
+      const text = await page.evaluate(`document.querySelector(${JSON.stringify(selector)}).textContent`);
+      assert.ok(text.includes(money(Number(item.price) * item.quantity)), text);
+    }
+    const saved = await readCart(page);
+    assert.deepEqual(saved.items, items);
+    assert.equal(saved.itemCount, items.length);
+    assert.equal(saved.subtotal, subtotal);
+    if (items.length) {
+      const summary = await page.evaluate(`document.querySelector('[data-testid="button-checkout"]').parentElement.textContent`);
+      assert.ok(summary.includes(money(subtotal)), summary);
+    } else {
+      assert.equal(await page.evaluate(`!!document.querySelector('[data-testid="button-checkout"]')`), false);
+      assert.deepEqual(saved.repeatedOrders, {});
+    }
+  }
+}
+
+async function openSharedCart(context, unit, quantity) {
+  const first = await openCart(context, unit, quantity);
+  const second = await wishlistPage(browser, context, { authenticated: false, sharedWith: first.page });
+  await second.page.send('Page.navigate', { url: `${wishlistBase}/web/cart` });
+  await second.page.wait(`!!document.querySelector(${JSON.stringify(row)})`);
+  assert.equal(first.page.browserContextId, second.page.browserContextId);
+  context.after(() => {
+    assert.ok(second.requests.some(request => request.path === '/web-api/auth/refresh'),
+      'The second tab must also intercept its API calls');
+    assert.ok(second.requests.every(request =>
+      request.method === 'GET' || request.path === '/web-api/auth/refresh'),
+    'Cross-tab cart changes must not call real customer mutation endpoints');
+  });
+  return { ...first, second: second.page };
+}
+
+for (const unit of ['кг', 'шт']) {
+  test(`two tabs ${unit}: quantities, removals, empty cart and totals stay in sync without reload`, async context => {
+    const initial = unit === 'кг' ? 0.735 : 4;
+    const step = unit === 'кг' ? 0.1 : 1;
+    const { page, second, item } = await openSharedCart(context, unit, initial);
+    const pages = [page, second];
+    await assertSharedCart(pages, [item, unrelated]);
+    await page.send('Page.bringToFront');
+    await page.click(increase);
+    const changed = { ...item, quantity: Number((initial + step).toFixed(3)) };
+    await assertSharedCart(pages, [changed, unrelated]);
+    await second.send('Page.bringToFront');
+    await second.click(increase);
+    changed.quantity = Number((initial + 2 * step).toFixed(3));
+    await assertSharedCart(pages, [changed, unrelated]);
+    await page.send('Page.bringToFront');
+    await page.click(decrease);
+    changed.quantity = Number((initial + step).toFixed(3));
+    await assertSharedCart(pages, [changed, unrelated]);
+    await second.click('[data-testid="button-remove-untouched"]');
+    await assertSharedCart(pages, [changed]);
+    await page.click(increase);
+    changed.quantity = Number((initial + 2 * step).toFixed(3));
+    await assertSharedCart(pages, [changed]);
+    await second.click('[data-testid="button-remove-quantity-test"]');
+    await assertSharedCart(pages, []);
+    for (const tab of pages) await tab.send('Page.reload');
+    await assertSharedCart(pages, []);
+    // Add through the UI after emptying; neither tab may revive deleted rows.
+    await second.send('Page.navigate', { url: `${wishlistBase}/web/catalog` });
+    await second.click(`[data-testid="button-add-cart-${product.id}"]`);
+    const added = {
+      productId: product.id, productName: product.name, price: product.price,
+      unit: product.unit, quantity: 0.2,
+    };
+    await assertSharedCart([page], [added]);
+    await second.click('header button:has(svg.lucide-shopping-cart)');
+    await assertSharedCart(pages, [added]);
+    for (const tab of pages) await tab.send('Page.reload');
+    await assertSharedCart(pages, [added]);
+  });
+}
+
+test('two tabs: an edit before queued storage notifications preserves newer changes to another row', async context => {
+  const { page, second, item } = await openSharedCart(context, 'кг', 0.735);
+  // Suppress just the receiving tab's storage listener, as if delivery were
+  // delayed in a background tab. Its visible row remains stale on purpose.
+  await second.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+    window.addEventListener('storage', event => {
+      if (window.holdCartEvents && event.key === 'dgs-web-cart') event.stopImmediatePropagation();
+    });
+    window.holdCartEvents = true;
+  ` });
+  await second.send('Page.reload');
+  await assertSharedCart([second], [item, unrelated]);
+  await page.click(increase);
+  const changed = { ...item, quantity: 0.835 };
+  await assertSharedCart([page], [changed, unrelated]);
+  await second.wait(`document.querySelector(${JSON.stringify(row)})?.textContent.includes('0.735 кг')`);
+  await second.click('[data-testid="button-increase-untouched"]');
+  const other = { ...unrelated, quantity: 4 };
+  await assertSharedCart([page, second], [changed, other]);
+  // Removal must also survive a later edit from an out-of-date tab.
+  await page.click('[data-testid="button-remove-quantity-test"]');
+  await assertSharedCart([page], [other]);
+  await second.click('[data-testid="button-increase-untouched"]');
+  other.quantity = 5;
+  await assertSharedCart([page, second], [other]);
+  // A late event contains an obsolete snapshot; read the current storage.
+  const before = await readCart(second);
+  await second.evaluate(`(() => {
+    window.holdCartEvents = false;
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'dgs-web-cart', storageArea: localStorage,
+      newValue: ${JSON.stringify(JSON.stringify({ state: { items: [item, unrelated] }, version: 0 }))},
+    }));
+  })()`);
+  await assertSharedCart([page, second], [other]);
+  assert.deepEqual(await readCart(second), before, 'Receiving events must not write stale data back');
+});
+
+test('two tabs: returning to a tab refreshes missed changes; storage deletion empties both tabs', async context => {
+  const { page, second, item } = await openSharedCart(context, 'шт', 4);
+  await second.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+    window.addEventListener('storage', event => event.stopImmediatePropagation());
+  ` });
+  await second.send('Page.reload');
+  await assertSharedCart([second], [item, unrelated]);
+  await page.click(increase);
+  const changed = { ...item, quantity: 5 };
+  await assertSharedCart([page], [changed, unrelated]);
+  await second.evaluate(`window.dispatchEvent(new Event('focus'))`);
+  await assertSharedCart([page, second], [changed, unrelated]);
+  await page.click(increase);
+  changed.quantity = 6;
+  await assertSharedCart([page], [changed, unrelated]);
+  assert.equal(await second.evaluate('document.visibilityState'), 'visible');
+  await second.evaluate(`document.dispatchEvent(new Event('visibilitychange'))`);
+  await assertSharedCart([page, second], [changed, unrelated]);
+  // removeItem is not the only way storage can disappear (e.g. browser cleanup).
+  await second.evaluate(`localStorage.removeItem('dgs-web-cart')`);
+  await page.wait(`document.querySelectorAll('[data-testid^="cart-item-"]').length === 0`);
+  assert.equal(await page.evaluate(`localStorage.getItem('dgs-web-cart')`), null,
+    'Receiving a storage deletion must not echo a write');
+  await second.evaluate(`window.dispatchEvent(new Event('focus'))`);
+  await second.wait(`document.querySelectorAll('[data-testid^="cart-item-"]').length === 0`);
+  await second.send('Page.navigate', { url: `${wishlistBase}/web/catalog` });
+  await second.click(`[data-testid="button-add-cart-${product.id}"]`);
+  const added = {
+    productId: product.id, productName: product.name, price: product.price,
+    unit: product.unit, quantity: 0.2,
+  };
+  await assertSharedCart([page], [added]);
+  await second.click('header button:has(svg.lucide-shopping-cart)');
+  await assertSharedCart([page, second], [added]);
+  await second.evaluate('localStorage.clear()');
+  await page.wait(`document.querySelectorAll('[data-testid^="cart-item-"]').length === 0`);
+  assert.equal(await page.evaluate(`localStorage.getItem('dgs-web-cart')`), null);
+});
+
+for (const action of ['quantity', 'remove-linked', 'remove-other']) {
+  test(`two tabs: delayed editorial purchase preserves the other tab's ${action} edit`, async context => {
+    const { page, item } = await openCart(context, 'кг', 0.735);
+    let releaseProduct;
+    let productRequested = false;
+    const productResponse = new Promise(resolve => { releaseProduct = resolve; });
+    // Release on failure too, so a pending interception cannot block cleanup.
+    const latest = { ...product, id: item.productId, name: 'Prezzo aggiornato', price: '2300.00' };
+    context.after(() => releaseProduct(latest));
+    const article = {
+      id: 'cart-sync-article', title: 'Formaggio di prova', country: 'Italia',
+      description: '', photos: [], history: '', characteristics: '', culinaryUses: '',
+      productionCountry: '', sources: [], externalVideoUrls: [], relatedVideos: [],
+      products: [latest],
+    };
+    const { page: editorial, requests } = await wishlistPage(browser, context, {
+      authenticated: false, sharedWith: page,
+      responses: {
+        '/web-api/editorial/cheeses/cart-sync-article': article,
+        '/web-api/editorial/cheeses/cart-sync-article/prices': { items: [], page: 1, limit: 10, total: 0 },
+        [`/web-api/products/${latest.slug}`]: () => {
+          productRequested = true;
+          return productResponse;
+        },
+      },
+    });
+    // Make the editorial store stale while the product check is in flight.
+    await editorial.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+      window.addEventListener('storage', event => event.stopImmediatePropagation());
+    ` });
+    await editorial.send('Page.navigate', { url: `${wishlistBase}/web/cheeses/${article.id}` });
+    await editorial.click('.ed-product button');
+    await editorial.wait(`document.querySelector('.ed-product button')?.disabled`);
+    assert.equal(productRequested, true, 'The product check must reach the mocked API before editing');
+    let expected;
+    const refreshed = {
+      ...item, productName: latest.name, price: latest.price, image: undefined,
+      quantity: action === 'quantity' ? 0.935 : action === 'remove-linked' ? 0.2 : 0.835,
+    };
+    // JSON persistence omits undefined image values.
+    delete refreshed.image;
+    if (action === 'quantity') {
+      await page.click(increase);
+      await assertSharedCart([page], [{ ...item, quantity: 0.835 }, unrelated]);
+      expected = [refreshed, unrelated];
+    } else if (action === 'remove-linked') {
+      await page.click('[data-testid="button-remove-quantity-test"]');
+      await assertSharedCart([page], [unrelated]);
+      // The pending user-requested addition is intentional, but must start at
+      // the initial quantity, not resurrect the removed quantity of 0.735.
+      expected = [unrelated, refreshed];
+    } else {
+      await page.click('[data-testid="button-remove-untouched"]');
+      await assertSharedCart([page], [item]);
+      expected = [refreshed];
+    }
+    releaseProduct(latest);
+    await editorial.wait(`document.querySelector('.ed-product [role="status"]')?.textContent.includes('Добавлено')`);
+    assert.ok(requests.some(request => request.path === `/web-api/products/${latest.slug}`));
+    await assertSharedCart([page], expected);
+    // The article is long and its purchase button is below the fold. Navigate
+    // explicitly rather than depending on header scrolling/animation timing.
+    await editorial.send('Page.navigate', { url: `${wishlistBase}/web/cart` });
+    await assertSharedCart([page, editorial], expected);
+    await editorial.send('Page.reload');
+    await assertSharedCart([page, editorial], expected);
+  });
+}
+
 for (const unit of ['кг', 'kg', ' КГ ', ' KG ', 'шт', 'уп']) {
   const weighted = ['кг', 'kg'].includes(unit.trim().toLowerCase());
   test(`cart ${JSON.stringify(unit)}: shared increments, repeated clicks and persistence`, async context => {

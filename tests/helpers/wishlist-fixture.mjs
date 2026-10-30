@@ -15,8 +15,9 @@ export const wishlistUser = {
 export async function wishlistPage(browser, context, {
   authenticated = true, initiallySelected = false, toggleFailure = false,
   readFailure = false, toggleDelay = 0, inStock = true, productOverrides = {},
+  sharedWith, responses = {},
 } = {}) {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ sharedWith });
   context.after(() => page.close());
   const state = { authenticated, userId: wishlistUser.id, toggleFailure, readFailure };
   const favorites = new Map([[wishlistUser.id, new Set(initiallySelected ? [wishlistProduct.id] : [])]]);
@@ -56,6 +57,8 @@ export async function wishlistPage(browser, context, {
     } else if (event.request.method !== 'GET') {
       await page.send('Fetch.failRequest', { requestId: event.requestId, errorReason: 'BlockedByClient' });
       throw new Error('Unexpected mutation in wishlist test');
+    } else if (event.request.method === 'GET' && Object.hasOwn(responses, path)) {
+      body = typeof responses[path] === 'function' ? await responses[path]() : responses[path];
     } else if (path === '/web-api/products') {
       body = { products: [product], pagination: { page: 1, limit: 24, total: 1, totalPages: 1 } };
     } else if (path === `/web-api/products/${product.slug}`) body = product;

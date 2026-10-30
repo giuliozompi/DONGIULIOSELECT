@@ -122,8 +122,9 @@ export async function launchBrowser() {
   });
   const root = await Connection.open(url);
   return {
-    async newPage() {
-      const { browserContextId } = await root.send('Target.createBrowserContext');
+    async newPage({ sharedWith } = {}) {
+      const browserContextId = sharedWith?.browserContextId ??
+        (await root.send('Target.createBrowserContext')).browserContextId;
       const { targetId } = await root.send('Target.createTarget', { url: 'about:blank', browserContextId });
       const address = new URL(url);
       const targets = await (await fetch(`http://${address.host}/json/list`)).json();
@@ -135,9 +136,14 @@ export async function launchBrowser() {
       await page.send('Network.enable');
       await page.send('Network.setBypassServiceWorker', { bypass: true });
       await page.setViewport({ width: 1280, height: 1000 });
+      page.browserContextId = browserContextId;
+      page.contextPages = sharedWith?.contextPages ?? new Set();
+      page.contextPages.add(page);
       page.close = async () => {
+        if (!page.contextPages.delete(page)) return;
         page.socket.close();
-        await root.send('Target.disposeBrowserContext', { browserContextId });
+        await root.send('Target.closeTarget', { targetId });
+        if (!page.contextPages.size) await root.send('Target.disposeBrowserContext', { browserContextId });
       };
       return page;
     },

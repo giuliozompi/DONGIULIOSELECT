@@ -39,9 +39,23 @@ function calcDerived(items: WebCartItem[]) {
   };
 }
 
+const CART_STORAGE_KEY = 'dgs-web-cart';
+
 export const useWebCart = create<WebCartState>()(
   persist(
-    (set) => ({
+    (_persistSet, _get, api) => {
+      // localStorage hydration is synchronous. Read the latest saved cart even
+      // if this tab has not processed the other tab's storage event yet.
+      // Wrap the public setter too: editorial purchases use functional setState
+      // to refresh a product's price before adding it after an API response.
+      const write = api.setState;
+      api.setState = ((...args: Parameters<typeof write>) => {
+        useWebCart.persist.rehydrate();
+        return write(...args);
+      }) as typeof write;
+      const set = (update: Partial<WebCartState> | ((state: WebCartState) => Partial<WebCartState>)) =>
+        api.setState(update);
+      return {
       items: [],
       itemCount: 0,
       subtotal: 0,
@@ -99,7 +113,43 @@ export const useWebCart = create<WebCartState>()(
         }),
 
       clearCart: () => set({ items: [], itemCount: 0, subtotal: 0, repeatedOrders: {} }),
-    }),
-    { name: 'dgs-web-cart' }
+      };
+    },
+    {
+      name: CART_STORAGE_KEY,
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<WebCartState> | undefined;
+        const items = saved?.items ?? [];
+        return {
+          ...current,
+          items,
+          ...calcDerived(items),
+          repeatedOrders: items.length ? saved?.repeatedOrders ?? {} : {},
+        };
+      },
+    }
   )
 );
+
+if (typeof window !== 'undefined' && window.addEventListener) {
+  // Re-read storage, not event.newValue: an older queued event must never
+  // roll back a newer edit. Rehydration does not write or echo storage events.
+  const refresh = () => { useWebCart.persist.rehydrate(); };
+  const onStorage = (event: StorageEvent) => {
+    if (event.storageArea === window.localStorage &&
+        (event.key === CART_STORAGE_KEY || event.key === null)) refresh();
+  };
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') refresh();
+  };
+  window.addEventListener('storage', onStorage);
+  window.addEventListener('focus', refresh);
+  document.addEventListener('visibilitychange', onVisible);
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+    });
+  }
+}
