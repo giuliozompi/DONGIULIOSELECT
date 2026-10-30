@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import express from 'express';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import { registerWebAddressUpdate } from '../server/webAddressRoutes';
+import { registerWebAddressUpdate, registerWebAddressDelete } from '../server/webAddressRoutes';
 
 // Run the actual Express handler with an isolated, SQL-predicate-aware store.
 // Never connect these tests to customer data.
-async function fixture(context: any) {
+async function fixture(context: any, { deleteError = false } = {}) {
   const rows = [
     { id: 'home', userId: 'customer-a', fullAddress: 'Москва, Тестовая, д 5', city: 'Москва',
       label: 'Дом', street: 'Тестовая', building: '5', postalCode: '123456',
@@ -36,23 +36,74 @@ async function fixture(context: any) {
   };
   const app = express();
   app.use(express.json());
-  registerWebAddressUpdate(app, { transaction: async (run: any) => run(transaction) } as any, (req, res, next) => {
+  const database = {
+    transaction: async (run: any) => run(transaction),
+    delete: () => ({ where: (predicate: any) => ({ returning: async () => {
+      if (deleteError) throw new Error('Isolated database failure');
+      const selected = rows.filter(matches(predicate));
+      writes += selected.length;
+      for (const row of selected) rows.splice(rows.indexOf(row), 1);
+      return selected.map(row => ({ id: row.id }));
+    } }) }),
+  };
+  const requireAuth: express.RequestHandler = (req, res, next) => {
     if (!req.headers.authorization) return res.status(401).json({ error: 'Требуется авторизация' });
     (req as any).webUser = { sub: 'customer-a' };
     next();
-  });
+  };
+  registerWebAddressUpdate(app, database as any, requireAuth);
+  registerWebAddressDelete(app, database as any, requireAuth);
   const server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
   context.after(() => new Promise<void>(resolve => server.close(() => resolve())));
   const address = server.address() as { port: number };
   return {
     rows, writes: () => writes,
+    delete: (id: string, authenticated = true) => fetch(`http://127.0.0.1:${address.port}/web-api/addresses/${id}`, {
+      method: 'DELETE', headers: authenticated ? { Authorization: 'test-only' } : {},
+    }),
     patch: (id: string, body: unknown, authenticated = true) => fetch(`http://127.0.0.1:${address.port}/web-api/addresses/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(authenticated ? { Authorization: 'test-only' } : {}) },
       body: JSON.stringify(body),
     }),
   };
 }
+
+test('DELETE reports 404 when another tab already removed the owned address', async context => {
+  const { delete: remove, rows, writes } = await fixture(context);
+  const remaining = structuredClone(rows.slice(1));
+  const success = await remove('home');
+  assert.equal(success.status, 200);
+  assert.deepEqual(await success.json(), { message: 'Адрес удалён' });
+  const missing = await remove('home');
+  assert.equal(missing.status, 404);
+  assert.deepEqual(await missing.json(), { error: 'Адрес не найден' });
+  assert.deepEqual(rows, remaining);
+  assert.equal(writes(), 1);
+});
+
+test('DELETE cannot remove foreign or missing addresses or write without authentication', async context => {
+  const { delete: remove, rows, writes } = await fixture(context);
+  const before = structuredClone(rows);
+  for (const id of ['foreign', 'missing']) {
+    const response = await remove(id);
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), { error: 'Адрес не найден' });
+  }
+  assert.equal((await remove('home', false)).status, 401);
+  assert.deepEqual(rows, before);
+  assert.equal(writes(), 0);
+});
+
+test('DELETE database errors report failure without deleting addresses', async context => {
+  const { delete: remove, rows, writes } = await fixture(context, { deleteError: true });
+  const before = structuredClone(rows);
+  const response = await remove('home');
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), { error: 'Ошибка сервера' });
+  assert.deepEqual(rows, before);
+  assert.equal(writes(), 0);
+});
 
 test('PATCH updates only the owned record and preserves omitted apartment, notes and default', async context => {
   const { patch, rows, writes } = await fixture(context);

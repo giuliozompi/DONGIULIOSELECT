@@ -17,7 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { webApi } from '../lib/webApi';
+import { webApi, WebApiError } from '../lib/webApi';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import type { SavedAddress as Address } from '../lib/savedAddresses';
@@ -137,6 +137,16 @@ function AddressBook({ userId }: { userId: string }) {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => webApi.delete<void>(`/addresses/${id}`),
+    onError: error => {
+      if (error instanceof WebApiError && error.status === 404) {
+        // Keep the card and confirmation stable for cancellation/focus. Do not
+        // refetch now; the next address-book read must reconcile with the server,
+        // even though the shared query normally has infinite staleTime.
+        qc.invalidateQueries({
+          queryKey: ['/web-api/addresses', userId], exact: true, refetchType: 'none',
+        });
+      }
+    },
     onSuccess: () => {
       // The request may finish after this owner's page has been replaced.
       qc.invalidateQueries({ queryKey: ['/web-api/addresses', userId], exact: true });
@@ -262,7 +272,9 @@ function AddressBook({ userId }: { userId: string }) {
           </AlertDialogHeader>
           {!deletePending && deleteMutation.isError && (
             <p role="alert" className="text-sm text-red-600">
-              {deleteMutation.error instanceof Error
+              {deleteMutation.error instanceof WebApiError && deleteMutation.error.status === 404
+                ? 'Адрес не найден. Возможно, он уже удалён в другой вкладке или на другом устройстве. Закройте окно и откройте список адресов заново, чтобы обновить его.'
+                : deleteMutation.error instanceof Error
                 ? deleteMutation.error.message : 'Не удалось удалить адрес. Попробуйте ещё раз.'}
             </p>
           )}

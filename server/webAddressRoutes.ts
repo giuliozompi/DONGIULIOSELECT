@@ -51,3 +51,20 @@ export function registerWebAddressUpdate(app: Express, database: typeof db, requ
     }
   });
 }
+
+export function registerWebAddressDelete(app: Express, database: typeof db, requireAuth: RequestHandler) {
+  app.delete('/web-api/addresses/:id', requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).webUser.sub as string;
+      // Check the result atomically: a separate existence read could race another
+      // tab's DELETE. The owner constraint applies to the write itself.
+      const [deleted] = await database.delete(webAddresses).where(and(
+        eq(webAddresses.id, req.params.id), eq(webAddresses.userId, userId),
+      )).returning({ id: webAddresses.id });
+      if (!deleted) return res.status(404).json({ error: 'Адрес не найден' });
+      return res.json({ message: 'Адрес удалён' });
+    } catch {
+      return res.status(500).json({ error: 'Ошибка сервера' });
+    }
+  });
+}

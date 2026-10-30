@@ -851,6 +851,81 @@ for (const mobile of [false, true]) {
   }
 }
 
+for (const mobile of [false, true]) {
+  for (const cancel of ['button', 'Escape']) {
+    for (const lastAddress of [false, true]) {
+      test(`already removed address returns 404 without success or automatic retries (${mobile ? 'mobile' : 'desktop'}, ${cancel}, ${lastAddress ? 'last address' : 'other cards remain'})`, async context => {
+        const remainingAddresses = lastAddress ? [] : [officeAddress];
+        const { page, requests, savedAddresses, releaseAddressDelete } = await openPage(context, {
+          authenticated: true, initialAddresses: [homeAddress, ...remainingAddresses],
+          holdAddressDelete: true,
+          addressDeleteResponses: [{ status: 404, body: { error: 'Адрес не найден' } }],
+        });
+        context.after(releaseAddressDelete);
+        await page.setViewport(mobile
+          ? { width: 390, height: 844, mobile: true }
+          : { width: 1280, height: 900 });
+        await page.send('Page.navigate', { url: `${base}/web/account/addresses` });
+        await page.click(selector('button-delete-address-home'));
+        const readsBefore = requests.filter(r => r.path === '/web-api/addresses').length;
+        const refreshesBefore = requests.filter(r => r.path === '/web-api/auth/refresh').length;
+        await page.click(selector('button-confirm-delete-address'));
+        await page.wait(`document.querySelector('[role="alertdialog"]')?.getAttribute('aria-busy') === 'true'`);
+        // Another tab/device has removed the record, without changing this tab's cache.
+        savedAddresses.splice(savedAddresses.findIndex(address => address.id === 'home'), 1);
+        releaseAddressDelete();
+        await page.wait(`document.querySelector('[role="alertdialog"] [role="alert"]')?.textContent.includes('Адрес не найден')
+          && !document.querySelector('[data-testid="button-confirm-delete-address"]').disabled
+          && !document.querySelector('[data-testid="button-cancel-delete-address"]').disabled`);
+        assert.match(await page.evaluate(`document.querySelector('[role="alertdialog"] [role="alert"]').textContent`),
+          /другой вкладке или на другом устройстве/);
+        assert.equal(await page.evaluate(`document.querySelector('[role="alertdialog"]').getAttribute('aria-busy')`), 'false');
+        assert.equal(await page.evaluate(exists('card-address-home')), true);
+        assert.equal(await page.evaluate(`document.body.textContent.includes('Адрес удалён')`), false);
+        if (cancel === 'button') {
+          await page.click(selector('button-cancel-delete-address'));
+        } else {
+          await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape' });
+          await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape' });
+        }
+        await page.wait(`!document.querySelector('[role="alertdialog"]')
+          && document.activeElement?.dataset.testid === 'button-delete-address-home'`);
+        assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-delete-address-home"]').disabled`), false);
+        // A new opening clears the old error, but is not itself permission to DELETE.
+        await page.click(selector('button-delete-address-home'));
+        await page.wait(`!!document.querySelector('[role="alertdialog"]')`);
+        assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"] [role="alert"]')`), false);
+        await page.click(selector('button-cancel-delete-address'));
+        await page.wait(`!document.querySelector('[role="alertdialog"]')
+          && document.activeElement?.dataset.testid === 'button-delete-address-home'`);
+        // Cross the retry backoff boundary as well as mutation settlement.
+        await delay(1200);
+        assert.equal(requests.filter(r => r.method === 'DELETE').length, 1);
+        assert.equal(requests.filter(r => r.path === '/web-api/addresses').length, readsBefore);
+        assert.equal(requests.filter(r => r.path === '/web-api/auth/refresh').length, refreshesBefore);
+        assert.equal(await page.evaluate(exists('card-address-home')), true);
+        assert.deepEqual(savedAddresses, remainingAddresses);
+
+        // Explicitly leave and reopen using client-side navigation: a full reload
+        // would hide an infinitely-fresh cache bug. The next read must reconcile.
+        await page.evaluate(`Array.from(document.querySelectorAll('button')).find(button => button.textContent.trim() === 'Аккаунт').click()`);
+        await page.wait(`location.pathname === '/web/account'`);
+        await page.wait(`Array.from(document.querySelectorAll('button')).some(button => button.textContent.trim() === 'Адреса доставки')`);
+        await page.evaluate(`Array.from(document.querySelectorAll('button')).find(button => button.textContent.trim() === 'Адреса доставки').click()`);
+        await page.wait(`location.pathname === '/web/account/addresses'
+          && !document.querySelector('[data-testid="card-address-home"]')
+          && ${lastAddress ? "document.body.textContent.includes('Нет сохранённых адресов')" : exists('card-address-office')}`);
+        assert.equal(requests.filter(r => r.path === '/web-api/addresses').length, readsBefore + 1);
+        assert.deepEqual(requests.filter(r => r.method === 'DELETE').map(r => r.path), ['/web-api/addresses/home']);
+        assert.equal(requests.filter(r => r.path === '/web-api/auth/refresh').length, refreshesBefore);
+        assert.equal(await page.evaluate(`document.body.textContent.includes('Адрес удалён')`), false);
+        assert.equal(await page.evaluate(`!!document.querySelector('[role="alertdialog"]')`), false);
+        assert.deepEqual(savedAddresses, remainingAddresses);
+      });
+    }
+  }
+}
+
 for (const scenario of [
   { name: 'refresh succeeds and deletion succeeds', refreshStatus: 200 },
   { name: 'refresh fails', refreshStatus: 401, error: 'Сессия истекла' },

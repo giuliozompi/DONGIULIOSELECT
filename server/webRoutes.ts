@@ -13,7 +13,7 @@ import { eq, and, gt, or, ilike, desc, sql, lt, gte, lte, asc } from 'drizzle-or
 import { storage } from './storage';
 import { createWebCategorySchema, updateWebCategorySchema } from './utils/web-category-input';
 import { isValidOrderQuantity } from '../shared/order-quantity';
-import { registerWebAddressUpdate } from './webAddressRoutes';
+import { registerWebAddressUpdate, registerWebAddressDelete } from './webAddressRoutes';
 import { registerWebReorder } from './webReorderRoutes';
 import { registerWebCheckout } from './webCheckoutRoutes';
 import { registerAdminPaymentLinks } from './adminPaymentLinkRoutes';
@@ -458,17 +458,7 @@ export function registerWebRoutes(app: Express) {
     }
   });
 
-  // DELETE /web-api/addresses/:id
-  app.delete('/web-api/addresses/:id', requireWebAuth, async (req: Request, res: Response) => {
-    try {
-      const { sub } = (req as any).webUser as JwtPayload;
-      await db.delete(webAddresses)
-        .where(and(eq(webAddresses.id, req.params.id), eq(webAddresses.userId, sub)));
-      return res.json({ message: 'Адрес удалён' });
-    } catch (err) {
-      return res.status(500).json({ error: 'Ошибка сервера' });
-    }
-  });
+  registerWebAddressDelete(app, db, requireWebAuth);
 
   // ── ORDERS ───────────────────────────────────────────────
 
