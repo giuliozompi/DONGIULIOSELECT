@@ -95,3 +95,18 @@ certificano i prodotti effettivamente venduti.
 la distinzione tra origine del formaggio e produzione del prodotto.
 Non usare i controlli sulle citazioni per dichiarare certificazioni,
 markirovka o sicurezza alimentare automaticamente verificate.
+
+Accanto al prezzo reale estero deve esserci un convertitore in rubli:
+«l’utente russo (principale)» deve poter confrontare gli importi.
+Il cambio deve essere attuale e il prezzo rilevato deve poter essere
+aggiornato nel tempo, senza confondere le date dei due dati.
+
+**Why:** L’utente ha approvato la rilevazione assistita dei prezzi con
+questa modifica, specificando che il pubblico principale è russo.
+
+**How to apply:** Conservare il prezzo e la valuta originali; affiancare
+una conversione in rubli con fonte e data del cambio e la data della
+rilevazione del prezzo. Comunicare che non è un costo di importazione
+in Russia: la conversione non calcola dazi, trasporto, IVA e ulteriori
+imposte o spese. Non presumere che il prezzo estero escluda imposte
+locali già comprese dal venditore.
