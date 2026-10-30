@@ -20,6 +20,29 @@ desiderato (o dai medesimi artefatti compilati). Non copiarlo da `/healthz` come
 Build in ambienti diversi possono produrre ID diversi: fa fede l’artefatto
 effettivamente costruito da Timeweb.
 
+## Regressione della build senza Git
+
+```
+node --test tests/release-build.test.mjs
+```
+
+La prova copia `scripts/build.mjs` senza modificarlo in una directory temporanea
+fuori dal checkout, senza `.git`, con sorgenti minimi isolati e i compilatori
+Vite/esbuild reali già installati in `node_modules`. Non compila l'intera
+applicazione: verifica la pipeline di identificazione e manifest con entry
+server, frontend, CSS, chunk lazy, service worker e asset pubblici annidati.
+Non avvia server, non importa il backend applicativo e non usa DB, rete o
+servizi reali; il processo di build riceve solo PATH, NODE_ENV e TZ, senza
+ereditare secret o configurazione Git. Le fixture vengono eliminate a fine test,
+anche in caso di errore.
+
+Quattro compilazioni verificano che server, HTML, manifest e log riportino lo
+stesso ID SHA-256; che una ricompilazione invariata mantenga l'ID; che modifiche
+separate al backend e al frontend lo cambino; e che il manifest elenchi tutti e
+soli i JS/CSS prodotti, con checksum corrispondenti ai byte su disco.
+La prova è inclusa anche in `npm run test:release`, insieme ai controlli HTTP
+con server di test locali già esistenti.
+
 ## Controllo dopo il rilascio
 
 ```
