@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
-import { checkRelease } from '../scripts/check-release.mjs';
+import { checkRelease as runCheckRelease } from '../scripts/check-release.mjs';
+
+// HTTP-only fixtures do not render React. Browser integration has its own suite.
+const checkRelease = options => runCheckRelease({
+  browserCheck: async () => ({ anonymous401: 1 }), ...options,
+});
 
 const expected = 'a'.repeat(64);
 const js = 'console.log("release test")';
@@ -93,6 +98,30 @@ for (const [mode, message] of [
 test('retries a previous release and succeeds before deadline', async t => {
   const { origin } = await fixture(t, 'eventual');
   assert.equal(await checkRelease({ origin, expected, timeoutMs: 2000, intervalMs: 5, log() {} }), true);
+});
+
+test('browser receives only remaining overall budget after HTTP verification', async t => {
+  const { origin } = await fixture(t);
+  let received;
+  assert.equal(await checkRelease({
+    origin, expected, timeoutMs: 2000, log() {},
+    browserCheck: async options => { received = options; return { anonymous401: 1 }; },
+  }), true);
+  assert.ok(received.timeoutMs > 0 && received.timeoutMs < 2000);
+  assert.equal(received.expected, expected);
+  assert.equal(received.origin, origin);
+  assert.ok(received.assets.includes('/assets/lazy.js'));
+});
+
+test('HTTP success cannot hide a browser failure', async t => {
+  const { origin } = await fixture(t);
+  const logs = [];
+  assert.equal(await checkRelease({
+    origin, expected, timeoutMs: 200, intervalMs: 20, log: line => logs.push(line),
+    browserCheck: async () => { throw new Error('browser: errori JavaScript'); },
+  }), false);
+  assert.match(logs.join('\n'), /browser: errori JavaScript/);
+  assert.ok(!logs.some(line => line.startsWith('VERIFICATO:')));
 });
 
 test('invalid identifiers and unbounded deadlines are rejected before requests', async () => {

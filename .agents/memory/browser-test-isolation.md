@@ -20,3 +20,9 @@ Browser startup and screenshot capture can intermittently stall in this workspac
 **Why:** Browser startup and navigation have timed out independently of successful HTTP and renderer checks. On an earlier occasion, an alternative Playwright Chromium completed the same tests.
 
 **How to apply:** Check app HTTP responses before diagnosing a browser timeout as an application failure. Discover an alternative installed Chromium before using `CHROMIUM_PATH`; never assume the previous alternative is still installed. If no alternative is available and both launch/capture paths fail, use the renderer tests and state that visual verification is incomplete instead of repeatedly retrying the browser.
+
+Chromium can classify automatic favicon and application-icon requests as `Other`, not `Image`.
+
+**Why:** A strict public-page network policy initially rejected the real compiled home even though its JavaScript rendered correctly; an icon request was classified differently from ordinary images.
+
+**How to apply:** Keep optional icon exclusions explicit by known path, and exercise the real HTML icon links in fixtures. Do not broadly allow every `Other` request, since that would weaken the read-only request policy.

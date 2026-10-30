@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { checkPublicBrowser } from './release-browser.mjs';
 
 export const validId = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
 export async function checkRelease({
   expected, origin = 'https://dongiulioselect.ru', timeoutMs = 120000,
-  intervalMs = 5000, requestMs = 8000, log = console.log,
+  intervalMs = 5000, requestMs = 8000, log = console.log, browserCheck = checkPublicBrowser,
 }) {
   if (!validId(expected)) throw new Error('Specificare il Build ID completo (64 caratteri esadecimali).');
   if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 600000 ||
@@ -106,7 +107,11 @@ export async function checkRelease({
         }
       }
       if (Date.now() >= deadline) throw new Error('scadenza raggiunta');
-      log(`VERIFICATO: build ${expected}, avvio e ${paths.size} asset JS/CSS pubblici. UI autenticata non verificata.`);
+      const browser = await browserCheck({
+        origin: base.origin, expected, assets: [...paths], timeoutMs: deadline - Date.now(),
+      });
+      if (Date.now() >= deadline) throw new Error('scadenza raggiunta');
+      log(`VERIFICATO: build ${expected}, avvio, ${paths.size} asset JS/CSS e rendering home pubblica nel browser. 401 anonimi simulati localmente: ${browser.anonymous401}. UI autenticata non verificata.`);
       return true;
     } catch (error) {
       last = error.message;
