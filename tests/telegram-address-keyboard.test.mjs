@@ -171,6 +171,71 @@ async function selectWithKeyboard(page, id) {
   assert.equal(current.controls, null);
 }
 
+async function compositionEvent(page, id, type) {
+  await page.evaluate(`document.querySelector(${JSON.stringify(selector(id))})
+    .dispatchEvent(new CompositionEvent(${JSON.stringify(type)},
+      {bubbles:true,data:'Москва Тестовая'}))`);
+}
+
+async function pressComposing(page, id, key, signal) {
+  // CDP's native key dispatcher has no isComposing option. Dispatch real DOM
+  // KeyboardEvents through the mounted React input to cover both independent
+  // browser signals, including legacy IMEs reporting only keyCode=229.
+  // These synthetic events cannot exercise native implicit form submission;
+  // the ordinary Enter after composition below still uses native CDP input.
+  const isComposing = signal === 'isComposing';
+  const keyCode = isComposing ? { Enter: 13, ArrowDown: 40 }[key] : 229;
+  const observed = await page.evaluate(`(() => {
+    const input=document.querySelector(${JSON.stringify(selector(id))});
+    const event=new KeyboardEvent('keydown',{
+      bubbles:true,cancelable:true,key:${JSON.stringify(key)},code:${JSON.stringify(key)},
+      isComposing:${isComposing},keyCode:${keyCode},which:${keyCode}
+    });
+    input.dispatchEvent(event);
+    input.dispatchEvent(new KeyboardEvent('keyup',{
+      bubbles:true,key:${JSON.stringify(key)},code:${JSON.stringify(key)},
+      isComposing:${isComposing},keyCode:${keyCode},which:${keyCode}
+    }));
+    return {isComposing:event.isComposing,keyCode:event.keyCode};
+  })()`);
+  assert.deepEqual(observed, { isComposing, keyCode }, 'Browser must deliver the intended IME signal');
+}
+
+async function assertCompositionSelection(live, id, signal) {
+  const { page } = live;
+  const opened = await openSuggestions(page, id);
+  await compositionEvent(page, id, 'compositionstart');
+  await compositionEvent(page, id, 'compositionupdate');
+  await pressComposing(page, id, 'ArrowDown', signal);
+  await pressComposing(page, id, 'Enter', signal);
+  assert.deepEqual(await state(page, id), opened, 'IME keys must not highlight, select or dismiss suggestions');
+  await assertNoSideEffects(live);
+  await compositionEvent(page, id, 'compositionend');
+
+  // A highlighted suggestion is the dangerous case: Enter would otherwise
+  // commit it. Start another composition with that suggestion already active.
+  await press(page, 'ArrowDown');
+  const highlighted = await state(page, id);
+  assert.equal(highlighted.active, highlighted.optionIds[0]);
+  await compositionEvent(page, id, 'compositionstart');
+  await pressComposing(page, id, 'Enter', signal);
+  assert.deepEqual(await state(page, id), highlighted, 'IME Enter must not commit the highlighted address');
+  await assertNoSideEffects(live);
+  await compositionEvent(page, id, 'compositionend');
+
+  // Normal native navigation and Enter work again without refocusing/retyping.
+  await press(page, 'ArrowDown');
+  assert.equal((await state(page, id)).active, highlighted.optionIds[1]);
+  await press(page, 'Enter');
+  const selected = await state(page, id);
+  assert.equal(selected.value, suggestions[1].fullAddress);
+  assert.equal(selected.focused, true);
+  assert.equal(selected.expanded, 'false');
+  assert.equal(selected.active, null);
+  assert.equal(selected.controls, null);
+  await assertNoSideEffects(live);
+}
+
 async function assertNoSideEffects({ page, requests, blocked }) {
   // Allow debounced suggestions and any accidental async mutations to settle.
   await delay(500);
@@ -297,6 +362,47 @@ test('Telegram checkout: Enter chooses the address without submitting a valid or
   assert.equal(await page.evaluate('location.pathname'), '/checkout');
   await assertNoSideEffects(live);
 });
+
+for (const signal of ['isComposing', 'keyCode229']) {
+  for (const mode of ['profile', 'add', 'edit', 'checkout']) {
+    test(`Telegram ${mode}: IME Enter (${signal}) does not select/save/submit; normal selection resumes`, async context => {
+      const path = mode === 'checkout' ? '/checkout' : '/my-data';
+      const live = await fixture(context, path);
+      const { page } = live;
+      let id;
+      if (mode === 'checkout') {
+        id = 'input-delivery-address';
+        await page.wait(exists('input-customer-name'));
+        await page.fill(selector('input-customer-name'), user.customerName);
+        await page.fill(selector('input-customer-phone'), user.phone);
+        await page.fill(selector('input-customer-email'), user.email);
+        await page.click(selector('radio-delivery-yandex_go'));
+        await page.click(selector('radio-payment-cash_on_delivery'));
+        await page.click(selector('checkbox-save-address'));
+        await page.fill(selector('input-address-label'), 'Работа');
+        await page.fill(selector('input-delivery-notes'), 'Не терять комментарий');
+      } else if (mode === 'profile') {
+        id = 'input-address-autocomplete';
+        await page.click(selector('button-edit-address'));
+      } else {
+        id = `input-${mode === 'add' ? 'new' : 'edit'}-address-autocomplete`;
+        await page.click(selector(mode === 'add' ? 'button-add-address' : 'button-edit-address-fixture-home'));
+        if (mode === 'add') await page.fill(selector('input-new-address-label'), 'Работа');
+      }
+      await assertCompositionSelection(live, id, signal);
+      assert.equal(await page.evaluate('location.pathname'), path);
+      if (mode === 'add' || mode === 'edit') {
+        assert.equal(await page.evaluate(exists(`dialog-${mode}-address`)), true, 'Unsaved dialog must stay open');
+      } else if (mode === 'profile') {
+        assert.equal(await page.evaluate(exists('button-save-all')), true);
+      } else {
+        assert.equal(await page.evaluate(`document.querySelector('[data-testid="input-delivery-notes"]').value`),
+          'Не терять комментарий');
+        assert.equal(await page.evaluate(`document.querySelector('[data-testid="input-address-label"]').value`), 'Работа');
+      }
+    });
+  }
+}
 
 test('delivery dialog: pickup and destination have distinct ARIA IDs and isolated keyboard state', async context => {
   const live = await fixture(context, '/admin?section=orders');
