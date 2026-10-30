@@ -24,11 +24,13 @@ const order = { id: orderId, userId: user.id, status: 'ОПЛАЧЕН',
   customerName: user.customerName, customerPhone: user.phone,
   deliveryMethod: 'yandex_go', deliveryAddress: user.address,
   deliveryLatitude: '55.75', deliveryLongitude: '37.61', paymentMethod: 'yookassa' };
+const pickupAddress = { id: 'fixture-pickup', label: 'Магазин', fullAddress: user.address,
+  contactName: 'Fixture', contactPhone: user.phone, latitude: '55.75', longitude: '37.61', isDefault: true };
 let browser;
 before(async () => { browser = await launchBrowser(); });
 after(async () => { await browser?.close(); });
 
-async function fixture(context, path) {
+async function fixture(context, path, { document: fixtureDocument, pickupAddresses = [] } = {}) {
   // Each page has a fresh browser context; the helper bypasses service workers
   // before navigation so no API call can escape interception in a worker target.
   const page = await browser.newPage();
@@ -62,6 +64,13 @@ async function fixture(context, path) {
     const url = new URL(request.url);
     const api = /^\/(?:api|web-api)(?:\/|$)/.test(url.pathname);
     const sdk = url.hostname === 'telegram.org' && url.pathname.endsWith('/telegram-web-app.js');
+    if (fixtureDocument && url.origin === new URL(base).origin &&
+        url.pathname === path && request.method === 'GET' && event.resourceType === 'Document') {
+      await page.send('Fetch.fulfillRequest', { requestId, responseCode: 200,
+        responseHeaders: [{ name: 'Content-Type', value: 'text/html' }],
+        body: Buffer.from(fixtureDocument).toString('base64') });
+      return;
+    }
     if (!api && !sdk && url.origin === new URL(base).origin && request.method === 'GET') {
       await page.send('Fetch.continueRequest', { requestId });
       return;
@@ -79,7 +88,7 @@ async function fixture(context, path) {
         '/api/fortune': { spinTokens: 0, bonuses: [], totalBonusAmount: '0' },
         '/api/admin/check': { isAdmin: true, isMasterAdmin: false },
         '/api/admin/orders': [order],
-        '/api/admin/pickup-addresses': [],
+        '/api/admin/pickup-addresses': pickupAddresses,
         '/api/categories': [],
         '/api/address/suggest': { suggestions },
       };
@@ -169,8 +178,54 @@ async function assertNoSideEffects({ page, requests, blocked }) {
   assert.deepEqual(requests.filter(r => !['GET', 'HEAD'].includes(r.method)), [], 'No save/order/payment/shipment request');
   assert.deepEqual(blocked, [], 'No unmocked API or external request');
   assert.ok(requests.some(r => r.path === '/api/address/suggest'), 'Suggestion API must actually be intercepted');
-  const authenticated = requests.find(r => r.path === '/api/user' || r.path === '/api/admin/orders');
+  const authenticated = requests.find(r => ['/api/user', '/api/admin/orders', '/api/admin/pickup-addresses'].includes(r.path));
   assert.equal(authenticated?.headers['x-telegram-init-data'], 'fixture-telegram-data');
+}
+
+async function standaloneDialogDocument(component) {
+  // These legacy dialogs are not mounted by the current admin page. Mount the
+  // real source in a browser-only document; never add a test route to the app.
+  // Discover Vite's exact versioned imports to avoid duplicate React instances.
+  const source = async path => {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.status, 200, `Vite must serve ${path}`);
+    return response.text();
+  };
+  const [dialog, main] = await Promise.all([
+    source(`/src/components/${component}.tsx`), source('/src/main.tsx'),
+  ]);
+  const dependency = (text, name) => {
+    const url = [...text.matchAll(/from "([^"]+)"/g)].map(match => match[1])
+      .find(url => url.split('?')[0].endsWith(`/${name}.js`));
+    assert.ok(url, `Vite import for ${name} must exist`);
+    return JSON.stringify(url);
+  };
+  return `<!doctype html><html><head><link rel="icon" href="data:,">
+    <title>Isolated delivery keyboard test</title></head><body><div id="root"></div>
+    <script type="module">
+      import RefreshRuntime from '/@react-refresh';
+      RefreshRuntime.injectIntoGlobalHook(window);
+      window.$RefreshReg$=()=>{};
+      window.$RefreshSig$=()=>type=>type;
+      window.__vite_plugin_react_preamble_installed__=true;
+      const [react,dom,query,client,component]=await Promise.all([
+        import(${dependency(dialog, 'react')}),
+        import(${dependency(main, 'react-dom_client')}),
+        import(${dependency(dialog, '@tanstack_react-query')}),
+        import('/src/lib/queryClient.ts'),
+        import('/src/components/${component}.tsx')
+      ]);
+      await import('/src/index.css');
+      const React=react.default;
+      function Harness(){
+        const [open,setOpen]=React.useState(true);
+        return React.createElement(query.QueryClientProvider,{client:client.queryClient},
+          React.createElement(component.${component},{open,order:${JSON.stringify(order)},
+            onOpenChange(value){window.fixtureDialogChanges.push(value);setOpen(value)}}));
+      }
+      window.fixtureDialogChanges=[];
+      dom.default.createRoot(document.getElementById('root')).render(React.createElement(Harness));
+    </script></body></html>`;
 }
 
 test('Telegram profile: keyboard selection and Escape retain the unsaved delivery draft', async context => {
@@ -276,3 +331,79 @@ test('delivery dialog: pickup and destination have distinct ARIA IDs and isolate
   await page.wait(`!document.querySelector('[data-testid="dialog-unified-delivery"]')`);
   await assertNoSideEffects(live);
 });
+
+for (const config of [
+  { component: 'YandexGoDialog', destination: 'input-delivery-address-autocomplete',
+    add: 'button-add-new-pickup', phone: 'input-pickup-contact-phone',
+    save: 'button-save-pickup-address', price: 'button-calculate-price-yandex-go',
+    courier: 'button-call-courier-yandex-go' },
+  { component: 'YandexDeliveryDialog', destination: 'input-delivery-address-edit',
+    add: 'button-add-pickup', phone: 'input-pickup-phone',
+    save: 'button-save-pickup', price: 'button-calculate-price',
+    courier: 'button-create-delivery' },
+]) {
+  for (const hasSavedPickup of [false, true]) {
+    test(`${config.component} (${hasSavedPickup ? 'saved' : 'first'} pickup): isolated ARIA, Enter and two-step Escape`, async context => {
+      const path = `/__keyboard-fixture/${config.component}`;
+      const live = await fixture(context, path, {
+        document: await standaloneDialogDocument(config.component),
+        pickupAddresses: hasSavedPickup ? [pickupAddress] : [],
+      });
+      const { page } = live;
+      await page.wait(`!!document.querySelector('[role="dialog"]')`);
+      if (hasSavedPickup) {
+        await page.wait(`document.querySelector(${JSON.stringify(selector(config.price))})?.disabled===false`);
+        await page.click(selector(config.add));
+      }
+      await page.wait(exists('input-pickup-address'));
+      await page.fill(selector(config.phone), user.phone);
+      await page.click(selector('button-edit-delivery'));
+      const pickup = await openSuggestions(page, 'input-pickup-address', 'Москва отправление');
+      await selectWithKeyboard(page, 'input-pickup-address');
+      assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector(config.save))}).disabled`), false);
+      const destination = await openSuggestions(page, config.destination, 'Москва получатель');
+      assert.notEqual(destination.controls, pickup.controls);
+      assert.equal(destination.optionIds.some(id => pickup.optionIds.includes(id)), false);
+      assert.equal((await state(page, 'input-pickup-address')).active, null);
+      assert.equal((await state(page, 'input-pickup-address')).expanded, 'false');
+      await selectWithKeyboard(page, config.destination);
+      assert.equal((await state(page, 'input-pickup-address')).value, suggestions[1].fullAddress);
+      assert.deepEqual(await page.evaluate('window.fixtureDialogChanges'), []);
+      assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector(config.courier))}).disabled`), true);
+
+      // Each field independently gets first-Escape protection and a normal
+      // second Escape. Reopen a fresh controlled instance for the second field.
+      for (const [index, [id, previous]] of [
+        ['input-pickup-address', pickup], [config.destination, destination],
+      ].entries()) {
+        if (index > 0) {
+          // Reload the intercepted document, not a real admin/order endpoint.
+          await page.send('Page.navigate', { url: `${base}${path}` });
+          if (hasSavedPickup) await page.click(selector(config.add));
+          await page.wait(exists('input-pickup-address'));
+          await page.click(selector('button-edit-delivery'));
+        }
+        const draft = `Москва черновик ${id}`;
+        const opened = await openSuggestions(page, id, draft);
+        if (index === 0) assert.equal(opened.controls, previous.controls);
+        await press(page, 'ArrowDown');
+        await press(page, 'Escape');
+        const dismissed = await state(page, id);
+        assert.equal(dismissed.expanded, 'false');
+        assert.equal(dismissed.controls, null);
+        assert.equal(dismissed.active, null);
+        assert.equal(dismissed.value, draft);
+        assert.equal(dismissed.focused, true);
+        assert.equal(await page.evaluate(`!!document.getElementById(${JSON.stringify(opened.controls)})`), false);
+        assert.deepEqual(await page.evaluate('window.fixtureDialogChanges'), []);
+        await delay(400);
+        assert.equal((await state(page, id)).expanded, 'false');
+        await assertNoSideEffects(live);
+        await press(page, 'Escape');
+        await page.wait(`!document.querySelector('[role="dialog"]')`);
+        assert.deepEqual(await page.evaluate('window.fixtureDialogChanges'), [false]);
+        await assertNoSideEffects(live);
+      }
+    });
+  }
+}
