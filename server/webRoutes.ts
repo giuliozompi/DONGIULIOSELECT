@@ -20,6 +20,7 @@ import { registerAdminPaymentLinks } from './adminPaymentLinkRoutes';
 import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
 import { registerAdminEditorialRoutes } from './adminEditorialRoutes';
 import { registerAdminEditorialAiRoutes } from './adminEditorialAiRoutes';
+import { registerEditorialMarketRoutes } from './adminEditorialMarketRoutes';
 import { registerPublicEditorialRoutes } from './publicEditorialRoutes';
 import { registerPriceSubmissionRoutes } from './priceSubmissionRoutes';
 import { getPaymentLinkStates } from './services/payment-link-attempts';
@@ -972,6 +973,8 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   registerAdminEditorialRoutes(app, [requireWebAuth, requireWebAdmin],
     req => ((req as any).webUser as JwtPayload | undefined)?.sub);
   registerAdminEditorialAiRoutes(app, [requireWebAuth, requireWebAdmin],
+    req => ((req as any).webUser as JwtPayload | undefined)?.sub);
+  registerEditorialMarketRoutes(app, [requireWebAuth, requireWebAdmin],
     req => ((req as any).webUser as JwtPayload | undefined)?.sub);
   registerAdminOrderOperatorRoutes(app, '/web-api', [requireWebAuth, requireWebAdmin],
     req => ((req as any).webUser as JwtPayload | undefined)?.sub);

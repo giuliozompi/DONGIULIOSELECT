@@ -350,7 +350,7 @@ test('customer endpoints enforce authentication, ownership, immutable server fie
     assert.equal(res.status, 401);
     assert.equal(res.headers.get('cache-control'), 'private, no-store');
   }
-  for (const field of ['userId', 'createdBy', 'sourceType', 'notes', 'moderation', 'cheeseId', 'revision'])
+  for (const field of ['userId', 'createdBy', 'sourceType', 'notes', 'offerConditions', 'moderation', 'cheeseId', 'revision'])
     assert.equal((await submissionsApi(c.id, 'POST', { ...observation(), [field]: 'forged' })).status, 400);
   const res = await submissionsApi(c.id, 'POST', observation());
   assert.equal(res.status, 201);

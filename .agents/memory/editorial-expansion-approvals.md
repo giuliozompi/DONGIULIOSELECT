@@ -110,3 +110,23 @@ rilevazione del prezzo. Comunicare che non è un costo di importazione
 in Russia: la conversione non calcola dazi, trasporto, IVA e ulteriori
 imposte o spese. Non presumere che il prezzo estero escluda imposte
 locali già comprese dal venditore.
+
+La frequenza scelta dall’utente è «Verifica settimanale con revisione».
+
+**Why:** L’utente vuole mantenere aggiornati i prezzi senza pubblicare
+automaticamente variazioni non controllate.
+
+**How to apply:** Conservare una revisione amministrativa esplicita
+tra nuova rilevazione e prezzo pubblico; non cambiare automaticamente
+i prezzi del catalogo commerciale. Il prezzo osservato e il cambio
+rimangono dati separati con date indipendenti.
+
+La condivisione delle richieste concorrenti di cambio deve comprendere
+anche la lettura della cache persistente, non soltanto la chiamata esterna.
+
+**Why:** Due letture iniziate prima del salvataggio possono completarsi
+in ordine diverso: la seconda può vedere una vecchia cache dopo che
+la prima chiamata esterna è già terminata, causando un doppio recupero.
+
+**How to apply:** Mantenere la protezione sull’intera operazione e
+distinguere il giorno richiesto quando si supera la mezzanotte di Mosca.

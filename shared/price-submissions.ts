@@ -3,7 +3,7 @@ import { priceDataSchema } from './editorial';
 
 // Ownership, moderation, notes and cheeseId are supplied only by the server.
 export const priceSubmissionSchema = priceDataSchema.innerType().omit({
-  cheeseId: true, sourceType: true, notes: true,
+  cheeseId: true, sourceType: true, notes: true, offerConditions: true,
 }).extend({ channel: z.enum(['online', 'shop']) }).strict().superRefine((data, ctx) => {
   if (data.channel === 'online' && !data.sourceUrl)
     ctx.addIssue({ code: 'custom', path: ['sourceUrl'], message: 'Для цены из Интернета нужна ссылка на источник' });

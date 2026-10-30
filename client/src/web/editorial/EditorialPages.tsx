@@ -8,6 +8,7 @@ import { useWebCart } from '../hooks/useWebCart';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { getCartQuantityRules } from '@shared/order-quantity';
 import CheesePriceSubmissions from './CheesePriceSubmissions';
+import RubleConversion from './RubleConversion';
 import './cheese-price-submissions.css';
 import './editorial.css';
 
@@ -276,12 +277,7 @@ function ProductPurchase({ item }: { item: PublicCheese['products'][number] }) {
 }
 function PriceRows({ prices }: { prices: PublicMarketPrice[] }) {
   if (!prices.length) return <Empty>Одобренных наблюдений цен пока нет.</Empty>;
-  return <div className="ed-prices">{prices.map(price => <article key={price.id}>
-    <strong>{price.price} {price.currency} · {price.packageQuantity} {price.packageUnit}</strong>
-    {price.pricePerKg !== null && <span>{price.pricePerKg.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} {price.currency}/кг</span>}
-    <small>{price.country} · {price.store} · {new Date(price.observedOn).toLocaleDateString('ru-RU')}</small>
-    {price.sourceUrl && <SourceLink href={price.sourceUrl}>Источник цены</SourceLink>}
-  </article>)}</div>;
+  return <RubleConversion prices={prices} />;
 }
 export function CheeseDetailPage() {
   const { id } = useParams<{ id: string }>();

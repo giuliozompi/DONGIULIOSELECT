@@ -248,7 +248,7 @@ export default function CheesePriceSubmissions({ cheeseId }: { cheeseId: string 
           <button className="ed-price-submit" type="submit" disabled={submitting} aria-busy={submitting} data-testid="price-submit">
             {submitting ? 'Отправляем…' : 'Отправить на проверку'}
           </button>
-          <p className="ed-price-form-note">Цены не конвертируются и не усредняются. Для упаковки «шт.» цена за килограмм не рассчитывается.</p>
+          <p className="ed-price-form-note">Исходная цена сохраняется без изменений. Рублёвый эквивалент одобренных иностранных цен — отдельная справочная оценка, не стоимость ввоза. Для упаковки «шт.» цена за килограмм не рассчитывается.</p>
         </form>
         <section className="ed-price-history" aria-labelledby="ed-price-history-title" data-testid="price-submission-history">
           <header><div><div className="ed-kicker">Только для вас</div><h4 id="ed-price-history-title">Мои наблюдения</h4></div>

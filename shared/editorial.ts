@@ -64,6 +64,7 @@ export const priceDataSchema = z.object({
   packageQuantity: z.number().positive().max(1e6),
   packageUnit: z.enum(['kg', 'g', 'piece']),
   notes: text(2000).default(''),
+  offerConditions: text(2000).default(''),
 }).strict().superRefine((data, ctx) => {
   if (data.sourceType === 'internet' && !data.sourceUrl)
     ctx.addIssue({ code: 'custom', path: ['sourceUrl'], message: 'Для интернет-цены нужна ссылка на источник' });

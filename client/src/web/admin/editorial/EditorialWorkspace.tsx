@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { editorialApi } from '../lib/editorialApi';
 import { adminApi } from '../lib/adminApi';
 import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
+import MarketMonitor from './market/MarketMonitor';
 import {
   editorialSchemas, pricePerKg,
   type CheeseData, type EditorialEntry, type EditorialKind, type PriceData, type VideoData,
@@ -29,7 +30,7 @@ const intros: Record<EditorialKind, string> = {
 };
 const EMPTY_VIDEO: VideoData = { title: '', description: '', status: 'draft', sortOrder: 0, url: '', cover: '', category: 'recipe', cheeseIds: [] };
 const EMPTY_CHEESE: CheeseData = { title: '', description: '', status: 'draft', sortOrder: 0, photos: [], country: '', region: '', latitude: null, longitude: null, history: '', characteristics: '', culinaryUses: '', productionCountry: '', sources: [], productIds: [], videoIds: [], externalVideoUrls: [] };
-const EMPTY_PRICE: PriceData = { cheeseId: '', sourceType: 'internet', price: 0, currency: 'EUR', country: '', store: '', sourceUrl: '', observedOn: new Date().toISOString().slice(0, 10), packageQuantity: 1, packageUnit: 'kg', notes: '' };
+const EMPTY_PRICE: FormData = { cheeseId: '', sourceType: 'internet', price: 0, currency: 'EUR', country: '', store: '', sourceUrl: '', observedOn: new Date().toISOString().slice(0, 10), packageQuantity: 1, packageUnit: 'kg', offerConditions: '', notes: '' };
 
 function fresh(kind: EditorialKind): FormData {
   if (kind === 'video') return { ...EMPTY_VIDEO, cheeseIds: [] };
@@ -81,6 +82,12 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const listQuery = useQuery({
     queryKey: listKey,
     queryFn: () => editorialApi.list(kind, page * PAGE_SIZE, PAGE_SIZE),
+  });
+  const linkedEntryId = new URLSearchParams(window.location.search).get('entry');
+  const linkedPriceQuery = useQuery({
+    queryKey: ['/web-api/admin/editorial', 'linked-price-entry', linkedEntryId],
+    queryFn: () => editorialApi.all('price'),
+    enabled: kind === 'price' && Boolean(linkedEntryId),
   });
   const cheeseQuery = useQuery({
     queryKey: ['/web-api/admin/editorial', 'all', 'cheese'],
@@ -134,12 +141,27 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const total = listQuery.data?.total || 0;
   const cheeses = cheeseQuery.data || [];
   const openedLinkedEntry = useRef(false);
-  const linkedEntry = new URLSearchParams(window.location.search).get('entry');
+  const linkedEntry = linkedEntryId;
   useEffect(() => {
-    if (kind !== 'cheese' || !linkedEntry || !cheeseQuery.data || openedLinkedEntry.current) return;
-    const target = cheeseQuery.data.find(value => value.id === linkedEntry);
-    if (target) { openedLinkedEntry.current = true; openEdit(target); }
-  }, [kind, linkedEntry, cheeseQuery.data]);
+    if (!linkedEntry || openedLinkedEntry.current) return;
+    if (kind === 'cheese' && cheeseQuery.data) {
+      const target = cheeseQuery.data.find(value => value.id === linkedEntry);
+      if (target) { openedLinkedEntry.current = true; openEdit(target); }
+    }
+    if (kind === 'price' && (linkedPriceQuery.data || listQuery.data)) {
+      const target = (linkedPriceQuery.data || listQuery.data?.items || []).find(value => value.id === linkedEntry);
+      if (target) {
+        openedLinkedEntry.current = true;
+        if (target.moderation === 'pending') {
+          setModerationTarget(target);
+          setModerationNote('');
+          setDecision('approved');
+        } else {
+          window.requestAnimationFrame(() => document.getElementById(`entry-${target.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+        }
+      }
+    }
+  }, [kind, linkedEntry, cheeseQuery.data, listQuery.data, linkedPriceQuery.data]);
   const videos = videoQuery.data || [];
   const products = productsQuery.data || [];
   const relationLoading = cheeseQuery.isLoading || videoQuery.isLoading || productsQuery.isLoading;
@@ -309,6 +331,8 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
         {kind === 'price' && <div className="mb-6 rounded-md border-l-4 border-[#b66b48] bg-[#f0e6d9] px-4 py-3 text-sm text-[#684b3d]">Рыночные наблюдения никогда не изменяют цену или доступность товара в каталоге. Новая и отредактированная запись цены всегда возвращается в очередь проверки.</div>}
 
+        {kind === 'price' && <MarketMonitor />}
+
         {busyError && <div role="alert" className="mb-4 flex items-start gap-2 rounded-md border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{errorText(busyError)} {isRevisionConflict(busyError) && <button className="underline underline-offset-2" onClick={() => listQuery.refetch()}>Обновить список и открыть заново</button>}</span></div>}
 
         {listQuery.isLoading ? <div className="space-y-3" aria-label="Загрузка записей">{[0, 1, 2].map(i => <div key={i} className="h-24 animate-pulse rounded-lg bg-[#e5e3d9]" />)}</div> :
@@ -396,6 +420,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 <div className="grid gap-4 sm:grid-cols-2">{field('Страна', 'country', priceForm.country, { required: true })}{field('Магазин', 'store', priceForm.store, { required: true })}</div>
                 {field('Ссылка на источник', 'sourceUrl', priceForm.sourceUrl, { required: priceForm.sourceType === 'internet', placeholder: 'https://…' })}
                 {priceForm.sourceType === 'user' && <p className="text-xs text-muted-foreground">Для наблюдения в обычном магазине ссылка необязательна. Укажите магазин, дату и пояснение для модератора.</p>}
+                {textarea('Условия предложения', 'offerConditions', String(form.offerConditions ?? ''), 'Условия цены, указанные продавцом. Это поле отображается публично после одобрения наблюдения.')}
                 {textarea('Примечания', 'notes', priceForm.notes)}
                 <div className="rounded-md bg-[#e9eee7] p-3 text-sm text-[#405b49]">{priceForm.packageUnit === 'piece' ? 'Цена за килограмм не рассчитывается: масса одной штуки неизвестна.' : `Расчётная цена за кг: ${pricePerKg(priceForm)!.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${priceForm.currency}/кг`}</div>
                 <p className="text-xs text-[#7d6657]">После сохранения запись станет ожидающей модерации. При редактировании цена снова требует решения оператора.</p>

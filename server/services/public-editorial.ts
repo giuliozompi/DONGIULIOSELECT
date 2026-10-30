@@ -92,6 +92,7 @@ export async function publicCheesePrices(id: string, page: number, limit: number
     const p = priceDataSchema.parse(r.data);
     return { id: r.id, sourceType: p.sourceType, price: p.price, currency: p.currency,
       country: p.country, store: p.store, sourceUrl: p.sourceUrl, observedOn: p.observedOn,
-      packageQuantity: p.packageQuantity, packageUnit: p.packageUnit, pricePerKg: pricePerKg(p) };
+      packageQuantity: p.packageQuantity, packageUnit: p.packageUnit, pricePerKg: pricePerKg(p),
+      offerConditions: p.offerConditions };
   }), total: result.rows[0].total, page, limit };
 }

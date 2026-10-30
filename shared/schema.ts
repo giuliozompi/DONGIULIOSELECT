@@ -71,6 +71,37 @@ export const editorialAiImports = pgTable('editorial_ai_imports', {
   createdBy: varchar('created_by').notNull(),
 }, table => [primaryKey({ columns: [table.runId, table.itemId] })]);
 
+export const editorialPriceWatches = pgTable('editorial_price_watches', {
+  id: uuid('id').primaryKey(), revision: integer('revision').notNull().default(1),
+  cheeseId: uuid('cheese_id').references(() => editorialEntries.id, { onDelete: 'set null' }),
+  country: text('country').notNull(), store: text('store').notNull().default(''), sourceUrl: text('source_url').notNull(),
+  active: boolean('active').notNull().default(true), createdBy: varchar('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  nextCheckAt: timestamp('next_check_at', { withTimezone: true }).notNull(),
+  lastCheckAt: timestamp('last_check_at', { withTimezone: true }),
+}, table => [index('editorial_price_watches_due').on(table.nextCheckAt).where(sql`${table.active}`),
+  check('editorial_price_watches_revision_check', sql`${table.revision}>0`)]);
+export const editorialPriceChecks = pgTable('editorial_price_checks', {
+  id: uuid('id').primaryKey(), watchId: uuid('watch_id').notNull().references(() => editorialPriceWatches.id, { onDelete: 'cascade' }),
+  requestedBy: varchar('requested_by').notNull(), requestId: uuid('request_id').notNull(), trigger: text('trigger').notNull(),
+  status: text('status').notNull(), params: jsonb('params').notNull(), observedOn: date('observed_on').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }), leaseUntil: timestamp('lease_until', { withTimezone: true }).notNull(),
+  result: jsonb('result'), error: text('error'), entryId: uuid('entry_id').references(() => editorialEntries.id, { onDelete: 'set null' }),
+  appliedParams: jsonb('applied_params'), appliedAt: timestamp('applied_at', { withTimezone: true }),
+}, table => [
+  uniqueIndex('editorial_price_checks_requested_by_request_id_key').on(table.requestedBy, table.requestId),
+  uniqueIndex('editorial_price_checks_running').on(table.watchId).where(sql`${table.status}='running'`),
+  index('editorial_price_checks_history').on(table.watchId, table.startedAt.desc()),
+  check('editorial_price_checks_trigger_check', sql`${table.trigger} IN ('manual','scheduled')`),
+  check('editorial_price_checks_status_check', sql`${table.status} IN ('running','ready','failed')`),
+]);
+export const editorialFxRates = pgTable('editorial_fx_rates', {
+  requestedOn: date('requested_on').primaryKey(), effectiveOn: date('effective_on').notNull(),
+  rates: jsonb('rates').$type<Record<string, number>>().notNull(),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey(), // Telegram user ID
   username: text("username"),
