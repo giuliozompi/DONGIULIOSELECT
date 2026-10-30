@@ -28,6 +28,7 @@ async function fixture(context, { paid = false, rejected = false, historyFailure
       paymentMethod: 'yookassa', customerName: 'Тестовый клиент', customerPhone: 'fixture-phone',
       amount: '100.00', items: [], deliveryAddress: 'Тестовый адрес' },
     logs: [], patches: 0, prints: [], requests: [], rejected, historyFailure,
+    printFailure: null, releasePrint: null,
   };
   await page.send('Fetch.enable', { patterns: [
     { urlPattern: '*/web-api/*' }, { urlPattern: '*/api/*' }, { urlPattern: '*telegram-web-app.js*' },
@@ -63,10 +64,18 @@ async function fixture(context, { paid = false, rejected = false, historyFailure
       else result = live.logs;
     } else if (path === `/web-api/admin/orders/${A}/print`) {
       live.prints.push(url.searchParams.get('format'));
+      if (live.printFailure === 'closed-loading') {
+        await new Promise(resolve => { live.releasePrint = resolve; });
+      }
       result = { html: `<!doctype html><html lang="ru"><body><h1>${url.searchParams.get('format')}</h1><p>${A}</p><p>${live.order.paymentMethod}</p></body></html>` };
+      if ([401, 403, 500].includes(live.printFailure)) {
+        status = live.printFailure;
+        result = { error: `Не удалось получить документ: HTTP ${status}. Повторите попытку.` };
+      } else if (live.printFailure === 'missing') result = {};
     }
     await page.send('Fetch.fulfillRequest', {
       requestId: event.requestId, responseCode: status,
+      responsePhrase: { 401: 'Unauthorized', 403: 'Forbidden', 500: 'Internal Server Error' }[status] || 'OK',
       responseHeaders: [{ name: 'Content-Type', value: path.includes('telegram-web-app') ? 'text/javascript' : 'application/json' }],
       body: Buffer.from(path.includes('telegram-web-app') ? '' : JSON.stringify(result)).toString('base64'),
     });
@@ -219,3 +228,95 @@ test('Telegram admin shows the server reason when a payment already exists', asy
   assert.equal(live.patches, 1);
   assert.equal(live.order.paymentMethod, 'yookassa');
 });
+
+const printActions = [
+  ['packing-list', 'button-print-packing-list'],
+  ['label', 'button-print-order-label'],
+  ['order-summary', 'button-print-order-summary'],
+];
+
+for (const entry of ['web', 'telegram-editor', 'telegram-viewer']) {
+  test(`${entry}: failed print actions report errors, never print, and permit a manual retry`, async context => {
+    const { page, live } = await fixture(context, { telegram: entry !== 'web' });
+    if (entry === 'web') await openDetail(page);
+    else {
+      await page.send('Page.navigate', { url: `${base}/admin?section=orders` });
+      const action = entry === 'telegram-editor' ? 'edit' : 'view';
+      await page.click(`[data-testid="button-${action}-order-${A}"]`);
+      await page.wait('!!document.querySelector(\'[data-testid="button-print-order-summary"]\')');
+    }
+    await page.evaluate(`window.fixturePrintWindows=[]; window.fixtureBlockPrint=false;
+      window.fixtureUnhandled=[];
+      window.addEventListener('unhandledrejection', e=>window.fixtureUnhandled.push(String(e.reason)));
+      window.open=()=>{
+        if(window.fixtureBlockPrint) return null;
+        const output={html:'',printed:0,closed:false};
+        window.fixturePrintWindows.push(output);
+        return {document:{
+          open(){if(output.closed) throw new Error('Closed window'); output.html=''},
+          write(html){if(output.closed) throw new Error('Closed window'); output.html+=html},
+          close(){}
+        },focus(){},print(){output.printed++},get closed(){return output.closed}};
+      }`);
+    for (const [format, testId] of printActions) {
+      for (const failure of ['blocked', 401, 403, 500, 'missing', 'closed-loading']) {
+        await context.test(`${format}: ${failure}`, async () => {
+          // Dismiss the preceding error so an old toast cannot satisfy this assertion.
+          await page.evaluate(`document.querySelector('[toast-close]')?.click()`);
+          await page.wait(`!Array.from(document.querySelectorAll('[data-state="open"]')).some(e=>e.textContent.includes('Ошибка печати') && e.hasAttribute('role'))`);
+          const before = live.prints.length;
+          const windowCount = await page.evaluate('window.fixturePrintWindows.length');
+          live.printFailure = failure;
+          await page.evaluate(`window.fixtureBlockPrint=${failure === 'blocked'}`);
+          const selector = `${entry === 'telegram-viewer' ? '[data-testid="dialog-order-view"] ' : ''}[data-testid="${testId}"]`;
+          await page.click(selector);
+          if (failure === 'closed-loading') {
+            await page.wait(`window.fixturePrintWindows.length===${windowCount + 1}`);
+            // Wait for the intercepted request, then close before its response arrives.
+            const deadline = Date.now() + 5000;
+            while (!live.releasePrint && Date.now() < deadline) {
+              await new Promise(resolve => setTimeout(resolve, 20));
+            }
+            assert.equal(typeof live.releasePrint, 'function');
+            await page.evaluate('window.fixturePrintWindows.at(-1).closed=true');
+            live.releasePrint();
+            live.releasePrint = null;
+          }
+          await page.wait(`${text}.includes('Ошибка печати')`);
+          const errorText = await page.evaluate(`Array.from(document.querySelectorAll('[role="status"]')).find(e=>e.textContent.includes('Ошибка печати'))?.textContent`);
+          assert.match(errorText, failure === 'blocked' ? /Разрешите всплывающие окна/
+            : failure === 'closed-loading' ? /Окно печати закрыто.*Повторите/
+            : failure === 'missing' ? /Сервер не вернул документ/
+            : entry === 'web' ? new RegExp(`HTTP ${failure}`)
+            : failure === 401 ? /Sessione scaduta/
+            : failure === 403 ? /Forbidden/ : /Internal Server Error/);
+          // The web API may refresh once on 401; both intercepted attempts must fail.
+          const expectedRequests = failure === 'blocked' ? 0 : failure === 401 && entry === 'web' ? 2 : 1;
+          assert.deepEqual(live.prints.slice(before), Array(expectedRequests).fill(format));
+          assert.equal(await page.evaluate('window.fixturePrintWindows.length'), windowCount + (failure === 'blocked' ? 0 : 1));
+          if (failure !== 'blocked') {
+            const output = await page.evaluate('window.fixturePrintWindows.at(-1)');
+            assert.equal(output.printed, 0);
+            if (failure !== 'closed-loading') {
+              assert.match(output.html, /Не удалось подготовить печать/);
+              assert.match(output.html, /повторите печать из заказа/);
+            }
+          }
+          // Only this next user click may produce a successful document.
+          live.printFailure = null;
+          await page.evaluate(`window.fixtureBlockPrint=false; document.querySelector('[toast-close]')?.click()`);
+          await page.click(selector);
+          await page.wait('window.fixturePrintWindows.at(-1)?.printed===1');
+          const output = await page.evaluate('window.fixturePrintWindows.at(-1)');
+          assert.match(output.html, new RegExp(format));
+          assert.match(output.html, new RegExp(A));
+          assert.equal(live.prints.length, before + expectedRequests + 1);
+          assert.equal(live.prints.at(-1), format);
+          const failedWindows = await page.evaluate(`window.fixturePrintWindows.slice(${windowCount}, -1)`);
+          assert.ok(failedWindows.every(output => output.printed === 0));
+          assert.deepEqual(await page.evaluate('window.fixtureUnhandled'), []);
+        });
+      }
+    }
+  });
+}

@@ -16,14 +16,19 @@ export async function printAdminOrder(
     : format === 'order-summary'
       ? 'заказа с ценами A4'
       : 'этикетки 100 × 150 мм';
-  popup.document.open();
-  popup.document.write(
-    `<!doctype html><html lang="ru"><meta charset="utf-8"><title>Подготовка печати</title><body style="font:16px sans-serif;padding:24px">Подготовка ${documentLabel}…</body></html>`,
-  );
-  popup.document.close();
-
   try {
+    popup.document.open();
+    popup.document.write(
+      `<!doctype html><html lang="ru"><meta charset="utf-8"><title>Подготовка печати</title><body style="font:16px sans-serif;padding:24px">Подготовка ${documentLabel}…</body></html>`,
+    );
+    popup.document.close();
     const result = await loadDocument();
+    const ensureOpen = () => {
+      if (popup.closed) {
+        throw new Error('Окно печати закрыто. Повторите печать из заказа.');
+      }
+    };
+    ensureOpen();
     if (!result || typeof result.html !== 'string' || !result.html.trim()) {
       throw new Error('Сервер не вернул документ для печати.');
     }
@@ -31,17 +36,32 @@ export async function printAdminOrder(
     popup.document.write(result.html);
     popup.document.close();
     popup.focus();
-    window.setTimeout(() => {
-      if (!popup.closed) popup.print();
-    }, 300);
+    await new Promise<void>((resolve, reject) => {
+      window.setTimeout(() => {
+        try {
+          ensureOpen();
+          popup.print();
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      }, 300);
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Не удалось загрузить документ.';
-    popup.document.open();
-    popup.document.write(
-      `<!doctype html><html lang="ru"><meta charset="utf-8"><title>Ошибка печати</title><body style="font:16px sans-serif;padding:24px"><h1>Не удалось подготовить печать</h1><p>${escapeHtml(message)}</p><p>Закройте это окно и повторите печать из заказа.</p></body></html>`,
-    );
-    popup.document.close();
-    throw error;
+    // A closed/inaccessible window must not mask the error shown in the order.
+    try {
+      if (!popup.closed) {
+        popup.document.open();
+        popup.document.write(
+          `<!doctype html><html lang="ru"><meta charset="utf-8"><title>Ошибка печати</title><body style="font:16px sans-serif;padding:24px"><h1>Не удалось подготовить печать</h1><p>${escapeHtml(message)}</p><p>Закройте это окно и повторите печать из заказа.</p></body></html>`,
+        );
+        popup.document.close();
+      }
+    } catch {
+      // The caller still displays the original error in its toast.
+    }
+    throw new Error(message);
   }
 }
 
