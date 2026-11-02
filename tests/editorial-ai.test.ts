@@ -11,6 +11,7 @@ import express from 'express';
 import type { Server } from 'node:http';
 import { registerAdminEditorialAiRoutes } from '../server/adminEditorialAiRoutes';
 import { reserveAiRun, executeAiRun, getAiRun, aiHistory, type AiDependencies } from '../server/services/editorial-ai';
+import { EditorialModelError } from '../server/services/editorial-ai-model';
 import { importAiCatalog, rankAiCatalog, applyAiDraft } from '../server/services/editorial-ai-changes';
 import { isPublicSourceAddress, validateSourceUrl, sourcePlainText, retrieveEditorialSource } from '../server/services/editorial-ai-sources';
 import { EditorialError, saveEditorial } from '../server/services/editorial';
@@ -223,6 +224,15 @@ test('unsupported source and expired workers terminate visibly; no automatic pro
   await executeAiRun(retry.run.id, db, { ...deps, model: async () => { count++; throw new Error('sensitive upstream payload'); } });
   assert.equal(count, 1);
   assert.equal((await getAiRun(retry.run.id, db)).error?.includes('sensitive'), false);
+});
+test('safe provider diagnostics persist in failed runs and history without changing cheese drafts', async () => {
+  const c = await cheese();
+  const message = 'OpenRouter отклонил запрос из-за оплаты или недостаточного баланса.';
+  const run = await readyDraft(c, { ...deps, model: async () => { throw new EditorialModelError(message); } });
+  assert.equal(run.status, 'failed');
+  assert.equal(run.error, message);
+  assert.equal((await aiHistory('draft', 1, db, c.id)).items[0].error, message);
+  assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0].revision, c.revision);
 });
 test('apply and creation audit failures roll back all changes', async () => {
   const c = await cheese(), run = await readyDraft(c);
