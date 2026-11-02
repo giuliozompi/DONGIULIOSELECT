@@ -32,7 +32,7 @@ export const videoDataSchema = z.object({
   cheeseIds: ids.default([]),
 }).strict();
 export const cheeseDataSchema = z.object({
-  ...base, photos: z.array(image).max(12).default([]),
+  ...base, nameOriginal: text(200).default(''), photos: z.array(image).max(12).default([]),
   country: required(100), region: text(200).default(''),
   latitude: z.number().min(-90).max(90).nullable().default(null),
   longitude: z.number().min(-180).max(180).nullable().default(null),

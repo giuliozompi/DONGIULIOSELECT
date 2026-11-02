@@ -4,6 +4,7 @@ import { pool } from './db';
 import { EditorialError } from './services/editorial';
 import { reserveAiRun, executeAiRun, getAiRun, aiHistory, defaultAiDependencies, type AiDependencies } from './services/editorial-ai';
 import { rankAiCatalog, importAiCatalog, applyAiDraft } from './services/editorial-ai-changes';
+import { suggestEditorialSources } from './services/editorial-ai-suggestions';
 
 export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHandler[],
   actor: (req: Request) => string | undefined, database = pool, deps: AiDependencies = defaultAiDependencies) {
@@ -28,6 +29,9 @@ export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHand
       res.status(created ? 202 : 200).json(run);
     }));
   }
+  app.post(`${base}/sources`, ...guards, handle(async (req, res, operator) => {
+    res.json(await suggestEditorialSources(req.body, operator, database, deps));
+  }));
   app.get(`${base}/runs`, ...guards, handle(async (req, res) => {
     const query = z.object({ kind: z.enum(['catalog', 'draft']), page: z.coerce.number().int().min(1).max(100000).default(1), entryId: z.string().uuid().optional() }).strict().parse(req.query);
     if (query.entryId && query.kind !== 'draft') throw new EditorialError(400, 'Фильтр статьи доступен только для заготовок');

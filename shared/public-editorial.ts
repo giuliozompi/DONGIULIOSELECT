@@ -3,7 +3,7 @@ import type { VideoData, CheeseData, PriceData } from './editorial';
 export interface PublicVideo extends Pick<VideoData, 'title' | 'description' | 'url' | 'cover' | 'category'> {
   id: string; publishedAt: string;
 }
-export interface PublicCheeseSummary extends Pick<CheeseData, 'title' | 'description' | 'country' | 'region' | 'latitude' | 'longitude'> {
+export interface PublicCheeseSummary extends Pick<CheeseData, 'title' | 'nameOriginal' | 'description' | 'country' | 'region' | 'latitude' | 'longitude'> {
   id: string; photo: string; publishedAt: string;
 }
 export interface EditorialProduct {

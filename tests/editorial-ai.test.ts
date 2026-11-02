@@ -20,6 +20,8 @@ import { changePublication } from '../server/services/editorial-publication';
 import { publicEditorialList } from '../server/services/public-editorial';
 import { cheeseDataSchema } from '../shared/editorial';
 import type { CatalogResult, DraftResult } from '../shared/editorial-ai';
+import { suggestEditorialSources, validateSourceSuggestions } from '../server/services/editorial-ai-suggestions';
+import { EditorialModelError } from '../server/services/editorial-ai-model';
 
 const exec = promisify(execFile);
 let dir: string, db: pg.Pool, server: Server, base: string;
@@ -27,6 +29,13 @@ let apiModelCalls = 0;
 const quote = 'Parmigiano Reggiano is a hard cheese traditionally made in Emilia-Romagna.';
 const evidence = { url: 'https://example.org/cheese', finalUrl: 'https://example.org/cheese',
   title: 'Cheese source', text: quote.repeat(4), sha256: 'evidence-hash', retrievedAt: new Date().toISOString(), characters: 300, truncated: false };
+const suggestedSources = () => ({
+  sources: [
+    { url: 'https://www.parmigianoreggiano.com/', label: 'Консорциум Пармиджано Реджано', kind: 'consortium' },
+    { url: 'https://www.latteriasoresina.it/', label: 'Кооператив Latteria Soresina', kind: 'cooperative' },
+    { url: 'https://www.parmareggio.it/', label: 'Производитель Parmareggio', kind: 'producer' },
+  ], warnings: [],
+});
 const catalog = () => ({
   items: [
     { nameOriginal: 'Parmigiano Reggiano', titleRu: 'Пармиджано Реджано', countryCode: 'IT',
@@ -120,6 +129,7 @@ test('catalogue ranking persists; imports are drafts, preserve multi-region orig
   const imported = [...a.created, ...b.created][0];
   assert.equal((imported.data as any).status, 'draft');
   assert.equal((imported.data as any).history, '');
+  assert.equal((imported.data as any).nameOriginal, 'Camembert');
   assert.equal(imported.publication, null);
   assert.equal((await publicEditorialList('cheese', { search: '', page: 1, limit: 12 }, db)).total, 0);
   const second = await readyCatalog();
@@ -127,6 +137,94 @@ test('catalogue ranking persists; imports are drafts, preserve multi-region orig
     itemIds: (second.result as CatalogResult).items.map(item => item.id) }, 'operator', db);
   assert.equal(secondResult.created.length, 0); assert.equal(secondResult.skipped.length, 2);
   await assert.rejects(rankAiCatalog(run.id, { revision: 1, ranks: [{ id: france.id, importance: 1 }] }, 'operator', db), fails(409));
+});
+test('original cheese name persists, is optional for legacy data, and is public/searchable only after publication', async () => {
+  const c = await cheese();
+  assert.equal(cheeseDataSchema.parse({ title: 'Сыр', country: 'Италия' }).nameOriginal, '');
+  const updated = await saveEditorial('cheese', { ...c.data, nameOriginal: 'Parmigiano Reggiano', status: 'ready' },
+    'operator', c, db);
+  assert.equal((updated.data as any).nameOriginal, 'Parmigiano Reggiano');
+  const alternateTitle = await saveEditorial('cheese', { ...updated.data, title: 'Другой русский вариант' },
+    'operator', updated, db);
+  const run = await readyCatalog();
+  assert.equal((run.result as CatalogResult).items[0].matches[0].id, c.id);
+  await changePublication(alternateTitle.id, alternateTitle.revision, true, 'operator', db);
+  const page = await publicEditorialList('cheese', { search: 'Parmigiano', page: 1, limit: 10 }, db);
+  assert.equal(page.total, 1);
+  assert.equal((page.items[0] as any).nameOriginal, 'Parmigiano Reggiano');
+});
+test('source suggestions validate public HTTPS URLs, duplicates and three-item bound without inventing missing sources', () => {
+  const valid = validateSourceSuggestions(suggestedSources());
+  assert.equal(valid.sources.length, 3);
+  assert.ok(valid.warnings.some(text => text.includes('без поиска')));
+  for (const url of ['http://example.org', 'https://127.0.0.1', 'https://localhost', 'https://host.internal',
+    'https://admin:secret@example.org', 'https://example.org:8443', 'javascript:alert(1)']) {
+    const input = suggestedSources(); input.sources[0].url = url;
+    assert.throws(() => validateSourceSuggestions(input));
+  }
+  const duplicate = suggestedSources(); duplicate.sources[1].url = duplicate.sources[0].url + '#section';
+  assert.throws(() => validateSourceSuggestions(duplicate));
+  const many = suggestedSources(); many.sources.push({ ...many.sources[0], url: 'https://example.org/' });
+  assert.throws(() => validateSourceSuggestions(many));
+  const scarce = validateSourceSuggestions({ sources: [], warnings: [] });
+  assert.equal(scarce.sources.length, 0);
+  assert.ok(scarce.warnings.some(text => text.includes('три источника')));
+});
+test('suggest sources sends only cheese identity, audits, throttles duplicate paid requests and never writes article or publication', async () => {
+  const c = await cheese(true);
+  let calls = 0;
+  const custom: AiDependencies = { ...deps, model: async (system, input) => {
+    calls++;
+    assert.ok(system.includes('consortium'));
+    assert.ok(system.includes('never fill the list with guesses'));
+    assert.deepEqual(Object.keys(input as object).sort(), ['country', 'nameOriginal', 'region', 'titleRu']);
+    assert.ok(!JSON.stringify(input).includes('PRIVATE_DO_NOT_SEND'));
+    return suggestedSources();
+  } };
+  const before = (await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0];
+  const body = { entryId: c.id, revision: c.revision };
+  const [a, b] = await Promise.allSettled([
+    suggestEditorialSources(body, 'operator', db, custom),
+    suggestEditorialSources(body, 'operator', db, custom),
+  ]);
+  assert.equal(calls, 1);
+  assert.equal([a, b].filter(r => r.status === 'fulfilled').length, 1);
+  const rejected = [a, b].find(r => r.status === 'rejected') as PromiseRejectedResult;
+  assert.equal(rejected.reason.status, 429);
+  assert.deepEqual((await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0], before);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM editorial_publications')).rows[0].n, 1);
+  const actions = (await db.query('SELECT action_type FROM admin_action_logs')).rows.map(r => r.action_type);
+  assert.ok(actions.includes('ai_sources_requested')); assert.ok(actions.includes('ai_sources_suggested'));
+  await assert.rejects(suggestEditorialSources({ ...body, revision: body.revision + 1 }, 'other', db, custom), fails(409));
+  await assert.rejects(suggestEditorialSources(body, '', db, custom), fails(401));
+  assert.equal(calls, 1);
+});
+test('source suggestion failures are safe, explicitly retried and preserve existing links', async () => {
+  const c = await cheese();
+  const body = { entryId: c.id, revision: c.revision };
+  let calls = 0;
+  await assert.rejects(suggestEditorialSources(body, 'operator', db, { ...deps, model: async () => {
+    calls++; throw new Error('SECRET_PROVIDER_PAYLOAD');
+  } }), (e: any) => e.status === 503 && !e.message.includes('SECRET_PROVIDER'));
+  assert.equal(calls, 1);
+  await assert.rejects(suggestEditorialSources(body, 'operator', db, deps), fails(429));
+  assert.deepEqual((await db.query('SELECT data FROM editorial_entries WHERE id=$1', [c.id])).rows[0].data.sources, ['https://example.org/old']);
+  assert.ok(!(await db.query('SELECT action_data FROM admin_action_logs')).rows.some(r =>
+    JSON.stringify(r.action_data).includes('SECRET_PROVIDER')));
+  await assert.rejects(suggestEditorialSources(body, 'another', db, {
+    ...deps, model: async () => { throw new EditorialModelError('Безопасная ошибка провайдера'); },
+  }), (e: any) => e.status === 503 && e.message === 'Безопасная ошибка провайдера');
+});
+test('source suggestions endpoint requires administrator access and rejects invalid input before calling AI', async () => {
+  const c = await cheese();
+  for (const [auth, status] of [['', 401], ['customer', 403], ['admin', 400]] as const) {
+    const response = await fetch(`${base}/sources`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...(auth ? { Authorization: auth } : {}) },
+      body: JSON.stringify({ entryId: c.id, revision: 0 }),
+    });
+    assert.equal(response.status, status);
+  }
+  assert.equal(apiModelCalls, 0);
 });
 test('source draft has real quote support, sends no private/customer/catalogue context, and applies selected fields only', async () => {
   const c = await cheese(true);

@@ -1,11 +1,13 @@
 import { webApi } from '../../lib/webApi';
 import type { EditorialEntry } from '@shared/editorial';
-import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField } from '@shared/editorial-ai';
+import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField, SourceSuggestions } from '@shared/editorial-ai';
 export type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, CatalogResult, DraftResult, CatalogItem, AiField } from '@shared/editorial-ai';
 const base = '/admin/editorial-ai';
 export const editorialAiApi = {
   catalog: (body: CatalogRequest) => webApi.post<EditorialAiRun>(`${base}/catalog`, body),
   draft: (body: DraftRequest) => webApi.post<EditorialAiRun>(`${base}/draft`, body),
+  suggestSources: (entry: EditorialEntry) =>
+    webApi.post<SourceSuggestions>(`${base}/sources`, { entryId: entry.id, revision: entry.revision }),
   run: (id: string) => webApi.get<EditorialAiRun>(`${base}/runs/${id}`),
   history: (kind: 'catalog' | 'draft', page = 1, entryId?: string) =>
     webApi.get<{ items: EditorialAiRun[]; total: number; page: number; limit: number }>(`${base}/runs?kind=${kind}&page=${page}${entryId ? `&entryId=${encodeURIComponent(entryId)}` : ''}`),

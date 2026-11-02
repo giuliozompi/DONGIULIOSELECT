@@ -51,7 +51,7 @@ export async function importAiCatalog(id: string, input: unknown, actor: string,
       const existing = imported ? { id: imported.id, title: imported.data.title } : fresh.items[0].matches[0];
       if (existing) { skipped.push({ itemId, entryId: existing.id, title: existing.title }); continue; }
       const data = cheeseDataSchema.parse({
-        title: item.titleRu, country: countryName(item.countryCode), region: item.regions.join(', '),
+        title: item.titleRu, nameOriginal: item.nameOriginal, country: countryName(item.countryCode), region: item.regions.join(', '),
         // Suggested summaries and subjective importance notes are not treated as verified article content.
         status: 'draft', sortOrder: 100 - item.importance,
       });

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { editorialAiCountries, countryName, type CatalogItem, type EditorialAiRun, type AiField, type DraftResult, type CatalogResult } from '@shared/editorial-ai';
 import type { CheeseData, EditorialEntry } from '@shared/editorial';
 import { editorialAiApi } from '../../lib/editorialAiApi';
+import SourcesSuggestions from './SourcesSuggestions';
 import './editorial-ai.css';
 
 const PAGE_SIZE = 10;
@@ -321,6 +322,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const [edits, setEdits] = useState<Partial<Record<AiField, string>>>({});
   const [revisionConflict, setRevisionConflict] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [suggestionBusy, setSuggestionBusy] = useState(false);
   const [error, setError] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
@@ -351,12 +353,20 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const entryRuns = history.data?.items || [];
   const editedProposal = Object.keys(edits).some(key => edits[key as AiField] !== draft?.fields[key as AiField]);
   const hasUnsavedChanges = sourcesText !== sourceBaseline.current || editedProposal;
+  function tryClaimSuggestion() {
+    if (generationClaimed) return false;
+    generationClaimed = true;
+    return true;
+  }
+  function releaseSuggestionClaim() {
+    generationClaimed = false;
+  }
   function confirmDiscardChanges(action: string) {
     if (!hasUnsavedChanges) return true;
     return window.confirm(`Есть несохранённые ссылки или правки текста предложения. ${action} и потерять их?`);
   }
   async function generateDraft() {
-    if (lock.current || generationClaimed) return;
+    if (lock.current || generationClaimed || suggestionBusy) return;
     const sources = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
     if (sources.length < 1 || sources.length > 3 || sources.some(url => !/^https:\/\/[^/\s?#]+/i.test(url))) {
       setError('Укажите от одной до трёх ссылок https, по одной на строку.');
@@ -383,7 +393,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     }
   }
   async function openHistoryRun(historyRun: EditorialAiRun) {
-    if (busy || lock.current || applyLock.current) return;
+    if (busy || suggestionBusy || generationClaimed || lock.current || applyLock.current) return;
     if (!confirmDiscardChanges('Открыть другое предложение')) return;
     setError('');
     try {
@@ -405,7 +415,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     }
   }
   async function applySelected() {
-    if (!current || !draft || selectedFields.length === 0 || current.appliedTo || revisionConflict || busy || applyLock.current) return;
+    if (!current || !draft || selectedFields.length === 0 || current.appliedTo || revisionConflict || busy || suggestionBusy || generationClaimed || applyLock.current) return;
     applyLock.current = true;
     const fieldsLabel = selectedFields.map(key => AI_FIELDS.find(field => field.key === key)?.label).join(', ');
     if (!window.confirm(`Применить выбранные поля (${fieldsLabel}) к текущей версии статьи? Фото, координаты, видео, товары и фактическая страна производства не изменятся. Запись останется черновиком.`)) {
@@ -445,7 +455,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   return <div data-testid={`ai-draft-entry-${entry.id}`} className="editorial-ai mt-3 border-t border-[#e2e0d5] pt-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div><p className="ai-kicker">Редакторская сверка источников</p><p className="mt-1 text-xs text-[#6f7b71]">Предложение по выбранным ссылкам · не автоматическая проверка истинности</p></div>
-      <Button size="sm" variant="outline" disabled={busy || Boolean(activeId)} onClick={() => {
+      <Button size="sm" variant="outline" disabled={busy || suggestionBusy || Boolean(activeId)} onClick={() => {
         if (lock.current || applyLock.current) return;
         if (!open) setOpen(true);
         else if (confirmDiscardChanges('Закрыть панель')) setOpen(false);
@@ -455,16 +465,35 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       <label className="block text-sm font-medium" htmlFor={`ai-sources-${entry.id}`}>Источники для анализа, только выбранные оператором</label>
       <textarea id={`ai-sources-${entry.id}`} className="mt-1 min-h-24 w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] p-2 text-sm" value={sourcesText} onChange={event => setSourcesText(event.target.value)} maxLength={6000} placeholder="https://… · до трёх ссылок, по одной на строку" />
       <p className="mt-1 text-xs text-[#78837a]">Укажите 1–3 публичные https-ссылки. Поиск в интернете не выполняется.</p>
-      <div className="mt-3 flex flex-wrap gap-2"><Button data-testid="ai-draft-generate" size="sm" className="bg-[#315647] hover:bg-[#244537]" disabled={busy || Boolean(activeId)} onClick={() => { void generateDraft(); }}><Sparkles className="mr-1.5 h-4 w-4" />Сформировать предложение</Button><button data-testid="ai-draft-history" className="text-xs text-[#51665a] underline underline-offset-2 disabled:opacity-50" disabled={busy || Boolean(activeId)} onClick={() => setHistoryOpen(value => !value)}>История предложений</button></div>
+      <SourcesSuggestions
+        entry={entry}
+        sourcesText={sourcesText}
+        disabled={busy || suggestionBusy || Boolean(activeId) || applyLock.current}
+        tryClaim={tryClaimSuggestion}
+        releaseClaim={releaseSuggestionClaim}
+        onBusyChange={setSuggestionBusy}
+        onAppend={urls => {
+         const existing = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+         const additions = urls.filter(url => !existing.includes(url));
+         const uniqueExisting = Array.from(new Set(existing));
+         if (existing.length + additions.length > 3 || uniqueExisting.length + additions.length > 3) {
+           setError('Можно использовать не более трёх уникальных ссылок. Удалите лишние строки в поле источников и повторите добавление.');
+           return;
+         }
+         setSourcesText(current => `${current.trimEnd()}${current.trim() ? '\n' : ''}${additions.join('\n')}`);
+         setError('');
+        }}
+      />
+      <div className="mt-3 flex flex-wrap gap-2"><Button data-testid="ai-draft-generate" size="sm" className="bg-[#315647] hover:bg-[#244537]" disabled={busy || suggestionBusy || Boolean(activeId)} onClick={() => { void generateDraft(); }}><Sparkles className="mr-1.5 h-4 w-4" />Сформировать предложение</Button><button data-testid="ai-draft-history" className="text-xs text-[#51665a] underline underline-offset-2 disabled:opacity-50" disabled={busy || suggestionBusy || Boolean(activeId)} onClick={() => setHistoryOpen(value => !value)}>История предложений</button></div>
       {error && <div role="alert" className="mt-3 rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{error}{isConflict({ status: 409, message: error }) && <button className="ml-2 underline" onClick={onApplied}>Обновить список</button>}</div>}
       <RunState run={current} error={polled.isError && activeId ? polled.error : undefined} />
       {current && <p className="mt-3 text-xs text-[#718075]">{current.model} · {prettyDate(current.createdAt)} · статус: {current.status === 'ready' ? 'готово' : current.status === 'running' ? 'выполняется' : 'ошибка'}{current.appliedTo ? ' · уже применено' : ''}</p>}
-      {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} applied={Boolean(current?.appliedTo)} stale={revisionConflict} onToggle={toggleField} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy} />}
+      {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} applied={Boolean(current?.appliedTo)} stale={revisionConflict} onToggle={toggleField} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy} />}
       {historyOpen && <div className="mt-3 space-y-2">
         {history.isLoading && <div className="h-12 animate-pulse rounded bg-[#e7e6dc]" />}
         {history.isError && <div role="alert" className="flex justify-between rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{errorMessage(history.error)}<Button size="sm" variant="outline" onClick={() => { void history.refetch(); }}>Повторить</Button></div>}
         {!history.isLoading && !history.isError && entryRuns.length === 0 && <p className="rounded border border-dashed border-[#c9cbbf] p-3 text-sm text-[#718075]">Предложений для этой статьи пока нет.</p>}
-        {entryRuns.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-[#e0dfd4] bg-[#fbfaf5] p-2 text-xs"><span>{prettyDate(item.createdAt)} · {item.status === 'ready' ? 'готово' : item.status === 'running' ? 'выполняется' : `ошибка: ${item.error || 'причина не указана'}`}</span><Button size="sm" variant="outline" disabled={busy || Boolean(activeId)} onClick={() => { void openHistoryRun(item); }}>Открыть</Button></div>)}
+        {entryRuns.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-[#e0dfd4] bg-[#fbfaf5] p-2 text-xs"><span>{prettyDate(item.createdAt)} · {item.status === 'ready' ? 'готово' : item.status === 'running' ? 'выполняется' : `ошибка: ${item.error || 'причина не указана'}`}</span><Button size="sm" variant="outline" disabled={busy || suggestionBusy || Boolean(activeId)} onClick={() => { void openHistoryRun(item); }}>Открыть</Button></div>)}
         {(history.data?.total || 0) > (history.data?.limit || PAGE_SIZE) && <div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={historyPage <= 1} onClick={() => setHistoryPage(page => page - 1)}>Назад</Button><span className="py-2 text-xs">Страница {historyPage}</span><Button size="sm" variant="outline" disabled={historyPage * (history.data?.limit || PAGE_SIZE) >= (history.data?.total || 0)} onClick={() => setHistoryPage(page => page + 1)}>Далее</Button></div>}
       </div>}
     </div>}

@@ -21,6 +21,18 @@ export const draftRequestSchema = z.object({
   requestId: z.string().uuid(), entryId: z.string().uuid(), revision: z.number().int().positive(),
   sources: z.array(editorialSourceUrl).min(1).max(3).refine(values => new Set(values).size === values.length),
 }).strict();
+export const sourceSuggestionsRequestSchema = z.object({
+  entryId: z.string().uuid(), revision: z.number().int().positive(),
+}).strict();
+export const sourceSuggestionsSchema = z.object({
+  sources: z.array(z.object({
+    url: editorialSourceUrl,
+    label: text(200).min(1),
+    kind: z.enum(['consortium', 'cooperative', 'producer', 'institution']),
+  }).strict()).max(3),
+  warnings: z.array(text(2000)).max(10),
+}).strict();
+export type SourceSuggestions = z.infer<typeof sourceSuggestionsSchema>;
 export const catalogModelItemSchema = z.object({
   nameOriginal: text(200).min(1), titleRu: text(200).min(1), countryCode,
   regions: z.array(text(100).min(1)).max(10),

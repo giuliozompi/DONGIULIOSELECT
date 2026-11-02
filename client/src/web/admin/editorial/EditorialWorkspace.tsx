@@ -29,7 +29,7 @@ const intros: Record<EditorialKind, string> = {
   price: 'Наблюдения за международными ценами. Эти данные не меняют цены и ассортимент каталога.',
 };
 const EMPTY_VIDEO: VideoData = { title: '', description: '', status: 'draft', sortOrder: 0, url: '', cover: '', category: 'recipe', cheeseIds: [] };
-const EMPTY_CHEESE: CheeseData = { title: '', description: '', status: 'draft', sortOrder: 0, photos: [], country: '', region: '', latitude: null, longitude: null, history: '', characteristics: '', culinaryUses: '', productionCountry: '', sources: [], productIds: [], videoIds: [], externalVideoUrls: [] };
+const EMPTY_CHEESE: CheeseData = { title: '', nameOriginal: '', description: '', status: 'draft', sortOrder: 0, photos: [], country: '', region: '', latitude: null, longitude: null, history: '', characteristics: '', culinaryUses: '', productionCountry: '', sources: [], productIds: [], videoIds: [], externalVideoUrls: [] };
 const EMPTY_PRICE: FormData = { cheeseId: '', sourceType: 'internet', price: 0, currency: 'EUR', country: '', store: '', sourceUrl: '', observedOn: new Date().toISOString().slice(0, 10), packageQuantity: 1, packageUnit: 'kg', offerConditions: '', notes: '' };
 
 function fresh(kind: EditorialKind): FormData {
@@ -57,6 +57,9 @@ function statusLabel(entry: EditorialEntry) {
 }
 function entryName(entry: EditorialEntry) {
   return (entry.data as FormData).title || 'Без названия';
+}
+function cheeseNameOriginal(entry: EditorialEntry) {
+  return entry.kind === 'cheese' ? (entry.data as CheeseData).nameOriginal : '';
 }
 function productName(product: any) {
   return product.name || product.title || product.slug || 'Товар без названия';
@@ -352,6 +355,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                       {entry.kind === 'video' && (entry.data as VideoData).cover && <img src={(entry.data as VideoData).cover} alt="" className="h-20 w-28 rounded object-cover" />}
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex flex-wrap items-center gap-2"><h2 className="font-serif text-lg">{rowTitle}</h2>
+                          {entry.kind === 'cheese' && cheeseNameOriginal(entry) && <span className="text-sm italic text-[#778278]">{cheeseNameOriginal(entry)}</span>}
                           <Badge variant="outline" className="border-[#c7cec3] bg-[#eef1eb] text-[#486252]">{statusLabel(entry)}</Badge>
                           {price && <Badge variant="outline" className="border-[#dfc9b5] bg-[#f5ece2] text-[#84563e]">{price.sourceType === 'user' ? 'Сообщение пользователя' : 'Источник в интернете'}</Badge>}
                         </div>
@@ -385,7 +389,10 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
             <DialogHeader><DialogTitle className="font-serif text-2xl">{editing ? 'Редактирование' : 'Новая запись'} · {titles[kind]}</DialogTitle></DialogHeader>
             <div className="space-y-5 py-2">
               {kind !== 'price' && <>
-                {field('Заголовок', 'title', (form as VideoData | CheeseData).title, { required: true })}
+                {kind === 'cheese' ? <div className="grid gap-4 sm:grid-cols-2">
+                  {field('Название по-русски', 'title', cheeseForm.title, { required: true })}
+                  {field('Оригинальное название', 'nameOriginal', cheeseForm.nameOriginal, { placeholder: 'Например, Parmigiano Reggiano' })}
+                </div> : field('Заголовок', 'title', (form as VideoData).title, { required: true })}
                 {textarea('Описание', 'description', (form as VideoData | CheeseData).description)}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5"><Label htmlFor="ed-status">Внутренний статус</Label><select id="ed-status" className={nativeSelectClass} value={(form as VideoData | CheeseData).status} onChange={e => set('status', e.target.value)}><option value="draft">Черновик</option><option value="ready">Готово к редакционному этапу</option></select></div>

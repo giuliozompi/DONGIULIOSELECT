@@ -43,3 +43,25 @@ SDK and chat format without confirming every parameter used through OpenRouter.
 verified model ID, and validate JSON and source-based drafts against the actual
 Gateway before release. Never silently drop JSON requirements or try another
 provider to conceal an incompatibility.
+
+An unauthenticated public-model request can distinguish a broad access refusal
+from a failure specific to a key or model, but does not establish its geographic
+cause.
+
+**Why:** The user confirmed that Timeweb-origin OpenRouter public and authenticated
+requests were both denied by a security policy, while the same environment could
+list models and complete a strict-JSON request through Timeweb AI Gateway.
+
+**How to apply:** Preserve that distinction when diagnosing future incidents.
+The successful Gateway smoke test establishes basic access and JSON transport,
+not correctness of complete cheese drafts, citations or publication.
+
+The user subsequently confirmed «OK FUNZIONA!» after activating Timeweb AI Gateway
+and retrying generation in the admin.
+
+**Why:** This is live-user confirmation of the editorial generation path, beyond
+the earlier minimal JSON transport probe.
+
+**How to apply:** Keep the working Gateway configuration rather than returning
+to blocked OpenRouter access. This confirmation does not establish the accuracy
+of generated cheese facts or authorize automatic publication.

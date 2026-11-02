@@ -33,7 +33,8 @@ export async function catalogMatches(result: CatalogResult, database: Pick<typeo
       new Intl.DisplayNames(['en'], { type: 'region' }).of(item.countryCode)!].map(normalizedCheeseName);
     const matches = new Map<string, { id: string; title: string }>();
     for (const row of entries) {
-      if (countries.includes(normalizedCheeseName(row.data.country)) && keys.includes(normalizedCheeseName(row.data.title)))
+      const entryKeys = [row.data.title, row.data.nameOriginal].filter(Boolean).map(normalizedCheeseName);
+      if (countries.includes(normalizedCheeseName(row.data.country)) && entryKeys.some(key => keys.includes(key)))
         matches.set(row.id, { id: row.id, title: row.data.title });
     }
     for (const row of imports) {
@@ -115,6 +116,8 @@ Return {"items":[{"nameOriginal":"original name","titleRu":"Russian name","count
 "summary":"brief Russian description"}],"warnings":["all names/origins/priorities require operator verification"]}.
 Use only requested country codes, no duplicate cheeses, at most requested limit total. Include every requested country with
 balanced coverage. importance integer1..100(higher first).
+nameOriginal must preserve the cheese's name in its language of origin, with original spelling and diacritics,
+not an English translation or Russian transliteration. titleRu is the separate Russian name.
 For IT and FR provide traditional regions when known, otherwise empty array plus warning; never force a single region.`;
 const draftPrompt = `${safety}
 Use ONLY supplied source evidence, not your background knowledge. Return {"fields":{"title":"optional Russian title",

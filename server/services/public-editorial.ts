@@ -11,12 +11,12 @@ function publicVideo(row: Publication): PublicVideo {
 }
 function cheeseSummary(row: Publication): PublicCheeseSummary {
   const c = cheeseDataSchema.parse(row.data);
-  return { id: row.entry_id, title: c.title, description: c.description, country: c.country,
+  return { id: row.entry_id, title: c.title, nameOriginal: c.nameOriginal, description: c.description, country: c.country,
     region: c.region, latitude: c.latitude, longitude: c.longitude, photo: c.photos.find(Boolean) || '',
     publishedAt: row.published_at.toISOString() };
 }
 export interface PublicFilters { search: string; category?: string; country?: string; page: number; limit: number }
-const filterSql = `kind=$1 AND ($2='' OR strpos(lower(concat_ws(' ',data->>'title',data->>'description',data->>'country',data->>'region')),lower($2))>0)
+const filterSql = `kind=$1 AND ($2='' OR strpos(lower(concat_ws(' ',data->>'title',data->>'nameOriginal',data->>'description',data->>'country',data->>'region')),lower($2))>0)
   AND ($3='' OR data->>'category'=$3) AND ($4='' OR data->>'country'=$4)`;
 export async function publicEditorialList(kind: 'video' | 'cheese', filters: PublicFilters, database = pool) {
   const params = [kind, filters.search, filters.category || '', filters.country || ''];
