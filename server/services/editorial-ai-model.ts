@@ -1,24 +1,24 @@
 import OpenAI from 'openai';
 import { editorialForbiddenReason } from './editorial-ai-forbidden';
-export const DEFAULT_EDITORIAL_AI_MODEL = 'google/gemini-2.5-flash';
-export const EDITORIAL_AI_MODEL = process.env.EDITORIAL_AI_MODEL?.trim() || DEFAULT_EDITORIAL_AI_MODEL;
-export class EditorialModelError extends Error {}
+import { DEFAULT_EDITORIAL_AI_MODEL, EditorialModelError, getEditorialModelSettings, type EditorialAiProvider } from './editorial-ai-config';
+export { DEFAULT_EDITORIAL_AI_MODEL, EditorialModelError, getEditorialModelSettings };
 // Only allowlisted diagnostics reach the operator/audit log. Never include
 // provider messages, response bodies, headers or request configuration.
-export function editorialProviderError(error: unknown): EditorialModelError {
+export function editorialProviderError(error: unknown, provider: EditorialAiProvider = 'openrouter'): EditorialModelError {
   if (error instanceof EditorialModelError) return error;
+  const label = provider === 'timeweb' ? 'Timeweb AI Gateway' : 'OpenRouter';
   const status = error instanceof OpenAI.APIError ? error.status : undefined;
   const messages: Record<number, string> = {
     400: 'AI отклонил параметры запроса. Администратору нужно проверить совместимость модели и формата JSON.',
-    401: 'OpenRouter отклонил ключ API. Администратору нужно проверить настройку ключа на Timeweb.',
-    402: 'OpenRouter отклонил запрос из-за оплаты или недостаточного баланса. Проверьте баланс и лимит расходов ключа.',
-    403: 'OpenRouter запретил доступ. Проверьте разрешения ключа и доступность модели для сервера Timeweb.',
+    401: `${label} отклонил ключ API. Администратору нужно проверить настройку ключа на Timeweb.`,
+    402: `${label} отклонил запрос из-за оплаты или недостаточного баланса. Проверьте баланс и лимит расходов ключа.`,
+    403: `${label} запретил доступ. Проверьте разрешения ключа и доступность модели для сервера Timeweb.`,
     404: 'Модель AI не найдена или недоступна. Администратору нужно проверить настройку модели.',
     408: 'Истекло время ожидания ответа AI. Повторите запрос явно позже.',
     422: 'AI отклонил параметры запроса. Администратору нужно проверить совместимость модели и формата JSON.',
     429: 'Превышен лимит запросов AI. Подождите и повторите запрос явно.',
   };
-  let message = status === 403 && error instanceof OpenAI.APIError
+  let message = provider === 'openrouter' && status === 403 && error instanceof OpenAI.APIError
     ? editorialForbiddenReason(error.error, error.headers?.get('content-type')?.toLowerCase().includes('text/html') ?? false)
     : undefined;
   message ||= status ? messages[status] : undefined;
@@ -26,24 +26,25 @@ export function editorialProviderError(error: unknown): EditorialModelError {
   if (!message && error instanceof OpenAI.APIConnectionTimeoutError)
     message = 'Истекло время ожидания ответа AI. Повторите запрос явно позже.';
   if (!message && error instanceof OpenAI.APIConnectionError)
-    message = 'Не удалось соединиться с OpenRouter. Проверьте доступ к сервису с сервера Timeweb.';
+    message = `Не удалось соединиться с ${label}. Проверьте доступ к сервису с сервера Timeweb.`;
   return new EditorialModelError(message || 'Неизвестная ошибка сервиса AI. Обратитесь к администратору; повторите запрос только явно.');
 }
-export function createEditorialModelRequester(client: OpenAI) {
+export function createEditorialModelRequester(client: OpenAI, settings = getEditorialModelSettings()) {
   return async (system: string, input: unknown): Promise<unknown> => {
     try {
       const response = await client.chat.completions.create({
-        model: EDITORIAL_AI_MODEL, temperature: 0.15, max_tokens: 6000,
+        model: settings.model, temperature: 0.15, max_tokens: 6000,
         // Gemini 2.5 Flash supports disabling thinking: reserve the output
         // budget for the reviewed JSON draft, not hidden reasoning tokens.
-        ...(EDITORIAL_AI_MODEL === DEFAULT_EDITORIAL_AI_MODEL ? { reasoning: { enabled: false } } : {}),
+        ...(settings.provider === 'openrouter' && settings.model === DEFAULT_EDITORIAL_AI_MODEL ? { reasoning: { enabled: false } } : {}),
         response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(input) }],
       });
-      // OpenRouter can also report an upstream failure in a successful HTTP response.
+      // Compatible gateways can report an upstream failure in HTTP 200.
       const embedded = (response as unknown as { error?: { code?: unknown } }).error;
       if (embedded) {
-        const code = typeof embedded.code === 'number' ? embedded.code : undefined;
+        const code = typeof embedded.code === 'number' ? embedded.code
+          : typeof embedded.code === 'string' && /^[45]\d{2}$/.test(embedded.code) ? Number(embedded.code) : undefined;
         throw OpenAI.APIError.generate(code, { error: embedded }, undefined, new Headers());
       }
       const choice = response.choices?.[0];
@@ -59,15 +60,24 @@ export function createEditorialModelRequester(client: OpenAI) {
         throw new EditorialModelError('AI вернул некорректный JSON. Заготовка не сохранена; повторите запрос явно.');
       }
     } catch (error) {
-      throw editorialProviderError(error);
+      throw editorialProviderError(error, settings.provider);
     }
   };
 }
-export async function requestEditorialModel(system: string, input: unknown): Promise<unknown> {
-  if (!process.env.OPENROUTER_API_KEY) throw new EditorialModelError('AI не настроен. Обратитесь к администратору.');
+export function createConfiguredEditorialRequester(
+  env: Record<string, string | undefined> = process.env,
+  fetcher?: typeof fetch,
+) {
+  const settings = getEditorialModelSettings(env);
+  const apiKey = env[settings.keyName]?.trim();
+  if (!apiKey) throw new EditorialModelError(`AI не настроен: отсутствует ${settings.keyName}. Обратитесь к администратору.`);
   const client = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1', apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: settings.baseURL, apiKey,
+    ...(fetcher ? { fetch: fetcher } : {}),
     maxRetries: 0, timeout: 45_000,
   });
-  return createEditorialModelRequester(client)(system, input);
+  return createEditorialModelRequester(client, settings);
+}
+export async function requestEditorialModel(system: string, input: unknown): Promise<unknown> {
+  return createConfiguredEditorialRequester()(system, input);
 }

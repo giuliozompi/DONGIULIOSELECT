@@ -6,7 +6,7 @@ import {
   catalogRequestSchema, draftRequestSchema, catalogModelSchema, draftModelSchema, draftGenerationSchema, countryName,
   type CatalogRequest, type DraftRequest, type EditorialAiRun, type CatalogResult, type DraftResult,
 } from '../../shared/editorial-ai';
-import { EDITORIAL_AI_MODEL, requestEditorialModel, EditorialModelError } from './editorial-ai-model';
+import { getEditorialModelSettings, requestEditorialModel, EditorialModelError } from './editorial-ai-model';
 import { retrieveEditorialSource, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
 
 export type RunRow = {
@@ -97,7 +97,7 @@ export async function reserveAiRun(kind: 'catalog' | 'draft', input: unknown, ac
     const row: RunRow = (await client.query(`INSERT INTO editorial_ai_runs
       (id,kind,status,request_id,params,model,created_by,lease_until)
       VALUES($1,$2,'running',$3,$4,$5,$6,clock_timestamp()+interval '2 minutes') RETURNING *`,
-      [id, kind, params.requestId, JSON.stringify(params), EDITORIAL_AI_MODEL, actor])).rows[0];
+      [id, kind, params.requestId, JSON.stringify(params), getEditorialModelSettings().model, actor])).rows[0];
     await audit(client, actor, 'ai_requested', id, null, { kind, params, model: row.model });
     return { run: runDto(row), created: true };
   });

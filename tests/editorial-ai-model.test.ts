@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import OpenAI from 'openai';
-import { createEditorialModelRequester, EditorialModelError, DEFAULT_EDITORIAL_AI_MODEL, EDITORIAL_AI_MODEL } from '../server/services/editorial-ai-model';
+import { createEditorialModelRequester, createConfiguredEditorialRequester, EditorialModelError, DEFAULT_EDITORIAL_AI_MODEL, getEditorialModelSettings } from '../server/services/editorial-ai-model';
 
 const sensitive = 'SECRET_PROVIDER_PAYLOAD';
 function requester(body: unknown, status = 200) {
@@ -20,13 +20,112 @@ function requester(body: unknown, status = 200) {
 function completion(content: string | null, finish_reason = 'stop') {
   return { choices: [{ message: { role: 'assistant', content }, finish_reason }] };
 }
+const timewebEnv = {
+  EDITORIAL_AI_PROVIDER: 'timeweb',
+  // Synthetic ID, not a claim about the live Timeweb catalogue.
+  EDITORIAL_AI_MODEL: 'google/test-gemini-flash',
+  TIMEWEB_AI_API_KEY: 'test-only-timeweb-key',
+  OPENROUTER_API_KEY: 'test-only-openrouter-key',
+};
+test('adding a Timeweb key does not change the default provider', () => {
+  const settings = getEditorialModelSettings({ TIMEWEB_AI_API_KEY: sensitive });
+  assert.equal(settings.provider, 'openrouter');
+  assert.equal(settings.baseURL, 'https://openrouter.ai/api/v1');
+  assert.equal(settings.keyName, 'OPENROUTER_API_KEY');
+  assert.equal(settings.model, DEFAULT_EDITORIAL_AI_MODEL);
+});
+test('Timeweb requires an explicit API model ID and rejects a display name', () => {
+  for (const model of ['', '   ', 'Gemini 3.5 Flash']) {
+    assert.throws(() => getEditorialModelSettings({
+      ...timewebEnv, EDITORIAL_AI_MODEL: model,
+    }), /API-код модели/);
+  }
+  assert.throws(() => getEditorialModelSettings({ EDITORIAL_AI_PROVIDER: 'untrusted-provider' }), /провайдер/);
+});
+test('a missing Timeweb key never falls back to the OpenRouter key', () => {
+  assert.throws(() => createConfiguredEditorialRequester({
+    ...timewebEnv, TIMEWEB_AI_API_KEY: ' ',
+  }), /TIMEWEB_AI_API_KEY/);
+});
+test('Timeweb uses its fixed URL, isolated key and explicit model without OpenRouter extensions', async () => {
+  let calls = 0;
+  const request = createConfiguredEditorialRequester(timewebEnv, async (url, init) => {
+    calls++;
+    assert.equal(String(url), 'https://api.timeweb.ai/v1/chat/completions');
+    assert.equal(new Headers(init?.headers).get('authorization'), `Bearer ${timewebEnv.TIMEWEB_AI_API_KEY}`);
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.model, timewebEnv.EDITORIAL_AI_MODEL);
+    assert.equal(body.reasoning, undefined);
+    assert.equal(body.models, undefined);
+    assert.equal(body.max_tokens, 6000);
+    assert.deepEqual(body.response_format, { type: 'json_object' });
+    assert.equal(body.messages[0].role, 'system');
+    return new Response(JSON.stringify(completion('{"ok":true}')), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  });
+  assert.deepEqual(await request('Return strict JSON', {}), { ok: true });
+  assert.equal(calls, 1);
+});
+for (const status of [400, 401, 402, 403, 429, 503]) {
+  test(`Timeweb HTTP ${status} is sanitized without retry or fallback`, async () => {
+    let calls = 0;
+    const request = createConfiguredEditorialRequester(timewebEnv, async url => {
+      calls++;
+      assert.ok(String(url).startsWith('https://api.timeweb.ai/'));
+      return new Response(JSON.stringify({ error: { code: status, message: sensitive } }), {
+        status, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    await assert.rejects(request('system', {}), error => {
+      assert.ok(error instanceof EditorialModelError);
+      assert.ok(!error.message.includes(sensitive));
+      assert.ok(!error.message.includes('OpenRouter'));
+      if ([401, 402, 403].includes(status)) assert.match(error.message, /Timeweb AI Gateway/);
+      return true;
+    });
+    assert.equal(calls, 1);
+  });
+}
+test('Timeweb embedded string error codes in HTTP 200 are not accepted as a draft', async () => {
+  let calls = 0;
+  const request = createConfiguredEditorialRequester(timewebEnv, async () => {
+    calls++;
+    return new Response(JSON.stringify({ error: { code: '503', message: sensitive } }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  });
+  await assert.rejects(request('system', {}), /временно недоступен/);
+  assert.equal(calls, 1);
+});
+test('Timeweb transport failures do not leak secrets or mention the wrong provider', async () => {
+  const request = createConfiguredEditorialRequester(timewebEnv, async () => { throw new Error(sensitive); });
+  await assert.rejects(request('system', {}), error => {
+    assert.ok(error instanceof EditorialModelError);
+    assert.match(error.message, /соединиться с Timeweb AI Gateway/);
+    assert.ok(!error.message.includes(sensitive));
+    return true;
+  });
+});
+test('Timeweb invalid JSON fails without removing JSON requirements or retrying', async () => {
+  let calls = 0;
+  const request = createConfiguredEditorialRequester(timewebEnv, async () => {
+    calls++;
+    return new Response(JSON.stringify(completion('invalid-json')), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  });
+  await assert.rejects(request('system', {}), /некорректный JSON/);
+  assert.equal(calls, 1);
+});
 test('editorial requests use Gemini JSON without model fallback or hidden thinking by default', async () => {
+  const settings = getEditorialModelSettings();
   assert.equal(DEFAULT_EDITORIAL_AI_MODEL, 'google/gemini-2.5-flash');
   const mock = requester(completion('{"ok":true}'));
   assert.deepEqual(await mock.request('Source-based editorial system', { name: 'Formaggio' }), { ok: true });
-  assert.equal(mock.body()?.model, EDITORIAL_AI_MODEL);
+  assert.equal(mock.body()?.model, settings.model);
   assert.deepEqual(mock.body()?.response_format, { type: 'json_object' });
-  if (EDITORIAL_AI_MODEL === DEFAULT_EDITORIAL_AI_MODEL) {
+  if (settings.provider === 'openrouter' && settings.model === DEFAULT_EDITORIAL_AI_MODEL) {
     assert.deepEqual(mock.body()?.reasoning, { enabled: false });
   } else {
     assert.equal(mock.body()?.reasoning, undefined);

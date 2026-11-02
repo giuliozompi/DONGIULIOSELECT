@@ -31,3 +31,15 @@ confirmed diagnosis of the previous provider's refusal.
 **How to apply:** Preserve the requested Gemini choice for editorial work while
 keeping source verification and human review. Do not claim that a model switch
 necessarily resolves an account-wide, security or regional restriction.
+
+Treat a provider's “OpenAI-compatible” claim as transport compatibility, not
+proof that all model parameters or structured-output requirements work.
+
+**Why:** The user approved preparing Timeweb AI Gateway as an alternative, but
+required keeping production inactive until a real test. Timeweb documents the
+SDK and chat format without confirming every parameter used through OpenRouter.
+
+**How to apply:** Keep provider selection explicit, use its own credential and
+verified model ID, and validate JSON and source-based drafts against the actual
+Gateway before release. Never silently drop JSON requirements or try another
+provider to conceal an incompatibility.
