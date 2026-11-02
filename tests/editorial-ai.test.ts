@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import OpenAI from 'openai';
 import { test, before, after, beforeEach } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -11,7 +12,7 @@ import express from 'express';
 import type { Server } from 'node:http';
 import { registerAdminEditorialAiRoutes } from '../server/adminEditorialAiRoutes';
 import { reserveAiRun, executeAiRun, getAiRun, aiHistory, type AiDependencies } from '../server/services/editorial-ai';
-import { EditorialModelError } from '../server/services/editorial-ai-model';
+import { EditorialModelError, createEditorialModelRequester } from '../server/services/editorial-ai-model';
 import { importAiCatalog, rankAiCatalog, applyAiDraft } from '../server/services/editorial-ai-changes';
 import { isPublicSourceAddress, validateSourceUrl, sourcePlainText, retrieveEditorialSource } from '../server/services/editorial-ai-sources';
 import { EditorialError, saveEditorial } from '../server/services/editorial';
@@ -232,6 +233,25 @@ test('safe provider diagnostics persist in failed runs and history without chang
   assert.equal(run.status, 'failed');
   assert.equal(run.error, message);
   assert.equal((await aiHistory('draft', 1, db, c.id)).items[0].error, message);
+  assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0].revision, c.revision);
+});
+test('a specific provider refusal reaches operator history without copying the provider payload', async () => {
+  const c = await cheese();
+  let calls = 0;
+  const client = new OpenAI({ apiKey: 'test-not-a-real-key', maxRetries: 0, fetch: async () => {
+    calls++;
+    return new Response(JSON.stringify({ error: {
+      code: 403, message: 'SECRET_DO_NOT_PERSIST',
+      metadata: { raw: JSON.stringify({ error: { code: 'unsupported_country_region_territory' } }) },
+    } }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+  } });
+  const run = await readyDraft(c, { ...deps, model: createEditorialModelRequester(client) });
+  assert.equal(calls, 1);
+  assert.equal(run.status, 'failed');
+  assert.match(run.error!, /страны или региона/);
+  const history = await aiHistory('draft', 1, db, c.id);
+  assert.equal(history.items[0].error, run.error);
+  assert.ok(!JSON.stringify(history).includes('SECRET_DO_NOT_PERSIST'));
   assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0].revision, c.revision);
 });
 test('apply and creation audit failures roll back all changes', async () => {

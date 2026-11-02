@@ -68,3 +68,50 @@ test('timeout is distinguished from connection failures', async () => {
   const error = editorialProviderError(new OpenAI.APIConnectionTimeoutError());
   assert.match(error.message, /время ожидания/);
 });
+for (const [name, detail, expected] of [
+  ['key budget', { metadata: { limit_source: 'openrouter_key_limit', remedy_hint: sensitive } }, /лимит расходов/],
+  ['workspace budget', { metadata: { limit_source: 'openrouter_workspace_budget' } }, /лимит расходов/],
+  ['guardrail budget', { metadata: { limit_source: 'openrouter_guardrail_budget' } }, /лимит расходов/],
+  ['budget legacy message', { message: `Budget limit exceeded (weekly limit). ${sensitive}` }, /лимит расходов/],
+  ['content filter', { metadata: { error_type: 'content_policy_violation', raw: sensitive } }, /политикой содержимого/],
+  ['refusal', { metadata: { error_type: 'refusal' } }, /политикой содержимого/],
+  ['country code', { metadata: { provider_code: 'unsupported_country_region_territory' } }, /страны или региона/],
+  ['country message', { message: `Country, region, or territory not supported. ${sensitive}` }, /страны или региона/],
+  ['model region message', { message: 'This model is not available in your region.' }, /страны или региона/],
+  ['upstream JSON', { metadata: { raw: JSON.stringify({ error: { code: 'unsupported_country_region_territory', message: sensitive } }) } }, /страны или региона/],
+  ['upstream object', { metadata: { raw: { error: { message: 'Country, region, or territory not supported.' } } } }, /страны или региона/],
+  ['guardrail', { message: 'Request blocked: prompt injection patterns detected', metadata: { patterns: [sensitive] } }, /правилом безопасности/],
+  ['unknown reason', { message: sensitive, metadata: { error_type: sensitive, raw: sensitive } }, /запретил доступ/],
+  ['invalid metadata', { message: sensitive, metadata: null }, /запретил доступ/],
+  ['empty pattern list', { message: sensitive, metadata: { patterns: [] } }, /запретил доступ/],
+  ['prompt echoed outside error fields', { message: sensitive, metadata: { raw: JSON.stringify({ prompt: 'This model is not available in your region.' }) } }, /запретил доступ/],
+] as const) {
+  for (const status of [403, 200]) {
+    test(`${name}: safe 403 reason survives HTTP ${status} without retries`, async () => {
+      const mock = requester({ error: { code: 403, message: sensitive, ...detail } }, status);
+      await assert.rejects(mock.request('system', {}), error => {
+        assert.ok(error instanceof EditorialModelError);
+        assert.match(error.message, expected);
+        assert.ok(!error.message.includes(sensitive));
+        return true;
+      });
+      assert.equal(mock.calls(), 1);
+    });
+  }
+}
+test('HTML access denial is distinguished from a JSON provider refusal', async () => {
+  const client = new OpenAI({
+    apiKey: sensitive, maxRetries: 0,
+    fetch: async () => new Response(`<html>${sensitive}</html>`, { status: 403, headers: { 'Content-Type': 'text/html' } }),
+  });
+  await assert.rejects(createEditorialModelRequester(client)('system', {}), error => {
+    assert.ok(error instanceof EditorialModelError);
+    assert.match(error.message, /HTML.*вместо JSON/);
+    assert.ok(!error.message.includes(sensitive));
+    return true;
+  });
+});
+test('non-403 failures are not reclassified by untrusted metadata', async () => {
+  const mock = requester({ error: { message: sensitive, metadata: { limit_source: 'openrouter_key_limit' } } }, 500);
+  await assert.rejects(mock.request('system', {}), /временно недоступен/);
+});

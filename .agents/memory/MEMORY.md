@@ -13,6 +13,7 @@
 - [Keyboard popups](keyboard-popups.md) — nested suggestions must consume Escape before Radix dialog capture handlers, without blocking subsequent dialog dismissal.
 - [Operator order documents](operator-order-documents.md) — payment-method edits must always be logged; packing list and named box label share the order QR and printed code.
 - [Telegram hosting diagnostics](telegram-transport.md) — workspace success does not prove Timeweb connectivity; ambiguous sends must not be retried automatically or leak bot URLs.
+- [Editorial provider diagnostics](editorial-provider-diagnostics.md) — a 403 alone cannot distinguish budget, security or regional restrictions; diagnose before rotating keys or changing models.
 - [Brand messaging](brand-messaging.md) — user-requested storefront copy emphasizes Italian producers in Russia and delivery throughout Russia.
 - [Editorial expansion approvals](editorial-expansion-approvals.md) — video and cheese encyclopedia roadmap requires explicit approval of each point before implementation.
 - [Preview dependency isolation](preview-dependency-isolation.md) — legacy npm projects need truly local sandbox dependencies and verification of both runtimes after scaffolding.

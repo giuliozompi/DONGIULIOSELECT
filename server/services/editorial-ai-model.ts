@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { editorialForbiddenReason } from './editorial-ai-forbidden';
 export const EDITORIAL_AI_MODEL = process.env.EDITORIAL_AI_MODEL || 'openai/gpt-4o-mini';
 export class EditorialModelError extends Error {}
 // Only allowlisted diagnostics reach the operator/audit log. Never include
@@ -16,7 +17,10 @@ export function editorialProviderError(error: unknown): EditorialModelError {
     422: 'AI отклонил параметры запроса. Администратору нужно проверить совместимость модели и формата JSON.',
     429: 'Превышен лимит запросов AI. Подождите и повторите запрос явно.',
   };
-  let message = status ? messages[status] : undefined;
+  let message = status === 403 && error instanceof OpenAI.APIError
+    ? editorialForbiddenReason(error.error, error.headers?.get('content-type')?.toLowerCase().includes('text/html') ?? false)
+    : undefined;
+  message ||= status ? messages[status] : undefined;
   if (!message && status && status >= 500) message = 'Сервис AI временно недоступен. Повторите запрос явно позже.';
   if (!message && error instanceof OpenAI.APIConnectionTimeoutError)
     message = 'Истекло время ожидания ответа AI. Повторите запрос явно позже.';
@@ -36,7 +40,7 @@ export function createEditorialModelRequester(client: OpenAI) {
       const embedded = (response as unknown as { error?: { code?: unknown } }).error;
       if (embedded) {
         const code = typeof embedded.code === 'number' ? embedded.code : undefined;
-        throw OpenAI.APIError.generate(code, {}, undefined, new Headers());
+        throw OpenAI.APIError.generate(code, { error: embedded }, undefined, new Headers());
       }
       const choice = response.choices?.[0];
       if (choice?.finish_reason === 'length')
