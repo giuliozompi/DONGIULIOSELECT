@@ -1,23 +1,40 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import OpenAI from 'openai';
-import { createEditorialModelRequester, EditorialModelError } from '../server/services/editorial-ai-model';
+import { createEditorialModelRequester, EditorialModelError, DEFAULT_EDITORIAL_AI_MODEL, EDITORIAL_AI_MODEL } from '../server/services/editorial-ai-model';
 
 const sensitive = 'SECRET_PROVIDER_PAYLOAD';
 function requester(body: unknown, status = 200) {
   let calls = 0;
+  let sentBody: Record<string, unknown> | undefined;
   const client = new OpenAI({
     apiKey: 'test-only-not-a-real-key', maxRetries: 0,
-    fetch: async () => {
+    fetch: async (_url, init) => {
       calls++;
+      sentBody = JSON.parse(String(init?.body));
       return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
     },
   });
-  return { request: createEditorialModelRequester(client), calls: () => calls };
+  return { request: createEditorialModelRequester(client), calls: () => calls, body: () => sentBody };
 }
 function completion(content: string | null, finish_reason = 'stop') {
   return { choices: [{ message: { role: 'assistant', content }, finish_reason }] };
 }
+test('editorial requests use Gemini JSON without model fallback or hidden thinking by default', async () => {
+  assert.equal(DEFAULT_EDITORIAL_AI_MODEL, 'google/gemini-2.5-flash');
+  const mock = requester(completion('{"ok":true}'));
+  assert.deepEqual(await mock.request('Source-based editorial system', { name: 'Formaggio' }), { ok: true });
+  assert.equal(mock.body()?.model, EDITORIAL_AI_MODEL);
+  assert.deepEqual(mock.body()?.response_format, { type: 'json_object' });
+  if (EDITORIAL_AI_MODEL === DEFAULT_EDITORIAL_AI_MODEL) {
+    assert.deepEqual(mock.body()?.reasoning, { enabled: false });
+  } else {
+    assert.equal(mock.body()?.reasoning, undefined);
+  }
+  assert.equal(mock.body()?.max_tokens, 6000);
+  assert.equal(mock.body()?.models, undefined);
+  assert.equal(mock.calls(), 1);
+});
 for (const [status, expected] of [
   [400, /параметры/], [401, /ключ API/], [402, /баланс/], [403, /запретил/],
   [404, /Модель/], [408, /время ожидания/], [422, /параметры/],

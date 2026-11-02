@@ -20,3 +20,14 @@ probe does not prove that Timeweb uses the same key or has the same access.
 Do not silently change model, disable safeguards or introduce automatic retries.
 
 Official reference: https://openrouter.ai/docs/api_reference/errors-and-debugging
+
+For cheese editorial generation, the user explicitly requested switching to
+Gemini through OpenRouter after the refusal persisted with a replacement key
+and a Timeweb restart.
+
+**Why:** The user chose the model change; it is not an automatic fallback or a
+confirmed diagnosis of the previous provider's refusal.
+
+**How to apply:** Preserve the requested Gemini choice for editorial work while
+keeping source verification and human review. Do not claim that a model switch
+necessarily resolves an account-wide, security or regional restriction.

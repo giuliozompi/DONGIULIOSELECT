@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { editorialForbiddenReason } from './editorial-ai-forbidden';
-export const EDITORIAL_AI_MODEL = process.env.EDITORIAL_AI_MODEL || 'openai/gpt-4o-mini';
+export const DEFAULT_EDITORIAL_AI_MODEL = 'google/gemini-2.5-flash';
+export const EDITORIAL_AI_MODEL = process.env.EDITORIAL_AI_MODEL?.trim() || DEFAULT_EDITORIAL_AI_MODEL;
 export class EditorialModelError extends Error {}
 // Only allowlisted diagnostics reach the operator/audit log. Never include
 // provider messages, response bodies, headers or request configuration.
@@ -33,6 +34,9 @@ export function createEditorialModelRequester(client: OpenAI) {
     try {
       const response = await client.chat.completions.create({
         model: EDITORIAL_AI_MODEL, temperature: 0.15, max_tokens: 6000,
+        // Gemini 2.5 Flash supports disabling thinking: reserve the output
+        // budget for the reviewed JSON draft, not hidden reasoning tokens.
+        ...(EDITORIAL_AI_MODEL === DEFAULT_EDITORIAL_AI_MODEL ? { reasoning: { enabled: false } } : {}),
         response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(input) }],
       });
