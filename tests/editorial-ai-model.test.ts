@@ -1,9 +1,44 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import OpenAI from 'openai';
-import { createEditorialModelRequester, createConfiguredEditorialRequester, EditorialModelError, DEFAULT_EDITORIAL_AI_MODEL, getEditorialModelSettings } from '../server/services/editorial-ai-model';
+import { createEditorialModelRequester, createConfiguredEditorialRequester, EditorialModelError, DEFAULT_EDITORIAL_AI_MODEL, getEditorialModelSettings, parseEditorialJson } from '../server/services/editorial-ai-model';
+import { sourceResponseError } from '../server/services/editorial-ai-sources';
 
 const sensitive = 'SECRET_PROVIDER_PAYLOAD';
+test('complete JSON fences are normalized without repairing or extracting model output', () => {
+  for (const text of ['{"ok":true}', '```json\n{"ok":true}\n```', '```\r\n{"ok":true}\r\n```', '\uFEFF{"ok":true}']) {
+    assert.deepEqual(parseEditorialJson(text), { ok: true });
+  }
+  for (const text of [
+    'Comment\n{"ok":true}', '```json\n{"ok":true}\n```\nComment',
+    '```json\n{"ok":true}', '{"ok":true,}', '{"ok":',
+    'null', '[]', '"text"', '{"ok":true}{"other":true}', `{"secret":"${sensitive}`,
+  ]) {
+    assert.throws(() => parseEditorialJson(text), error => {
+      assert.ok(error instanceof EditorialModelError);
+      assert.match(error.message, /некорректный JSON/);
+      assert.ok(!error.message.includes(sensitive));
+      return true;
+    });
+  }
+});
+test('source diagnostics distinguish HTTP refusals, missing pages and unsupported content', () => {
+  assert.match(sourceResponseError(403, 'text/html')!, /HTTP 403.*другую/);
+  assert.match(sourceResponseError(404, 'text/html')!, /не найдена.*HTTP 404/);
+  assert.match(sourceResponseError(429, 'text/html')!, /частоту.*HTTP 429/);
+  assert.match(sourceResponseError(503, 'text/html')!, /HTTP 503/);
+  assert.match(sourceResponseError(200, 'application/pdf')!, /PDF/);
+  assert.match(sourceResponseError(200, 'text/html', 'gzip')!, /сжатие/);
+  assert.equal(sourceResponseError(200, 'text/html; charset=utf-8'), undefined);
+});
+test('a complete fenced response succeeds with one provider call, but truncated fences never do', async () => {
+  const valid = requester(completion('```json\n{"ok":true}\n```'));
+  assert.deepEqual(await valid.request('system', {}), { ok: true });
+  assert.equal(valid.calls(), 1);
+  const truncated = requester(completion('```json\n{"ok":true}\n```', 'length'));
+  await assert.rejects(truncated.request('system', {}), /лимит длины/);
+  assert.equal(truncated.calls(), 1);
+});
 function requester(body: unknown, status = 200) {
   let calls = 0;
   let sentBody: Record<string, unknown> | undefined;

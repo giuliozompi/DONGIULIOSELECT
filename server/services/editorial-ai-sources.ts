@@ -39,7 +39,32 @@ export function sourcePlainText(html: string) {
     .replace(/<(script|style|noscript|svg|nav|footer|header)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
     .replace(/<[^>]*>/g, ' ')));
 }
+export function sourceResponseError(status: number, type: string, encoding?: string): string | undefined {
+  if (status !== 200) {
+    const hint = status === 403 ? 'Сайт запретил автоматическое чтение'
+      : status === 404 ? 'Страница не найдена'
+      : status === 429 ? 'Сайт ограничил частоту запросов'
+      : 'Сайт вернул ошибку';
+    return `${hint} (HTTP ${status}). Выберите другую публичную страницу.`;
+  }
+  if (!/^text\/(?:html|plain)(?:;|$)/i.test(type))
+    return 'Источник не является HTML/текстом (например, PDF). Выберите текстовую веб-страницу.';
+  if (encoding && encoding !== 'identity')
+    return 'Сайт вернул неподдерживаемое сжатие. Выберите другую публичную страницу.';
+}
 export async function retrieveEditorialSource(value: string): Promise<SourceEvidence> {
+  const host = validateSourceUrl(value).hostname;
+  try {
+    return await retrieveSource(value);
+  } catch (error) {
+    const detail = error instanceof EditorialSourceError ? error.message
+      : 'Не удалось установить соединение или определить адрес сайта.';
+    // Expose only the validated original hostname and allowlisted diagnostics,
+    // never the response body, redirect URL, query parameters or network error.
+    throw new EditorialSourceError(`${host}: ${detail}`);
+  }
+}
+async function retrieveSource(value: string): Promise<SourceEvidence> {
   const original = validateSourceUrl(value);
   const deadline = Date.now() + 15_000;
   let url = original;
@@ -66,9 +91,9 @@ export async function retrieveEditorialSource(value: string): Promise<SourceEvid
         if (status >= 300 && status < 400) {
           res.resume(); resolve({ status, location: res.headers.location, body: '', type }); return;
         }
-        if (status !== 200 || !/^text\/(?:html|plain)(?:;|$)/i.test(type) ||
-          res.headers['content-encoding'] && res.headers['content-encoding'] !== 'identity') {
-          res.resume(); reject(new EditorialSourceError('Источник недоступен или не является HTML/текстом. Выберите другую публичную страницу.')); return;
+        const responseError = sourceResponseError(status, type, res.headers['content-encoding']);
+        if (responseError) {
+          res.resume(); reject(new EditorialSourceError(responseError)); return;
         }
         const chunks: Buffer[] = []; let bytes = 0;
         res.on('data', chunk => {

@@ -65,3 +65,16 @@ the earlier minimal JSON transport probe.
 **How to apply:** Keep the working Gateway configuration rather than returning
 to blocked OpenRouter access. This confirmation does not establish the accuracy
 of generated cheese facts or authorize automatic publication.
+
+Normalize only a single complete Markdown JSON fence around a valid object;
+do not repair malformed JSON, extract objects from prose, or retry automatically.
+
+**Why:** Gateway JSON mode does not eliminate output-format variations. A
+format-only wrapper can be removed without inventing data, whereas repairing
+syntax or accepting a partial response could change reviewed editorial facts.
+
+**How to apply:** Preserve completion-status checks and downstream schemas.
+Source-read errors and model-format errors are separate failures: identify
+the original source hostname and safe HTTP classification without exposing
+response bodies, URL query parameters or credentials. Do not treat inability
+to read a suggested source as proof that its website does not exist.

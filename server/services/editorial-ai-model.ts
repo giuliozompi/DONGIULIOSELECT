@@ -2,6 +2,23 @@ import OpenAI from 'openai';
 import { editorialForbiddenReason } from './editorial-ai-forbidden';
 import { DEFAULT_EDITORIAL_AI_MODEL, EditorialModelError, getEditorialModelSettings, type EditorialAiProvider } from './editorial-ai-config';
 export { DEFAULT_EDITORIAL_AI_MODEL, EditorialModelError, getEditorialModelSettings };
+// Accept only a complete JSON document, optionally inside one Markdown fence.
+// Never repair syntax, extract a substring, or accept incomplete model output.
+export function parseEditorialJson(content: string): unknown {
+  const trimmed = content.trim();
+  const fence = /^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i.exec(trimmed);
+  const document = fence ? fence[1].trim() : trimmed;
+  try {
+    const parsed: unknown = JSON.parse(document);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      throw new Error('Expected an object');
+    return parsed;
+  } catch {
+    const format = trimmed.startsWith('```') ? 'блок Markdown'
+      : document.startsWith('{') ? 'синтаксис JSON' : 'ответ не является объектом JSON';
+    throw new EditorialModelError(`AI вернул некорректный JSON (${format}). Заготовка не сохранена; повторите запрос явно.`);
+  }
+}
 // Only allowlisted diagnostics reach the operator/audit log. Never include
 // provider messages, response bodies, headers or request configuration.
 export function editorialProviderError(error: unknown, provider: EditorialAiProvider = 'openrouter'): EditorialModelError {
@@ -38,7 +55,7 @@ export function createEditorialModelRequester(client: OpenAI, settings = getEdit
         // budget for the reviewed JSON draft, not hidden reasoning tokens.
         ...(settings.provider === 'openrouter' && settings.model === DEFAULT_EDITORIAL_AI_MODEL ? { reasoning: { enabled: false } } : {}),
         response_format: { type: 'json_object' },
-        messages: [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(input) }],
+        messages: [{ role: 'system', content: `${system}\nOutput exactly one valid JSON object. No Markdown fences, commentary or trailing text. Escape quotes and newlines inside JSON strings.` }, { role: 'user', content: JSON.stringify(input) }],
       });
       // Compatible gateways can report an upstream failure in HTTP 200.
       const embedded = (response as unknown as { error?: { code?: unknown } }).error;
@@ -54,11 +71,7 @@ export function createEditorialModelRequester(client: OpenAI, settings = getEdit
         throw new EditorialModelError('AI отказался подготовить ответ. Проверьте название и источники перед новым явным запросом.');
       if (choice?.finish_reason !== 'stop' || !choice.message.content?.trim())
         throw new EditorialModelError('AI вернул пустой или незавершённый ответ. Заготовка не сохранена; повторите явно.');
-      try {
-        return JSON.parse(choice.message.content);
-      } catch {
-        throw new EditorialModelError('AI вернул некорректный JSON. Заготовка не сохранена; повторите запрос явно.');
-      }
+      return parseEditorialJson(choice.message.content);
     } catch (error) {
       throw editorialProviderError(error, settings.provider);
     }
