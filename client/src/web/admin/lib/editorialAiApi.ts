@@ -1,11 +1,16 @@
 import { webApi } from '../../lib/webApi';
 import type { EditorialEntry } from '@shared/editorial';
-import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField, SourceSuggestions } from '@shared/editorial-ai';
+import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField, SourceSuggestions, ResearchRequest, OriginLookup } from '@shared/editorial-ai';
 export type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, CatalogResult, DraftResult, CatalogItem, AiField } from '@shared/editorial-ai';
 const base = '/admin/editorial-ai';
 export const editorialAiApi = {
   catalog: (body: CatalogRequest) => webApi.post<EditorialAiRun>(`${base}/catalog`, body),
   draft: (body: DraftRequest) => webApi.post<EditorialAiRun>(`${base}/draft`, body),
+  research: (body: ResearchRequest) => webApi.post<EditorialAiRun>(`${base}/research`, body),
+  originLookup: (entry: EditorialEntry, place: string) =>
+    webApi.post<OriginLookup>(`${base}/origin-geocoding`, { entryId: entry.id, revision: entry.revision, place }),
+  originApply: (entry: EditorialEntry, lookupId: string, candidateId: string) =>
+    webApi.post<EditorialEntry>(`${base}/origin-geocoding/apply`, { entryId: entry.id, revision: entry.revision, lookupId, candidateId }),
   suggestSources: (entry: EditorialEntry) =>
     webApi.post<SourceSuggestions>(`${base}/sources`, { entryId: entry.id, revision: entry.revision }),
   run: (id: string) => webApi.get<EditorialAiRun>(`${base}/runs/${id}`),

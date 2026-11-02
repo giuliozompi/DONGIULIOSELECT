@@ -140,8 +140,8 @@ export default function SourcesSuggestions({
   return <section className="mt-3 rounded border border-[#d8d9cc] bg-[#f1f0e8] p-3" aria-label="Предложенные источники">
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-sm font-semibold text-[#43574a]">Подсказки редактору</p>
-        <p className="mt-0.5 text-xs text-[#78837a]">Приоритет — консорциумы, кооперативы и известные производители. Запрос выполняется только по нажатию.</p>
+        <p className="text-sm font-semibold text-[#43574a]">Непроверенные AI-подсказки источников</p>
+        <p className="mt-0.5 text-xs text-[#78837a]">Это отдельная модельная подборка, не поиск Brave и не проверенные источники. Приоритет — консорциумы, кооперативы и известные производители. Запрос выполняется только по нажатию.</p>
       </div>
       <Button data-testid="ai-suggest-sources" size="sm" variant="outline" disabled={interactionDisabled} onClick={() => { void suggest(); }}>
         {loading ? <LoaderCircle className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}

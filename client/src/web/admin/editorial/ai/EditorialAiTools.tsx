@@ -7,6 +7,8 @@ import { editorialAiCountries, countryName, type CatalogItem, type EditorialAiRu
 import type { CheeseData, EditorialEntry } from '@shared/editorial';
 import { editorialAiApi } from '../../lib/editorialAiApi';
 import SourcesSuggestions from './SourcesSuggestions';
+import OriginCoordinates from './OriginCoordinates';
+import ResearchDiagnostics from './ResearchDiagnostics';
 import './editorial-ai.css';
 
 const PAGE_SIZE = 10;
@@ -21,6 +23,11 @@ const AI_FIELDS: { key: AiField; label: string; prop: keyof CheeseData }[] = [
 ];
 const nativeSelect = 'ai-native-select';
 let generationClaimed = false;
+const GLOBAL_AI_LOCK_EVENT = 'editorial-ai-lock-change';
+function setGenerationClaimed(value: boolean) {
+  generationClaimed = value;
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(GLOBAL_AI_LOCK_EVENT));
+}
 type EditorialAiHistory = Awaited<ReturnType<typeof editorialAiApi.history>>;
 const draftHistoryForEntry = editorialAiApi.history as unknown as (
   kind: 'draft',
@@ -87,7 +94,7 @@ export function EditorialAiCatalog({ onImported }: { onImported: () => void }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const claimRef = useRef(false);
   useEffect(() => () => {
-    if (claimRef.current) { claimRef.current = false; generationClaimed = false; }
+    if (claimRef.current) { claimRef.current = false; setGenerationClaimed(false); }
   }, []);
 
   const history = useQuery({
@@ -102,7 +109,7 @@ export function EditorialAiCatalog({ onImported }: { onImported: () => void }) {
   useEffect(() => {
     if (claimRef.current && currentRun && currentRun.status !== 'running') {
       claimRef.current = false;
-      generationClaimed = false;
+      setGenerationClaimed(false);
       setBusy(false);
     }
   }, [currentRun?.id, currentRun?.status]);
@@ -118,13 +125,13 @@ export function EditorialAiCatalog({ onImported }: { onImported: () => void }) {
   const claim = () => {
     if (claimRef.current || generationClaimed) return false;
     claimRef.current = true;
-    generationClaimed = true;
+    setGenerationClaimed(true);
     setBusy(true);
     return true;
   };
   const release = () => {
     claimRef.current = false;
-    generationClaimed = false;
+    setGenerationClaimed(false);
     setBusy(false);
   };
   async function generate() {
@@ -160,7 +167,7 @@ export function EditorialAiCatalog({ onImported }: { onImported: () => void }) {
     setHistoryOpen(false);
     if (historyRun.status === 'running') {
       claimRef.current = true;
-      generationClaimed = true;
+      setGenerationClaimed(true);
       setBusy(true);
     }
     if (historyRun.status !== 'running') {
@@ -313,8 +320,8 @@ function CatalogRow({ item, selected, disabled, onToggle, onRank }: { item: Cata
   </article>;
 }
 
-export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onApplied: () => void }) {
-  const initialSources = ((entry.data as CheeseData).sources || []).join('\n');
+export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onApplied: (saved?: EditorialEntry) => void }) {
+  const initialSources = ((entry.data as CheeseData).sources || []).filter(url => !/^https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+$/.test(url)).join('\n');
   const [open, setOpen] = useState(false);
   const [sourcesText, setSourcesText] = useState(initialSources);
   const [run, setRun] = useState<EditorialAiRun>();
@@ -323,14 +330,47 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const [revisionConflict, setRevisionConflict] = useState(false);
   const [busy, setBusy] = useState(false);
   const [suggestionBusy, setSuggestionBusy] = useState(false);
+  const [globalAiBusy, setGlobalAiBusy] = useState(generationClaimed);
   const [error, setError] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
   const lock = useRef(false);
   const applyLock = useRef(false);
+  const mountedRef = useRef(false);
+  const identity = `${entry.id}:${entry.revision}`;
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  const entryIdRef = useRef(entry.id);
+  const runEntryIdRef = useRef<string>();
   useEffect(() => () => {
-    if (lock.current) { lock.current = false; generationClaimed = false; }
+    if (lock.current) { lock.current = false; setGenerationClaimed(false); }
   }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (lock.current) { lock.current = false; setGenerationClaimed(false); }
+    };
+  }, []);
+  useEffect(() => {
+    const refreshLock = () => setGlobalAiBusy(generationClaimed);
+    window.addEventListener(GLOBAL_AI_LOCK_EVENT, refreshLock);
+    return () => window.removeEventListener(GLOBAL_AI_LOCK_EVENT, refreshLock);
+  }, []);
+  useEffect(() => {
+    if (entryIdRef.current === entry.id) return;
+    entryIdRef.current = entry.id;
+    runEntryIdRef.current = undefined;
+    setRun(undefined);
+    setSelectedFields([]);
+    setEdits({});
+    setRevisionConflict(false);
+    setError('');
+    setHistoryOpen(false);
+    const nextSources = ((entry.data as CheeseData).sources || []).filter(url => !/^https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+$/.test(url)).join('\n');
+    setSourcesText(nextSources);
+    sourceBaseline.current = nextSources;
+  }, [entry.id, entry.data]);
   const sourceBaseline = useRef(initialSources);
   const history = useQuery({
     queryKey: ['/admin/editorial-ai/history', 'draft', entry.id, historyPage],
@@ -338,28 +378,35 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     enabled: open && historyOpen,
     retry: 1,
   });
-  const activeId = running(run) ? run?.id : undefined;
+  const visibleRun = runEntryIdRef.current === entry.id ? run : undefined;
+  const activeId = running(visibleRun) ? visibleRun?.id : undefined;
   const polled = useRunPoll(activeId, Boolean(activeId));
-  const current = polled.data || run;
+  const current = polled.data || visibleRun;
   useEffect(() => {
     if (lock.current && current && current.status !== 'running') {
       lock.current = false;
-      generationClaimed = false;
+      setGenerationClaimed(false);
       setBusy(false);
     }
   }, [current?.id, current?.status]);
   const draft = current?.status === 'ready' ? current.result as DraftResult | null : null;
+  const runParams = current?.kind === 'draft' ? current.params as { entryId?: string; revision?: number } : undefined;
+  const runStale = Boolean(current && (current.appliedTo
+    ? current.appliedTo.entryId !== entry.id || current.appliedTo.revision !== entry.revision
+    : runParams?.entryId !== entry.id || runParams?.revision !== entry.revision));
+  const readyTextPendingApply = Boolean(draft && !current?.appliedTo
+    && Object.values(draft.fields).some(value => typeof value === 'string' && value.trim().length > 0));
   const entryData = entry.data as CheeseData;
   const entryRuns = history.data?.items || [];
   const editedProposal = Object.keys(edits).some(key => edits[key as AiField] !== draft?.fields[key as AiField]);
   const hasUnsavedChanges = sourcesText !== sourceBaseline.current || editedProposal;
   function tryClaimSuggestion() {
     if (generationClaimed) return false;
-    generationClaimed = true;
+    setGenerationClaimed(true);
     return true;
   }
   function releaseSuggestionClaim() {
-    generationClaimed = false;
+    setGenerationClaimed(false);
   }
   function confirmDiscardChanges(action: string) {
     if (!hasUnsavedChanges) return true;
@@ -374,21 +421,74 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     }
     if (editedProposal && !confirmDiscardChanges('Создать новое предложение')) return;
     lock.current = true;
-    generationClaimed = true;
+    setGenerationClaimed(true);
     setBusy(true);
     setError('');
+    const requestIdentity = identity;
     try {
       const next = await editorialAiApi.draft({ requestId: crypto.randomUUID(), entryId: entry.id, revision: entry.revision, sources });
+      if (!mountedRef.current || identityRef.current !== requestIdentity) {
+        if (lock.current) { lock.current = false; setGenerationClaimed(false); }
+        if (mountedRef.current) setBusy(false);
+        return;
+      }
+      runEntryIdRef.current = entry.id;
       setRun(next);
       setSelectedFields([]);
       setEdits({});
       setRevisionConflict(false);
       sourceBaseline.current = sourcesText;
-      if (next.status !== 'running') { lock.current = false; generationClaimed = false; setBusy(false); }
+      if (next.status !== 'running') { lock.current = false; setGenerationClaimed(false); setBusy(false); }
     } catch (issue) {
+      if (!mountedRef.current || identityRef.current !== requestIdentity) {
+        if (lock.current) { lock.current = false; setGenerationClaimed(false); }
+        if (mountedRef.current) setBusy(false);
+        return;
+      }
       setError(errorMessage(issue));
       lock.current = false;
-      generationClaimed = false;
+      setGenerationClaimed(false);
+      setBusy(false);
+    }
+  }
+  async function researchDraft() {
+    if (lock.current || generationClaimed || suggestionBusy || applyLock.current) return;
+    const sources = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+    if (sources.length > 3 || sources.some(url => !/^https:\/\/[^/\s?#]+/i.test(url))) {
+      setError('Добавьте не более трёх публичных https-ссылок, по одной на строку.');
+      return;
+    }
+    if (editedProposal && !confirmDiscardChanges('Начать поиск источников')) return;
+    lock.current = true;
+    setGenerationClaimed(true);
+    setBusy(true);
+    setError('');
+    const requestIdentity = identity;
+    try {
+      const next = await editorialAiApi.research({
+        requestId: crypto.randomUUID(), entryId: entry.id, revision: entry.revision, sources,
+      });
+      if (!mountedRef.current || identityRef.current !== requestIdentity) {
+        if (lock.current) { lock.current = false; setGenerationClaimed(false); }
+        if (mountedRef.current) setBusy(false);
+        return;
+      }
+      runEntryIdRef.current = entry.id;
+      setRun(next);
+      setSelectedFields([]);
+      setEdits({});
+      setRevisionConflict(false);
+      sourceBaseline.current = sourcesText;
+      if (next.status !== 'running') { lock.current = false; setGenerationClaimed(false); setBusy(false); }
+    } catch (issue) {
+      if (!mountedRef.current || identityRef.current !== requestIdentity) {
+        if (lock.current) { lock.current = false; setGenerationClaimed(false); }
+        if (mountedRef.current) setBusy(false);
+        return;
+      }
+      setError(errorMessage(issue));
+      lock.current = false;
+      setGenerationClaimed(false);
       setBusy(false);
     }
   }
@@ -396,9 +496,13 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     if (busy || suggestionBusy || generationClaimed || lock.current || applyLock.current) return;
     if (!confirmDiscardChanges('Открыть другое предложение')) return;
     setError('');
+    const requestIdentity = identity;
     try {
       const next = historyRun.status === 'running' ? historyRun : await editorialAiApi.run(historyRun.id);
-      const historicSources = ((next.params as { sources?: string[] }).sources || []).join('\n');
+      if (!mountedRef.current || identityRef.current !== requestIdentity
+        || (next.params as { entryId?: string }).entryId !== entry.id) return;
+      const historicSources = ((next.params as { sources?: string[] }).sources || []).filter(url => !/^https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+$/.test(url)).join('\n');
+      runEntryIdRef.current = entry.id;
       setRun(next);
       setEdits({});
       setRevisionConflict(false);
@@ -407,19 +511,22 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       setHistoryOpen(false);
       if (next.status === 'running') {
         lock.current = true;
-        generationClaimed = true;
+        setGenerationClaimed(true);
         setBusy(true);
       }
     } catch (issue) {
+      if (!mountedRef.current || identityRef.current !== requestIdentity) return;
       setError(errorMessage(issue));
     }
   }
   async function applySelected() {
-    if (!current || !draft || selectedFields.length === 0 || current.appliedTo || revisionConflict || busy || suggestionBusy || generationClaimed || applyLock.current) return;
+    if (!current || !draft || selectedFields.length === 0 || current.appliedTo || revisionConflict || runStale || busy || suggestionBusy || generationClaimed || applyLock.current) return;
     applyLock.current = true;
+    setGenerationClaimed(true);
     const fieldsLabel = selectedFields.map(key => AI_FIELDS.find(field => field.key === key)?.label).join(', ');
     if (!window.confirm(`Применить выбранные поля (${fieldsLabel}) к текущей версии статьи? Фото, координаты, видео, товары и фактическая страна производства не изменятся. Запись останется черновиком.`)) {
       applyLock.current = false;
+      setGenerationClaimed(false);
       return;
     }
     setBusy(true);
@@ -427,18 +534,23 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     const selectedEdits = Object.fromEntries(selectedFields
       .filter(field => edits[field] !== undefined)
       .map(field => [field, edits[field]])) as Partial<Record<AiField, string>>;
+    const requestIdentity = identity;
     try {
       const updated = await applyDraftWithEdits(current, entry, selectedFields, selectedEdits);
-      setRun({ ...current, appliedTo: { entryId: updated.id, revision: updated.revision } });
-      onApplied();
+      if (mountedRef.current && identityRef.current === requestIdentity) {
+        setRun({ ...current, appliedTo: { entryId: updated.id, revision: updated.revision } });
+      }
+      onApplied(updated);
     } catch (issue) {
+      if (!mountedRef.current || identityRef.current !== requestIdentity) return;
       if (isConflict(issue)) setRevisionConflict(true);
       setError(isConflict(issue)
         ? 'Статья изменилась после создания предложения. Предпросмотр и правки сохранены. Обновите список и сформируйте новое предложение для актуальной версии.'
         : errorMessage(issue));
     } finally {
       applyLock.current = false;
-      setBusy(false);
+      setGenerationClaimed(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
   function updateProposal(field: AiField, value: string) {
@@ -455,7 +567,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   return <div data-testid={`ai-draft-entry-${entry.id}`} className="editorial-ai mt-3 border-t border-[#e2e0d5] pt-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div><p className="ai-kicker">Редакторская сверка источников</p><p className="mt-1 text-xs text-[#6f7b71]">Предложение по выбранным ссылкам · не автоматическая проверка истинности</p></div>
-      <Button size="sm" variant="outline" disabled={busy || suggestionBusy || Boolean(activeId)} onClick={() => {
+       <Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => {
         if (lock.current || applyLock.current) return;
         if (!open) setOpen(true);
         else if (confirmDiscardChanges('Закрыть панель')) setOpen(false);
@@ -463,12 +575,12 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     </div>
     {open && <div className="mt-3 rounded border border-[#e0dfd4] bg-[#f8f7f0] p-3">
       <label className="block text-sm font-medium" htmlFor={`ai-sources-${entry.id}`}>Источники для анализа, только выбранные оператором</label>
-      <textarea id={`ai-sources-${entry.id}`} className="mt-1 min-h-24 w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] p-2 text-sm" value={sourcesText} onChange={event => setSourcesText(event.target.value)} maxLength={6000} placeholder="https://… · до трёх ссылок, по одной на строку" />
-      <p className="mt-1 text-xs text-[#78837a]">Укажите 1–3 публичные https-ссылки. Поиск в интернете не выполняется.</p>
+       <textarea id={`ai-sources-${entry.id}`} className="mt-1 min-h-24 w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] p-2 text-sm" value={sourcesText} onChange={event => setSourcesText(event.target.value)} maxLength={6000} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} placeholder="https://… · до трёх ссылок, по одной на строку" />
+       <p className="mt-1 text-xs text-[#78837a]">До трёх публичных https-ссылок, по одной на строку. Поиск выполняется только по отдельному нажатию.</p>
       <SourcesSuggestions
         entry={entry}
         sourcesText={sourcesText}
-        disabled={busy || suggestionBusy || Boolean(activeId) || applyLock.current}
+         disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current}
         tryClaim={tryClaimSuggestion}
         releaseClaim={releaseSuggestionClaim}
         onBusyChange={setSuggestionBusy}
@@ -484,17 +596,40 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
          setError('');
         }}
       />
-      <div className="mt-3 flex flex-wrap gap-2"><Button data-testid="ai-draft-generate" size="sm" className="bg-[#315647] hover:bg-[#244537]" disabled={busy || suggestionBusy || Boolean(activeId)} onClick={() => { void generateDraft(); }}><Sparkles className="mr-1.5 h-4 w-4" />Сформировать предложение</Button><button data-testid="ai-draft-history" className="text-xs text-[#51665a] underline underline-offset-2 disabled:opacity-50" disabled={busy || suggestionBusy || Boolean(activeId)} onClick={() => setHistoryOpen(value => !value)}>История предложений</button></div>
-      {error && <div role="alert" className="mt-3 rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{error}{isConflict({ status: 409, message: error }) && <button className="ml-2 underline" onClick={onApplied}>Обновить список</button>}</div>}
+       <div className="mt-3 flex flex-wrap gap-2">
+          <Button data-testid="ai-draft-research" size="sm" className="bg-[#315647] hover:bg-[#244537]" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void researchDraft(); }}><FileSearch className="mr-1.5 h-4 w-4" />Найти источники и подготовить текст</Button>
+          <Button data-testid="ai-draft-generate" size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void generateDraft(); }}><Sparkles className="mr-1.5 h-4 w-4" />Сформировать только по этим ссылкам</Button>
+          <button data-testid="ai-draft-history" className="text-xs text-[#51665a] underline underline-offset-2 disabled:opacity-50" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => setHistoryOpen(value => !value)}>История предложений</button>
+       </div>
+       {error && <div role="alert" className="mt-3 rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{error}{isConflict({ status: 409, message: error }) && <button className="ml-2 underline" onClick={() => onApplied()}>Обновить список</button>}</div>}
       <RunState run={current} error={polled.isError && activeId ? polled.error : undefined} />
       {current && <p className="mt-3 text-xs text-[#718075]">{current.model} · {prettyDate(current.createdAt)} · статус: {current.status === 'ready' ? 'готово' : current.status === 'running' ? 'выполняется' : 'ошибка'}{current.appliedTo ? ' · уже применено' : ''}</p>}
-      {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} applied={Boolean(current?.appliedTo)} stale={revisionConflict} onToggle={toggleField} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy} />}
+        {current?.kind === 'draft' && (current.result as DraftResult | null)?.research && <ResearchDiagnostics report={(current.result as DraftResult).research!} sources={(current.result as DraftResult).sources || []} missingContext={[
+         !entryData.history?.trim() && 'История',
+         !entryData.country?.trim() && 'Страна происхождения',
+         !entryData.region?.trim() && 'Регион',
+         !entryData.characteristics?.trim() && 'Характеристики',
+         !entryData.culinaryUses?.trim() && 'Кулинарное использование',
+         (entryData.latitude == null || entryData.longitude == null) && 'Координаты происхождения',
+        ].filter((value): value is string => Boolean(value))} sourcesText={sourcesText} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onAppend={urls => {
+         const existing = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+         const unique = Array.from(new Set(existing));
+         const additions = urls.filter(url => !unique.includes(url));
+         if (existing.length + additions.length > 3 || unique.length + additions.length > 3) {
+           setError('Можно использовать не более трёх ссылок. Удалите лишние строки вручную и повторите добавление.');
+           return;
+         }
+         setSourcesText(currentText => `${currentText.trimEnd()}${currentText.trim() ? '\n' : ''}${additions.join('\n')}`);
+         setError('');
+       }} />}
+        <OriginCoordinates entry={entry} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current || readyTextPendingApply} isGlobalBusy={() => generationClaimed} tryClaim={tryClaimSuggestion} releaseClaim={releaseSuggestionClaim} onBusyChange={setSuggestionBusy} onApplied={saved => onApplied(saved)} />
+        {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy} />}
       {historyOpen && <div className="mt-3 space-y-2">
         {history.isLoading && <div className="h-12 animate-pulse rounded bg-[#e7e6dc]" />}
-        {history.isError && <div role="alert" className="flex justify-between rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{errorMessage(history.error)}<Button size="sm" variant="outline" onClick={() => { void history.refetch(); }}>Повторить</Button></div>}
+        {history.isError && <div role="alert" className="flex justify-between rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{errorMessage(history.error)}<Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy} onClick={() => { void history.refetch(); }}>Повторить</Button></div>}
         {!history.isLoading && !history.isError && entryRuns.length === 0 && <p className="rounded border border-dashed border-[#c9cbbf] p-3 text-sm text-[#718075]">Предложений для этой статьи пока нет.</p>}
-        {entryRuns.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-[#e0dfd4] bg-[#fbfaf5] p-2 text-xs"><span>{prettyDate(item.createdAt)} · {item.status === 'ready' ? 'готово' : item.status === 'running' ? 'выполняется' : `ошибка: ${item.error || 'причина не указана'}`}</span><Button size="sm" variant="outline" disabled={busy || suggestionBusy || Boolean(activeId)} onClick={() => { void openHistoryRun(item); }}>Открыть</Button></div>)}
-        {(history.data?.total || 0) > (history.data?.limit || PAGE_SIZE) && <div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={historyPage <= 1} onClick={() => setHistoryPage(page => page - 1)}>Назад</Button><span className="py-2 text-xs">Страница {historyPage}</span><Button size="sm" variant="outline" disabled={historyPage * (history.data?.limit || PAGE_SIZE) >= (history.data?.total || 0)} onClick={() => setHistoryPage(page => page + 1)}>Далее</Button></div>}
+        {entryRuns.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-[#e0dfd4] bg-[#fbfaf5] p-2 text-xs"><span>{prettyDate(item.createdAt)} · {item.status === 'ready' ? 'готово' : item.status === 'running' ? 'выполняется' : `ошибка: ${item.error || 'причина не указана'}`}</span><Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => { void openHistoryRun(item); }}>Открыть</Button></div>)}
+        {(history.data?.total || 0) > (history.data?.limit || PAGE_SIZE) && <div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || historyPage <= 1} onClick={() => setHistoryPage(page => page - 1)}>Назад</Button><span className="py-2 text-xs">Страница {historyPage}</span><Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || historyPage * (history.data?.limit || PAGE_SIZE) >= (history.data?.total || 0)} onClick={() => setHistoryPage(page => page + 1)}>Далее</Button></div>}
       </div>}
     </div>}
   </div>;
@@ -512,10 +647,13 @@ function DraftPreview({ draft, entryData, edits, selectedFields, applied, stale,
       const current = String(entryData[field.prop] || '');
       const citations = draft.citations.filter(citation => citation.field === field.key);
       return <article key={field.key} className="rounded border border-[#e0dfd4] bg-[#fbfaf5] p-3">
-        <label className="flex items-start gap-2"><input className="mt-1 accent-[#315647]" type="checkbox" checked={selectedFields.includes(field.key)} onChange={() => onToggle(field.key)} disabled={applied || busy} /><span className="font-semibold">{field.label}</span></label>
+        <label className="flex items-start gap-2"><input className="mt-1 accent-[#315647]" type="checkbox" checked={selectedFields.includes(field.key)} onChange={() => onToggle(field.key)} disabled={applied || stale || busy} /><span className="font-semibold">{field.label}</span></label>
         <div className="mt-2 grid gap-3 md:grid-cols-2"><div><p className="text-[10px] font-bold uppercase tracking-wider text-[#8a9188]">Сейчас</p><p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[#6f7b71]">{current || 'Поле пустое'}</p></div><div><label className="text-[10px] font-bold uppercase tracking-wider text-[#a45f43]" htmlFor={`ai-proposal-${field.key}`}>Редактируемый вариант</label><textarea id={`ai-proposal-${field.key}`} data-testid={`ai-proposal-${field.key}`} className="mt-1 min-h-24 w-full rounded border border-[#d8d9cc] bg-white p-2 text-sm leading-5" value={edits[field.key] ?? proposal} onChange={event => onEdit(field.key, event.target.value)} disabled={applied || stale || busy} /></div></div>
         {edits[field.key] !== undefined && edits[field.key] !== proposal && <p className="mt-2 text-xs text-[#8b5d43]">Редакторская правка. Цитаты ниже относятся к исходному варианту AI, а не подтверждают добавленный вами текст.</p>}
-        {citations.length > 0 && <div className="mt-2 space-y-1">{citations.map((citation, index) => <blockquote key={`${citation.sourceIndex}-${index}`} className="border-l-2 border-[#b67b5a] pl-2 text-xs italic text-[#68746b]">«{citation.quote}» · источник {citation.sourceIndex + 1} · цитата исходного варианта</blockquote>)}</div>}
+         {citations.length > 0 && <div className="mt-2 space-y-1">{citations.map((citation, index) => {
+           const source = draft.sources[citation.sourceIndex];
+           return <blockquote key={`${citation.sourceIndex}-${index}`} className="border-l-2 border-[#b67b5a] pl-2 text-xs italic text-[#68746b]">«{citation.quote}» · {source ? <a className="underline underline-offset-2" href={source.finalUrl} target="_blank" rel="noopener noreferrer">источник {citation.sourceIndex + 1}: {source.title || source.finalUrl}</a> : `источник ${citation.sourceIndex + 1}`} · цитата исходного варианта</blockquote>;
+         })}</div>}
       </article>;
     })}</div>
     {draft.sources.length > 0 && <div className="rounded border border-[#e0dfd4] bg-[#f1f0e8] p-3 text-xs"><strong>Полученные источники</strong><ul className="mt-1 space-y-1">{draft.sources.map((source, index) => <li key={`${source.sha256}-${index}`}><a className="break-all underline underline-offset-2" href={source.finalUrl} target="_blank" rel="noreferrer">{source.title || source.finalUrl}</a><span className="ml-1 text-[#7a857b]">· получен {prettyDate(source.retrievedAt)} · {source.characters.toLocaleString('ru-RU')} знаков · SHA-256 {source.sha256.slice(0, 12)}…{source.truncated ? ' · текст усечён' : ''}</span></li>)}</ul></div>}

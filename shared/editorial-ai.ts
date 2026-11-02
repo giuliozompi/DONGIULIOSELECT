@@ -19,8 +19,37 @@ export const catalogRequestSchema = z.object({
 }).strict().refine(value => value.limit >= value.countries.length, 'Число сыров должно быть не меньше числа стран');
 export const draftRequestSchema = z.object({
   requestId: z.string().uuid(), entryId: z.string().uuid(), revision: z.number().int().positive(),
-  sources: z.array(editorialSourceUrl).min(1).max(3).refine(values => new Set(values).size === values.length),
+  sources: z.array(editorialSourceUrl).max(3).refine(values => new Set(values).size === values.length),
+  research: z.literal(true).optional(),
+}).strict().superRefine((value, ctx) => {
+  if (!value.research && !value.sources.length)
+    ctx.addIssue({ code: 'custom', message: 'Укажите хотя бы один источник', path: ['sources'] });
+});
+export const researchRequestSchema = z.object({
+  requestId: z.string().uuid(), entryId: z.string().uuid(), revision: z.number().int().positive(),
+  sources: z.array(editorialSourceUrl).max(3).refine(values => new Set(values).size === values.length).default([]),
 }).strict();
+export type ResearchRequest = z.infer<typeof researchRequestSchema>;
+export const originLookupRequestSchema = z.object({
+  entryId: z.string().uuid(), revision: z.number().int().positive(),
+  place: text(200).min(2),
+}).strict();
+export const originApplyRequestSchema = z.object({
+  entryId: z.string().uuid(), revision: z.number().int().positive(),
+  lookupId: z.string().uuid(), candidateId: text(100).min(1),
+}).strict();
+export const originCandidateSchema = z.object({
+  id: text(100).min(1), label: text(1000).min(1), type: text(100),
+  latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180),
+  url: z.string().url().refine(value => /^https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+$/.test(value)),
+}).strict();
+export const originLookupSchema = z.object({
+  lookupId: z.string().uuid(), entryId: z.string().uuid(), revision: z.number().int().positive(),
+  query: text(400), candidates: z.array(originCandidateSchema).max(3),
+  retrievedAt: z.string().datetime(), cached: z.boolean(),
+  attribution: z.literal('© OpenStreetMap contributors'),
+});
+export type OriginLookup = z.infer<typeof originLookupSchema>;
 export const sourceSuggestionsRequestSchema = z.object({
   entryId: z.string().uuid(), revision: z.number().int().positive(),
 }).strict();
@@ -53,7 +82,7 @@ export const draftModelSchema = z.object({
     culinaryUses: text(20000).optional(),
   }).strict(),
   citations: z.array(z.object({
-    field: aiFieldSchema, sourceIndex: z.number().int().min(0).max(2), quote: text(1200).min(10),
+    field: aiFieldSchema, sourceIndex: z.number().int().min(0).max(5), quote: text(1200).min(10),
   }).strict()).max(40),
   warnings: z.array(text(2000)).max(30),
 }).strict();
@@ -62,7 +91,7 @@ export const draftModelSchema = z.object({
 export const draftGenerationSchema = z.object({
   fields: draftModelSchema.shape.fields,
   citations: z.array(z.object({
-    field: aiFieldSchema, sourceIndex: z.number().int().min(0).max(2),
+    field: aiFieldSchema, sourceIndex: z.number().int().min(0).max(5),
     passageId: z.number().int().min(0).max(100),
   }).strict()).max(40),
   warnings: draftModelSchema.shape.warnings,
@@ -74,8 +103,13 @@ export type CatalogItem = z.infer<typeof catalogModelItemSchema> & {
   matches: { id: string; title: string }[];
 };
 export type AiSource = { url: string; finalUrl: string; title: string; retrievedAt: string; sha256: string; characters: number; truncated: boolean };
+export type ResearchReport = {
+  provider: 'brave'; queries: string[];
+  failures: { url: string; reason: string }[];
+  warnings: string[]; searchedAt: string;
+};
 export type CatalogResult = { items: CatalogItem[]; warnings: string[] };
-export type DraftResult = z.infer<typeof draftModelSchema> & { sources: AiSource[] };
+export type DraftResult = z.infer<typeof draftModelSchema> & { sources: AiSource[]; research?: ResearchReport };
 export interface EditorialAiRun {
   id: string; kind: 'catalog' | 'draft'; status: 'running' | 'ready' | 'failed';
   revision: number; model: string; createdAt: string; finishedAt: string | null;

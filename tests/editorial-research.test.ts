@@ -1,0 +1,275 @@
+import assert from 'node:assert/strict';
+import { test, before, after, beforeEach } from 'node:test';
+import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import pg from 'pg';
+import express from 'express';
+import type { Server } from 'node:http';
+import { registerAdminEditorialAiRoutes } from '../server/adminEditorialAiRoutes';
+import { reserveAiRun, executeAiRun, getAiRun } from '../server/services/editorial-ai';
+import { applyAiDraft } from '../server/services/editorial-ai-changes';
+import { researchEditorialSources, searchEditorialWeb } from '../server/services/editorial-ai-research';
+import { fetchOriginCandidates, originProviderSettings } from '../server/services/editorial-origin-provider';
+import { lookupEditorialOrigin, applyEditorialOrigin } from '../server/services/editorial-origin';
+import { EditorialError, saveEditorial } from '../server/services/editorial';
+import { changePublication } from '../server/services/editorial-publication';
+import { EditorialModelError } from '../server/services/editorial-ai-config';
+import { EditorialSourceError } from '../server/services/editorial-ai-sources';
+import { cheeseDataSchema } from '../shared/editorial';
+import type { DraftResult } from '../shared/editorial-ai';
+
+const exec = promisify(execFile);
+let dir: string, db: pg.Pool, server: Server, base: string;
+const sensitive = 'PRIVATE_NEVER_SEND_OR_LOG';
+const identity = { title: 'Кастельманьо', nameOriginal: 'Castelmagno', country: 'Италия', region: 'Пьемонт' };
+const text = 'Castelmagno is traditionally produced in Piemonte, Italy. Its history dates to documented medieval references. '.repeat(4);
+const source = async (url: string) => ({
+  url, finalUrl: url, title: 'Official cheese source', text, retrievedAt: new Date().toISOString(),
+  sha256: 'test-fixture', characters: text.length, truncated: false,
+});
+const candidate = {
+  id: 'relation/123', label: 'Castelmagno, Piemonte, Italia', type: 'administrative',
+  latitude: 44.407, longitude: 7.212, url: 'https://www.openstreetmap.org/relation/123',
+};
+const hit = (n: number) => ({ url: `https://example.org/source-${n}`, title: `Consorzio ${n}`, description: 'History and origin' });
+const parameters = (entry: { id: string; revision: number }) => ({
+  requestId: randomUUID(), entryId: entry.id, revision: entry.revision, sources: [], research: true,
+});
+const fails = (status: number) => (error: unknown) => error instanceof EditorialError && error.status === status;
+before(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'editorial-research-'));
+  await exec('initdb', ['-D', join(dir, 'data'), '-U', 'editorial_test', '-A', 'trust', '--no-locale', '--encoding=UTF8']);
+  await exec('pg_ctl', ['-D', join(dir, 'data'), '-l', join(dir, 'postgres.log'), '-o', `-k ${dir} -p 55475 -h ''`, '-w', 'start']);
+  db = new pg.Pool({ host: dir, port: 55475, user: 'editorial_test', database: 'postgres', password: '', ssl: false, max: 8 });
+  await db.query(`CREATE TABLE products(id varchar PRIMARY KEY);
+    CREATE TABLE admin_action_logs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),admin_user_id varchar NOT NULL,
+      action_type text NOT NULL,entity_type text NOT NULL,entity_id varchar,action_data jsonb NOT NULL);`);
+  for (const file of ['editorial-admin.sql', 'editorial-publication.sql', 'editorial-ai.sql'])
+    await db.query(await readFile(`migrations/${file}`, 'utf8'));
+  const app = express(); app.use(express.json());
+  registerAdminEditorialAiRoutes(app, [
+    (req, res, next) => req.headers.authorization ? next() : void res.sendStatus(401),
+    (req, res, next) => req.headers.authorization === 'admin' ? next() : void res.sendStatus(403),
+  ], () => 'operator', db);
+  server = app.listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening', resolve));
+  base = `http://127.0.0.1:${(server.address() as any).port}/web-api/admin/editorial-ai`;
+}, { timeout: 30000 });
+after(async () => {
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+  await db?.end();
+  if (dir) { await exec('pg_ctl', ['-D', join(dir, 'data'), '-m', 'immediate', '-w', 'stop']).catch(() => {}); await rm(dir, { recursive: true, force: true }); }
+});
+beforeEach(async () => {
+  await db.query('TRUNCATE editorial_ai_imports,editorial_ai_runs,editorial_publications,editorial_entries,admin_action_logs');
+});
+async function cheese(published = false) {
+  let entry = await saveEditorial('cheese', cheeseDataSchema.parse({
+    ...identity, description: sensitive, history: 'Old history', characteristics: 'Old characteristics',
+    culinaryUses: 'Old uses', photos: ['https://example.org/photo.jpg'], sources: ['https://example.org/original'],
+    latitude: 40, longitude: 10, productionCountry: 'Россия', status: published ? 'ready' : 'draft',
+  }), 'operator', undefined, db);
+  if (published) entry = await changePublication(entry.id, entry.revision, true, 'operator', db);
+  return entry;
+}
+test('Brave uses the direct fixed endpoint and credential, one request, bounded results, no private URLs', async () => {
+  let calls = 0;
+  const results = await searchEditorialWeb('Castelmagno history', { BRAVE_API_KEY: 'fixture-key' }, async (url, init) => {
+    calls++;
+    const parsed = new URL(String(url));
+    assert.equal(parsed.origin, 'https://api.search.brave.com');
+    assert.equal(parsed.pathname, '/res/v1/web/search');
+    assert.equal(parsed.searchParams.get('operators'), 'false');
+    assert.equal(new Headers(init?.headers).get('X-Subscription-Token'), 'fixture-key');
+    assert.equal(init?.redirect, 'error');
+    return new Response(JSON.stringify({ web: { results: [
+      hit(1), { ...hit(2), url: 'http://example.org/' }, { ...hit(3), url: 'https://127.0.0.1/' },
+    ] } }), { status: 200 });
+  });
+  assert.equal(calls, 1); assert.deepEqual(results, [hit(1)]);
+  await assert.rejects(searchEditorialWeb('test', {}, async () => { throw new Error('must not call'); }), /BRAVE_API_KEY/);
+});
+for (const status of [401, 402, 403, 429, 503]) {
+  test(`Brave ${status} is sanitized and never retried`, async () => {
+    let calls = 0;
+    await assert.rejects(searchEditorialWeb('test', { BRAVE_API_KEY: 'fixture' }, async () => {
+      calls++; return new Response(sensitive, { status });
+    }), error => error instanceof EditorialModelError && !error.message.includes(sensitive) && error.message.includes(String(status)));
+    assert.equal(calls, 1);
+  });
+}
+test('research limits search to three queries and reading to nine candidates, tolerates failed sources and deduplicates', async () => {
+  let searches = 0, reads = 0, active = 0, maxActive = 0;
+  const found = await researchEditorialSources(identity, [], {
+    search: async () => { searches++; return Array.from({ length: 5 }, (_, n) => hit(n + (searches - 1) * 5)); },
+    source: async url => {
+      reads++; active++; maxActive = Math.max(maxActive, active);
+      await new Promise(resolve => setTimeout(resolve, 2)); active--;
+      if (url.endsWith('0')) throw new EditorialSourceError('example.org: HTTP 404');
+      return source(url);
+    },
+  }, async () => {});
+  assert.equal(searches, 3); assert.ok(reads <= 9); assert.ok(maxActive <= 3);
+  assert.equal(found.sources.length, 6); assert.equal(found.report.failures.length, 1);
+  assert.match(found.report.failures[0].reason, /404/);
+});
+test('provider failure stops further search calls and preserves readable manual sources', async () => {
+  let calls = 0;
+  const found = await researchEditorialSources(identity, ['https://example.org/manual'], {
+    search: async () => { calls++; throw new EditorialModelError('Brave Search: HTTP 403'); }, source,
+  }, async () => {});
+  assert.equal(calls, 1); assert.equal(found.sources.length, 1);
+  assert.match(found.report.warnings.join(' '), /403/);
+});
+test('research run is idempotent, source-based, review-only, warns on missing fields, and preserves publication', async () => {
+  const entry = await cheese(true), params = parameters(entry);
+  const first = await reserveAiRun('draft', params, 'operator', db);
+  const duplicate = await reserveAiRun('draft', params, 'operator', db);
+  assert.equal(duplicate.created, false); assert.equal(duplicate.run.id, first.run.id);
+  let searches = 0, models = 0;
+  await executeAiRun(first.run.id, db, {
+    source, pause: async () => {},
+    search: async query => { searches++; assert.ok(!query.includes(sensitive)); return [hit(searches)]; },
+    model: async (system, input) => {
+      models++; assert.match(system, /history/);
+      assert.ok(!JSON.stringify(input).includes(sensitive));
+      return { fields: { history: 'Документированная история.' }, citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }], warnings: [] };
+    },
+  });
+  const ready = await getAiRun(first.run.id, db), result = ready.result as DraftResult;
+  assert.equal(ready.status, 'ready'); assert.equal(searches, 3); assert.equal(models, 1);
+  assert.equal(result.research?.queries.length, 3);
+  assert.match(result.warnings.join(' '), /зона происхождения/);
+  assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [entry.id])).rows[0].revision, entry.revision);
+  const publication = (await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data;
+  assert.equal(publication.history, 'Old history');
+  await assert.rejects(reserveAiRun('draft', parameters(entry), 'operator', db), fails(429));
+  const applied = await applyAiDraft(ready.id, { entryId: entry.id, revision: entry.revision, fields: ['history'] }, 'operator', db);
+  assert.equal(applied.data.productionCountry, 'Россия'); assert.equal(applied.data.latitude, 40);
+  assert.equal(applied.data.status, 'draft');
+  assert.equal((await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data.history, 'Old history');
+});
+test('model failure keeps search results without storing raw pages, changing the entry, or retrying', async () => {
+  const entry = await cheese(), run = (await reserveAiRun('draft', parameters(entry), 'operator', db)).run;
+  let calls = 0;
+  await executeAiRun(run.id, db, { source, search: async () => [hit(1)], pause: async () => {},
+    model: async () => { calls++; throw new EditorialModelError('AI вернул некорректный JSON'); } });
+  const failed = await getAiRun(run.id, db);
+  assert.equal(failed.status, 'failed'); assert.equal(calls, 1);
+  assert.equal((failed.result as DraftResult).sources.length, 1);
+  assert.ok(!JSON.stringify(failed.result).includes(text));
+});
+test('zero readable sources skip the model and preserve source diagnostics', async () => {
+  const entry = await cheese(), run = (await reserveAiRun('draft', parameters(entry), 'operator', db)).run;
+  let models = 0;
+  await executeAiRun(run.id, db, { source: async () => { throw new EditorialSourceError('example.org: HTTP 404'); },
+    search: async () => [hit(1)], pause: async () => {}, model: async () => { models++; return {}; } });
+  const failed = await getAiRun(run.id, db);
+  assert.equal(failed.status, 'failed'); assert.equal(models, 0);
+  assert.match((failed.result as DraftResult).research!.failures[0].reason, /404/);
+});
+test('Nominatim request identifies the app, filters country and rejects invalid coordinate data', async () => {
+  let calls = 0;
+  const candidates = await fetchOriginCandidates('Castelmagno, Италия', 'it', originProviderSettings({}), async (url, init) => {
+    calls++;
+    assert.equal(new URL(String(url)).searchParams.get('countrycodes'), 'it');
+    assert.match(new Headers(init?.headers).get('User-Agent')!, /dongiulioselect\.ru/);
+    assert.equal(init?.redirect, 'error');
+    return new Response(JSON.stringify([
+      { osm_type: 'relation', osm_id: 123, display_name: candidate.label, lat: '44.407', lon: '7.212', type: 'administrative', address: { country_code: 'it' } },
+      { osm_type: 'node', osm_id: 999, display_name: 'Wrong country', lat: '40', lon: '7', address: { country_code: 'fr' } },
+      { osm_type: 'way', osm_id: 111, display_name: 'Bad coordinates', lat: '999', lon: '7', address: { country_code: 'it' } },
+    ]));
+  });
+  assert.deepEqual(candidates, [candidate]); assert.equal(calls, 1);
+  assert.throws(() => originProviderSettings({ EDITORIAL_GEOCODER_DISABLED: 'true' }), fails(503));
+  assert.throws(() => originProviderSettings({ EDITORIAL_GEOCODER_URL: 'https://127.0.0.1/' }));
+});
+test('geocoding caches across operators, throttles uncached calls globally, applies only saved selections and never publishes', async () => {
+  const entry = await cheese(true);
+  let calls = 0;
+  const provider = async () => { calls++; return [candidate]; };
+  const body = { entryId: entry.id, revision: entry.revision, place: 'Castelmagno' };
+  const first = await lookupEditorialOrigin(body, 'operator', db, provider, {});
+  const cached = await lookupEditorialOrigin(body, 'operator-2', db, provider, {});
+  assert.equal(cached.cached, true); assert.equal(calls, 1);
+  assert.notEqual(cached.lookupId, first.lookupId); assert.equal(cached.retrievedAt, first.retrievedAt);
+  await assert.rejects(lookupEditorialOrigin({ ...body, place: 'Other place' }, 'operator-2', db, provider, {}), fails(429));
+  await assert.rejects(applyEditorialOrigin({ ...body, place: undefined, lookupId: first.lookupId, candidateId: 'forged' }, 'operator', db));
+  await assert.rejects(applyEditorialOrigin({ entryId: entry.id, revision: entry.revision, lookupId: first.lookupId, candidateId: 'forged' }, 'operator', db), fails(400));
+  const saved = await applyEditorialOrigin({ entryId: entry.id, revision: entry.revision, lookupId: first.lookupId, candidateId: candidate.id }, 'operator', db);
+  assert.equal(saved.data.latitude, candidate.latitude); assert.equal(saved.data.longitude, candidate.longitude);
+  assert.equal(saved.data.productionCountry, 'Россия'); assert.equal(saved.data.status, 'draft');
+  assert.ok(saved.data.sources.includes(candidate.url));
+  assert.equal((await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data.latitude, 40);
+  await assert.rejects(applyEditorialOrigin({ entryId: entry.id, revision: entry.revision, lookupId: first.lookupId, candidateId: candidate.id }, 'operator', db), fails(409));
+});
+test('geocoding network failures are sanitized and consume the global reservation without retries', async () => {
+  const entry = await cheese(); let calls = 0;
+  const body = { entryId: entry.id, revision: entry.revision, place: 'Castelmagno' };
+  const provider = async () => { calls++; throw new Error(sensitive); };
+  await assert.rejects(lookupEditorialOrigin(body, 'operator', db, provider, {}), error =>
+    error instanceof EditorialError && !error.message.includes(sensitive));
+  await assert.rejects(lookupEditorialOrigin(body, 'operator', db, provider, {}), fails(429));
+  assert.equal(calls, 1);
+});
+test('parallel geocoding reservations allow only one new external call across operators', async () => {
+  const entry = await cheese(); let calls = 0;
+  let release!: () => void;
+  const wait = new Promise<void>(resolve => { release = resolve; });
+  const provider = async () => { calls++; await wait; return [candidate]; };
+  const body = { entryId: entry.id, revision: entry.revision, place: 'Castelmagno' };
+  const first = lookupEditorialOrigin(body, 'operator', db, provider, {});
+  while (!calls) await new Promise(resolve => setTimeout(resolve, 2));
+  await assert.rejects(lookupEditorialOrigin({ ...body, place: 'Other' }, 'operator-2', db, provider, {}), fails(429));
+  release(); await first; assert.equal(calls, 1);
+});
+test('late geographic responses and cross-entry selections cannot overwrite an edited article', async () => {
+  const entry = await cheese();
+  const body = { entryId: entry.id, revision: entry.revision, place: 'Castelmagno' };
+  await assert.rejects(lookupEditorialOrigin(body, 'operator', db, async () => {
+    await saveEditorial('cheese', { ...entry.data, history: 'New operator history' }, 'operator',
+      { id: entry.id, revision: entry.revision }, db);
+    return [candidate];
+  }, {}), fails(409));
+  const current = (await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [entry.id])).rows[0];
+  assert.equal(current.data.history, 'New operator history'); assert.equal(current.data.latitude, 40);
+  await db.query(`DELETE FROM admin_action_logs WHERE action_type='origin_lookup_requested'`);
+  const fresh = await lookupEditorialOrigin({ ...body, revision: current.revision }, 'operator', db, async () => [candidate], {});
+  const other = await cheese();
+  await assert.rejects(applyEditorialOrigin({
+    entryId: other.id, revision: other.revision, lookupId: fresh.lookupId, candidateId: candidate.id,
+  }, 'operator', db), fails(409));
+  await assert.rejects(applyEditorialOrigin({
+    entryId: entry.id, revision: current.revision, lookupId: fresh.lookupId,
+    candidateId: candidate.id, latitude: 0, longitude: 0,
+  }, 'operator', db));
+});
+test('geographic cache expiry uses original retrieval time, not the most recent cache hit', async () => {
+  const entry = await cheese(); let calls = 0;
+  const body = { entryId: entry.id, revision: entry.revision, place: 'Castelmagno' };
+  const provider = async () => { calls++; return [candidate]; };
+  const original = await lookupEditorialOrigin(body, 'operator', db, provider, {});
+  const cached = await lookupEditorialOrigin(body, 'operator-2', db, provider, {});
+  assert.equal(cached.retrievedAt, original.retrievedAt);
+  await db.query(`UPDATE admin_action_logs SET action_data=jsonb_set(action_data,'{newData,fetchedAt}',
+    to_jsonb((extract(epoch FROM clock_timestamp())*1000-2678400000)::bigint))
+    WHERE action_type='origin_lookup_ready'`);
+  await db.query("DELETE FROM admin_action_logs WHERE action_type='origin_lookup_requested'");
+  const renewed = await lookupEditorialOrigin(body, 'operator-2', db, provider, {});
+  assert.equal(renewed.cached, false); assert.equal(calls, 2);
+});
+test('research and origin endpoints reject guests, customers and forged request data before external requests', async () => {
+  for (const path of ['/research', '/origin-geocoding', '/origin-geocoding/apply']) {
+    for (const [auth, status] of [[undefined, 401], ['customer', 403], ['admin', 400]] as const) {
+      const response = await fetch(base + path, { method: 'POST', headers: {
+        'Content-Type': 'application/json', ...(auth ? { Authorization: auth } : {}),
+      }, body: JSON.stringify({ forged: true }) });
+      assert.equal(response.status, status);
+    }
+  }
+});

@@ -5,6 +5,8 @@ import { EditorialError } from './services/editorial';
 import { reserveAiRun, executeAiRun, getAiRun, aiHistory, defaultAiDependencies, type AiDependencies } from './services/editorial-ai';
 import { rankAiCatalog, importAiCatalog, applyAiDraft } from './services/editorial-ai-changes';
 import { suggestEditorialSources } from './services/editorial-ai-suggestions';
+import { researchRequestSchema } from '../shared/editorial-ai';
+import { lookupEditorialOrigin, applyEditorialOrigin } from './services/editorial-origin';
 
 export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHandler[],
   actor: (req: Request) => string | undefined, database = pool, deps: AiDependencies = defaultAiDependencies) {
@@ -31,6 +33,18 @@ export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHand
   }
   app.post(`${base}/sources`, ...guards, handle(async (req, res, operator) => {
     res.json(await suggestEditorialSources(req.body, operator, database, deps));
+  }));
+  app.post(`${base}/research`, ...guards, handle(async (req, res, operator) => {
+    const body = researchRequestSchema.parse(req.body);
+    const { run, created } = await reserveAiRun('draft', { ...body, research: true }, operator, database);
+    if (created) void executeAiRun(run.id, database, deps).catch(() => console.error('Editorial research completion could not be recorded'));
+    res.status(created ? 202 : 200).json(run);
+  }));
+  app.post(`${base}/origin-geocoding`, ...guards, handle(async (req, res, operator) => {
+    res.json(await lookupEditorialOrigin(req.body, operator, database));
+  }));
+  app.post(`${base}/origin-geocoding/apply`, ...guards, handle(async (req, res, operator) => {
+    res.json(await applyEditorialOrigin(req.body, operator, database));
   }));
   app.get(`${base}/runs`, ...guards, handle(async (req, res) => {
     const query = z.object({ kind: z.enum(['catalog', 'draft']), page: z.coerce.number().int().min(1).max(100000).default(1), entryId: z.string().uuid().optional() }).strict().parse(req.query);

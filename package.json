@@ -28,7 +28,7 @@
     "test:order-operator-ui": "node --test tests/admin-order-operator-ui.test.mjs",
     "test:order-print": "node --import tsx --test tests/admin-order-print.test.ts",
     "test:order-print-pagination": "node --import tsx --test tests/order-print-pagination.test.mjs",
-    "test:editorial": "node --import tsx --test --test-concurrency=1 tests/editorial-admin.test.ts tests/editorial-ai.test.ts tests/editorial-ai-model.test.ts tests/editorial-market.test.ts",
+    "test:editorial": "node --import tsx --test --test-concurrency=1 tests/editorial-admin.test.ts tests/editorial-ai.test.ts tests/editorial-ai-model.test.ts tests/editorial-market.test.ts tests/editorial-research.test.ts",
     "test:editorial-ui": "node --test tests/editorial-admin-ui.test.mjs",
     "test:wishlist": "node --test tests/web-wishlist.test.mjs",
     "test:wishlist-quantity": "node --test tests/web-wishlist-quantity.test.mjs",

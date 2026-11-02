@@ -8,6 +8,7 @@ import {
 } from '../../shared/editorial-ai';
 import { getEditorialModelSettings, requestEditorialModel, EditorialModelError } from './editorial-ai-model';
 import { retrieveEditorialSource, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
+import { researchEditorialSources, searchEditorialWeb, type ResearchDependencies } from './editorial-ai-research';
 
 export type RunRow = {
   id: string; kind: EditorialAiRun['kind']; status: EditorialAiRun['status']; revision: number;
@@ -93,11 +94,15 @@ export async function reserveAiRun(kind: 'catalog' | 'draft', input: unknown, ac
       const cheese = (await client.query("SELECT revision FROM editorial_entries WHERE id=$1 AND kind='cheese'", [p.entryId])).rows[0];
       if (!cheese) throw new EditorialError(404, 'Сырная статья не найдена');
       if (cheese.revision !== p.revision) throw new EditorialError(409, 'Статья изменилась. Откройте свежую версию перед генерацией.');
+      if (p.research && (await client.query(`SELECT id FROM editorial_ai_runs
+        WHERE created_by=$1 AND params->>'research'='true'
+        AND created_at>clock_timestamp()-interval '60 seconds' LIMIT 1`, [actor])).rowCount)
+        throw new EditorialError(429, 'Поиск с подготовкой текста можно запускать раз в минуту. Проверьте предыдущий результат.');
     }
     const id = randomUUID();
     const row: RunRow = (await client.query(`INSERT INTO editorial_ai_runs
       (id,kind,status,request_id,params,model,created_by,lease_until)
-      VALUES($1,$2,'running',$3,$4,$5,$6,clock_timestamp()+interval '2 minutes') RETURNING *`,
+      VALUES($1,$2,'running',$3,$4,$5,$6,clock_timestamp()+interval '3 minutes') RETURNING *`,
       [id, kind, params.requestId, JSON.stringify(params), getEditorialModelSettings().model, actor])).rows[0];
     await audit(client, actor, 'ai_requested', id, null, { kind, params, model: row.model });
     return { run: runDto(row), created: true };
@@ -125,6 +130,11 @@ Use ONLY supplied source evidence, not your background knowledge. Return {"field
 "history":"optional history","characteristics":"optional milk/texture/aging/taste","culinaryUses":"optional cooking uses"},
 "citations":[{"field":"field name","sourceIndex":0,"passageId":0}],"warnings":[]}.
 Omit unsupported fields entirely. Every nonempty proposed field needs at least one citation.
+Actively cover history, traditional origin country and region/production zone, characteristics and culinary uses
+when the supplied evidence supports them. Search all supplied pages, not just the first.
+For history include documented development and dates only when sourced; never invent a founding legend.
+For region describe the traditional production zone and municipalities if documented, not the location of a seller.
+For each of these five areas that lacks evidence, add an explicit Russian warning explaining what is missing.
 Refer ONLY to the numbered source passages provided. Never invent passage IDs and never retype or translate quotations.
 Cite support for every factual assertion, not merely a cheese name. The server will extract the actual passage as the quote.
 Conflicting sources/production geography require warnings. If insufficient evidence return fields{},citations[],warnings.
@@ -132,6 +142,8 @@ Do not propose productionCountry, coordinates, products, photographs, videos, pr
 export type AiDependencies = {
   model: (system: string, input: unknown) => Promise<unknown>;
   source: (url: string) => Promise<SourceEvidence>;
+  search?: ResearchDependencies['search'];
+  pause?: (ms: number) => Promise<void>;
 };
 export const defaultAiDependencies: AiDependencies = { model: requestEditorialModel, source: retrieveEditorialSource };
 export function editorialSourcePassages(text: string) {
@@ -176,10 +188,29 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
       const params = row.params as DraftRequest;
       const cheese = (await database.query("SELECT data,revision FROM editorial_entries WHERE id=$1 AND kind='cheese'", [params.entryId])).rows[0];
       if (!cheese || cheese.revision !== params.revision) throw new EditorialError(409, 'Статья изменилась во время подготовки. Повторите по свежей версии.');
-      const sources = await Promise.all(params.sources.map(deps.source));
+      let sources: SourceEvidence[];
+      let research: DraftResult['research'];
+      if (params.research) {
+        const found = await researchEditorialSources(cheese.data, params.sources, {
+          search: deps.search || searchEditorialWeb, source: deps.source,
+        }, deps.pause);
+        sources = found.sources; research = found.report;
+        // Keep the discovered URLs/diagnostics even if the model later fails.
+        // Never persist raw source text, and do not retry paid search to recover it.
+        const progress: DraftResult = { fields: {}, citations: [], warnings: research.warnings,
+          sources: sources.map(({ text: _text, ...metadata }) => metadata), research };
+        const saved = await database.query(`UPDATE editorial_ai_runs SET result=$2
+          WHERE id=$1 AND status='running' AND lease_until>clock_timestamp() RETURNING id`,
+          [id, JSON.stringify(progress)]);
+        if (!saved.rowCount) return;
+        if (!sources.length) throw new EditorialModelError('Нет читаемых источников для статьи. Проверьте результаты поиска и добавьте публичную страницу вручную.');
+      } else {
+        sources = await Promise.all(params.sources.map(deps.source));
+      }
       const passages = sources.map(source => editorialSourcePassages(source.text));
       const generated = draftGenerationSchema.parse(await deps.model(draftPrompt, {
-        cheese: { name: cheese.data.title, originCountry: cheese.data.country, originRegion: cheese.data.region },
+        cheese: { name: cheese.data.title, nameOriginal: cheese.data.nameOriginal,
+          originCountry: cheese.data.country, originRegion: cheese.data.region },
         sources: sources.map((source, index) => ({ url: source.finalUrl, passages: passages[index] })),
       }));
       const fields = { ...generated.fields };
@@ -206,17 +237,21 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
           missing.push(field);
         }
       }
-      result = { ...raw, warnings: [...raw.warnings,
+      const coreFields = { history: 'История', country: 'Страна происхождения', region: 'Регион / зона происхождения',
+        characteristics: 'Характеристики', culinaryUses: 'Кулинарное использование' } as const;
+      result = { ...raw, warnings: [...raw.warnings, ...(research?.warnings || []),
         ...missing.map(field => `AI не предоставил данных для поля «${field}»: оно не предлагается к применению.`),
+        ...Object.entries(coreFields).filter(([field]) => !raw.fields[field as keyof typeof coreFields]?.trim())
+          .map(([, label]) => `«${label}»: в заготовке нет подтверждённых данных. Добавьте источник по этой теме; поле не заполнено догадками.`),
         'Цитаты найдены в источниках; достоверность и полноту каждого утверждения проверяет редактор.'],
-        sources: sources.map(({ text: _text, ...metadata }) => metadata) };
+        sources: sources.map(({ text: _text, ...metadata }) => metadata), ...(research ? { research } : {}) };
     }
     await transaction(database, async client => {
       const updated = await client.query(`UPDATE editorial_ai_runs SET status='ready',result=$2,
         finished_at=clock_timestamp(),revision=revision+1 WHERE id=$1 AND status='running'
         AND lease_until>clock_timestamp() RETURNING id`, [id, JSON.stringify(result)]);
       if (updated.rowCount) await audit(client, row.created_by, 'ai_generated', id, null, {
-        kind: row.kind, model: row.model, sourceUrls: row.kind === 'draft' ? (row.params as DraftRequest).sources : [],
+        kind: row.kind, model: row.model, sourceUrls: row.kind === 'draft' ? (result as DraftResult).sources.map(source => source.url) : [],
       });
     });
   } catch (error) {
