@@ -39,8 +39,10 @@ type ApplyDraftWithEdits = (
   entry: EditorialEntry,
   fields: AiField[],
   edits?: Partial<Record<AiField, string>>,
+  photos?: { photoIds: string[]; photoRightsConfirmed: boolean },
 ) => Promise<EditorialEntry>;
-const applyDraftWithEdits = editorialAiApi.apply as unknown as ApplyDraftWithEdits;
+const applyDraftWithEdits: ApplyDraftWithEdits = (run, entry, fields, edits, photos) =>
+  editorialAiApi.apply(run, entry, fields, edits, photos);
 
 function errorMessage(error: unknown) {
   return (error as { message?: string })?.message || 'Не удалось выполнить запрос. Повторите попытку.';
@@ -326,6 +328,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const [sourcesText, setSourcesText] = useState(initialSources);
   const [run, setRun] = useState<EditorialAiRun>();
   const [selectedFields, setSelectedFields] = useState<AiField[]>([]);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [photoRightsConfirmed, setPhotoRightsConfirmed] = useState(false);
   const [edits, setEdits] = useState<Partial<Record<AiField, string>>>({});
   const [revisionConflict, setRevisionConflict] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -340,6 +344,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const identity = `${entry.id}:${entry.revision}`;
   const identityRef = useRef(identity);
   identityRef.current = identity;
+  const photoIdentityRef = useRef(identity);
   const entryIdRef = useRef(entry.id);
   const runEntryIdRef = useRef<string>();
   useEffect(() => () => {
@@ -371,6 +376,12 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     setSourcesText(nextSources);
     sourceBaseline.current = nextSources;
   }, [entry.id, entry.data]);
+  useEffect(() => {
+    if (photoIdentityRef.current === identity) return;
+    photoIdentityRef.current = identity;
+    setSelectedPhotoIds([]);
+    setPhotoRightsConfirmed(false);
+  }, [identity]);
   const sourceBaseline = useRef(initialSources);
   const history = useQuery({
     queryKey: ['/admin/editorial-ai/history', 'draft', entry.id, historyPage],
@@ -399,7 +410,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const entryData = entry.data as CheeseData;
   const entryRuns = history.data?.items || [];
   const editedProposal = Object.keys(edits).some(key => edits[key as AiField] !== draft?.fields[key as AiField]);
-  const hasUnsavedChanges = sourcesText !== sourceBaseline.current || editedProposal;
+  const hasUnsavedChanges = sourcesText !== sourceBaseline.current || editedProposal || selectedPhotoIds.length > 0;
   function tryClaimSuggestion() {
     if (generationClaimed) return false;
     setGenerationClaimed(true);
@@ -410,7 +421,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   }
   function confirmDiscardChanges(action: string) {
     if (!hasUnsavedChanges) return true;
-    return window.confirm(`Есть несохранённые ссылки или правки текста предложения. ${action} и потерять их?`);
+    return window.confirm(`Есть несохранённые ссылки, правки текста или выбранные фотографии. ${action} и потерять их?`);
   }
   async function generateDraft() {
     if (lock.current || generationClaimed || suggestionBusy) return;
@@ -419,7 +430,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       setError('Укажите от одной до трёх ссылок https, по одной на строку.');
       return;
     }
-    if (editedProposal && !confirmDiscardChanges('Создать новое предложение')) return;
+    if (hasUnsavedChanges && !confirmDiscardChanges('Создать новое предложение')) return;
     lock.current = true;
     setGenerationClaimed(true);
     setBusy(true);
@@ -435,6 +446,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       runEntryIdRef.current = entry.id;
       setRun(next);
       setSelectedFields([]);
+      setSelectedPhotoIds([]);
+      setPhotoRightsConfirmed(false);
       setEdits({});
       setRevisionConflict(false);
       sourceBaseline.current = sourcesText;
@@ -458,7 +471,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       setError('Добавьте не более трёх публичных https-ссылок, по одной на строку.');
       return;
     }
-    if (editedProposal && !confirmDiscardChanges('Начать поиск источников')) return;
+    if (hasUnsavedChanges && !confirmDiscardChanges('Начать поиск источников')) return;
     lock.current = true;
     setGenerationClaimed(true);
     setBusy(true);
@@ -476,6 +489,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       runEntryIdRef.current = entry.id;
       setRun(next);
       setSelectedFields([]);
+      setSelectedPhotoIds([]);
+      setPhotoRightsConfirmed(false);
       setEdits({});
       setRevisionConflict(false);
       sourceBaseline.current = sourcesText;
@@ -505,6 +520,9 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       runEntryIdRef.current = entry.id;
       setRun(next);
       setEdits({});
+      setSelectedFields([]);
+      setSelectedPhotoIds([]);
+      setPhotoRightsConfirmed(false);
       setRevisionConflict(false);
       setSourcesText(historicSources);
       sourceBaseline.current = historicSources;
@@ -520,11 +538,19 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     }
   }
   async function applySelected() {
-    if (!current || !draft || selectedFields.length === 0 || current.appliedTo || revisionConflict || runStale || busy || suggestionBusy || generationClaimed || applyLock.current) return;
+    const selectedPhotos = selectedPhotoIds.length > 0;
+    if (!current || current.status !== 'ready' || !draft || (selectedFields.length === 0 && !selectedPhotos)
+      || (selectedPhotos && !photoRightsConfirmed) || current.appliedTo || revisionConflict || runStale
+      || busy || suggestionBusy || generationClaimed || applyLock.current) return;
     applyLock.current = true;
     setGenerationClaimed(true);
     const fieldsLabel = selectedFields.map(key => AI_FIELDS.find(field => field.key === key)?.label).join(', ');
-    if (!window.confirm(`Применить выбранные поля (${fieldsLabel}) к текущей версии статьи? Фото, координаты, видео, товары и фактическая страна производства не изменятся. Запись останется черновиком.`)) {
+    const photoLabel = selectedPhotos ? ` фотографии (${selectedPhotoIds.length})` : '';
+    const changesLabel = selectedFields.length ? `выбранные текстовые поля (${fieldsLabel})` : 'только выбранные фотографии';
+    const untouched = selectedPhotos
+      ? 'Координаты, видео, товары и фактическая страна производства не изменятся.'
+      : 'Фото, координаты, видео, товары и фактическая страна производства не изменятся.';
+    if (!window.confirm(`Применить ${changesLabel}${photoLabel} к текущей версии статьи? ${untouched} Публикации не будет; запись останется черновиком.`)) {
       applyLock.current = false;
       setGenerationClaimed(false);
       return;
@@ -536,7 +562,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       .map(field => [field, edits[field]])) as Partial<Record<AiField, string>>;
     const requestIdentity = identity;
     try {
-      const updated = await applyDraftWithEdits(current, entry, selectedFields, selectedEdits);
+      const updated = await applyDraftWithEdits(current, entry, selectedFields, selectedEdits,
+        selectedPhotos ? { photoIds: selectedPhotoIds, photoRightsConfirmed: true } : undefined);
       if (mountedRef.current && identityRef.current === requestIdentity) {
         setRun({ ...current, appliedTo: { entryId: updated.id, revision: updated.revision } });
       }
@@ -563,6 +590,13 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   }
   function toggleField(field: AiField) {
     setSelectedFields(currentFields => currentFields.includes(field) ? currentFields.filter(value => value !== field) : [...currentFields, field]);
+  }
+  function togglePhoto(id: string) {
+    setSelectedPhotoIds(currentIds => {
+      const next = currentIds.includes(id) ? currentIds.filter(value => value !== id) : currentIds.length < 3 ? [...currentIds, id] : currentIds;
+      return next;
+    });
+    setPhotoRightsConfirmed(false);
   }
   function selectAllDraftFields() {
     if (!draft || current?.appliedTo || revisionConflict || runStale || busy || suggestionBusy || globalAiBusy || generationClaimed || Boolean(activeId) || applyLock.current) return;
@@ -615,7 +649,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
          !entryData.characteristics?.trim() && 'Характеристики',
          !entryData.culinaryUses?.trim() && 'Кулинарное использование',
          (entryData.latitude == null || entryData.longitude == null) && 'Координаты происхождения',
-        ].filter((value): value is string => Boolean(value))} sourcesText={sourcesText} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onAppend={urls => {
+        ].filter((value): value is string => Boolean(value))} sourcesText={sourcesText} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} selectedPhotoIds={selectedPhotoIds} photoRightsConfirmed={photoRightsConfirmed} canSelectPhotos={current.status === 'ready' && !current.appliedTo && !revisionConflict && !runStale} onTogglePhoto={togglePhoto} onPhotoRightsChange={setPhotoRightsConfirmed} onAppend={urls => {
          const existing = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
          const unique = Array.from(new Set(existing));
          const additions = urls.filter(url => !unique.includes(url));
@@ -627,7 +661,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
          setError('');
        }} />}
         <OriginCoordinates entry={entry} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} readyTextPendingApply={readyTextPendingApply} isGlobalBusy={() => generationClaimed} tryClaim={tryClaimSuggestion} releaseClaim={releaseSuggestionClaim} onBusyChange={setSuggestionBusy} onApplied={saved => onApplied(saved)} />
-        {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onSelectAll={selectAllDraftFields} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} />}
+        {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} selectedPhotoCount={selectedPhotoIds.length} photoRightsConfirmed={photoRightsConfirmed} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onSelectAll={selectAllDraftFields} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} />}
       {historyOpen && <div className="mt-3 space-y-2">
         {history.isLoading && <div className="h-12 animate-pulse rounded bg-[#e7e6dc]" />}
         {history.isError && <div role="alert" className="flex justify-between rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{errorMessage(history.error)}<Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy} onClick={() => { void history.refetch(); }}>Повторить</Button></div>}
@@ -639,8 +673,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   </div>;
 }
 
-function DraftPreview({ draft, entryData, edits, selectedFields, applied, stale, onToggle, onSelectAll, onEdit, onApply, busy }: {
-  draft: DraftResult; entryData: CheeseData; edits: Partial<Record<AiField, string>>; selectedFields: AiField[]; applied: boolean; stale: boolean;
+function DraftPreview({ draft, entryData, edits, selectedFields, selectedPhotoCount, photoRightsConfirmed, applied, stale, onToggle, onSelectAll, onEdit, onApply, busy }: {
+  draft: DraftResult; entryData: CheeseData; edits: Partial<Record<AiField, string>>; selectedFields: AiField[]; selectedPhotoCount: number; photoRightsConfirmed: boolean; applied: boolean; stale: boolean;
   onToggle: (field: AiField) => void; onSelectAll: () => void; onEdit: (field: AiField, value: string) => void; onApply: () => void; busy: boolean;
 }) {
   const availableFields = AI_FIELDS.filter(field => draft.fields[field.key] !== undefined);
@@ -667,6 +701,6 @@ function DraftPreview({ draft, entryData, edits, selectedFields, applied, stale,
       </article>;
     })}</div>
     {draft.sources.length > 0 && <div className="rounded border border-[#e0dfd4] bg-[#f1f0e8] p-3 text-xs"><strong>Полученные источники</strong><ul className="mt-1 space-y-1">{draft.sources.map((source, index) => <li key={`${source.sha256}-${index}`}><a className="break-all underline underline-offset-2" href={source.finalUrl} target="_blank" rel="noreferrer">{source.title || source.finalUrl}</a><span className="ml-1 text-[#7a857b]">· получен {prettyDate(source.retrievedAt)} · {source.characters.toLocaleString('ru-RU')} знаков · SHA-256 {source.sha256.slice(0, 12)}…{source.truncated ? ' · текст усечён' : ''}</span></li>)}</ul></div>}
-    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-[#718075]">{stale ? 'Версия записи изменилась. Обновите запись и сформируйте новое предложение; текущий предпросмотр сохранён.' : 'Текст можно отредактировать. Применяются только отмеченные поля; запись останется черновиком.'}</p><Button data-testid="ai-draft-apply" disabled={busy || applied || stale || selectedFields.length === 0} onClick={onApply} className="bg-[#315647] hover:bg-[#244537]">{applied ? 'Уже применено' : 'Применить выбранные поля'}</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-[#718075]">{stale ? 'Версия записи изменилась. Обновите запись и сформируйте новое предложение; текущий предпросмотр сохранён.' : 'Применяются только отмеченные поля и фотографии. Запись останется черновиком.'}</p><Button data-testid="ai-draft-apply" disabled={busy || applied || stale || (selectedFields.length === 0 && selectedPhotoCount === 0) || (selectedPhotoCount > 0 && !photoRightsConfirmed)} onClick={onApply} className="bg-[#315647] hover:bg-[#244537]">{applied ? 'Уже применено' : selectedFields.length && selectedPhotoCount ? 'Применить выбранный текст и фото' : selectedPhotoCount ? 'Применить выбранные фото' : 'Применить выбранные поля'}</Button></div>
   </div>;
 }

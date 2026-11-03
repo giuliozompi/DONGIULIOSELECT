@@ -20,6 +20,14 @@ export const editorialAiApi = {
     webApi.patch<EditorialAiRun>(`${base}/runs/${run.id}/ranking`, { revision: run.revision, ranks }),
   import: (run: EditorialAiRun, itemIds: string[]) =>
     webApi.post<ImportResult>(`${base}/runs/${run.id}/import`, { revision: run.revision, itemIds }),
-  apply: (run: EditorialAiRun, entry: EditorialEntry, fields: AiField[], edits?: Partial<Record<AiField, string>>) =>
-    webApi.post<EditorialEntry>(`${base}/runs/${run.id}/apply`, { entryId: entry.id, revision: entry.revision, fields, edits }),
+  apply: (
+    run: EditorialAiRun,
+    entry: EditorialEntry,
+    fields: AiField[],
+    edits?: Partial<Record<AiField, string>>,
+    photos?: { photoIds: string[]; photoRightsConfirmed: boolean },
+  ) => webApi.post<EditorialEntry>(`${base}/runs/${run.id}/apply`, {
+    entryId: entry.id, revision: entry.revision, fields, edits,
+    ...(photos?.photoIds.length ? photos : {}),
+  }),
 };

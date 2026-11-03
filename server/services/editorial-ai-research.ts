@@ -3,6 +3,8 @@ import type { ResearchReport } from '../../shared/editorial-ai';
 import { EditorialModelError } from './editorial-ai-config';
 import { retrieveEditorialSource, validateSourceUrl, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
 import { researchJson } from './editorial-research-http';
+import { structuredResearchPlan, researchCoverage, sourceTopics } from './editorial-research-topics';
+import { researchPhotos } from './editorial-research-photos';
 
 export type ResearchIdentity = { title: string; nameOriginal?: string; country: string; region: string };
 export type ResearchHit = { url: string; title: string; description: string };
@@ -53,16 +55,11 @@ export const defaultResearchDependencies: ResearchDependencies = {
   search: query => searchEditorialWeb(query), source: retrieveEditorialSource,
 };
 export function editorialResearchQueries(cheese: ResearchIdentity): string[] {
-  const identity = `${(cheese.nameOriginal || cheese.title).slice(0, 160)} ${cheese.country.slice(0, 80)}`.trim();
-  return [
-    `${identity} cheese formaggio fromage official consortium consorzio`,
-    `${identity} cheese formaggio fromage history origins storia histoire`,
-    `${identity} cheese formaggio fromage production area specification zona produzione`,
-  ].map(query => query.slice(0, 400));
+  return structuredResearchPlan(cheese).map(item => item.query);
 }
 function normalized(text: string) {
-  return text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return text.normalize('NFKD').replace(new RegExp('\\p{M}', 'gu'), '').toLowerCase()
+    .replace(new RegExp('[^\\p{L}\\p{N}]+', 'gu'), ' ').trim();
 }
 function identityNames(cheese: ResearchIdentity) {
   return [cheese.nameOriginal || '', cheese.title].map(name => normalized(name)
@@ -82,7 +79,7 @@ export function editorialSourceMatchesCheese(source: SourceEvidence, cheese: Res
     let start = padded.indexOf(needle);
     while (start !== -1) {
       const context = padded.slice(Math.max(0, start - 450), start + needle.length + 450);
-      if (/(?:^| )(?:cheese\p{L}*|formagg\p{L}*|fromag\p{L}*|сыр\p{L}*|kase\p{L}*|queso\p{L}*|queijo\p{L}*)(?: |$)/u.test(context)) return true;
+      if (new RegExp('(?:^| )(?:cheese\\p{L}*|formagg\\p{L}*|fromag\\p{L}*|сыр\\p{L}*|kase\\p{L}*|queso\\p{L}*|queijo\\p{L}*)(?: |$)', 'u').test(context)) return true;
       start = padded.indexOf(needle, start + needle.length);
     }
     return false;
@@ -91,8 +88,11 @@ export function editorialSourceMatchesCheese(source: SourceEvidence, cheese: Res
 function priority(hit: ResearchHit) {
   // Ranking preference, NOT a declaration that a site is official.
   try {
-    return /consorz|consorti|cooperativ|minister|regione|gouv|\.gov\b|europa\.eu/i
-      .test(`${new URL(hit.url).hostname} ${hit.title} ${hit.description}`) ? 1 : 0;
+    const url = new URL(hit.url);
+    const institutional = /consorz|consorti|cooperativ|minister|regione|gouv|\.gov\b|europa\.eu/i
+      .test(`${url.hostname} ${hit.title} ${hit.description}`);
+    const specificPage = url.pathname.replace(/\/(?:it|en|fr|ru|es|de)\/?$/, '/').length > 1;
+    return (institutional ? 2 : 0) + (specificPage ? 3 : 0);
   } catch { return 0; }
 }
 export async function researchEditorialSources(
@@ -101,11 +101,13 @@ export async function researchEditorialSources(
 ): Promise<{ sources: SourceEvidence[]; report: ResearchReport }> {
   const report: ResearchReport = { provider: 'brave', queries: [], failures: [], searchedAt: new Date().toISOString(),
     warnings: ['Найденные страницы проверены на читаемость, но официальный статус, связь с сыром и каждый факт проверяет редактор.'] };
-  const hits: ResearchHit[] = [];
-  for (const query of editorialResearchQueries(cheese)) {
+  const plan = structuredResearchPlan(cheese);
+  report.queryPlan = plan;
+  const hits: (ResearchHit & { topic: typeof plan[number]['topic'] })[] = [];
+  for (const { query, topic } of plan) {
     if (report.queries.length) await pause(1100);
     report.queries.push(query);
-    try { hits.push(...await deps.search(query)); }
+    try { hits.push(...(await deps.search(query)).slice(0, 5).map(hit => ({ ...hit, topic }))); }
     catch (error) {
       report.warnings.push(error instanceof EditorialModelError ? error.message : 'Поиск прерван из-за ошибки сервиса.');
       // A provider failure is not permission to spend on more requests.
@@ -121,9 +123,13 @@ export async function researchEditorialSources(
   });
   if (relevantHits.length < hits.length) report.warnings.push('Часть результатов поиска исключена: в них не найдено название выбранного сыра. Дополнительных запросов не было.');
   const seen = new Set<string>();
+  const ranked = relevantHits.sort((a, b) => priority(b) - priority(a));
+  // Reserve room for each requested topic instead of letting a single consortium
+  // or repeated homepage consume the whole reading budget.
+  const topicFirst = plan.flatMap(item => ranked.find(hit => hit.topic === item.topic) || []);
   const candidates = [
     ...manual.map(url => ({ url, title: '', description: '' })),
-    ...relevantHits.sort((a, b) => priority(b) - priority(a)),
+    ...topicFirst, ...ranked,
   ].flatMap(hit => {
     try {
       const url = validateSourceUrl(hit.url); url.hash = '';
@@ -131,10 +137,10 @@ export async function researchEditorialSources(
       seen.add(url.href); return [url.href];
     } catch { return []; }
   }).slice(0, 9);
-  const sources: SourceEvidence[] = [];
+  const readable: SourceEvidence[] = [];
   // Bound source reading to three concurrent requests, nine candidates total.
-  // Stop at six readable pages; one bad source must not discard the others.
-  for (let start = 0; start < candidates.length && sources.length < 6; start += 3) {
+  // Read at most nine once, then choose six for topic coverage, not response order.
+  for (let start = 0; start < candidates.length; start += 3) {
     const batch = await Promise.all(candidates.slice(start, start + 3).map(async url => {
       try {
         const source = await deps.source(url);
@@ -152,9 +158,23 @@ export async function researchEditorialSources(
         return null;
       }
     }));
-    for (const source of batch) if (source && sources.length < 6 &&
-      !sources.some(old => old.finalUrl === source.finalUrl)) sources.push(source);
+    for (const source of batch) if (source &&
+      !readable.some(old => old.finalUrl === source.finalUrl)) readable.push(source);
   }
+  const sources: SourceEvidence[] = [], covered = new Set<string>();
+  while (readable.length && sources.length < 6) {
+    const score = (source: SourceEvidence) => sourceTopics(source).filter(topic => !covered.has(topic)).length * 10
+      + (source.images?.length ? 0.5 : 0) + Math.min(source.text.length, 20_000) / 20_000;
+    readable.sort((a, b) => score(b) - score(a));
+    const selected = readable.shift()!;
+    sources.push(selected);
+    sourceTopics(selected).forEach(topic => covered.add(topic));
+  }
+  report.coverage = researchCoverage(sources);
+  report.photos = researchPhotos(sources);
+  report.warnings.push('Покрытие тем определено по ключевым словам и фрагментам, а не проверкой фактов. Наличие фрагмента не гарантирует полноту или достоверность сведений.');
+  if (!report.photos.length) report.warnings.push('Подходящих ссылок на фотографии в прочитанных страницах не найдено. Изображения не выдумываются.');
+  else report.warnings.push('Фотографии взяты из ссылок на прочитанных страницах. Проверьте изображённый сыр и права использования; ссылка на лицензию сама по себе не подтверждает разрешение.');
   if (report.failures.length) report.warnings.push('Часть страниц не прочитана. Заготовка использует только доступные источники.');
   if (!sources.length) report.warnings.push('Нет читаемых источников с подтверждённой связью с выбранным сыром. Добавьте другую публичную страницу; текст не создаётся из догадок.');
   return { sources, report };

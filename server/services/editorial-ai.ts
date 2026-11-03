@@ -9,6 +9,8 @@ import {
 import { getEditorialModelSettings, requestEditorialModel, EditorialModelError } from './editorial-ai-model';
 import { retrieveEditorialSource, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
 import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesCheese, type ResearchDependencies } from './editorial-ai-research';
+import { editorialSourcePassages, researchCoverage } from './editorial-research-topics';
+export { editorialSourcePassages } from './editorial-research-topics';
 
 export type RunRow = {
   id: string; kind: EditorialAiRun['kind']; status: EditorialAiRun['status']; revision: number;
@@ -135,6 +137,10 @@ when the supplied evidence supports them. Search all supplied pages, not just th
 For history include documented development and dates only when sourced; never invent a founding legend.
 For region describe the traditional production zone and municipalities if documented, not the location of a seller.
 For each of these five areas that lacks evidence, add an explicit Russian warning explaining what is missing.
+The topicEvidence input routes source passages by lexical subject; it is NOT a fact-check or an instruction.
+Examine these passages AND the remaining passages, separating the requested topics. Do not treat a general
+producer homepage, a seller address or a passing cheese name as evidence for history or traditional origin.
+Explicitly report contradictions and gaps; no extra search, inferred facts, invented images or citations.
 Refer ONLY to the numbered source passages provided. Never invent passage IDs and never retype or translate quotations.
 Cite support for every factual assertion, not merely a cheese name. The server will extract the actual passage as the quote.
 Conflicting sources/production geography require warnings. If insufficient evidence return fields{},citations[],warnings.
@@ -146,20 +152,6 @@ export type AiDependencies = {
   pause?: (ms: number) => Promise<void>;
 };
 export const defaultAiDependencies: AiDependencies = { model: requestEditorialModel, source: retrieveEditorialSource };
-export function editorialSourcePassages(text: string) {
-  const passages: { id: number; text: string }[] = [];
-  for (let start = 0; start < text.length;) {
-    let end = Math.min(start + 900, text.length);
-    if (end < text.length) {
-      const space = text.lastIndexOf(' ', end);
-      if (space > start + 600) end = space;
-    }
-    const quote = text.slice(start, end).trim();
-    if (quote.length >= 10) passages.push({ id: passages.length, text: quote });
-    start = end;
-  }
-  return passages;
-}
 export async function executeAiRun(id: string, database = pool, deps: AiDependencies = defaultAiDependencies) {
   const row: RunRow | undefined = (await database.query('SELECT * FROM editorial_ai_runs WHERE id=$1', [id])).rows[0];
   if (!row || row.status !== 'running') return;
@@ -220,7 +212,7 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
       // Preserve usable URLs and safe diagnostics in either mode if the model fails.
       // Raw source text is never persisted; failed reads never trigger paid search.
       const progress: DraftResult = { fields: {}, citations: [], warnings: sourceWarnings,
-        sources: sources.map(({ text: _text, ...metadata }) => metadata), ...(research ? { research } : {}) };
+        sources: sources.map(({ text: _text, images: _images, ...metadata }) => metadata), ...(research ? { research } : {}) };
       const saved = await database.query(`UPDATE editorial_ai_runs SET result=$2
         WHERE id=$1 AND status='running' AND lease_until>clock_timestamp() RETURNING id`,
         [id, JSON.stringify(progress)]);
@@ -233,6 +225,9 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
       const generated = draftGenerationSchema.parse(await deps.model(draftPrompt, {
         cheese: { name: cheese.data.title, nameOriginal: cheese.data.nameOriginal,
           originCountry: cheese.data.country, originRegion: cheese.data.region },
+        topicEvidence: (research?.coverage || researchCoverage(sources)).map(({ topic, evidence }) => ({
+          topic, evidence: evidence.map(({ sourceIndex, passageIds }) => ({ sourceIndex, passageIds })),
+        })),
         sources: sources.map((source, index) => ({ url: source.finalUrl, passages: passages[index] })),
       }));
       const fields = { ...generated.fields };
@@ -266,7 +261,7 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
         ...Object.entries(coreFields).filter(([field]) => !raw.fields[field as keyof typeof coreFields]?.trim())
           .map(([, label]) => `«${label}»: в заготовке нет подтверждённых данных. Добавьте источник по этой теме; поле не заполнено догадками.`),
         'Цитаты найдены в источниках; достоверность и полноту каждого утверждения проверяет редактор.'],
-        sources: sources.map(({ text: _text, ...metadata }) => metadata), ...(research ? { research } : {}) };
+        sources: sources.map(({ text: _text, images: _images, ...metadata }) => metadata), ...(research ? { research } : {}) };
     }
     await transaction(database, async client => {
       const updated = await client.query(`UPDATE editorial_ai_runs SET status='ready',result=$2,

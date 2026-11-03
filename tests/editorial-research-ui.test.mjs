@@ -21,6 +21,12 @@ test('research is explicit, partial failures remain visible, and origin points r
   const found = 'https://example.com/discovered-cheese-source';
   const report = {
     provider: 'brave', queries: ['Parmigiano Reggiano history Emilia-Romagna'],
+    queryPlan: [{ topic: 'history', label: 'История', query: 'Parmigiano Reggiano history' }],
+    coverage: [
+      { topic: 'history', label: 'История', status: 'evidence', evidence: [{ sourceIndex: 0, passageIds: [4, 5], excerpt: 'Производство упоминается в историческом реестре.' }] },
+      { topic: 'origin', label: 'Происхождение', status: 'missing', evidence: [] },
+    ],
+    photos: [{ id: 'photo-failed', imageUrl: 'https://photo-fixture.example.test/failed.jpg', sourceUrl: found, label: 'Кандидат — сырная головка' }],
     failures: [{ url: manual[0], reason: 'Fixture reader failure' }],
     warnings: ['Недостаточно сведений о кулинарном использовании.'], searchedAt: '2026-01-01T12:00:00.000Z',
   };
@@ -34,15 +40,25 @@ test('research is explicit, partial failures remain visible, and origin points r
     }] }, error: 'Fixture model failure', appliedTo: null,
   };
   let researchCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0;
+  let imagePreviewCalls = 0;
   let researchRequests = [], lookupRequests = [], draftApplyRequests = [];
   const exceptions = [];
   page.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails.text));
   await page.send('Network.enable');
   await page.send('Network.setBypassServiceWorker', { bypass: true });
   await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `if ('serviceWorker' in navigator) navigator.serviceWorker.register = async () => ({}); window.confirm = () => true;` });
-  await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/web-api/*' }, { urlPattern: '*/api/*' }, { urlPattern: '*telegram.org/js/telegram-web-app.js*' }] });
+  await page.send('Fetch.enable', { patterns: [{ urlPattern: '*/web-api/*' }, { urlPattern: '*/api/*' }, { urlPattern: '*telegram.org/js/telegram-web-app.js*' }, { urlPattern: 'https://photo-fixture.example.test/*' }] });
   page.on('Fetch.requestPaused', async event => {
     const url = new URL(event.request.url);
+    if (url.hostname === 'photo-fixture.example.test') {
+      imagePreviewCalls++;
+      await page.send('Fetch.fulfillRequest', {
+        requestId: event.requestId, responseCode: 200,
+        responseHeaders: [{ name: 'Content-Type', value: 'image/png' }],
+        body: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l4sAAAAASUVORK5CYII=',
+      });
+      return;
+    }
     let body = [], status = 200;
     if (url.pathname === '/web-api/auth/refresh') body = {
       accessToken: 'isolated-test-token', user: { id: 'test-only-operator', firstName: 'Test', email: 'editorial@example.invalid' },
@@ -56,7 +72,11 @@ test('research is explicit, partial failures remain visible, and origin points r
       await delay(250);
       body = researchCalls === 1 ? researchRun : {
         ...researchRun, id: '55555555-5555-4555-8555-555555555555', status: 'ready', revision: 91,
-        params: request, result: { fields: { title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' }, citations: [], warnings: [], sources: [] },
+        params: request, result: {
+          fields: { title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' }, citations: [], warnings: [],
+          sources: researchRun.result.sources,
+          research: { ...report, photos: [{ id: 'photo-ready', imageUrl: 'https://photo-fixture.example.test/ready.jpg', sourceUrl: found, label: 'Проверить идентичность' }] },
+        },
         error: null, appliedTo: null,
       };
     } else if (url.pathname === '/web-api/admin/editorial-ai/origin-geocoding') {
@@ -120,6 +140,17 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-report"]').innerText.includes('Fixture reader failure')`), true);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-report"]').innerText.includes('Regional cheese record')`), true);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-report"]').innerText.includes('История')`), true);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-coverage"]').innerText.includes('эвристические фрагменты')`), true, 'coverage is marked as evidence fragments, not verified facts');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-coverage"]').innerText.includes('Сведений не найдено')`), true, 'missing topics are shown explicitly');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-coverage"] a').getAttribute('href')`), found, 'coverage links to source metadata');
+    assert.equal(imagePreviewCalls, 0, 'candidate images cause no remote request while the panel renders');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-photo-select-photo-failed"]').checked`), false, 'failed-run candidate is not selected');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-photo-select-photo-failed"]').disabled`), true, 'failed-run candidate is read-only');
+    await clickButton('ai-photo-preview-photo-failed');
+    await page.wait(`!!document.querySelector('[data-testid="ai-research-photos"] img')`);
+    await delay(250);
+    assert.equal(imagePreviewCalls, 1, 'remote image request only happens after explicit preview');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-photos"] img').getAttribute('referrerpolicy')`), 'no-referrer');
     await page.evaluate(`document.querySelector('[data-testid="ai-research-report"] input[type="checkbox"]').click()`);
     await page.evaluate(`document.querySelector('[data-testid="ai-research-report"] button').click()`);
     assert.deepEqual(await page.evaluate(`document.querySelector('#ai-sources-${id}').value.split('\\n').filter(Boolean)`), [...manual, found]);
@@ -174,11 +205,23 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').value`), 'Редакторская правка названия');
     assert.equal(draftApplyCalls, 0, 'bulk selection never triggers apply or an AI request');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-photo-select-photo-ready"]').checked`), false, 'select-all text does not select any photo');
+    assert.equal(imagePreviewCalls, 1, 'ready-run photo also remains unloaded until explicit preview');
+    await clickButton('ai-photo-preview-photo-ready');
+    await page.wait(`document.querySelector('[data-testid="ai-research-photos"] img')?.getAttribute('src') === 'https://photo-fixture.example.test/ready.jpg'`);
+    await delay(250);
+    assert.equal(imagePreviewCalls, 2, 'preview button explicitly loads the ready-run candidate');
+    await page.evaluate(`document.querySelector('[data-testid="ai-photo-select-photo-ready"]').click()`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), true, 'photo apply is blocked until rights are confirmed');
+    await page.evaluate(`document.querySelector('[data-testid="ai-photo-rights-confirm"]').click()`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false, 'rights confirmation unlocks the explicit apply action');
     await clickButton('ai-draft-apply');
     await page.wait(`document.body.innerText.includes('Уже применено')`);
     assert.equal(draftApplyCalls, 1, 'text is only saved after explicit field selection and apply');
     assert.deepEqual(draftApplyRequests[0].fields, ['title', 'region']);
     assert.equal(draftApplyRequests[0].edits.title, 'Редакторская правка названия', 'the preserved operator edit is sent only with explicit apply');
+    assert.deepEqual(draftApplyRequests[0].photoIds, ['photo-ready'], 'only explicitly selected photos are applied');
+    assert.equal(draftApplyRequests[0].photoRightsConfirmed, true, 'photo rights confirmation is sent with the apply request');
     await page.wait(`document.querySelector('[data-testid="ai-origin-place"]').value === 'Ломбардия'`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-lookup"]').disabled`), false, 'lookup unlocks after the applied region is saved');
     assert.equal(lookupCalls, 1, 'applying region still does not start a paid lookup automatically');

@@ -103,10 +103,22 @@ export type CatalogItem = z.infer<typeof catalogModelItemSchema> & {
   matches: { id: string; title: string }[];
 };
 export type AiSource = { url: string; finalUrl: string; title: string; retrievedAt: string; sha256: string; characters: number; truncated: boolean };
+export type ResearchTopic = 'history' | 'origin' | 'characteristics' | 'culinaryUses';
+export type ResearchCoverage = {
+  topic: ResearchTopic; label: string; status: 'evidence' | 'missing';
+  evidence: { sourceIndex: number; passageIds: number[]; excerpt: string }[];
+};
+export const researchPhotoSchema = z.object({
+  id: text(64).min(1), imageUrl: editorialSourceUrl, sourceUrl: editorialSourceUrl,
+  label: text(300), licenseUrl: editorialSourceUrl.optional(),
+}).strict();
+export type ResearchPhoto = z.infer<typeof researchPhotoSchema>;
 export type ResearchReport = {
   provider: 'brave'; queries: string[];
   failures: { url: string; reason: string }[];
   warnings: string[]; searchedAt: string;
+  coverage?: ResearchCoverage[]; photos?: ResearchPhoto[];
+  queryPlan?: { topic: ResearchTopic | 'photos'; label: string; query: string }[];
 };
 export type CatalogResult = { items: CatalogItem[]; warnings: string[] };
 export type DraftResult = z.infer<typeof draftModelSchema> & { sources: AiSource[]; research?: ResearchReport };
@@ -126,7 +138,14 @@ export const importRequestSchema = z.object({
 }).strict();
 export const applyRequestSchema = z.object({
   entryId: z.string().uuid(), revision: z.number().int().positive(),
-  fields: z.array(aiFieldSchema).min(1).refine(fields => new Set(fields).size === fields.length),
+  fields: z.array(aiFieldSchema).refine(fields => new Set(fields).size === fields.length),
   edits: draftModelSchema.shape.fields.optional(),
-}).strict();
+  photoIds: z.array(text(64).min(1)).max(3).refine(ids => new Set(ids).size === ids.length).optional(),
+  photoRightsConfirmed: z.boolean().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (!value.fields.length && !value.photoIds?.length)
+    ctx.addIssue({ code: 'custom', message: 'Выберите текстовые поля или фотографии' });
+  if (value.photoIds?.length && value.photoRightsConfirmed !== true)
+    ctx.addIssue({ code: 'custom', message: 'Подтвердите право использования выбранных фотографий' });
+});
 export type ImportResult = { created: EditorialEntry[]; skipped: { itemId: string; entryId: string; title: string }[] };

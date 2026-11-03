@@ -3,9 +3,10 @@ import { isIP } from 'node:net';
 import { request } from 'node:https';
 import { createHash } from 'node:crypto';
 import { editorialSourceUrl, type AiSource } from '../../shared/editorial-ai';
+import { sourcePageImages, type SourceImage } from './editorial-research-photos';
 
 export class EditorialSourceError extends Error {}
-export type SourceEvidence = AiSource & { text: string };
+export type SourceEvidence = AiSource & { text: string; images?: SourceImage[] };
 // Reject non-global ranges, including IPv4-mapped IPv6, transition and documentation nets.
 export function isPublicSourceAddress(address: string): boolean {
   if (isIP(address) === 4) {
@@ -35,7 +36,9 @@ const entities = (text: string) => text.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|qu
   return number > 0 && number <= 0x10ffff && !(number >= 0xd800 && number <= 0xdfff) ? String.fromCodePoint(number) : ' ';
 });
 export function sourcePlainText(html: string) {
-  return normalize(entities(html.replace(/<!--[\s\S]*?-->/g, ' ')
+  const main = html.match(/<(?:main|article)\b[^>]*>([\s\S]*?)<\/(?:main|article)\s*>/i)?.[1];
+  const content = main && normalize(main.replace(/<[^>]*>/g, ' ')).length >= 150 ? main : html;
+  return normalize(entities(content.replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<(script|style|noscript|svg|nav|footer|header)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
     .replace(/<[^>]*>/g, ' ')));
 }
@@ -120,7 +123,8 @@ async function retrieveSource(value: string): Promise<SourceEvidence> {
     if (allText.length < 150) throw new EditorialSourceError('В источнике недостаточно читаемого текста. Выберите другую страницу.');
     const title = entities(response.body.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] || url.hostname).replace(/<[^>]*>/g, '').trim().slice(0, 250);
     const text = allText.slice(0, 20_000);
-    return { url: original.href, finalUrl: url.href, title, text, retrievedAt: new Date().toISOString(),
+    return { url: original.href, finalUrl: url.href, title, text, images: /^text\/html/i.test(response.type) ? sourcePageImages(response.body, url.href) : [],
+      retrievedAt: new Date().toISOString(),
       sha256: createHash('sha256').update(text).digest('hex'), characters: text.length, truncated: allText.length > text.length };
   }
   throw new EditorialSourceError('Не удалось получить источник.');

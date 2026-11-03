@@ -25,8 +25,11 @@ La sola verifica delle variabili non equivale a una verifica di rete Timeweb.
 
 Aprire una scheda formaggio e «Подготовить с ИИ».
 
-1. «Найти источники и подготовить текст» avvia esplicitamente fino a tre
-   query distinte: fonti istituzionali, storia e origine, zona produttiva.
+1. «Найти источники и подготовить текст» avvia esplicitamente fino a cinque
+   query distinte: storia, origine/zona produttiva, caratteristiche tecniche,
+   utilizzi in cucina e fotografie. Usa il nome originale e il vocabolario
+   della lingua del paese riconosciuto (italiano, francese, russo, spagnolo,
+   tedesco; altrimenti inglese), non un insieme di parole di lingue diverse.
    Le tre eventuali fonti manuali vengono conservate e considerate per prime.
 2. Si leggono al massimo nove pagine, tre alla volta, conservando fino a sei
    fonti leggibili. I controlli HTTPS/DNS/redirect anti-SSRF restano attivi.
@@ -37,8 +40,16 @@ Aprire una scheda formaggio e «Подготовить с ИИ».
    Le esclusioni per pertinenza sono avvisi separati dagli errori di lettura;
    il filtro è prudenziale e può scartare pagine valide con nomi alternativi.
    Non certifica fatti né ufficialità e non avvia ricerche aggiuntive.
+   La selezione riserva spazio a ogni argomento, preferisce pagine specifiche
+   alle homepage e sceglie fino a sei fonti anche per diversità degli argomenti.
+   Quando disponibile si estrae il contenuto principale `main`/`article`, non
+   l’intera navigazione del sito.
 3. Il modello riceve solo l’identità editoriale del formaggio e i passaggi
    numerati delle pagine leggibili, non dati clienti, ordini o descrizioni private.
+   Riceve inoltre la corrispondenza argomento–fonte–ID dei passaggi. Il rapporto
+   mostra i quattro argomenti testuali con frammenti e lacune prima della bozza.
+   È un instradamento lessicale per la revisione: un frammento non è una prova
+   semantica e non garantisce completezza, ufficialità o correttezza dei fatti.
 4. La bozza propone storia, paese e regione/zona d’origine, caratteristiche,
    descrizione e usi quando documentati. I campi privi di citazioni sono omessi
    e segnalati. La presenza di una citazione non certifica la verità dell’asserzione.
@@ -80,11 +91,42 @@ pagine specifiche, verificare il nome originale o avviare esplicitamente
 la ricerca. La modalità manuale
 non passa mai automaticamente a Brave e non introduce retry AI o di rete.
 
+## Fotografie da scegliere
+
+La ricerca può proporre fino a tre URL di immagini realmente referenziate
+nell’HTML delle pagine pertinenti lette (metadati OpenGraph/Twitter e immagini
+del contenuto principale). Scarta URL non HTTPS/locali, duplicati, loghi e
+immagini palesemente troppo piccole. Non usa generazione di immagini né URL
+inventati dal modello, non scarica file durante la ricerca e non certifica
+l’identità visiva del formaggio. Se non trova candidati, lo dichiara.
+
+Le anteprime remote partono soltanto premendo «Показать фото», senza Referer;
+l’operatore verifica contenuto e diritti. L’eventuale link `rel=license` è un
+indizio da verificare, non autorizzazione automatica. In assenza di quel link
+i diritti sono indicati come sconosciuti.
+
+Si possono scegliere foto e testi insieme oppure solo foto, con conferma
+esplicita dei diritti e il normale comando di applicazione. «Добавить всё»
+resta una selezione dei soli campi testuali. Il server accetta esclusivamente
+gli ID dei candidati salvati nella generazione e associati alle sue fonti,
+controlla la revisione e aggiunge URL/provenienza senza sostituire foto esistenti.
+Non accetta URL immagine arbitrari dal client; massimo 12 foto nella scheda.
+La conferma dei diritti e le scelte sono registrate nel log.
+Una generazione è applicabile una volta sola: selezionare insieme tutti i
+contenuti desiderati prima di confermare. Una ripetizione identica è idempotente.
+Le pubblicazioni rimangono invariate. Se fallisce il modello, i candidati
+rimangono visibili ma non applicabili da quel job fallito.
+
+Le immagini restano URL esterni: la disponibilità futura e il permesso di
+hotlink non sono garantiti. Non è una copia permanente su App Storage.
+
 ## Limiti, costi e disponibilità
 
-- Ricerca: massimo tre query per avvio, almeno 1,1 secondi tra query; una nuova
+- Ricerca: massimo cinque query per avvio, almeno 1,1 secondi tra query; una nuova
   ricerca per operatore ogni 60 secondi. Un errore provider interrompe le query
   successive, senza retry. Le altre fonti già disponibili possono essere usate.
+- Una sola chiamata al modello per generazione; l’estrazione foto non avvia
+  altre generazioni, ricerche immagini a pagamento o fallback.
 - Ricerca/testo: stessa riserva idempotente e blocco globale dei job AI esistenti;
   lease di tre minuti. Nessuna ricerca a montaggio, polling o apertura della storia.
 - Nominatim: solo su richiesta, massimo una nuova chiamata ogni **15 secondi

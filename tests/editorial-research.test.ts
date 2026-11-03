@@ -13,6 +13,8 @@ import { registerAdminEditorialAiRoutes } from '../server/adminEditorialAiRoutes
 import { reserveAiRun, executeAiRun, getAiRun } from '../server/services/editorial-ai';
 import { applyAiDraft } from '../server/services/editorial-ai-changes';
 import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesCheese } from '../server/services/editorial-ai-research';
+import { structuredResearchPlan, researchCoverage, editorialSourcePassages } from '../server/services/editorial-research-topics';
+import { sourcePageImages, researchPhotos } from '../server/services/editorial-research-photos';
 import { fetchOriginCandidates, originProviderSettings } from '../server/services/editorial-origin-provider';
 import { lookupEditorialOrigin, applyEditorialOrigin } from '../server/services/editorial-origin';
 import { EditorialError, saveEditorial } from '../server/services/editorial';
@@ -102,18 +104,18 @@ for (const status of [401, 402, 403, 429, 503]) {
     assert.equal(calls, 1);
   });
 }
-test('research limits search to three queries and reading to nine candidates, tolerates failed sources and deduplicates', async () => {
+test('research limits search to five topic queries and reading to nine candidates, tolerates failed sources and deduplicates', async () => {
   let searches = 0, reads = 0, active = 0, maxActive = 0;
   const found = await researchEditorialSources(identity, [], {
     search: async () => { searches++; return Array.from({ length: 5 }, (_, n) => hit(n + (searches - 1) * 5)); },
     source: async url => {
       reads++; active++; maxActive = Math.max(maxActive, active);
       await new Promise(resolve => setTimeout(resolve, 2)); active--;
-      if (url.endsWith('0')) throw new EditorialSourceError('example.org: HTTP 404');
+      if (url.endsWith('/source-0')) throw new EditorialSourceError('example.org: HTTP 404');
       return source(url);
     },
   }, async () => {});
-  assert.equal(searches, 3); assert.ok(reads <= 9); assert.ok(maxActive <= 3);
+  assert.equal(searches, 5); assert.ok(reads <= 9); assert.ok(maxActive <= 3);
   assert.equal(found.sources.length, 6); assert.equal(found.report.failures.length, 1);
   assert.match(found.report.failures[0].reason, /404/);
 });
@@ -124,6 +126,77 @@ test('provider failure stops further search calls and preserves readable manual 
   }, async () => {});
   assert.equal(calls, 1); assert.equal(found.sources.length, 1);
   assert.match(found.report.warnings.join(' '), /403/);
+});
+test('five bounded searches follow topics in the origin language instead of mixed generic phrases', () => {
+  const plan = structuredResearchPlan(identity);
+  assert.equal(plan.length, 5);
+  assert.deepEqual(plan.map(item => item.topic), ['history', 'origin', 'characteristics', 'culinaryUses', 'photos']);
+  assert.ok(plan.every(item => item.query.includes('Castelmagno formaggio Italia') && item.query.length <= 400));
+  assert.match(plan[0].query, /storia/); assert.match(plan[1].query, /disciplinare/);
+  assert.match(plan[2].query, /stagionatura/); assert.match(plan[3].query, /ricette/);
+  assert.match(plan[4].query, /foto/);
+  assert.match(structuredResearchPlan({ ...identity, country: 'Франция', nameOriginal: 'Comté' })[0].query, /Comté fromage France histoire/);
+  assert.match(structuredResearchPlan({ ...identity, country: 'Неизвестная страна' })[0].query, /cheese .*history/);
+});
+test('coverage routes real numbered passages by topic and leaves missing subjects explicit', async () => {
+  const evidence = { ...await source('https://example.org/history'),
+    text: 'Castelmagno cheese history documented in medieval records. '.repeat(12) };
+  const coverage = researchCoverage([evidence]);
+  assert.equal(coverage.find(item => item.topic === 'history')!.status, 'evidence');
+  assert.equal(coverage.find(item => item.topic === 'culinaryUses')!.status, 'missing');
+  const history = coverage.find(item => item.topic === 'history')!.evidence[0];
+  assert.equal(history.sourceIndex, 0);
+  assert.ok(history.passageIds.every(id => editorialSourcePassages(evidence.text).some(p => p.id === id)));
+  assert.ok(history.excerpt.length <= 360);
+});
+test('topic diversity keeps specific culinary and technical pages as well as institutional sources', async () => {
+  const bodies = [
+    'Castelmagno cheese history in medieval records.',
+    'Castelmagno cheese traditional production territory in Piemonte, Italy.',
+    'Castelmagno cheese milk texture taste aging technical specifications.',
+    'Castelmagno cheese recipes cooking salads pairing.',
+    'Castelmagno cheese photographs.',
+  ];
+  let searches = 0;
+  const reads: string[] = [];
+  const found = await researchEditorialSources(identity, [], {
+    search: async () => {
+      const index = searches++;
+      return [
+        { url: 'https://example.org/', title: 'Consorzio Castelmagno', description: 'Homepage' },
+        { url: `https://example.org/topic-${index}`, title: 'Castelmagno cheese', description: bodies[index] },
+      ];
+    },
+    source: async url => {
+      reads.push(url);
+      const index = Number(url.match(/topic-(\d)/)?.[1] ?? 0);
+      return { ...await source(url), text: bodies[index].repeat(5) };
+    },
+  }, async () => {});
+  assert.equal(searches, 5); assert.ok(reads.length <= 9);
+  assert.ok(reads.indexOf('https://example.org/topic-3') < reads.indexOf('https://example.org/'));
+  assert.ok(found.report.coverage!.every(topic => topic.status === 'evidence'));
+  assert.ok(found.sources.some(page => page.url.endsWith('topic-3')));
+});
+test('photo candidates are actual safe HTML references, deduplicated, provenance-bound and not license-certified', async () => {
+  const html = `<meta property="og:image" content="/photos/cheese.jpg?x=1&amp;y=2">
+    <meta name="twitter:image" content="/photos/cheese.jpg?x=1&amp;y=2">
+    <link rel="license" href="https://example.org/licence">
+    <header><img src="/unrelated-navigation.jpg"></header>
+    <main><img src="/photos/detail.jpg" alt="Castelmagno cheese" width="600" height="400">
+    <img src="/logo.png"><img src="https://127.0.0.1/private.jpg"><img src="http://example.org/no.jpg">
+    <img src="/tiny.jpg" width="1" height="1"><img src="data:image/png;base64,secret">
+    <script>const fake='<img src="/not-real.jpg">'</script></main>`;
+  const images = sourcePageImages(html, 'https://example.org/cheese');
+  assert.deepEqual(images.map(image => image.url), [
+    'https://example.org/photos/cheese.jpg?x=1&y=2', 'https://example.org/photos/detail.jpg',
+  ]);
+  assert.ok(images.every(image => image.licenseUrl === 'https://example.org/licence'));
+  const photos = researchPhotos([{ ...await source('https://example.org/cheese'), images }]);
+  assert.equal(photos.length, 2);
+  assert.equal(photos[0].sourceUrl, 'https://example.org/cheese');
+  assert.equal(photos[0].id, researchPhotos([{ ...await source('https://example.org/cheese'), images }])[0].id);
+  assert.equal((photos[0] as any).rightsConfirmed, undefined);
 });
 test('research rejects unrelated consortia before fetching and checks actual content after redirects', async () => {
   const reads: string[] = [];
@@ -187,8 +260,8 @@ test('research run is idempotent, source-based, review-only, warns on missing fi
     },
   });
   const ready = await getAiRun(first.run.id, db), result = ready.result as DraftResult;
-  assert.equal(ready.status, 'ready'); assert.equal(searches, 3); assert.equal(models, 1);
-  assert.equal(result.research?.queries.length, 3);
+  assert.equal(ready.status, 'ready'); assert.equal(searches, 5); assert.equal(models, 1);
+  assert.equal(result.research?.queries.length, 5);
   assert.match(result.warnings.join(' '), /зона происхождения/);
   assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [entry.id])).rows[0].revision, entry.revision);
   const publication = (await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data;
@@ -208,6 +281,86 @@ test('model failure keeps search results without storing raw pages, changing the
   assert.equal(failed.status, 'failed'); assert.equal(calls, 1);
   assert.equal((failed.result as DraftResult).sources.length, 1);
   assert.ok(!JSON.stringify(failed.result).includes(text));
+});
+async function readyPhotoDraft(published = false) {
+  const entry = await cheese(published), params = parameters(entry);
+  const run = (await reserveAiRun('draft', params, 'operator', db)).run;
+  await executeAiRun(run.id, db, {
+    source: async url => ({ ...await source(url), images: [
+      { url: 'https://example.org/castelmagno-photo.jpg', alt: 'Castelmagno cheese' },
+      { url: 'https://example.org/castelmagno-detail.jpg', alt: 'Castelmagno detail', licenseUrl: 'https://example.org/license' },
+    ] }),
+    search: async () => [hit(1)], pause: async () => {},
+    model: async (_system, input) => {
+      assert.equal((input as any).topicEvidence.length, 4);
+      assert.ok(!(input as any).sources[0].images, 'the model does not author image suggestions');
+      return { fields: { history: 'Документированная история.' },
+        citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }], warnings: [] };
+    },
+  });
+  const ready = await getAiRun(run.id, db);
+  assert.equal(ready.status, 'ready');
+  return { entry, ready, photos: (ready.result as DraftResult).research!.photos! };
+}
+test('selected photos append atomically with text, keep provenance, audit rights and never replace a publication', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft(true);
+  const body = { entryId: entry.id, revision: entry.revision, fields: ['history'],
+    photoIds: [photos[0].id], photoRightsConfirmed: true };
+  const saved = await applyAiDraft(ready.id, body, 'operator', db);
+  assert.deepEqual(saved.data.photos, ['https://example.org/photo.jpg', photos[0].imageUrl]);
+  assert.equal(saved.data.history, 'Документированная история.');
+  assert.ok(saved.data.sources.includes(photos[0].sourceUrl));
+  assert.equal(saved.data.productionCountry, 'Россия');
+  assert.equal(saved.data.status, 'draft');
+  const pub = (await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data;
+  assert.deepEqual(pub.photos, ['https://example.org/photo.jpg']);
+  assert.equal(pub.history, 'Old history');
+  const retry = await applyAiDraft(ready.id, body, 'operator', db);
+  assert.equal(retry.revision, saved.revision);
+  const logs = (await db.query("SELECT action_data FROM admin_action_logs WHERE entity_id=$1 AND action_type='ai_applied'", [entry.id])).rows;
+  assert.equal(logs.length, 1);
+  assert.ok(JSON.stringify(logs).includes('"photoRightsConfirmed":true'));
+  await assert.rejects(applyAiDraft(ready.id, { ...body, photoIds: [photos[1].id] }, 'operator', db), fails(409));
+});
+test('photo-only application requires rights, saved candidate IDs and the unchanged article revision', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft();
+  const body = { entryId: entry.id, revision: entry.revision, fields: [],
+    photoIds: [photos[0].id], photoRightsConfirmed: true };
+  await assert.rejects(applyAiDraft(ready.id, { ...body, photoRightsConfirmed: false }, 'operator', db));
+  await assert.rejects(applyAiDraft(ready.id, { ...body, photoIds: ['forged'] }, 'operator', db), fails(400));
+  await assert.rejects(applyAiDraft(ready.id, { ...body, imageUrl: 'https://example.org/forged.jpg' }, 'operator', db));
+  await assert.rejects(applyAiDraft(ready.id, { ...body, photoIds: [] }, 'operator', db));
+  await assert.rejects(applyAiDraft(ready.id, { ...body, entryId: randomUUID() }, 'operator', db), fails(400));
+  const saved = await applyAiDraft(ready.id, body, 'operator', db);
+  assert.equal(saved.data.history, 'Old history');
+  assert.ok(saved.data.photos.includes(photos[0].imageUrl));
+  assert.equal(saved.revision, entry.revision + 1);
+});
+test('photos cannot be applied from an old revision or from candidates without saved source provenance', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft();
+  const body = { entryId: entry.id, revision: entry.revision, fields: [],
+    photoIds: [photos[0].id], photoRightsConfirmed: true };
+  const result = ready.result as DraftResult;
+  result.research!.photos![0].sourceUrl = 'https://example.org/not-read';
+  await db.query('UPDATE editorial_ai_runs SET result=$2 WHERE id=$1', [ready.id, JSON.stringify(result)]);
+  await assert.rejects(applyAiDraft(ready.id, body, 'operator', db), fails(400));
+  await saveEditorial('cheese', { ...entry.data, history: 'Operator changed the article' }, 'other-operator', entry, db);
+  await assert.rejects(applyAiDraft(ready.id, body, 'operator', db), fails(409));
+});
+test('failed model retains coverage and real candidate URLs without retrying or applying them', async () => {
+  const entry = await cheese(), run = (await reserveAiRun('draft', parameters(entry), 'operator', db)).run;
+  let models = 0;
+  await executeAiRun(run.id, db, {
+    source: async url => ({ ...await source(url), images: [{ url: 'https://example.org/real-photo.jpg', alt: 'Castelmagno' }] }),
+    search: async () => [hit(1)], pause: async () => {},
+    model: async () => { models++; throw new EditorialModelError('Model unavailable'); },
+  });
+  const failed = await getAiRun(run.id, db), result = failed.result as DraftResult;
+  assert.equal(failed.status, 'failed'); assert.equal(models, 1);
+  assert.equal(result.research!.coverage!.length, 4);
+  assert.equal(result.research!.photos![0].imageUrl, 'https://example.org/real-photo.jpg');
+  assert.ok(!(result.sources[0] as any).images, 'raw extractor metadata is not duplicated in source DTOs');
+  assert.deepEqual((await db.query('SELECT data FROM editorial_entries WHERE id=$1', [entry.id])).rows[0].data.photos, ['https://example.org/photo.jpg']);
 });
 test('zero readable sources skip the model and preserve source diagnostics', async () => {
   const entry = await cheese(), run = (await reserveAiRun('draft', parameters(entry), 'operator', db)).run;

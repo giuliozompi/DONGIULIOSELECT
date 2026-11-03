@@ -2,11 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { pool } from '../db';
 import { cheeseDataSchema, type CheeseData, type EditorialEntry } from '../../shared/editorial';
 import {
-  applyRequestSchema, importRequestSchema, rankRequestSchema, countryName,
+  applyRequestSchema, importRequestSchema, rankRequestSchema, countryName, researchPhotoSchema,
   type CatalogResult, type DraftRequest, type DraftResult, type ImportResult,
 } from '../../shared/editorial-ai';
 import { transaction, audit, entry, EditorialError, type Row } from './editorial';
 import { catalogMatches, normalizedCheeseName, runDto, type RunRow } from './editorial-ai';
+import { validateSourceUrl } from './editorial-ai-sources';
 
 async function lockedRun(client: any, id: string, kind: 'catalog' | 'draft'): Promise<RunRow> {
   const row = (await client.query('SELECT * FROM editorial_ai_runs WHERE id=$1 FOR UPDATE', [id])).rows[0];
@@ -78,7 +79,8 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
   const edits = body.edits || {};
   if (Object.keys(edits).some(field => !body.fields.includes(field as typeof body.fields[number])))
     throw new EditorialError(400, 'Редактировать можно только выбранные поля');
-  const appliedParams = { fields: [...body.fields].sort(), edits };
+  const appliedParams = { fields: [...body.fields].sort(), edits,
+    ...(body.photoIds?.length ? { photoIds: [...body.photoIds].sort(), photoRightsConfirmed: true } : {}) };
   return transaction(database, async client => {
     const run = await lockedRun(client, id, 'draft');
     const params = run.params as DraftRequest;
@@ -95,6 +97,14 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     if (params.revision !== body.revision || old.revision !== body.revision)
       throw new EditorialError(409, 'Статья изменилась после генерации. Сначала сохраните свои изменения и подготовьте новую заготовку.');
     const proposal = run.result as DraftResult;
+    const selectedPhotos = (body.photoIds || []).map(photoId => {
+      const found = researchPhotoSchema.safeParse(proposal.research?.photos?.find(photo => photo.id === photoId));
+      if (!found.success || !proposal.sources.some(source => source.finalUrl === found.data.sourceUrl))
+        throw new EditorialError(400, 'Фотография отсутствует среди сохранённых предложений этой заготовки.');
+      // Only IDs from the saved run are accepted. Client-supplied image URLs are forbidden.
+      validateSourceUrl(found.data.imageUrl); validateSourceUrl(found.data.sourceUrl);
+      return found.data;
+    });
     const data = { ...(old.data as CheeseData) };
     for (const field of body.fields) {
       const value = proposal.fields[field];
@@ -104,7 +114,10 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     }
     const sourceUrls = proposal.citations.filter(citation => body.fields.includes(citation.field))
       .map(citation => proposal.sources[citation.sourceIndex].url);
-    data.sources = Array.from(new Set([...data.sources, ...sourceUrls]));
+    data.sources = Array.from(new Set([...data.sources, ...sourceUrls, ...selectedPhotos.map(photo => photo.sourceUrl)]));
+    data.photos = Array.from(new Set([...data.photos, ...selectedPhotos.map(photo => photo.imageUrl)]));
+    if (data.photos.length > 12)
+      throw new EditorialError(400, 'В статье может быть не более 12 фотографий. Сначала удалите лишние изображения.');
     data.status = 'draft';
     const parsed = cheeseDataSchema.parse(data);
     const saved: Row = (await client.query(`UPDATE editorial_entries SET data=$2,revision=revision+1,
@@ -115,6 +128,7 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     const current = entry({ ...saved, published_at: old.published_at, published_revision: old.published_revision });
     await audit(client, actor, 'ai_applied', old.id, entry(old), {
       ...current, aiRunId: id, appliedFields: body.fields, operatorEdits: edits,
+      ...(selectedPhotos.length ? { selectedPhotos, photoRightsConfirmed: true } : {}),
     });
     return current;
   });
