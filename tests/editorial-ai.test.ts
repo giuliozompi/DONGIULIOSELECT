@@ -26,7 +26,7 @@ import { EditorialModelError } from '../server/services/editorial-ai-model';
 const exec = promisify(execFile);
 let dir: string, db: pg.Pool, server: Server, base: string;
 let apiModelCalls = 0;
-const quote = 'Parmigiano Reggiano is a hard cheese traditionally made in Emilia-Romagna.';
+const quote = 'Parmigiano Reggiano is a hard cheese traditionally made in Emilia-Romagna. Пармиджано Реджано — итальянский сыр.';
 const evidence = { url: 'https://example.org/cheese', finalUrl: 'https://example.org/cheese',
   title: 'Cheese source', text: quote.repeat(4), sha256: 'evidence-hash', retrievedAt: new Date().toISOString(), characters: 300, truncated: false };
 const suggestedSources = () => ({

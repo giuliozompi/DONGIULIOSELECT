@@ -8,7 +8,7 @@ import {
 } from '../../shared/editorial-ai';
 import { getEditorialModelSettings, requestEditorialModel, EditorialModelError } from './editorial-ai-model';
 import { retrieveEditorialSource, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
-import { researchEditorialSources, searchEditorialWeb, type ResearchDependencies } from './editorial-ai-research';
+import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesCheese, type ResearchDependencies } from './editorial-ai-research';
 
 export type RunRow = {
   id: string; kind: EditorialAiRun['kind']; status: EditorialAiRun['status']; revision: number;
@@ -202,7 +202,12 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
         sources = [];
         fetched.forEach((item, index) => {
           if (item.status === 'fulfilled') {
-            sources.push(item.value);
+            if (editorialSourceMatchesCheese(item.value, cheese.data)) {
+              sources.push(item.value);
+            } else {
+              const host = new URL(params.sources[index]).hostname;
+              sourceWarnings.push(`Источник исключён — ${host}: в прочитанном тексте не найдены название выбранного сыра и связанный с ним сырный контекст. Укажите конкретную страницу о сыре, а не общую главную страницу. Проверьте также оригинальное название в статье.`);
+            }
           } else {
             const host = new URL(params.sources[index]).hostname;
             const detail = item.reason instanceof EditorialSourceError
@@ -222,7 +227,7 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
       if (!saved.rowCount) return;
       if (!sources.length) {
         if (research) throw new EditorialModelError('Нет читаемых источников по выбранному сыру. Проверьте предупреждения и результаты поиска, затем добавьте подходящую публичную страницу вручную.');
-        throw new EditorialSourceError(`Ни один из выбранных источников не удалось прочитать. Замените ссылки или нажмите «Найти источники и подготовить текст». ${sourceWarnings.join(' ')}`);
+        throw new EditorialSourceError(`Среди выбранных источников нет читаемых страниц с подтверждённой связью с выбранным сыром. AI не вызван. Укажите конкретную страницу о сыре, проверьте оригинальное название или явно нажмите «Найти источники и подготовить текст». ${sourceWarnings.join(' ')}`);
       }
       const passages = sources.map(source => editorialSourcePassages(source.text));
       const generated = draftGenerationSchema.parse(await deps.model(draftPrompt, {

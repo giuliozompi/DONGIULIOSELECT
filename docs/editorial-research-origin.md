@@ -64,14 +64,20 @@ DOP, non identifica necessariamente uno stabilimento e non modifica la
 ### Generazione soltanto dai link manuali
 
 «Сформировать только по этим ссылкам» legge tutte le fonti selezionate, una sola
-volta ciascuna. Una pagina non leggibile non impedisce di usare le altre:
+volta ciascuna. Applica lo stesso filtro prudenziale di pertinenza della ricerca:
+nel testo deve comparire il nome originale o russo del formaggio in un contesto
+caseario. Titolo, URL e nome del produttore non bastano. Un nome alternativo non
+riconosciuto può richiedere la correzione del nome originale nella scheda.
+Una pagina non leggibile o non pertinente non impedisce di usare le altre:
 la bozza elenca gli indirizzi scartati tra gli avvisi e le citazioni vengono
 associate soltanto alle pagine effettivamente lette, nell’ordine originario.
 I metadati leggibili e gli avvisi sono conservati nel job anche se fallisce il
 modello; non viene salvato il testo integrale delle pagine.
 
-Se tutte le fonti falliscono, il modello non viene chiamato: l’errore indica di
-correggere i link o scegliere esplicitamente la ricerca. La modalità manuale
+Se tutte le fonti falliscono o vengono escluse, il modello non viene chiamato:
+l’errore distingue gli avvisi di lettura e pertinenza e indica di scegliere
+pagine specifiche, verificare il nome originale o avviare esplicitamente
+la ricerca. La modalità manuale
 non passa mai automaticamente a Brave e non introduce retry AI o di rete.
 
 ## Limiti, costi e disponibilità

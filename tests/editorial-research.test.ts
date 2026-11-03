@@ -266,11 +266,68 @@ test('manual drafts with no readable sources keep safe diagnostics and never cal
   });
   const failed = await getAiRun(run.run.id, db), result = failed.result as DraftResult;
   assert.equal(failed.status, 'failed'); assert.equal(reads, 2); assert.equal(paid, 0);
-  assert.match(failed.error || '', /Ни один из выбранных источников/);
+  assert.match(failed.error || '', /Среди выбранных источников нет читаемых страниц/);
   assert.match(failed.error || '', /Найти источники и подготовить текст/);
   assert.match(failed.error || '', /bad\.example\.org/);
   assert.equal(result.sources.length, 0); assert.equal(result.warnings.length, 2);
   assert.ok(!JSON.stringify(failed).includes(sensitive));
+});
+test('manual drafts reject generic homepages even with relevant URL/title and never call paid services', async () => {
+  const entry = await cheese(true);
+  const urls = ['https://example.org/Castelmagno', 'https://bad.example.org/cheese'];
+  const run = (await reserveAiRun('draft', {
+    requestId: randomUUID(), entryId: entry.id, revision: entry.revision, sources: urls,
+  }, 'operator', db)).run;
+  let reads = 0, models = 0, searches = 0;
+  await executeAiRun(run.id, db, {
+    source: async url => {
+      reads++;
+      if (url === urls[1]) throw new EditorialSourceError('bad.example.org: HTTP 403');
+      return { ...await source(url), finalUrl: 'https://example.org/home',
+        title: 'Castelmagno cheese producer', text: 'Our family dairy welcomes visitors. Explore our cheese catalogue and contact details.' };
+    },
+    model: async () => { models++; return {}; },
+    search: async () => { searches++; return []; },
+  });
+  const failed = await getAiRun(run.id, db), result = failed.result as DraftResult;
+  assert.equal(failed.status, 'failed'); assert.equal(reads, 2);
+  assert.equal(models, 0); assert.equal(searches, 0);
+  assert.match(failed.error || '', /AI не вызван/);
+  assert.match(result.warnings.join(' '), /Источник исключён — example\.org/);
+  assert.match(result.warnings.join(' '), /Источник пропущен — bad\.example\.org/);
+  assert.equal(result.sources.length, 0);
+  assert.ok(!JSON.stringify(result).includes('Our family dairy'));
+  assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [entry.id])).rows[0].revision, entry.revision);
+  assert.equal((await db.query('SELECT published_revision FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].published_revision, entry.revision);
+});
+test('manual drafts keep relevant content only, remap citations and do not require original name when Russian name is supported', async () => {
+  const entry = await cheese();
+  const urls = ['https://example.org/home', 'https://example.org/actual-cheese'];
+  const run = (await reserveAiRun('draft', {
+    requestId: randomUUID(), entryId: entry.id, revision: entry.revision, sources: urls,
+  }, 'operator', db)).run;
+  let models = 0, reads = 0, searches = 0;
+  await executeAiRun(run.id, db, {
+    source: async url => {
+      reads++;
+      return { ...await source(url), text: url === urls[0] ? 'Welcome to our dairy cheese shop.' :
+        'Кастельманьо — итальянский сыр из Пьемонта. Его история описана в документах региона. '.repeat(3) };
+    },
+    search: async () => { searches++; return []; },
+    model: async (_system, input) => {
+      models++;
+      assert.deepEqual((input as any).sources.map((page: any) => page.url), [urls[1]]);
+      return { fields: { history: 'История описана в документах региона.' },
+        citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }], warnings: [] };
+    },
+  });
+  const ready = await getAiRun(run.id, db), result = ready.result as DraftResult;
+  assert.equal(ready.status, 'ready'); assert.equal(models, 1);
+  assert.equal(reads, 2); assert.equal(searches, 0);
+  assert.deepEqual(result.sources.map(page => page.url), [urls[1]]);
+  assert.equal(result.citations[0].sourceIndex, 0);
+  assert.match(result.citations[0].quote, /Кастельманьо/);
+  assert.match(result.warnings.join(' '), /Источник исключён/);
 });
 test('manual source warnings and readable metadata survive model failure without persisting raw text', async () => {
   const entry = await cheese();
