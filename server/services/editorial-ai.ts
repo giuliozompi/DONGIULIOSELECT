@@ -190,22 +190,39 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
       if (!cheese || cheese.revision !== params.revision) throw new EditorialError(409, 'Статья изменилась во время подготовки. Повторите по свежей версии.');
       let sources: SourceEvidence[];
       let research: DraftResult['research'];
+      const sourceWarnings: string[] = [];
       if (params.research) {
         const found = await researchEditorialSources(cheese.data, params.sources, {
           search: deps.search || searchEditorialWeb, source: deps.source,
         }, deps.pause);
         sources = found.sources; research = found.report;
-        // Keep the discovered URLs/diagnostics even if the model later fails.
-        // Never persist raw source text, and do not retry paid search to recover it.
-        const progress: DraftResult = { fields: {}, citations: [], warnings: research.warnings,
-          sources: sources.map(({ text: _text, ...metadata }) => metadata), research };
-        const saved = await database.query(`UPDATE editorial_ai_runs SET result=$2
-          WHERE id=$1 AND status='running' AND lease_until>clock_timestamp() RETURNING id`,
-          [id, JSON.stringify(progress)]);
-        if (!saved.rowCount) return;
-        if (!sources.length) throw new EditorialModelError('Нет читаемых источников для статьи. Проверьте результаты поиска и добавьте публичную страницу вручную.');
+        sourceWarnings.push(...research.warnings);
       } else {
-        sources = await Promise.all(params.sources.map(deps.source));
+        const fetched = await Promise.allSettled(params.sources.map(async url => deps.source(url)));
+        sources = [];
+        fetched.forEach((item, index) => {
+          if (item.status === 'fulfilled') {
+            sources.push(item.value);
+          } else {
+            const host = new URL(params.sources[index]).hostname;
+            const detail = item.reason instanceof EditorialSourceError
+              ? item.reason.message : 'Не удалось прочитать публичную страницу.';
+            const prefix = `${host}: `;
+            sourceWarnings.push(`Источник пропущен — ${host}: ${detail.startsWith(prefix) ? detail.slice(prefix.length) : detail}`);
+          }
+        });
+      }
+      // Preserve usable URLs and safe diagnostics in either mode if the model fails.
+      // Raw source text is never persisted; failed reads never trigger paid search.
+      const progress: DraftResult = { fields: {}, citations: [], warnings: sourceWarnings,
+        sources: sources.map(({ text: _text, ...metadata }) => metadata), ...(research ? { research } : {}) };
+      const saved = await database.query(`UPDATE editorial_ai_runs SET result=$2
+        WHERE id=$1 AND status='running' AND lease_until>clock_timestamp() RETURNING id`,
+        [id, JSON.stringify(progress)]);
+      if (!saved.rowCount) return;
+      if (!sources.length) {
+        if (research) throw new EditorialModelError('Нет читаемых источников для статьи. Проверьте результаты поиска и добавьте публичную страницу вручную.');
+        throw new EditorialSourceError(`Ни один из выбранных источников не удалось прочитать. Замените ссылки или нажмите «Найти источники и подготовить текст». ${sourceWarnings.join(' ')}`);
       }
       const passages = sources.map(source => editorialSourcePassages(source.text));
       const generated = draftGenerationSchema.parse(await deps.model(draftPrompt, {
@@ -239,7 +256,7 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
       }
       const coreFields = { history: 'История', country: 'Страна происхождения', region: 'Регион / зона происхождения',
         characteristics: 'Характеристики', culinaryUses: 'Кулинарное использование' } as const;
-      result = { ...raw, warnings: [...raw.warnings, ...(research?.warnings || []),
+      result = { ...raw, warnings: [...raw.warnings, ...sourceWarnings,
         ...missing.map(field => `AI не предоставил данных для поля «${field}»: оно не предлагается к применению.`),
         ...Object.entries(coreFields).filter(([field]) => !raw.fields[field as keyof typeof coreFields]?.trim())
           .map(([, label]) => `«${label}»: в заготовке нет подтверждённых данных. Добавьте источник по этой теме; поле не заполнено догадками.`),

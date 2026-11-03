@@ -50,6 +50,19 @@ Un punto è rappresentativo della zona tradizionale: non delimita un’intera ar
 DOP, non identifica necessariamente uno stabilimento e non modifica la
 `productionCountry` del prodotto commerciale.
 
+### Generazione soltanto dai link manuali
+
+«Сформировать только по этим ссылкам» legge tutte le fonti selezionate, una sola
+volta ciascuna. Una pagina non leggibile non impedisce di usare le altre:
+la bozza elenca gli indirizzi scartati tra gli avvisi e le citazioni vengono
+associate soltanto alle pagine effettivamente lette, nell’ordine originario.
+I metadati leggibili e gli avvisi sono conservati nel job anche se fallisce il
+modello; non viene salvato il testo integrale delle pagine.
+
+Se tutte le fonti falliscono, il modello non viene chiamato: l’errore indica di
+correggere i link o scegliere esplicitamente la ricerca. La modalità manuale
+non passa mai automaticamente a Brave e non introduce retry AI o di rete.
+
 ## Limiti, costi e disponibilità
 
 - Ricerca: massimo tre query per avvio, almeno 1,1 secondi tra query; una nuova

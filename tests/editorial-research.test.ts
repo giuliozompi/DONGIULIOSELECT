@@ -172,6 +172,84 @@ test('zero readable sources skip the model and preserve source diagnostics', asy
   assert.equal(failed.status, 'failed'); assert.equal(models, 0);
   assert.match((failed.result as DraftResult).research!.failures[0].reason, /404/);
 });
+test('manual drafts skip failed sources, preserve source order and remap citations without searching or retries', async () => {
+  const entry = await cheese(true);
+  const urls = ['https://bad.example.org/cheese', 'https://example.org/second', 'https://example.org/third'];
+  const run = await reserveAiRun('draft', {
+    requestId: randomUUID(), entryId: entry.id, revision: entry.revision, sources: urls,
+  }, 'operator', db);
+  const reads: string[] = []; let models = 0, searches = 0;
+  await executeAiRun(run.run.id, db, {
+    source: async url => {
+      reads.push(url);
+      if (url === urls[0]) throw new EditorialSourceError('bad.example.org: Страница не найдена (HTTP 404).');
+      const evidence = await source(url);
+      return { ...evidence, text: `${url.endsWith('third') ? 'Third' : 'Second'} source. ${text}` };
+    },
+    search: async () => { searches++; return []; },
+    model: async (_system, input) => {
+      models++;
+      const pages = (input as any).sources;
+      assert.deepEqual(pages.map((p: any) => p.url), urls.slice(1));
+      assert.match(pages[1].passages[0].text, /Third source/);
+      return { fields: { history: 'Проверенная история.' },
+        citations: [{ field: 'history', sourceIndex: 1, passageId: 0 }], warnings: [] };
+    },
+  });
+  const ready = await getAiRun(run.run.id, db), result = ready.result as DraftResult;
+  assert.equal(ready.status, 'ready'); assert.equal(models, 1); assert.equal(searches, 0);
+  assert.deepEqual(reads, urls);
+  assert.deepEqual(result.sources.map(s => s.url), urls.slice(1));
+  assert.match(result.warnings.join(' '), /Источник пропущен — bad\.example\.org: Страница не найдена/);
+  assert.equal(result.citations[0].sourceIndex, 1); assert.match(result.citations[0].quote, /Third source/);
+  assert.equal(result.research, undefined);
+  assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [entry.id])).rows[0].revision, entry.revision);
+  assert.equal((await db.query('SELECT published_revision FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].published_revision, entry.revision);
+});
+test('manual drafts with no readable sources keep safe diagnostics and never call AI or Brave', async () => {
+  const entry = await cheese();
+  const urls = ['https://bad.example.org/cheese', 'https://other.example.org/cheese'];
+  const run = await reserveAiRun('draft', {
+    requestId: randomUUID(), entryId: entry.id, revision: entry.revision, sources: urls,
+  }, 'operator', db);
+  let reads = 0, paid = 0;
+  await executeAiRun(run.run.id, db, {
+    source: async () => { reads++; throw new Error(sensitive); },
+    search: async () => { paid++; return []; },
+    model: async () => { paid++; return {}; },
+  });
+  const failed = await getAiRun(run.run.id, db), result = failed.result as DraftResult;
+  assert.equal(failed.status, 'failed'); assert.equal(reads, 2); assert.equal(paid, 0);
+  assert.match(failed.error || '', /Ни один из выбранных источников/);
+  assert.match(failed.error || '', /Найти источники и подготовить текст/);
+  assert.match(failed.error || '', /bad\.example\.org/);
+  assert.equal(result.sources.length, 0); assert.equal(result.warnings.length, 2);
+  assert.ok(!JSON.stringify(failed).includes(sensitive));
+});
+test('manual source warnings and readable metadata survive model failure without persisting raw text', async () => {
+  const entry = await cheese();
+  const urls = ['https://bad.example.org/cheese', 'https://example.org/readable'];
+  const run = await reserveAiRun('draft', {
+    requestId: randomUUID(), entryId: entry.id, revision: entry.revision, sources: urls,
+  }, 'operator', db);
+  let models = 0;
+  await executeAiRun(run.run.id, db, {
+    source: async url => {
+      if (url === urls[0]) throw new EditorialSourceError('Не удалось получить публичный источник.');
+      return source(url);
+    },
+    model: async () => { models++; throw new EditorialModelError('Fixture model failure'); },
+    search: async () => { throw new Error('Manual mode must never search'); },
+  });
+  const failed = await getAiRun(run.run.id, db), result = failed.result as DraftResult;
+  assert.equal(failed.status, 'failed'); assert.equal(models, 1);
+  assert.equal(result.sources.length, 1); assert.equal(result.sources[0].url, urls[1]);
+  assert.match(result.warnings.join(' '), /bad\.example\.org/);
+  assert.ok(!JSON.stringify(result).includes('Its history dates'));
+  assert.ok(result.sources.every(s => !('text' in s)));
+  await executeAiRun(run.run.id, db, { source, model: async () => { models++; return {}; } });
+  assert.equal(models, 1);
+});
 test('Nominatim request identifies the app, filters country and rejects invalid coordinate data', async () => {
   let calls = 0;
   const candidates = await fetchOriginCandidates('Castelmagno, Италия', 'it', originProviderSettings({}), async (url, init) => {
