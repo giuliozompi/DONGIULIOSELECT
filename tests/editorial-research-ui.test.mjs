@@ -34,7 +34,7 @@ test('research is explicit, partial failures remain visible, and origin points r
     }] }, error: 'Fixture model failure', appliedTo: null,
   };
   let researchCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0;
-  let researchRequests = [], lookupRequests = [];
+  let researchRequests = [], lookupRequests = [], draftApplyRequests = [];
   const exceptions = [];
   page.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails.text));
   await page.send('Network.enable');
@@ -82,6 +82,7 @@ test('research is explicit, partial failures remain visible, and origin points r
       body = entry;
     } else if (url.pathname.includes('/editorial-ai/') && url.pathname.endsWith('/apply')) {
       draftApplyCalls++;
+      draftApplyRequests.push(JSON.parse(event.request.postData));
       entry = { ...entry, revision: 3, data: { ...entry.data, title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' } };
       body = entry;
     } else if (event.request.method !== 'GET' && url.pathname !== '/web-api/auth/refresh') {
@@ -151,12 +152,33 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-pending-guidance"]').innerText.includes('Сначала выберите нужные текстовые поля')`), true);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-place"]').value`), 'Эмилия-Романья', 'pending proposal does not replace the saved region in the lookup field');
     assert.equal(lookupCalls, 1, 'a pending proposal does not trigger coordinate lookup');
-    await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').closest('article').querySelector('input[type="checkbox"]').click()`);
+    assert.equal(await page.evaluate(`document.querySelectorAll('[data-testid^="ai-proposal-"]').length`), 2, 'only fields present in the AI proposal are available for selection');
+    assert.equal(await page.evaluate(`!!document.querySelector('[data-testid="ai-proposal-country"]')`), false, 'an absent proposal field cannot be bulk-selected');
+    await page.evaluate(`(() => {
+      const field=document.querySelector('[data-testid="ai-proposal-title"]');
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,'Редакторская правка названия');
+      field.dispatchEvent(new Event('input',{bubbles:true}));
+      field.dispatchEvent(new Event('change',{bubbles:true}));
+    })()`);
+    await clickButton('ai-draft-select-all');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').closest('article').querySelector('input[type="checkbox"]').checked`), true);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-region"]').closest('article').querySelector('input[type="checkbox"]').checked`), true);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').value`), 'Редакторская правка названия', 'bulk selection preserves operator text edits');
+    assert.equal(draftApplyCalls, 0, 'bulk selection does not apply the draft');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false);
     await page.evaluate(`document.querySelector('[data-testid="ai-proposal-region"]').closest('article').querySelector('input[type="checkbox"]').click()`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-region"]').closest('article').querySelector('input[type="checkbox"]').checked`), false, 'individual fields remain deselectable after bulk selection');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').closest('article').querySelector('input[type="checkbox"]').checked`), true);
+    await clickButton('ai-draft-select-all');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-region"]').closest('article').querySelector('input[type="checkbox"]').checked`), true, 'bulk selection can add remaining proposed fields without changing edits');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').value`), 'Редакторская правка названия');
+    assert.equal(draftApplyCalls, 0, 'bulk selection never triggers apply or an AI request');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false);
     await clickButton('ai-draft-apply');
     await page.wait(`document.body.innerText.includes('Уже применено')`);
     assert.equal(draftApplyCalls, 1, 'text is only saved after explicit field selection and apply');
+    assert.deepEqual(draftApplyRequests[0].fields, ['title', 'region']);
+    assert.equal(draftApplyRequests[0].edits.title, 'Редакторская правка названия', 'the preserved operator edit is sent only with explicit apply');
     await page.wait(`document.querySelector('[data-testid="ai-origin-place"]').value === 'Ломбардия'`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-lookup"]').disabled`), false, 'lookup unlocks after the applied region is saved');
     assert.equal(lookupCalls, 1, 'applying region still does not start a paid lookup automatically');

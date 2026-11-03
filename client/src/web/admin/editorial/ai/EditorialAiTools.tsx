@@ -564,6 +564,10 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   function toggleField(field: AiField) {
     setSelectedFields(currentFields => currentFields.includes(field) ? currentFields.filter(value => value !== field) : [...currentFields, field]);
   }
+  function selectAllDraftFields() {
+    if (!draft || current?.appliedTo || revisionConflict || runStale || busy || suggestionBusy || globalAiBusy || generationClaimed || Boolean(activeId) || applyLock.current) return;
+    setSelectedFields(AI_FIELDS.filter(field => draft.fields[field.key] !== undefined).map(field => field.key));
+  }
   return <div data-testid={`ai-draft-entry-${entry.id}`} className="editorial-ai mt-3 border-t border-[#e2e0d5] pt-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div><p className="ai-kicker">Редакторская сверка источников</p><p className="mt-1 text-xs text-[#6f7b71]">Предложение по выбранным ссылкам · не автоматическая проверка истинности</p></div>
@@ -623,7 +627,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
          setError('');
        }} />}
         <OriginCoordinates entry={entry} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} readyTextPendingApply={readyTextPendingApply} isGlobalBusy={() => generationClaimed} tryClaim={tryClaimSuggestion} releaseClaim={releaseSuggestionClaim} onBusyChange={setSuggestionBusy} onApplied={saved => onApplied(saved)} />
-        {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy} />}
+        {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onSelectAll={selectAllDraftFields} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} />}
       {historyOpen && <div className="mt-3 space-y-2">
         {history.isLoading && <div className="h-12 animate-pulse rounded bg-[#e7e6dc]" />}
         {history.isError && <div role="alert" className="flex justify-between rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{errorMessage(history.error)}<Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy} onClick={() => { void history.refetch(); }}>Повторить</Button></div>}
@@ -635,14 +639,20 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   </div>;
 }
 
-function DraftPreview({ draft, entryData, edits, selectedFields, applied, stale, onToggle, onEdit, onApply, busy }: {
+function DraftPreview({ draft, entryData, edits, selectedFields, applied, stale, onToggle, onSelectAll, onEdit, onApply, busy }: {
   draft: DraftResult; entryData: CheeseData; edits: Partial<Record<AiField, string>>; selectedFields: AiField[]; applied: boolean; stale: boolean;
-  onToggle: (field: AiField) => void; onEdit: (field: AiField, value: string) => void; onApply: () => void; busy: boolean;
+  onToggle: (field: AiField) => void; onSelectAll: () => void; onEdit: (field: AiField, value: string) => void; onApply: () => void; busy: boolean;
 }) {
+  const availableFields = AI_FIELDS.filter(field => draft.fields[field.key] !== undefined);
+  const allSelected = availableFields.length > 0 && availableFields.every(field => selectedFields.includes(field.key));
   return <div className="mt-4 space-y-3">
     <div className="rounded border border-[#dfc9b5] bg-[#f5ece2] p-3 text-xs leading-5 text-[#75533e]"><strong>Проверка обязательна.</strong> Цитаты сопоставлены сервером с извлечённым текстом источников; это не семантическая верификация фактов. Оператор проверяет все утверждения.</div>
     {draft.warnings.length > 0 && <div className="rounded border border-[#dfc9b5] bg-[#f5ece2] p-3 text-sm text-[#75533e]"><strong>Замечания модели</strong><ul className="mt-1 list-inside list-disc">{draft.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div>}
-    <div className="space-y-2">{AI_FIELDS.filter(field => draft.fields[field.key] !== undefined).map(field => {
+    <div className="flex flex-col gap-2 rounded border border-[#e0dfd4] bg-[#f1f0e8] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs leading-5 text-[#66736a]">Выбор отмечает предложенные поля для последующего применения. Сам по себе он ничего не сохраняет.</p>
+      <Button data-testid="ai-draft-select-all" size="sm" variant="outline" disabled={busy || applied || stale || availableFields.length === 0 || allSelected} onClick={onSelectAll}>Добавить всё</Button>
+    </div>
+    <div className="space-y-2">{availableFields.map(field => {
       const proposal = draft.fields[field.key] || '';
       const current = String(entryData[field.prop] || '');
       const citations = draft.citations.filter(citation => citation.field === field.key);
