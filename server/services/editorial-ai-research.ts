@@ -55,10 +55,38 @@ export const defaultResearchDependencies: ResearchDependencies = {
 export function editorialResearchQueries(cheese: ResearchIdentity): string[] {
   const identity = `${(cheese.nameOriginal || cheese.title).slice(0, 160)} ${cheese.country.slice(0, 80)}`.trim();
   return [
-    `${identity} official consortium consorzio cooperative`,
-    `${identity} history origins storia histoire`,
-    `${identity} production area specification territory zona produzione`,
+    `${identity} cheese formaggio fromage official consortium consorzio`,
+    `${identity} cheese formaggio fromage history origins storia histoire`,
+    `${identity} cheese formaggio fromage production area specification zona produzione`,
   ].map(query => query.slice(0, 400));
+}
+function normalized(text: string) {
+  return text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+function identityNames(cheese: ResearchIdentity) {
+  return [cheese.nameOriginal || '', cheese.title].map(name => normalized(name)
+    .split(' ').filter(word => !/^(dop|dpo|pdo|aop|aoc|igp|pgi|cheese|formaggio|fromage|сыр)$/.test(word)).join(' '))
+    .filter(name => name.length >= 3);
+}
+function mentionsIdentity(text: string, cheese: ResearchIdentity) {
+  const haystack = ` ${normalized(text)} `;
+  return identityNames(cheese).some(name => haystack.includes(` ${name} `));
+}
+export function editorialSourceMatchesCheese(source: SourceEvidence, cheese: ResearchIdentity) {
+  // Match the actual article body, not a domain, search snippet or redirected URL.
+  // This is a conservative topic check, not verification of facts or official status.
+  const body = normalized(source.text);
+  return identityNames(cheese).some(name => {
+    const needle = ` ${name} `, padded = ` ${body} `;
+    let start = padded.indexOf(needle);
+    while (start !== -1) {
+      const context = padded.slice(Math.max(0, start - 450), start + needle.length + 450);
+      if (/(?:^| )(?:cheese\p{L}*|formagg\p{L}*|fromag\p{L}*|сыр\p{L}*|kase\p{L}*|queso\p{L}*|queijo\p{L}*)(?: |$)/u.test(context)) return true;
+      start = padded.indexOf(needle, start + needle.length);
+    }
+    return false;
+  });
 }
 function priority(hit: ResearchHit) {
   // Ranking preference, NOT a declaration that a site is official.
@@ -85,10 +113,17 @@ export async function researchEditorialSources(
     }
   }
   if (!hits.length) report.warnings.push('Brave не вернул подходящих публичных https-страниц. Можно использовать вручную выбранные источники.');
+  const relevantHits = hits.filter(hit => {
+    // A consortium keyword alone must never make an unrelated result eligible.
+    let address = hit.url;
+    try { address = decodeURIComponent(address); } catch { /* retain encoded address */ }
+    return mentionsIdentity(`${hit.title} ${hit.description} ${address}`, cheese);
+  });
+  if (relevantHits.length < hits.length) report.warnings.push('Часть результатов поиска исключена: в них не найдено название выбранного сыра. Дополнительных запросов не было.');
   const seen = new Set<string>();
   const candidates = [
     ...manual.map(url => ({ url, title: '', description: '' })),
-    ...hits.sort((a, b) => priority(b) - priority(a)),
+    ...relevantHits.sort((a, b) => priority(b) - priority(a)),
   ].flatMap(hit => {
     try {
       const url = validateSourceUrl(hit.url); url.hash = '';
@@ -104,6 +139,10 @@ export async function researchEditorialSources(
       try {
         const source = await deps.source(url);
         validateSourceUrl(source.finalUrl);
+        if (!editorialSourceMatchesCheese(source, cheese)) {
+          report.warnings.push(`Источник исключён — ${new URL(url).hostname}: в тексте не подтверждена связь с выбранным сыром. Проверьте страницу вручную.`);
+          return null;
+        }
         return source;
       } catch (error) {
         const reason = error instanceof EditorialSourceError
@@ -117,6 +156,6 @@ export async function researchEditorialSources(
       !sources.some(old => old.finalUrl === source.finalUrl)) sources.push(source);
   }
   if (report.failures.length) report.warnings.push('Часть страниц не прочитана. Заготовка использует только доступные источники.');
-  if (!sources.length) report.warnings.push('Нет читаемых источников. Добавьте другую публичную страницу; текст не создаётся из догадок.');
+  if (!sources.length) report.warnings.push('Нет читаемых источников с подтверждённой связью с выбранным сыром. Добавьте другую публичную страницу; текст не создаётся из догадок.');
   return { sources, report };
 }

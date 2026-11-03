@@ -221,7 +221,7 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
         [id, JSON.stringify(progress)]);
       if (!saved.rowCount) return;
       if (!sources.length) {
-        if (research) throw new EditorialModelError('Нет читаемых источников для статьи. Проверьте результаты поиска и добавьте публичную страницу вручную.');
+        if (research) throw new EditorialModelError('Нет читаемых источников по выбранному сыру. Проверьте предупреждения и результаты поиска, затем добавьте подходящую публичную страницу вручную.');
         throw new EditorialSourceError(`Ни один из выбранных источников не удалось прочитать. Замените ссылки или нажмите «Найти источники и подготовить текст». ${sourceWarnings.join(' ')}`);
       }
       const passages = sources.map(source => editorialSourcePassages(source.text));

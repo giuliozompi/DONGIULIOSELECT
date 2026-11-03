@@ -9,8 +9,8 @@ function errorMessage(error: unknown) {
   return (error as { message?: string })?.message || 'Не удалось найти варианты места. Повторите попытку.';
 }
 
-export default function OriginCoordinates({ entry, disabled, isGlobalBusy, tryClaim, releaseClaim, onBusyChange, onApplied }: {
-  entry: EditorialEntry; disabled: boolean; isGlobalBusy: () => boolean;
+export default function OriginCoordinates({ entry, disabled, readyTextPendingApply, isGlobalBusy, tryClaim, releaseClaim, onBusyChange, onApplied }: {
+  entry: EditorialEntry; disabled: boolean; readyTextPendingApply: boolean; isGlobalBusy: () => boolean;
   tryClaim: () => boolean; releaseClaim: () => void; onBusyChange: (busy: boolean) => void; onApplied: (saved: EditorialEntry) => void;
 }) {
   const data = entry.data as { region?: string; latitude?: number | null; longitude?: number | null };
@@ -27,6 +27,7 @@ export default function OriginCoordinates({ entry, disabled, isGlobalBusy, tryCl
   const identityRef = useRef(requestIdentity);
   identityRef.current = requestIdentity;
   const busyRef = useRef(false);
+  const lookupBlocked = disabled || readyTextPendingApply;
   const ownsClaim = useRef(false);
   const tryClaimRef = useRef(tryClaim);
   const releaseClaimRef = useRef(releaseClaim);
@@ -68,7 +69,7 @@ export default function OriginCoordinates({ entry, disabled, isGlobalBusy, tryCl
   }
 
   async function findCandidates() {
-    if (busyRef.current || disabled || isGlobalBusy()) return;
+    if (busyRef.current || lookupBlocked || isGlobalBusy()) return;
     const publicPlace = place.trim();
     if (publicPlace.length < 2) { setError('Укажите публичное название региона или населённого пункта.'); return; }
     if (!startClaim()) return;
@@ -94,7 +95,7 @@ export default function OriginCoordinates({ entry, disabled, isGlobalBusy, tryCl
     }
   }
   async function saveCandidate() {
-    if (busyRef.current || disabled || isGlobalBusy() || !lookup || !selectedId) return;
+    if (busyRef.current || lookupBlocked || isGlobalBusy() || !lookup || !selectedId) return;
     const candidate = lookup.candidates.find(item => item.id === selectedId);
     if (!candidate) return;
     busyRef.current = true;
@@ -127,7 +128,14 @@ export default function OriginCoordinates({ entry, disabled, isGlobalBusy, tryCl
   }
   return <section data-testid="ai-origin-coordinates" className="mt-4 rounded border border-[#d8d9cc] bg-[#f8f7f0] p-3" aria-label="Координаты происхождения">
     <div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#a45f43]" /><div><h3 className="text-sm font-semibold">Точка происхождения</h3><p className="mt-1 text-xs leading-5 text-[#718075]">Это представительская точка региона или населённого пункта, не фабрика и не граница всей географической области. Не указывайте адрес покупателя. Поиск выполняется только по запросу.</p></div></div>
-    <div className="mt-3 flex flex-col gap-2 sm:flex-row"><label className="min-w-0 flex-1"><span className="mb-1 block text-xs font-medium">Публичное название места</span><input data-testid="ai-origin-place" className="w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] px-3 py-2 text-sm" value={place} onChange={event => setPlace(event.target.value)} maxLength={200} disabled={busy} placeholder="Например, Эмилия-Романья" /></label><Button data-testid="ai-origin-lookup" size="sm" variant="outline" className="self-end" disabled={busy || disabled || place.trim().length < 2} onClick={() => { void findCandidates(); }}>{loading ? <LoaderCircle className="mr-1.5 h-4 w-4 animate-spin" /> : <MapPin className="mr-1.5 h-4 w-4" />}{loading ? 'Ищем варианты…' : 'Найти координаты'}</Button></div>
+    <ol className="mt-3 grid gap-2 border-y border-[#e0dfd4] py-3 text-xs text-[#526158] sm:grid-cols-3">
+      <li data-testid="ai-origin-step-region"><strong className="block text-[#315647]">1 · Регион статьи</strong>{readyTextPendingApply ? 'Сначала примените выбранный текст предложения к статье.' : place.trim() ? `Сверьте место: ${place.trim()}` : 'Укажите публичный регион вручную в поле ниже.'}</li>
+      <li><strong className="block text-[#315647]">2 · Поиск по нажатию</strong>Нажмите «Найти координаты», чтобы запросить варианты.</li>
+      <li><strong className="block text-[#315647]">3 · Выбор и подтверждение</strong>Выберите точку и отдельно подтвердите сохранение в черновик.</li>
+    </ol>
+    {(data.latitude == null || data.longitude == null) && <p className="mt-3 rounded border border-[#dfc9b5] bg-[#f5ece2] px-3 py-2 text-xs leading-5 text-[#75533e]">Координаты происхождения пока не заполнены. Используйте место, сохранённое в статье; поиск ничего не изменит, пока вы не выберете вариант и не подтвердите сохранение.</p>}
+    {readyTextPendingApply && <p data-testid="ai-origin-pending-guidance" role="note" className="mt-3 rounded border border-[#dfc9b5] bg-[#f5ece2] px-3 py-2 text-xs leading-5 text-[#75533e]">Готовый текст предложения ещё не сохранён в статье. Сначала выберите нужные текстовые поля (в том числе регион, если он предложен) и нажмите «Применить выбранные поля». После сохранения поле места будет взято из обновлённой статьи; затем запустите поиск отдельно. Неприменённое предложение не используется для поиска.</p>}
+    <div className="mt-3 flex flex-col gap-2 sm:flex-row"><label className="min-w-0 flex-1"><span className="mb-1 block text-xs font-medium">Публичное название места · из статьи, можно изменить</span><input data-testid="ai-origin-place" className="w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] px-3 py-2 text-sm" value={place} onChange={event => setPlace(event.target.value)} maxLength={200} disabled={busy || readyTextPendingApply} placeholder="Например, Эмилия-Романья" /></label><Button data-testid="ai-origin-lookup" size="sm" variant="outline" className="self-end" disabled={busy || lookupBlocked || place.trim().length < 2} onClick={() => { void findCandidates(); }}>{loading ? <LoaderCircle className="mr-1.5 h-4 w-4 animate-spin" /> : <MapPin className="mr-1.5 h-4 w-4" />}{loading ? 'Ищем варианты…' : 'Найти координаты'}</Button></div>
     <p className="mt-1 text-[11px] text-[#78837a]">Свежие запросы глобально ограничены интервалом 15 секунд; сохранённые варианты могут быть возвращены из 30-дневного серверного кэша.</p>
     {(data.latitude != null || data.longitude != null) && <p className="mt-2 text-xs text-[#68766d]">Сохранено: {data.latitude ?? '—'}, {data.longitude ?? '—'}. Новый вариант не заменит координаты без выбора и сохранения.</p>}
     {error && <div role="alert" className="mt-3 rounded border border-[#d79c89] bg-[#faeee9] p-2.5 text-sm text-[#8b4535]">{error}</div>}
@@ -141,6 +149,6 @@ export default function OriginCoordinates({ entry, disabled, isGlobalBusy, tryCl
       {lookup.candidates.length > 0 && <Button data-testid="ai-origin-apply" size="sm" className="mt-3 bg-[#315647] hover:bg-[#244537]" disabled={busy || disabled || !selectedId} onClick={() => { void saveCandidate(); }}>{saving ? 'Сохраняем черновик…' : 'Сохранить выбранную точку'}</Button>}
       <p className="mt-2 text-[11px] text-[#78837a]">© OpenStreetMap contributors · <a className="underline" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">условия атрибуции</a>{lookup.cached ? ' · сохранённые поисковые варианты могут кэшироваться до 30 дней' : ''}</p>
     </div>}
-    {disabled && <p className="mt-2 text-xs text-[#8b5d43]">Сначала завершите текущую AI-задачу и примените готовый текстовый вариант: применение меняет ревизию статьи.</p>}
+    {disabled && <p className="mt-2 text-xs text-[#8b5d43]">Поиск временно недоступен, пока выполняется другая редакторская задача или действует общая блокировка. Повторите после её завершения.</p>}
   </section>;
 }

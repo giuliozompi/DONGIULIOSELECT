@@ -622,7 +622,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
          setSourcesText(currentText => `${currentText.trimEnd()}${currentText.trim() ? '\n' : ''}${additions.join('\n')}`);
          setError('');
        }} />}
-        <OriginCoordinates entry={entry} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current || readyTextPendingApply} isGlobalBusy={() => generationClaimed} tryClaim={tryClaimSuggestion} releaseClaim={releaseSuggestionClaim} onBusyChange={setSuggestionBusy} onApplied={saved => onApplied(saved)} />
+        <OriginCoordinates entry={entry} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} readyTextPendingApply={readyTextPendingApply} isGlobalBusy={() => generationClaimed} tryClaim={tryClaimSuggestion} releaseClaim={releaseSuggestionClaim} onBusyChange={setSuggestionBusy} onApplied={saved => onApplied(saved)} />
         {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy} />}
       {historyOpen && <div className="mt-3 space-y-2">
         {history.isLoading && <div className="h-12 animate-pulse rounded bg-[#e7e6dc]" />}

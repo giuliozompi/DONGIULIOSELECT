@@ -30,6 +30,13 @@ Aprire una scheda formaggio e «Подготовить с ИИ».
    Le tre eventuali fonti manuali vengono conservate e considerate per prime.
 2. Si leggono al massimo nove pagine, tre alla volta, conservando fino a sei
    fonti leggibili. I controlli HTTPS/DNS/redirect anti-SSRF restano attivi.
+   I risultati automatici devono contenere il nome originale o russo del
+   formaggio prima di essere candidati alla lettura: «consorzio» da solo non
+   basta. Nel testo letto deve poi comparire il nome in un contesto caseario,
+   anche per le fonti manuali incluse nella ricerca e dopo un redirect.
+   Le esclusioni per pertinenza sono avvisi separati dagli errori di lettura;
+   il filtro è prudenziale e può scartare pagine valide con nomi alternativi.
+   Non certifica fatti né ufficialità e non avvia ricerche aggiuntive.
 3. Il modello riceve solo l’identità editoriale del formaggio e i passaggi
    numerati delle pagine leggibili, non dati clienti, ordini o descrizioni private.
 4. La bozza propone storia, paese e regione/zona d’origine, caratteristiche,
@@ -43,6 +50,10 @@ Aprire una scheda formaggio e «Подготовить с ИИ».
 7. L’operatore confronta, seleziona e applica i campi. Il contenuto resta bozza.
 8. Dopo aver applicato il testo, cerca una località pubblica nella zona d’origine
    e sceglie esplicitamente una delle tre proposte geografiche. Nessuna preselezione.
+   Il pannello mostra i tre passaggi e spiega il blocco se c’è una proposta
+   testuale da applicare; usa la regione salvata, non quella ancora proposta
+   dall’AI. Applicare il testo non avvia il geocoding. Le coordinate già salvate
+   restano visibili e nessuna nuova posizione viene scelta automaticamente.
    Il server applica solo coordinate del risultato salvato, associato a
    scheda e revisione; non accetta latitudine/longitudine dal client.
 

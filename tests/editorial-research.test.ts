@@ -12,7 +12,7 @@ import type { Server } from 'node:http';
 import { registerAdminEditorialAiRoutes } from '../server/adminEditorialAiRoutes';
 import { reserveAiRun, executeAiRun, getAiRun } from '../server/services/editorial-ai';
 import { applyAiDraft } from '../server/services/editorial-ai-changes';
-import { researchEditorialSources, searchEditorialWeb } from '../server/services/editorial-ai-research';
+import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesCheese } from '../server/services/editorial-ai-research';
 import { fetchOriginCandidates, originProviderSettings } from '../server/services/editorial-origin-provider';
 import { lookupEditorialOrigin, applyEditorialOrigin } from '../server/services/editorial-origin';
 import { EditorialError, saveEditorial } from '../server/services/editorial';
@@ -26,7 +26,7 @@ const exec = promisify(execFile);
 let dir: string, db: pg.Pool, server: Server, base: string;
 const sensitive = 'PRIVATE_NEVER_SEND_OR_LOG';
 const identity = { title: 'Кастельманьо', nameOriginal: 'Castelmagno', country: 'Италия', region: 'Пьемонт' };
-const text = 'Castelmagno is traditionally produced in Piemonte, Italy. Its history dates to documented medieval references. '.repeat(4);
+const text = 'Castelmagno cheese is traditionally produced in Piemonte, Italy. Its history dates to documented medieval references. '.repeat(4);
 const source = async (url: string) => ({
   url, finalUrl: url, title: 'Official cheese source', text, retrievedAt: new Date().toISOString(),
   sha256: 'test-fixture', characters: text.length, truncated: false,
@@ -35,7 +35,7 @@ const candidate = {
   id: 'relation/123', label: 'Castelmagno, Piemonte, Italia', type: 'administrative',
   latitude: 44.407, longitude: 7.212, url: 'https://www.openstreetmap.org/relation/123',
 };
-const hit = (n: number) => ({ url: `https://example.org/source-${n}`, title: `Consorzio ${n}`, description: 'History and origin' });
+const hit = (n: number) => ({ url: `https://example.org/source-${n}`, title: `Consorzio Castelmagno ${n}`, description: 'History and origin' });
 const parameters = (entry: { id: string; revision: number }) => ({
   requestId: randomUUID(), entryId: entry.id, revision: entry.revision, sources: [], research: true,
 });
@@ -124,6 +124,52 @@ test('provider failure stops further search calls and preserves readable manual 
   }, async () => {});
   assert.equal(calls, 1); assert.equal(found.sources.length, 1);
   assert.match(found.report.warnings.join(' '), /403/);
+});
+test('research rejects unrelated consortia before fetching and checks actual content after redirects', async () => {
+  const reads: string[] = [];
+  const unrelated = 'https://www.tripadvisor.com/Maniago_Consorzio_Coltellinai';
+  const redirected = 'https://example.org/castelmagno';
+  const found = await researchEditorialSources(identity, ['https://example.org/manual-unrelated'], {
+    search: async () => [
+      { url: unrelated, title: 'Consorzio Coltellinai Maniago', description: 'Official consortium' },
+      { url: redirected, title: 'Castelmagno DOP', description: 'Formaggio' }, hit(1),
+    ],
+    source: async url => {
+      reads.push(url);
+      if (url === redirected || url.includes('manual-unrelated'))
+        return { ...await source(url), finalUrl: 'https://example.org/knives', text: 'Consorzio Coltellinai Maniago. Handmade knives.' };
+      return source(url);
+    },
+  }, async () => {});
+  assert.ok(!reads.includes(unrelated));
+  assert.equal(reads.length, 3);
+  assert.deepEqual(found.sources.map(item => item.url), [hit(1).url]);
+  assert.match(found.report.warnings.join(' '), /название выбранного сыра/);
+  assert.match(found.report.warnings.join(' '), /в тексте не подтверждена связь/);
+});
+test('topic matching supports original and Russian names, accents and designations, not homonyms or partial names', async () => {
+  const evidence = await source('https://example.org/source');
+  const matches = (body: string, name = identity) => editorialSourceMatchesCheese({ ...evidence, text: body }, name);
+  assert.equal(matches('Кастельманьо — итальянский сыр.'), true);
+  assert.equal(matches('Il formaggio Castelmagno DOP è prodotto in Piemonte.'), true);
+  assert.equal(matches('Le fromage Comté est produit dans le Jura.', { ...identity, nameOriginal: 'Comté AOP' }), true);
+  assert.equal(matches('Castelmagno is a mountain municipality, with hiking trails.'), false);
+  assert.equal(matches('Castelmagnolia cheese from a different place.'), false);
+  assert.equal(matches('A cheese shop in Maniago. A consortium makes knives.'), false);
+});
+test('no model is called when all readable research pages are off topic', async () => {
+  const entry = await cheese(), run = (await reserveAiRun('draft', parameters(entry), 'operator', db)).run;
+  let models = 0;
+  await executeAiRun(run.id, db, {
+    source: async url => ({ ...await source(url), text: 'A consortium of knife makers in Maniago.' }),
+    search: async () => [hit(1)], pause: async () => {},
+    model: async () => { models++; return {}; },
+  });
+  const failed = await getAiRun(run.id, db);
+  assert.equal(failed.status, 'failed'); assert.equal(models, 0);
+  const result = failed.result as DraftResult;
+  assert.equal(result.sources.length, 0);
+  assert.match(result.warnings.join(' '), /в тексте не подтверждена связь/);
 });
 test('research run is idempotent, source-based, review-only, warns on missing fields, and preserves publication', async () => {
   const entry = await cheese(true), params = parameters(entry);

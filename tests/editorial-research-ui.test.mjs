@@ -34,7 +34,7 @@ test('research is explicit, partial failures remain visible, and origin points r
     }] }, error: 'Fixture model failure', appliedTo: null,
   };
   let researchCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0;
-  let researchRequests = [];
+  let researchRequests = [], lookupRequests = [];
   const exceptions = [];
   page.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails.text));
   await page.send('Network.enable');
@@ -56,15 +56,17 @@ test('research is explicit, partial failures remain visible, and origin points r
       await delay(250);
       body = researchCalls === 1 ? researchRun : {
         ...researchRun, id: '55555555-5555-4555-8555-555555555555', status: 'ready', revision: 91,
-        params: request, result: { fields: { title: 'Пармиджано Реджано — текст редактора' }, citations: [], warnings: [], sources: [] },
+        params: request, result: { fields: { title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' }, citations: [], warnings: [], sources: [] },
         error: null, appliedTo: null,
       };
     } else if (url.pathname === '/web-api/admin/editorial-ai/origin-geocoding') {
       lookupCalls++;
+      const request = JSON.parse(event.request.postData);
+      lookupRequests.push(request);
       await delay(300);
       body = {
         lookupId: '44444444-4444-4444-8444-444444444444', entryId: id, revision: entry.revision,
-        query: 'Эмилия-Романья', retrievedAt: '2026-01-01T12:00:00.000Z', cached: false,
+        query: request.place, retrievedAt: '2026-01-01T12:00:00.000Z', cached: false,
         attribution: '© OpenStreetMap contributors',
         candidates: [
           { id: 'place-1', label: 'Emilia-Romagna, Italy', type: 'state', latitude: 44.5, longitude: 11.0, url: 'https://www.openstreetmap.org/relation/12345' },
@@ -80,7 +82,7 @@ test('research is explicit, partial failures remain visible, and origin points r
       body = entry;
     } else if (url.pathname.includes('/editorial-ai/') && url.pathname.endsWith('/apply')) {
       draftApplyCalls++;
-      entry = { ...entry, revision: 3, data: { ...entry.data, title: 'Пармиджано Реджано — текст редактора' } };
+      entry = { ...entry, revision: 3, data: { ...entry.data, title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' } };
       body = entry;
     } else if (event.request.method !== 'GET' && url.pathname !== '/web-api/auth/refresh') {
       throw new Error(`Unexpected fixture mutation: ${url.pathname}`);
@@ -99,6 +101,9 @@ test('research is explicit, partial failures remain visible, and origin points r
     // Opening the panel must not trigger internet search or geocoding.
     assert.equal(researchCalls, 0);
     assert.equal(lookupCalls, 0);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-place"]').value`), 'Эмилия-Романья', 'lookup starts from the saved article region');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-coordinates"]').innerText.includes('Координаты происхождения пока не заполнены')`), true, 'missing coordinates have actionable guidance');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-coordinates"]').innerText.includes('2 · Поиск по нажатию')`), true, 'lookup is explicitly presented as a separate step');
     await page.evaluate(`(() => {
       const field=document.querySelector('#ai-sources-${id}');
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(field,${JSON.stringify(manual.join('\n'))});
@@ -129,21 +134,38 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-apply"]').disabled`), true);
     await page.evaluate(`document.querySelectorAll('[data-testid="ai-origin-coordinates"] input[type="radio"]')[1].click()`);
     await clickButton('ai-origin-apply');
-    await page.wait(`document.body.innerText.includes('Точка сохранена в черновике статьи.')`);
+    await page.wait(`document.querySelector('[data-testid="ai-origin-coordinates"]').innerText.includes('Сохранено: 44.49, 11.34')`);
     assert.equal(applyCoordinateCalls, 1);
     assert.equal(draftApplyCalls, 0);
 
+    // Let the entry-list query settle on the saved revision before starting the next run.
+    await delay(500);
     await page.evaluate(`(() => {const button=document.querySelector('[data-testid="ai-draft-research"]'); if(button.disabled) throw Error('research should unlock after coordinate lookup/save'); button.click()})()`);
     await page.wait(`!!document.querySelector('[data-testid="ai-draft-apply"]')`);
     assert.equal(researchCalls, 2);
     assert.equal(researchRequests[1].revision, 2, 'origin save refreshed the entry revision before the next run');
     // The server run revision is intentionally unrelated; validity is bound to params.entryId/revision.
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), true, 'draft requires explicit field selection');
+    await page.wait(`!!document.querySelector('[data-testid="ai-origin-pending-guidance"]')`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-lookup"]').disabled`), true, 'a proposed region cannot be used before text is explicitly applied');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-pending-guidance"]').innerText.includes('Сначала выберите нужные текстовые поля')`), true);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-place"]').value`), 'Эмилия-Романья', 'pending proposal does not replace the saved region in the lookup field');
+    assert.equal(lookupCalls, 1, 'a pending proposal does not trigger coordinate lookup');
     await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').closest('article').querySelector('input[type="checkbox"]').click()`);
+    await page.evaluate(`document.querySelector('[data-testid="ai-proposal-region"]').closest('article').querySelector('input[type="checkbox"]').click()`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false);
     await clickButton('ai-draft-apply');
     await page.wait(`document.body.innerText.includes('Уже применено')`);
     assert.equal(draftApplyCalls, 1, 'text is only saved after explicit field selection and apply');
+    await page.wait(`document.querySelector('[data-testid="ai-origin-place"]').value === 'Ломбардия'`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-lookup"]').disabled`), false, 'lookup unlocks after the applied region is saved');
+    assert.equal(lookupCalls, 1, 'applying region still does not start a paid lookup automatically');
+    await clickButton('ai-origin-lookup');
+    await page.wait(`document.querySelectorAll('[data-testid="ai-origin-coordinates"] input[type="radio"]').length === 2`);
+    assert.equal(lookupCalls, 2, 'lookup occurs only after explicit activation');
+    assert.equal(lookupRequests[1].place, 'Ломбардия', 'lookup uses the region after it has been applied to the entry');
+    assert.equal(await page.evaluate(`document.querySelectorAll('[data-testid="ai-origin-coordinates"] input[type="radio"]:checked').length`), 0, 'candidates are never selected automatically');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-apply"]').disabled`), true, 'saving still requires an explicit candidate selection');
     assert.equal(researchRequests.length, 2);
     assert.deepEqual(exceptions, []);
   } finally { await browser.close(); }
