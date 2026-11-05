@@ -26,7 +26,7 @@ test('research is explicit, partial failures remain visible, and origin points r
       { topic: 'history', label: 'История', status: 'evidence', evidence: [{ sourceIndex: 0, passageIds: [4, 5], excerpt: 'Производство упоминается в историческом реестре.' }] },
       { topic: 'origin', label: 'Происхождение', status: 'missing', evidence: [] },
     ],
-    photos: [{ id: 'photo-failed', imageUrl: 'https://photo-fixture.example.test/failed.jpg', sourceUrl: found, label: 'Кандидат — сырная головка' }],
+     photos: [{ id: 'photo-failed', imageUrl: 'https://photo-fixture.example.test/failed.jpg', sourceUrl: found, label: 'Кандидат — сырная головка' }],
     failures: [{ url: manual[0], reason: 'Fixture reader failure' }],
     warnings: ['Недостаточно сведений о кулинарном использовании.'], searchedAt: '2026-01-01T12:00:00.000Z',
   };
@@ -39,9 +39,9 @@ test('research is explicit, partial failures remain visible, and origin points r
       sha256: 'a'.repeat(64), characters: 812, truncated: false,
     }] }, error: 'Fixture model failure', appliedTo: null,
   };
-  let researchCalls = 0, runGetCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0;
+  let researchCalls = 0, runGetCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0, photoImportCalls = 0;
   let imagePreviewCalls = 0;
-  let researchRequests = [], lookupRequests = [], draftApplyRequests = [];
+  let researchRequests = [], lookupRequests = [], coordinateRequests = [], draftApplyRequests = [], photoImportRequests = [];
   const exceptions = [];
   page.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails.text));
   await page.send('Network.enable');
@@ -86,7 +86,10 @@ test('research is explicit, partial failures remain visible, and origin points r
           params: researchRequests[1], result: {
             fields: { title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' }, citations: [], warnings: [],
             sources: researchRun.result.sources,
-            research: { ...report, photos: [{ id: 'photo-ready', imageUrl: 'https://photo-fixture.example.test/ready.jpg', sourceUrl: found, label: 'Проверить идентичность' }] },
+             research: { ...report, photos: [
+               { id: 'photo-ready', imageUrl: 'https://photo-fixture.example.test/ready.jpg', sourceUrl: found, label: 'Проверить идентичность' },
+               { id: 'photo-second', imageUrl: 'https://photo-fixture.example.test/second.jpg', sourceUrl: found, label: 'Дополнительный кадр' },
+             ] },
           },
           error: null, appliedTo: null,
         };
@@ -107,10 +110,32 @@ test('research is explicit, partial failures remain visible, and origin points r
       };
     } else if (url.pathname === '/web-api/admin/editorial-ai/origin-geocoding/apply') {
       applyCoordinateCalls++;
-      assert.deepEqual(JSON.parse(event.request.postData), {
-        entryId: id, revision: entry.revision, lookupId: '44444444-4444-4444-8444-444444444444', candidateId: 'place-2',
-      });
-      entry = { ...entry, revision: 2, data: { ...entry.data, latitude: 44.49, longitude: 11.34 } };
+      const coordinateRequest = JSON.parse(event.request.postData);
+      coordinateRequests.push(coordinateRequest);
+      assert.equal(coordinateRequest.entryId, id);
+      assert.equal(coordinateRequest.revision, entry.revision);
+      assert.equal(coordinateRequest.lookupId, '44444444-4444-4444-8444-444444444444');
+      assert.equal(coordinateRequest.candidateId, applyCoordinateCalls === 1 ? 'place-2' : 'place-1');
+      const savedPlace = coordinateRequest.candidateId === 'place-2'
+        ? { latitude: 44.49, longitude: 11.34 }
+        : { latitude: 44.5, longitude: 11 };
+      entry = { ...entry, revision: entry.revision + 1, data: { ...entry.data, ...savedPlace } };
+      body = entry;
+    } else if (/^\/web-api\/admin\/editorial-ai\/runs\/[^/]+\/photos$/.test(url.pathname)) {
+      assert.equal(url.pathname.split('/').at(-2), '55555555-5555-4555-8555-555555555555', 'photo import uses the ready run');
+      photoImportCalls++;
+      const request = JSON.parse(event.request.postData);
+      photoImportRequests.push(request);
+      assert.equal(request.entryId, id);
+      assert.equal(request.revision, entry.revision, 'photo-only import uses the current entry revision');
+      assert.equal(request.photoRightsConfirmed, true);
+      assert.equal(request.photoIds.length >= 1 && request.photoIds.length <= 3, true);
+      assert.equal(draftApplyCalls, 1, 'photo import is separate from text apply');
+      entry = {
+        ...entry,
+        revision: entry.revision + 1,
+        data: { ...entry.data, photos: Array.from(new Set([...entry.data.photos, ...request.photoIds.map(photoId => `https://photo-fixture.example.test/${photoId === 'photo-second' ? 'second' : 'ready'}.jpg`)])) },
+      };
       body = entry;
     } else if (url.pathname.includes('/editorial-ai/') && url.pathname.endsWith('/apply')) {
       draftApplyCalls++;
@@ -276,13 +301,33 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(lookupCalls, 2, 'lookup occurs only after explicit activation');
     assert.equal(lookupRequests[1].place, 'Ломбардия', 'lookup uses the region after it has been applied to the entry');
     assert.equal(await page.evaluate(`document.querySelectorAll('[data-testid="ai-origin-coordinates"] input[type="radio"]:checked').length`), 0, 'candidates are never selected automatically');
-    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-apply"]').disabled`), true, 'saving still requires an explicit candidate selection');
+    await page.evaluate(`document.querySelectorAll('[data-testid="ai-origin-coordinates"] input[type="radio"]')[0].click()`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-apply"]').disabled`), false);
+    await clickButton('ai-origin-apply');
+    await page.wait(`document.querySelector('[data-testid="ai-origin-coordinates"]').innerText.includes('Сохранено: 44.5, 11')`);
+    assert.equal(applyCoordinateCalls, 2, 'a later coordinate save advances the article after text apply');
+    assert.equal(coordinateRequests[1].revision, 3, 'coordinate save after text application uses the current cache revision');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').innerText`), 'Уже применено', 'photo-only import does not undo the original text-run applied state');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').disabled`), true, 'stale text fields remain protected after the coordinate save');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-photo-select-photo-second"]').disabled`), false, 'ready same-entry photos remain selectable despite applied and stale text');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-photo-import"]').disabled`), true, 'photo import requires selection and rights confirmation');
+    await page.evaluate(`document.querySelector('[data-testid="ai-photo-select-photo-second"]').click()`);
+    await page.evaluate(`document.querySelector('[data-testid="ai-photo-rights-confirm"]').click()`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-photo-import"]').disabled`), false);
+    await clickButton('ai-photo-import');
+    await page.wait(`document.querySelector('[data-testid="ai-photo-select-photo-second"]')?.checked === false && document.querySelector('[data-testid="ai-photo-import"]')?.disabled === true`);
+    assert.equal(photoImportCalls, 1);
+    assert.deepEqual(photoImportRequests[0].photoIds, ['photo-second']);
+    assert.equal(photoImportRequests[0].revision, 4, 'photo import uses the revision from the later coordinate save');
+    assert.equal(researchCalls, 2, 'photo import does not start another research run');
+    assert.equal(draftApplyCalls, 1, 'photo import does not make another text apply request');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').innerText`), 'Уже применено', 'photo-only import leaves the original run applied marker unchanged');
     assert.equal(researchRequests.length, 2);
     await page.evaluate(`([...document.querySelectorAll('#entry-${id} button')].find(button=>button.textContent.includes('Изменить'))).click()`);
     await page.wait(`!!document.querySelector('[data-testid="cheese-photo-editor"]')`);
-    assert.equal(await page.evaluate(`document.querySelector('#ed-photos').value`), 'https://photo-fixture.example.test/ready.jpg', 'the saved photo is visible when editing the updated article');
-    assert.equal(await page.evaluate(`document.querySelector('#ed-latitude').value`), '44.49', 'saved latitude is visible in the updated article');
-    assert.equal(await page.evaluate(`document.querySelector('#ed-longitude').value`), '11.34', 'saved longitude is visible in the updated article');
+    assert.equal(await page.evaluate(`document.querySelector('#ed-photos').value`), 'https://photo-fixture.example.test/ready.jpg\nhttps://photo-fixture.example.test/second.jpg', 'the saved photo is appended without replacing the existing photo');
+    assert.equal(await page.evaluate(`document.querySelector('#ed-latitude').value`), '44.5', 'saved latitude is visible in the updated article');
+    assert.equal(await page.evaluate(`document.querySelector('#ed-longitude').value`), '11', 'saved longitude is visible in the updated article');
     assert.deepEqual(exceptions, []);
   } finally { await browser.close(); }
 });

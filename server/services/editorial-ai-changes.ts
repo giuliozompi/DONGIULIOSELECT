@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { pool } from '../db';
 import { cheeseDataSchema, type CheeseData, type EditorialEntry } from '../../shared/editorial';
 import {
-  applyRequestSchema, importRequestSchema, rankRequestSchema, countryName, researchPhotoSchema,
+  applyRequestSchema, importRequestSchema, importPhotoRequestSchema, rankRequestSchema, countryName, researchPhotoSchema,
   type CatalogResult, type DraftRequest, type DraftResult, type ImportResult,
 } from '../../shared/editorial-ai';
 import { transaction, audit, entry, EditorialError, type Row } from './editorial';
@@ -129,6 +129,47 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     await audit(client, actor, 'ai_applied', old.id, entry(old), {
       ...current, aiRunId: id, appliedFields: body.fields, operatorEdits: edits,
       ...(selectedPhotos.length ? { selectedPhotos, photoRightsConfirmed: true } : {}),
+    });
+    return current;
+  });
+}
+
+// Photo review is independent of the one-time text proposal application.
+// Candidates remain tied to the saved same-entry run, while writes use the
+// current article revision so later edits or geographic choices are preserved.
+export async function importAiPhotos(id: string, input: unknown, actor: string, database = pool) {
+  if (!actor) throw new EditorialError(401, 'Требуется авторизация');
+  const body = importPhotoRequestSchema.parse(input);
+  return transaction(database, async client => {
+    const run = await lockedRun(client, id, 'draft');
+    if ((run.params as DraftRequest).entryId !== body.entryId)
+      throw new EditorialError(400, 'Фотографии относятся к другой статье');
+    const old: Row | undefined = (await client.query(`SELECT e.*,p.published_at,p.published_revision FROM editorial_entries e
+      LEFT JOIN editorial_publications p ON p.entry_id=e.id WHERE e.id=$1 FOR UPDATE OF e`, [body.entryId])).rows[0];
+    if (!old || old.kind !== 'cheese') throw new EditorialError(404, 'Сырная статья не найдена');
+    if (old.revision !== body.revision)
+      throw new EditorialError(409, 'Статья изменилась. Обновите её перед импортом фотографий.');
+    const proposal = run.result as DraftResult;
+    const selectedPhotos = body.photoIds.map(photoId => {
+      const found = researchPhotoSchema.safeParse(proposal.research?.photos?.find(photo => photo.id === photoId));
+      if (!found.success || !proposal.sources.some(source => source.finalUrl === found.data.sourceUrl))
+        throw new EditorialError(400, 'Фотография отсутствует среди сохранённых предложений этой заготовки.');
+      validateSourceUrl(found.data.imageUrl);
+      validateSourceUrl(found.data.sourceUrl);
+      return found.data;
+    });
+    const data = { ...(old.data as CheeseData) };
+    const photos = Array.from(new Set([...data.photos, ...selectedPhotos.map(photo => photo.imageUrl)]));
+    const sources = Array.from(new Set([...data.sources, ...selectedPhotos.map(photo => photo.sourceUrl)]));
+    if (photos.length > 12) throw new EditorialError(400, 'В статье может быть не более 12 фотографий.');
+    if (photos.length === data.photos.length && sources.length === data.sources.length) return entry(old);
+    const parsed = cheeseDataSchema.parse({ ...data, photos, sources, status: 'draft' });
+    const saved: Row = (await client.query(`UPDATE editorial_entries SET data=$2,revision=revision+1,
+      updated_by=$3,updated_at=clock_timestamp() WHERE id=$1 RETURNING *`,
+    [old.id, JSON.stringify(parsed), actor])).rows[0];
+    const current = entry({ ...saved, published_at: old.published_at, published_revision: old.published_revision });
+    await audit(client, actor, 'ai_photos_imported', old.id, entry(old), {
+      ...current, aiRunId: id, selectedPhotos, photoRightsConfirmed: true,
     });
     return current;
   });

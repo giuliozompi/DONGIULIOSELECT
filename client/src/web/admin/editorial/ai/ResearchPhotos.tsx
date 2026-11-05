@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ExternalLink, ImageOff, Image as ImageIcon } from 'lucide-react';
+import { Check, ExternalLink, ImageOff, Image as ImageIcon } from 'lucide-react';
 import type { ResearchPhoto } from '@shared/editorial-ai';
+import { Button } from '@/components/ui/button';
 
 export default function ResearchPhotos({
-  photos, selectedIds, rightsConfirmed, disabled, onToggle, onRightsConfirmedChange,
+  photos, selectedIds, rightsConfirmed, disabled, onToggle, onRightsConfirmedChange, canImport, onImport,
 }: {
   photos: ResearchPhoto[];
   selectedIds: string[];
@@ -11,6 +12,8 @@ export default function ResearchPhotos({
   disabled: boolean;
   onToggle: (id: string) => void;
   onRightsConfirmedChange: (checked: boolean) => void;
+  canImport: boolean;
+  onImport: () => void;
 }) {
   const [previewIds, setPreviewIds] = useState<string[]>([]);
   const [imageErrors, setImageErrors] = useState<string[]>([]);
@@ -88,5 +91,16 @@ export default function ResearchPhotos({
         <span><strong>Подтверждаю право использовать выбранные фотографии.</strong> Я проверил(а) условия использования и визуальную идентичность. Если лицензия не указана, право использования нужно установить отдельно.</span>
       </label>
     </div>}
+    <div className="mt-3 flex flex-col gap-2 border-t border-[#d8d9cc] pt-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs leading-5 text-[#78837a]">Импорт фотографий сохраняет только выбранные изображения в текущую версию статьи. Текст предложения и его статус не меняются.</p>
+      <Button
+        data-testid="ai-photo-import"
+        type="button"
+        size="sm"
+        className="shrink-0 bg-[#315647] hover:bg-[#244537]"
+        disabled={!canImport || disabled || selectedIds.length < 1 || selectedIds.length > 3 || !rightsConfirmed}
+        onClick={onImport}
+      ><Check className="mr-1.5 h-4 w-4" />Импортировать фото отдельно</Button>
+    </div>
   </section>;
 }

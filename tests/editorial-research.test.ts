@@ -11,7 +11,7 @@ import express from 'express';
 import type { Server } from 'node:http';
 import { registerAdminEditorialAiRoutes } from '../server/adminEditorialAiRoutes';
 import { reserveAiRun, executeAiRun, getAiRun } from '../server/services/editorial-ai';
-import { applyAiDraft } from '../server/services/editorial-ai-changes';
+import { applyAiDraft, importAiPhotos } from '../server/services/editorial-ai-changes';
 import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesCheese, editorialSourceCheeseMatch } from '../server/services/editorial-ai-research';
 import { structuredResearchPlan, researchCoverage, editorialSourcePassages } from '../server/services/editorial-research-topics';
 import { sourcePageImages, researchPhotos } from '../server/services/editorial-research-photos';
@@ -383,6 +383,81 @@ async function readyPhotoDraft(published = false) {
   assert.equal(ready.status, 'ready');
   return { entry, ready, photos: (ready.result as DraftResult).research!.photos! };
 }
+test('photos can be imported after text and later article edits without losing data or changing publication', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft(true);
+  const text = await applyAiDraft(ready.id, {
+    entryId: entry.id, revision: entry.revision, fields: ['history'],
+  }, 'operator', db);
+  const edited = await saveEditorial('cheese', { ...text.data, region: 'Revised region', latitude: 45.1, longitude: 7.2 },
+    'operator', { id: entry.id, revision: text.revision }, db);
+  const saved = await importAiPhotos(ready.id, {
+    entryId: entry.id, revision: edited.revision, photoIds: [photos[0].id], photoRightsConfirmed: true,
+  }, 'operator', db);
+  assert.deepEqual(saved.data.photos, ['https://example.org/photo.jpg', photos[0].imageUrl]);
+  assert.equal(saved.data.history, 'Документированная история.');
+  assert.equal(saved.data.region, 'Revised region');
+  assert.equal(saved.data.latitude, 45.1);
+  assert.equal(saved.data.longitude, 7.2);
+  assert.equal(saved.data.status, 'draft');
+  assert.ok(saved.data.sources.includes(photos[0].sourceUrl));
+  const pub = (await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data;
+  assert.deepEqual(pub.photos, ['https://example.org/photo.jpg']);
+  const run = await getAiRun(ready.id, db);
+  assert.deepEqual(run.appliedTo, { entryId: entry.id, revision: text.revision }, 'photo import does not reapply or rebase text');
+  const duplicate = await importAiPhotos(ready.id, {
+    entryId: entry.id, revision: saved.revision, photoIds: [photos[0].id], photoRightsConfirmed: true,
+  }, 'operator', db);
+  assert.equal(duplicate.revision, saved.revision);
+  const logs = (await db.query("SELECT action_data FROM admin_action_logs WHERE entity_id=$1 AND action_type='ai_photos_imported'", [entry.id])).rows;
+  assert.equal(logs.length, 1);
+  assert.ok(JSON.stringify(logs).includes('"photoRightsConfirmed":true'));
+});
+test('independent photo import rejects stale revisions, forged URLs or IDs, wrong articles and absent rights', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft();
+  const body = { entryId: entry.id, revision: entry.revision, photoIds: [photos[0].id], photoRightsConfirmed: true };
+  await assert.rejects(importAiPhotos(ready.id, { ...body, revision: entry.revision + 1 }, 'operator', db), fails(409));
+  await assert.rejects(importAiPhotos(ready.id, { ...body, photoIds: ['forged'] }, 'operator', db), fails(400));
+  await assert.rejects(importAiPhotos(ready.id, { ...body, entryId: randomUUID() }, 'operator', db), fails(400));
+  for (const invalid of [
+    { ...body, photoRightsConfirmed: false }, { ...body, photoIds: [] },
+    { ...body, photoIds: [photos[0].id, photos[0].id] }, { ...body, imageUrl: 'https://example.org/forged.jpg' },
+  ]) await assert.rejects(importAiPhotos(ready.id, invalid, 'operator', db));
+  await assert.rejects(importAiPhotos(ready.id, body, '', db), fails(401));
+  await db.query("UPDATE editorial_ai_runs SET status='running' WHERE id=$1", [ready.id]);
+  await assert.rejects(importAiPhotos(ready.id, body, 'operator', db), fails(409));
+  await db.query("UPDATE editorial_ai_runs SET status='failed' WHERE id=$1", [ready.id]);
+  await assert.rejects(importAiPhotos(ready.id, body, 'operator', db), fails(409));
+  for (const auth of [undefined, 'customer']) {
+    const response = await fetch(`${base}/runs/${ready.id}/photos`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...(auth ? { authorization: auth } : {}) }, body: JSON.stringify(body),
+    });
+    assert.equal(response.status, auth ? 403 : 401);
+  }
+});
+test('independent photo import does not consume an unapplied text proposal', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft();
+  const response = await fetch(`${base}/runs/${ready.id}/photos`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', authorization: 'admin' },
+    body: JSON.stringify({ entryId: entry.id, revision: entry.revision, photoIds: [photos[0].id], photoRightsConfirmed: true }),
+  });
+  assert.equal(response.status, 200);
+  assert.ok((await response.json()).data.photos.includes(photos[0].imageUrl));
+  assert.equal((await getAiRun(ready.id, db)).appliedTo, null);
+});
+test('independent photo import rejects unproven candidates and full galleries without partial writes', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft();
+  const data = { ...entry.data, photos: Array.from({ length: 12 }, (_, index) => `https://example.org/existing-${index}.jpg`) };
+  const full = await saveEditorial('cheese', data, 'operator', { id: entry.id, revision: entry.revision }, db);
+  const body = { entryId: entry.id, revision: full.revision, photoIds: [photos[0].id], photoRightsConfirmed: true };
+  await assert.rejects(importAiPhotos(ready.id, body, 'operator', db), fails(400));
+  const proposal = ready.result as DraftResult;
+  proposal.research!.photos![0].sourceUrl = 'https://example.org/not-read';
+  await db.query('UPDATE editorial_ai_runs SET result=$2 WHERE id=$1', [ready.id, JSON.stringify(proposal)]);
+  await assert.rejects(importAiPhotos(ready.id, body, 'operator', db), fails(400));
+  const saved = (await db.query('SELECT revision,data FROM editorial_entries WHERE id=$1', [entry.id])).rows[0];
+  assert.equal(saved.revision, full.revision);
+  assert.deepEqual(saved.data.photos, data.photos);
+});
 test('selected photos append atomically with text, keep provenance, audit rights and never replace a publication', async () => {
   const { entry, ready, photos } = await readyPhotoDraft(true);
   const body = { entryId: entry.id, revision: entry.revision, fields: ['history'],

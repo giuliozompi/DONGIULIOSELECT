@@ -447,7 +447,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                     <span className="text-xs text-[#718075]">{cheesePhotos.length} из 12</span>
                   </div>
                   {cheesePhotos.length === 0
-                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. До сохранения как «Готово» выберите AI-фото и подтвердите права до его применения или добавьте URL вручную ниже.</p>
+                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. До сохранения как «Готово» выберите AI-фото, подтвердите права и нажмите «Импортировать фото отдельно» — в том числе после применения текста. Или добавьте URL вручную ниже.</p>
                     : <p className="text-sm text-[#526158]">Указано фотографий: {cheesePhotos.length}. Можно добавить или удалить URL вручную.</p>}
                   <Textarea id="ed-photos" value={rawLines.photos ?? (Array.isArray(cheeseForm.photos) ? cheeseForm.photos.join('\n') : String(cheeseForm.photos ?? ''))} rows={4} onChange={e => setLines('photos', e.target.value)} placeholder="https://… · по одному URL на строку" />
                   <p className="text-xs text-[#718075]">До 12 URL или путей изображений. Пустые строки игнорируются; редакция не загружает изображения с внешних сайтов автоматически.</p>

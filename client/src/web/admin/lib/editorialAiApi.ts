@@ -30,4 +30,15 @@ export const editorialAiApi = {
     entryId: entry.id, revision: entry.revision, fields, edits,
     ...(photos?.photoIds.length ? photos : {}),
   }),
+  importPhotos: (
+    run: EditorialAiRun,
+    entry: EditorialEntry,
+    photoIds: string[],
+    photoRightsConfirmed: boolean,
+  ) => webApi.post<EditorialEntry>(`${base}/runs/${run.id}/photos`, {
+    entryId: entry.id,
+    revision: entry.revision,
+    photoIds,
+    photoRightsConfirmed,
+  }),
 };

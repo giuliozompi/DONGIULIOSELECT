@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { pool } from './db';
 import { EditorialError } from './services/editorial';
 import { reserveAiRun, executeAiRun, getAiRun, aiHistory, defaultAiDependencies, type AiDependencies } from './services/editorial-ai';
-import { rankAiCatalog, importAiCatalog, applyAiDraft } from './services/editorial-ai-changes';
+import { rankAiCatalog, importAiCatalog, applyAiDraft, importAiPhotos } from './services/editorial-ai-changes';
 import { suggestEditorialSources } from './services/editorial-ai-suggestions';
 import { researchRequestSchema } from '../shared/editorial-ai';
 import { lookupEditorialOrigin, applyEditorialOrigin } from './services/editorial-origin';
@@ -56,4 +56,5 @@ export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHand
   app.patch(`${base}/runs/:id/ranking`, ...guards, handle(async (req, res, operator) => { res.json(await rankAiCatalog(id(req), req.body, operator, database)); }));
   app.post(`${base}/runs/:id/import`, ...guards, handle(async (req, res, operator) => { res.json(await importAiCatalog(id(req), req.body, operator, database)); }));
   app.post(`${base}/runs/:id/apply`, ...guards, handle(async (req, res, operator) => { res.json(await applyAiDraft(id(req), req.body, operator, database)); }));
+  app.post(`${base}/runs/:id/photos`, ...guards, handle(async (req, res, operator) => { res.json(await importAiPhotos(id(req), req.body, operator, database)); }));
 }

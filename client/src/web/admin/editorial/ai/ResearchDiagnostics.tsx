@@ -13,7 +13,8 @@ const topicLabels: Record<ResearchTopic, string> = {
 
 export default function ResearchDiagnostics({
   report, sources, missingContext, sourcesText, disabled, onAppend,
-  selectedPhotoIds, photoRightsConfirmed, canSelectPhotos, onTogglePhoto, onPhotoRightsChange,
+  selectedPhotoIds, photoRightsConfirmed, canSelectPhotos, canImportPhotos, onTogglePhoto,
+  onPhotoRightsChange, onImportPhotos,
 }: {
   report: ResearchReport;
   sources: AiSource[];
@@ -24,8 +25,10 @@ export default function ResearchDiagnostics({
   selectedPhotoIds: string[];
   photoRightsConfirmed: boolean;
   canSelectPhotos: boolean;
+  canImportPhotos: boolean;
   onTogglePhoto: (id: string) => void;
   onPhotoRightsChange: (checked: boolean) => void;
+  onImportPhotos: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [notice, setNotice] = useState('');
@@ -101,7 +104,13 @@ export default function ResearchDiagnostics({
       disabled={disabled || !canSelectPhotos}
       onToggle={onTogglePhoto}
       onRightsConfirmedChange={onPhotoRightsChange}
+      canImport={canImportPhotos && !disabled}
+      onImport={onImportPhotos}
     />}
-    {photos.length > 0 && !canSelectPhotos && <p className="mt-2 text-xs text-[#8b5d43]">Кандидаты доступны только для ознакомления: применить можно лишь фотографии из готового запуска.</p>}
+    {photos.length > 0 && !canSelectPhotos && <p className="mt-2 text-xs text-[#8b5d43]">
+      {report && !canImportPhotos
+        ? 'Фотографии можно импортировать только из готового запуска, созданного для этой статьи. Запущенные или завершившиеся ошибкой задания импортировать нельзя.'
+        : 'Кандидаты доступны только для ознакомления.'}
+    </p>}
   </section>;
 }

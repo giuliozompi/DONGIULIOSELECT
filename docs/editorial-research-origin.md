@@ -100,6 +100,12 @@ non passa mai automaticamente a Brave e non introduce retry AI o di rete.
 
 ## Fotografie da scegliere
 
+Il comando «Импортировать фото отдельно» permette di scegliere e importare le
+foto anche dopo aver applicato i testi o salvato le coordinate. Usa la revisione
+corrente della scheda, conserva gli altri campi e richiede la conferma dei diritti.
+Accetta solo candidati di una ricerca pronta appartenente alla stessa scheda;
+non genera nuove ricerche, non riapplica i testi e non modifica la pubblicazione.
+
 La ricerca può proporre fino a tre URL di immagini realmente referenziate
 nell’HTML delle pagine pertinenti lette (metadati OpenGraph/Twitter e immagini
 del contenuto principale). Scarta URL non HTTPS/locali, duplicati, loghi e

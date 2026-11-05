@@ -149,3 +149,9 @@ export const applyRequestSchema = z.object({
     ctx.addIssue({ code: 'custom', message: 'Подтвердите право использования выбранных фотографий' });
 });
 export type ImportResult = { created: EditorialEntry[]; skipped: { itemId: string; entryId: string; title: string }[] };
+export const importPhotoRequestSchema = z.object({
+  entryId: z.string().uuid(),
+  revision: z.number().int().positive(),
+  photoIds: z.array(text(64).min(1)).min(1).max(3).refine(ids => new Set(ids).size === ids.length),
+  photoRightsConfirmed: z.literal(true),
+}).strict();

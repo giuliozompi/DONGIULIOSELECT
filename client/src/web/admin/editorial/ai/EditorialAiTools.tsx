@@ -587,6 +587,39 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       if (mountedRef.current) setBusy(false);
     }
   }
+  async function importSelectedPhotos() {
+    const photoIds = [...selectedPhotoIds];
+    if (!current || current.kind !== 'draft' || current.status !== 'ready' || !draft
+      || runParams?.entryId !== entry.id || photoIds.length < 1 || photoIds.length > 3
+      || !photoRightsConfirmed || busy || suggestionBusy || generationClaimed || applyLock.current) return;
+    applyLock.current = true;
+    setGenerationClaimed(true);
+    const requestIdentity = identity;
+    if (!window.confirm(`Сохранить ${photoIds.length} выбранную фотографию в текущей версии статьи? Будут добавлены только фотографии; текстовое предложение не будет применено или изменено.`)) {
+      applyLock.current = false;
+      setGenerationClaimed(false);
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const updated = await editorialAiApi.importPhotos(current, entry, photoIds, true);
+      if (!mountedRef.current || identityRef.current !== requestIdentity || entryIdRef.current !== updated.id) return;
+      setSelectedPhotoIds([]);
+      setPhotoRightsConfirmed(false);
+      onApplied(updated);
+    } catch (issue) {
+      if (!mountedRef.current || identityRef.current !== requestIdentity || entryIdRef.current !== entry.id) return;
+      if (isConflict(issue)) setRevisionConflict(true);
+      setError(isConflict(issue)
+        ? 'Статья изменилась во время импорта фотографий. Обновите список и повторите импорт для актуальной версии.'
+        : errorMessage(issue));
+    } finally {
+      applyLock.current = false;
+      setGenerationClaimed(false);
+      if (mountedRef.current) setBusy(false);
+    }
+  }
   function updateProposal(field: AiField, value: string) {
     setEdits(currentEdits => {
       const next = { ...currentEdits };
@@ -649,14 +682,14 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
        {error && <div role="alert" className="mt-3 rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{error}{isConflict({ status: 409, message: error }) && <button className="ml-2 underline" onClick={() => onApplied()}>Обновить список</button>}</div>}
       <RunState run={current} error={polled.isError && activeId ? polled.error : undefined} />
       {current && <p className="mt-3 text-xs text-[#718075]">{current.model} · {prettyDate(current.createdAt)} · статус: {current.status === 'ready' ? 'готово' : current.status === 'running' ? 'выполняется' : 'ошибка'}{current.appliedTo ? ' · уже применено' : ''}</p>}
-        {current?.kind === 'draft' && (current.result as DraftResult | null)?.research && <ResearchDiagnostics report={(current.result as DraftResult).research!} sources={(current.result as DraftResult).sources || []} missingContext={[
+         {current?.kind === 'draft' && (current.result as DraftResult | null)?.research && <ResearchDiagnostics report={(current.result as DraftResult).research!} sources={(current.result as DraftResult).sources || []} missingContext={[
          !entryData.history?.trim() && 'История',
          !entryData.country?.trim() && 'Страна происхождения',
          !entryData.region?.trim() && 'Регион',
          !entryData.characteristics?.trim() && 'Характеристики',
          !entryData.culinaryUses?.trim() && 'Кулинарное использование',
          (entryData.latitude == null || entryData.longitude == null) && 'Координаты происхождения',
-        ].filter((value): value is string => Boolean(value))} sourcesText={sourcesText} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} selectedPhotoIds={selectedPhotoIds} photoRightsConfirmed={photoRightsConfirmed} canSelectPhotos={current.status === 'ready' && !current.appliedTo && !revisionConflict && !runStale} onTogglePhoto={togglePhoto} onPhotoRightsChange={setPhotoRightsConfirmed} onAppend={urls => {
+         ].filter((value): value is string => Boolean(value))} sourcesText={sourcesText} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} selectedPhotoIds={selectedPhotoIds} photoRightsConfirmed={photoRightsConfirmed} canSelectPhotos={current.status === 'ready' && runParams?.entryId === entry.id} canImportPhotos={current.status === 'ready' && runParams?.entryId === entry.id} onTogglePhoto={togglePhoto} onPhotoRightsChange={setPhotoRightsConfirmed} onImportPhotos={() => { void importSelectedPhotos(); }} onAppend={urls => {
          const existing = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
          const unique = Array.from(new Set(existing));
          const additions = urls.filter(url => !unique.includes(url));
