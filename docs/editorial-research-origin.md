@@ -120,6 +120,26 @@ rimangono visibili ma non applicabili da quel job fallito.
 Le immagini restano URL esterni: la disponibilità futura e il permesso di
 hotlink non sono garantiti. Non è una copia permanente su App Storage.
 
+## Nomi russi e pagine italiane
+
+Se manca `nameOriginal`, il filtro non deve cercare soltanto la grafia russa
+in una fonte italiana: `Кастельманьо` e `Castelmagno` possono indicare lo stesso
+nome. Per schede con origine Italia e titolo interamente cirillico, il filtro
+ammette anche corrispondenze di trascrizione italiane limitate (es. `gn`/`нь`,
+`c`/`к`, `zz`/`ц`), su parole intere e nello stesso ordine. Non usa distanza
+di modifica, nomi inventati da AI o sottostringhe dei domini.
+
+La pagina letta deve comunque contenere il nome e un termine di contesto
+caseario vicino. Una città, un consorzio di coltelli, una homepage generica
+o il solo risultato di ricerca non bastano. Con un nome originale esplicito
+il confronto non lo sostituisce con varianti fonetiche. Il riconoscimento per
+trascrizione genera un avviso di revisione; non certifica identità o fatti
+e non scrive automaticamente il nome originale nella scheda.
+
+Questa compatibilità vale per filtro dei risultati e verifica del corpo
+pagina, in modalità ricerca e manuale. Nessuna richiesta aggiuntiva Brave/AI.
+Inserire il nome originale resta raccomandato per precisione delle query.
+
 ## Limiti, costi e disponibilità
 
 - Ricerca: massimo cinque query per avvio, almeno 1,1 secondi tra query; una nuova

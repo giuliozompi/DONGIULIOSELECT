@@ -8,7 +8,7 @@ import {
 } from '../../shared/editorial-ai';
 import { getEditorialModelSettings, requestEditorialModel, EditorialModelError } from './editorial-ai-model';
 import { retrieveEditorialSource, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
-import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesCheese, type ResearchDependencies } from './editorial-ai-research';
+import { researchEditorialSources, searchEditorialWeb, editorialSourceCheeseMatch, transcriptionWarning, type ResearchDependencies } from './editorial-ai-research';
 import { editorialSourcePassages, researchCoverage } from './editorial-research-topics';
 export { editorialSourcePassages } from './editorial-research-topics';
 
@@ -194,8 +194,10 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
         sources = [];
         fetched.forEach((item, index) => {
           if (item.status === 'fulfilled') {
-            if (editorialSourceMatchesCheese(item.value, cheese.data)) {
+            const match = editorialSourceCheeseMatch(item.value, cheese.data);
+            if (match) {
               sources.push(item.value);
+              if (match === 'transcription' && !sourceWarnings.includes(transcriptionWarning)) sourceWarnings.push(transcriptionWarning);
             } else {
               const host = new URL(params.sources[index]).hostname;
               sourceWarnings.push(`Источник исключён — ${host}: в прочитанном тексте не найдены название выбранного сыра и связанный с ним сырный контекст. Укажите конкретную страницу о сыре, а не общую главную страницу. Проверьте также оригинальное название в статье.`);

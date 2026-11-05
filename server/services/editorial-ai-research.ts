@@ -5,6 +5,7 @@ import { retrieveEditorialSource, validateSourceUrl, EditorialSourceError, type 
 import { researchJson } from './editorial-research-http';
 import { structuredResearchPlan, researchCoverage, sourceTopics } from './editorial-research-topics';
 import { researchPhotos } from './editorial-research-photos';
+import { cheeseIdentityContexts } from './editorial-cheese-identity';
 
 export type ResearchIdentity = { title: string; nameOriginal?: string; country: string; region: string };
 export type ResearchHit = { url: string; title: string; description: string };
@@ -57,34 +58,20 @@ export const defaultResearchDependencies: ResearchDependencies = {
 export function editorialResearchQueries(cheese: ResearchIdentity): string[] {
   return structuredResearchPlan(cheese).map(item => item.query);
 }
-function normalized(text: string) {
-  return text.normalize('NFKD').replace(new RegExp('\\p{M}', 'gu'), '').toLowerCase()
-    .replace(new RegExp('[^\\p{L}\\p{N}]+', 'gu'), ' ').trim();
-}
-function identityNames(cheese: ResearchIdentity) {
-  return [cheese.nameOriginal || '', cheese.title].map(name => normalized(name)
-    .split(' ').filter(word => !/^(dop|dpo|pdo|aop|aoc|igp|pgi|cheese|formaggio|fromage|сыр)$/.test(word)).join(' '))
-    .filter(name => name.length >= 3);
-}
 function mentionsIdentity(text: string, cheese: ResearchIdentity) {
-  const haystack = ` ${normalized(text)} `;
-  return identityNames(cheese).some(name => haystack.includes(` ${name} `));
+  return cheeseIdentityContexts(text, cheese).length > 0;
 }
-export function editorialSourceMatchesCheese(source: SourceEvidence, cheese: ResearchIdentity) {
+export function editorialSourceCheeseMatch(source: SourceEvidence, cheese: ResearchIdentity): 'exact' | 'transcription' | undefined {
   // Match the actual article body, not a domain, search snippet or redirected URL.
   // This is a conservative topic check, not verification of facts or official status.
-  const body = normalized(source.text);
-  return identityNames(cheese).some(name => {
-    const needle = ` ${name} `, padded = ` ${body} `;
-    let start = padded.indexOf(needle);
-    while (start !== -1) {
-      const context = padded.slice(Math.max(0, start - 450), start + needle.length + 450);
-      if (new RegExp('(?:^| )(?:cheese\\p{L}*|formagg\\p{L}*|fromag\\p{L}*|сыр\\p{L}*|kase\\p{L}*|queso\\p{L}*|queijo\\p{L}*)(?: |$)', 'u').test(context)) return true;
-      start = padded.indexOf(needle, start + needle.length);
-    }
-    return false;
-  });
+  const contexts = cheeseIdentityContexts(source.text, cheese).filter(context =>
+    new RegExp('(?:^| )(?:cheese\\p{L}*|formagg\\p{L}*|fromag\\p{L}*|сыр\\p{L}*|kase\\p{L}*|queso\\p{L}*|queijo\\p{L}*)(?: |$)', 'u').test(context.text));
+  return contexts.some(context => !context.transliterated) ? 'exact' : contexts.length ? 'transcription' : undefined;
 }
+export function editorialSourceMatchesCheese(source: SourceEvidence, cheese: ResearchIdentity) {
+  return Boolean(editorialSourceCheeseMatch(source, cheese));
+}
+export const transcriptionWarning = 'Оригинальное название не заполнено. Связь с итальянским названием найдена по ограниченным правилам транскрипции и сырному контексту, а не проверкой фактов. Проверьте соответствие и заполните название на языке происхождения для более точного поиска.';
 function priority(hit: ResearchHit) {
   // Ranking preference, NOT a declaration that a site is official.
   try {
@@ -145,10 +132,12 @@ export async function researchEditorialSources(
       try {
         const source = await deps.source(url);
         validateSourceUrl(source.finalUrl);
-        if (!editorialSourceMatchesCheese(source, cheese)) {
+        const match = editorialSourceCheeseMatch(source, cheese);
+        if (!match) {
           report.warnings.push(`Источник исключён — ${new URL(url).hostname}: в тексте не подтверждена связь с выбранным сыром. Проверьте страницу вручную.`);
           return null;
         }
+        if (match === 'transcription' && !report.warnings.includes(transcriptionWarning)) report.warnings.push(transcriptionWarning);
         return source;
       } catch (error) {
         const reason = error instanceof EditorialSourceError

@@ -12,7 +12,7 @@ import type { Server } from 'node:http';
 import { registerAdminEditorialAiRoutes } from '../server/adminEditorialAiRoutes';
 import { reserveAiRun, executeAiRun, getAiRun } from '../server/services/editorial-ai';
 import { applyAiDraft } from '../server/services/editorial-ai-changes';
-import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesCheese } from '../server/services/editorial-ai-research';
+import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesCheese, editorialSourceCheeseMatch } from '../server/services/editorial-ai-research';
 import { structuredResearchPlan, researchCoverage, editorialSourcePassages } from '../server/services/editorial-research-topics';
 import { sourcePageImages, researchPhotos } from '../server/services/editorial-research-photos';
 import { fetchOriginCandidates, originProviderSettings } from '../server/services/editorial-origin-provider';
@@ -197,6 +197,56 @@ test('photo candidates are actual safe HTML references, deduplicated, provenance
   assert.equal(photos[0].sourceUrl, 'https://example.org/cheese');
   assert.equal(photos[0].id, researchPhotos([{ ...await source('https://example.org/cheese'), images }])[0].id);
   assert.equal((photos[0] as any).rightsConfirmed, undefined);
+});
+test('Russian Italian-cheese names can match Italian body names without inventing an original name', async () => {
+  for (const [title, original] of [
+    ['Кастельманьо', 'Castelmagno'], ['Рикотта Салата', 'Ricotta salata'],
+    ['Моцарелла', 'Mozzarella'], ['Пармиджано Реджано', 'Parmigiano Reggiano'],
+    ['Буррата', 'Burrata'],
+  ]) {
+    const page = { ...await source('https://example.org/cheese'), text: `${original} è un formaggio italiano. Storia e caratteristiche.`.repeat(5) };
+    const cheeseIdentity = { ...identity, title, nameOriginal: '' };
+    assert.equal(editorialSourceCheeseMatch(page, cheeseIdentity), 'transcription', title);
+    assert.equal(cheeseIdentity.nameOriginal, '', 'matching does not write a guessed original spelling');
+    assert.equal(editorialSourceCheeseMatch(page, { ...cheeseIdentity, nameOriginal: original }), 'exact');
+  }
+});
+test('transcription is bounded to missing Italian names and still rejects wrong bodies, domains and distant cheese mentions', async () => {
+  const cheeseIdentity = { ...identity, nameOriginal: '' };
+  const metadata = { ...await source('https://example.org/castelmagno'), title: 'Castelmagno formaggio' };
+  for (const body of [
+    'Castelmagno è un comune nella provincia di Cuneo. '.repeat(8),
+    'Consorzio coltellinai di Maniago. Coltelli tradizionali. '.repeat(8),
+    'CastelmagnoExtra formaggio italiano. '.repeat(8),
+    `Castelmagno ${'Un paese con monti e sentieri. '.repeat(30)} Formaggio italiano.`,
+    'Ricotta salata è un formaggio italiano. '.repeat(8),
+  ]) assert.equal(editorialSourceMatchesCheese({ ...metadata, text: body }, cheeseIdentity), false);
+  const page = { ...metadata, text: 'Castelmagno è un formaggio italiano. '.repeat(8) };
+  assert.equal(editorialSourceMatchesCheese(page, { ...cheeseIdentity, country: 'Франция' }), false);
+  assert.equal(editorialSourceMatchesCheese(page, { ...cheeseIdentity, nameOriginal: 'Comté' }), false, 'do not override an explicit original name');
+});
+for (const research of [false, true]) test(`missing native name still generates from an Italian body (${research ? 'Brave' : 'manual'} mode)`, async () => {
+  const previous = await cheese();
+  const entry = await saveEditorial('cheese', { ...previous.data, nameOriginal: '' }, 'operator', previous, db);
+  const params = { ...parameters(entry), ...(research ? {} : { research: undefined }), sources: ['https://example.org/castelmagno'] };
+  const run = (await reserveAiRun('draft', params, 'operator', db)).run;
+  let searches = 0, models = 0;
+  await executeAiRun(run.id, db, {
+    source,
+    search: async () => { searches++; return [{ url: 'https://example.org/castelmagno', title: 'Castelmagno: formaggio DOP', description: 'Storia e caratteristiche' }]; },
+    pause: async () => {},
+    model: async (_system, input) => {
+      models++; assert.equal((input as any).cheese.nameOriginal, '');
+      assert.ok(JSON.stringify(input).includes('Castelmagno'));
+      return { fields: { history: 'Документированная история.' }, citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }], warnings: [] };
+    },
+  });
+  const ready = await getAiRun(run.id, db), result = ready.result as DraftResult;
+  assert.equal(ready.status, 'ready', ready.error || '');
+  assert.equal(searches, research ? 5 : 0); assert.equal(models, 1);
+  assert.equal(result.sources.length, 1);
+  assert.ok(result.warnings.some(warning => /транскрипции/.test(warning)));
+  assert.equal((await db.query('SELECT data FROM editorial_entries WHERE id=$1', [entry.id])).rows[0].data.nameOriginal, '');
 });
 test('research rejects unrelated consortia before fetching and checks actual content after redirects', async () => {
   const reads: string[] = [];
