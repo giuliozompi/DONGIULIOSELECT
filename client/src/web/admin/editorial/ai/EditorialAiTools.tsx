@@ -393,7 +393,12 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const visibleRun = runEntryIdRef.current === entry.id ? run : undefined;
   const pollingRunId = running(visibleRun) ? visibleRun?.id : undefined;
   const polled = useRunPoll(pollingRunId, Boolean(pollingRunId));
-  const current = polled.data || visibleRun;
+  // Applying a ready run updates local appliedTo immediately. The last poll can
+  // still contain the same run's unapplied response, so keep that same-ID local
+  // apply marker; a response for any other run remains authoritative.
+  const current = visibleRun?.appliedTo?.entryId === entry.id && polled.data?.id === visibleRun.id
+    ? visibleRun
+    : polled.data || visibleRun;
   const activeId = running(current) ? current?.id : undefined;
   useEffect(() => {
     if (lock.current && current && current.status !== 'running') {

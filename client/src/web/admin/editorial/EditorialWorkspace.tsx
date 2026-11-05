@@ -64,6 +64,20 @@ function cheeseNameOriginal(entry: EditorialEntry) {
 function productName(product: any) {
   return product.name || product.title || product.slug || 'Товар без названия';
 }
+function missingCheeseReadyRequirements(data: CheeseData) {
+  const missing: string[] = [];
+  const sources = Array.isArray(data.sources) ? data.sources : String(data.sources ?? '').split(/\r?\n/);
+  const photos = Array.isArray(data.photos) ? data.photos : String(data.photos ?? '').split(/\r?\n/);
+  if (!data.title.trim()) missing.push('Название');
+  if (!data.country.trim()) missing.push('Страна происхождения');
+  if (!data.history.trim()) missing.push('История');
+  if (!data.characteristics.trim()) missing.push('Характеристики');
+  if (!data.culinaryUses.trim()) missing.push('Кулинарное использование');
+  if (!sources.some(value => value.trim())) missing.push('Источники');
+  if (!photos.some(value => value.trim())) missing.push('Фотография');
+  if (data.latitude === null || data.longitude === null) missing.push('Обе координаты происхождения');
+  return missing;
+}
 
 export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const qc = useQueryClient();
@@ -111,6 +125,19 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const invalidateEditorial = async () => {
     await qc.invalidateQueries({ queryKey: ['/web-api/admin/editorial'] });
   };
+  function handleAiEntryApplied(saved?: EditorialEntry) {
+    if (saved) {
+      qc.setQueriesData({ queryKey: ['/web-api/admin/editorial'] }, (cached: any) => {
+        const replaceCurrent = (items: EditorialEntry[]) => items.map(item =>
+          item.id === saved.id && saved.revision >= item.revision ? saved : item,
+        );
+        if (Array.isArray(cached)) return replaceCurrent(cached);
+        if (cached && Array.isArray(cached.items)) return { ...cached, items: replaceCurrent(cached.items) };
+        return cached;
+      });
+    }
+    void invalidateEditorial();
+  }
   const createMutation = useMutation({
     mutationFn: (data: FormData) => editorialApi.create(kind, data),
     onSuccess: async () => { await invalidateEditorial(); closeDialog(true); toast({ title: 'Запись создана' }); },
@@ -310,6 +337,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const videoForm = form as VideoData;
   const cheeseForm = form as CheeseData;
   const priceForm = form as PriceData;
+  const cheesePhotos = (Array.isArray(cheeseForm.photos) ? cheeseForm.photos : String(cheeseForm.photos ?? '').split(/\r?\n/)).filter(value => value.trim());
 
   return (
     <div className="min-h-full bg-[#f5f3ed] text-[#29352f]">
@@ -377,7 +405,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                         <Button size="icon" variant="ghost" className="text-[#9d4d3f] hover:bg-[#f7e9e4]" aria-label={`Удалить ${rowTitle}`} disabled={requestBusy} onClick={() => { void deleteEntry(entry, rowTitle); }}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </CardContent>
-                    {kind === 'cheese' && <div className="px-4 pb-4 md:px-5"><CheeseAiDraft entry={entry} onApplied={() => { void invalidateEditorial(); }} /></div>}
+                     {kind === 'cheese' && <div className="px-4 pb-4 md:px-5"><CheeseAiDraft entry={entry} onApplied={handleAiEntryApplied} /></div>}
                   </Card>;
                 })}
               </div>}
@@ -413,11 +441,30 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 </div>
                 <div className="space-y-1.5"><Label htmlFor="ed-productionCountry">Фактическая страна производства</Label><Input id="ed-productionCountry" value={cheeseForm.productionCountry} onChange={e => set('productionCountry', e.target.value)} /><p className="text-xs text-muted-foreground">Не подменяет географию происхождения сыра.</p></div>
                 {textarea('История', 'history')}{textarea('Характеристики', 'characteristics')}{textarea('Кулинарное использование', 'culinaryUses')}
-                {lineTextarea('Фото — по одному URL или пути на строку', 'photos', cheeseForm.photos, 'До 12 изображений. Пустые строки игнорируются.')}
-                {lineTextarea('Источники — по одному http(s) URL на строку', 'sources', cheeseForm.sources, 'До 30 источников.')}
+                <section data-testid="cheese-photo-editor" className="space-y-2 rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <Label htmlFor="ed-photos">Фотографии · обязательны для статуса «Готово»</Label>
+                    <span className="text-xs text-[#718075]">{cheesePhotos.length} из 12</span>
+                  </div>
+                  {cheesePhotos.length === 0
+                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. До сохранения как «Готово» выберите AI-фото и подтвердите права до его применения или добавьте URL вручную ниже.</p>
+                    : <p className="text-sm text-[#526158]">Указано фотографий: {cheesePhotos.length}. Можно добавить или удалить URL вручную.</p>}
+                  <Textarea id="ed-photos" value={rawLines.photos ?? (Array.isArray(cheeseForm.photos) ? cheeseForm.photos.join('\n') : String(cheeseForm.photos ?? ''))} rows={4} onChange={e => setLines('photos', e.target.value)} placeholder="https://… · по одному URL на строку" />
+                  <p className="text-xs text-[#718075]">До 12 URL или путей изображений. Пустые строки игнорируются; редакция не загружает изображения с внешних сайтов автоматически.</p>
+                </section>
+                {lineTextarea('Источники — по одному http(s) URL на строку · обязательны для «Готово»', 'sources', cheeseForm.sources, 'До 30 источников.')}
                 {relations('Связанные товары каталога', 'productIds', products.filter((product: any) => product.id != null).map((product: any) => ({ id: String(product.id), label: productName(product) })))}
-                {relations('Связанные видео', 'videoIds', videos.map(entry => ({ id: entry.id, label: entryName(entry) })))}
-                {lineTextarea('Внешние видео-ссылки — по одной на строку', 'externalVideoUrls', cheeseForm.externalVideoUrls, 'Ссылки YouTube или публичные посты Telegram.')}
+                {relations('Связанные видео — необязательно', 'videoIds', videos.map(entry => ({ id: entry.id, label: entryName(entry) })))}
+                {lineTextarea('Внешние видео-ссылки — необязательно', 'externalVideoUrls', cheeseForm.externalVideoUrls, 'Не обязательны для статуса «Готово». Ссылки YouTube или публичные посты Telegram.')}
+                {cheeseForm.status === 'ready' && <div data-testid="cheese-ready-requirements" aria-live="polite" className="rounded-md border border-[#dfc9b5] bg-[#f5ece2] p-3 text-sm text-[#684b3d]">
+                  {(() => {
+                    const missing = missingCheeseReadyRequirements(cheeseForm);
+                    return missing.length
+                      ? <><p className="font-semibold">Для статуса «Готово» ещё нужны:</p><ul className="mt-1 list-inside list-disc">{missing.map(item => <li key={item}>{item}</li>)}</ul></>
+                      : <p className="font-semibold">Обязательные поля для «Готово» заполнены. Сохранение всё равно проверит формат ссылок и координат.</p>;
+                  })()}
+                  <p className="mt-2 text-xs">Регион, оригинальное название, связанные товары и видео — необязательны. Для черновика эти требования не блокируют сохранение.</p>
+                </div>}
               </>}
               {kind === 'price' && <>
                 <div className="space-y-1.5"><Label htmlFor="ed-cheeseId">Сырная статья *</Label><select id="ed-cheeseId" className={nativeSelectClass} value={priceForm.cheeseId} onChange={e => set('cheeseId', e.target.value)}><option value="">{cheeseQuery.isLoading ? 'Загрузка статей…' : 'Выберите сыр'}</option>{cheeses.map(entry => <option key={entry.id} value={entry.id}>{entryName(entry)}</option>)}</select></div>

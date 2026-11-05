@@ -115,7 +115,7 @@ test('research is explicit, partial failures remain visible, and origin points r
     } else if (url.pathname.includes('/editorial-ai/') && url.pathname.endsWith('/apply')) {
       draftApplyCalls++;
       draftApplyRequests.push(JSON.parse(event.request.postData));
-      entry = { ...entry, revision: 3, data: { ...entry.data, title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' } };
+      entry = { ...entry, revision: 3, data: { ...entry.data, title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия', photos: draftApplyRequests.at(-1).photoIds?.includes('photo-ready') ? ['https://photo-fixture.example.test/ready.jpg'] : entry.data.photos } };
       body = entry;
     } else if (event.request.method !== 'GET' && url.pathname !== '/web-api/auth/refresh') {
       throw new Error(`Unexpected fixture mutation: ${url.pathname}`);
@@ -130,6 +130,22 @@ test('research is explicit, partial failures remain visible, and origin points r
   try {
     await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses` });
     await page.wait(`!!document.querySelector('[data-testid="ai-draft-entry-${id}"]')`);
+    await page.evaluate(`([...document.querySelectorAll('#entry-${id} button')].find(button=>button.textContent.includes('Изменить'))).click()`);
+    await page.wait(`!!document.querySelector('[data-testid="cheese-photo-editor"]')`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-photo-editor"]').innerText.includes('Фотографий пока нет')`), true, 'the edit dialog makes missing photos explicit');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-photo-editor"]').innerText.includes('добавьте URL вручную')`), true, 'manual photo URLs are clearly offered');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-photo-editor"]').innerText.includes('0 из 12')`), true, 'the existing photo count is visible');
+    assert.equal(await page.evaluate(`document.querySelector('[role="dialog"]').innerText.includes('Внешние видео-ссылки — необязательно')`), true, 'external videos are explicitly optional');
+    await page.evaluate(`(() => {const status=document.querySelector('#ed-status');status.value='ready';status.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+    await page.wait(`!!document.querySelector('[data-testid="cheese-ready-requirements"]')`);
+    const readyGuidance = await page.evaluate(`document.querySelector('[data-testid="cheese-ready-requirements"]').innerText`);
+    const missingGuidance = readyGuidance.split('Регион, оригинальное название')[0];
+    for (const requirement of ['История', 'Характеристики', 'Кулинарное использование', 'Фотография', 'Обе координаты происхождения']) {
+      assert.equal(missingGuidance.includes(requirement), true, `ready guidance lists missing ${requirement}`);
+    }
+    assert.equal(missingGuidance.includes('Источники'), false, 'existing sources satisfy the schema requirement');
+    assert.equal(missingGuidance.includes('Регион'), false, 'region is not a ready requirement in the shared schema');
+    await page.evaluate(`(() => {const status=document.querySelector('#ed-status');status.value='draft';status.dispatchEvent(new Event('change',{bubbles:true}));[...document.querySelectorAll('[role="dialog"] button')].find(button=>button.textContent.trim()==='Отмена').click()})()`);
     await page.evaluate(`document.querySelector('[data-testid="ai-draft-entry-${id}"] button').click()`);
     // Opening the panel must not trigger internet search or geocoding.
     assert.equal(researchCalls, 0);
@@ -262,6 +278,11 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(await page.evaluate(`document.querySelectorAll('[data-testid="ai-origin-coordinates"] input[type="radio"]:checked').length`), 0, 'candidates are never selected automatically');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-apply"]').disabled`), true, 'saving still requires an explicit candidate selection');
     assert.equal(researchRequests.length, 2);
+    await page.evaluate(`([...document.querySelectorAll('#entry-${id} button')].find(button=>button.textContent.includes('Изменить'))).click()`);
+    await page.wait(`!!document.querySelector('[data-testid="cheese-photo-editor"]')`);
+    assert.equal(await page.evaluate(`document.querySelector('#ed-photos').value`), 'https://photo-fixture.example.test/ready.jpg', 'the saved photo is visible when editing the updated article');
+    assert.equal(await page.evaluate(`document.querySelector('#ed-latitude').value`), '44.49', 'saved latitude is visible in the updated article');
+    assert.equal(await page.evaluate(`document.querySelector('#ed-longitude').value`), '11.34', 'saved longitude is visible in the updated article');
     assert.deepEqual(exceptions, []);
   } finally { await browser.close(); }
 });
