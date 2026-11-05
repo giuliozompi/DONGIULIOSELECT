@@ -39,7 +39,7 @@ test('research is explicit, partial failures remain visible, and origin points r
       sha256: 'a'.repeat(64), characters: 812, truncated: false,
     }] }, error: 'Fixture model failure', appliedTo: null,
   };
-  let researchCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0;
+  let researchCalls = 0, runGetCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0;
   let imagePreviewCalls = 0;
   let researchRequests = [], lookupRequests = [], draftApplyRequests = [];
   const exceptions = [];
@@ -70,15 +70,27 @@ test('research is explicit, partial failures remain visible, and origin points r
       const request = JSON.parse(event.request.postData);
       researchRequests.push(request);
       await delay(250);
-      body = researchCalls === 1 ? researchRun : {
-        ...researchRun, id: '55555555-5555-4555-8555-555555555555', status: 'ready', revision: 91,
-        params: request, result: {
-          fields: { title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' }, citations: [], warnings: [],
-          sources: researchRun.result.sources,
-          research: { ...report, photos: [{ id: 'photo-ready', imageUrl: 'https://photo-fixture.example.test/ready.jpg', sourceUrl: found, label: 'Проверить идентичность' }] },
-        },
-        error: null, appliedTo: null,
+      body = {
+        ...researchRun,
+        id: researchCalls === 1 ? researchRun.id : '55555555-5555-4555-8555-555555555555',
+        status: 'running', params: request, result: null, error: null, finishedAt: null,
       };
+    } else if (event.request.method === 'GET' && /^\/web-api\/admin\/editorial-ai\/runs\/[^/]+$/.test(url.pathname)) {
+      runGetCalls++;
+      const runId = url.pathname.split('/').at(-1);
+      if (runId === researchRun.id) {
+        body = researchRun;
+      } else {
+        body = {
+          ...researchRun, id: runId, status: 'ready', revision: 91,
+          params: researchRequests[1], result: {
+            fields: { title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия' }, citations: [], warnings: [],
+            sources: researchRun.result.sources,
+            research: { ...report, photos: [{ id: 'photo-ready', imageUrl: 'https://photo-fixture.example.test/ready.jpg', sourceUrl: found, label: 'Проверить идентичность' }] },
+          },
+          error: null, appliedTo: null,
+        };
+      }
     } else if (url.pathname === '/web-api/admin/editorial-ai/origin-geocoding') {
       lookupCalls++;
       const request = JSON.parse(event.request.postData);
@@ -134,6 +146,9 @@ test('research is explicit, partial failures remain visible, and origin points r
     await page.evaluate(`(() => {const button=document.querySelector('[data-testid="ai-draft-research"]');button.click();button.click()})()`);
     await page.wait(`!!document.querySelector('[data-testid="ai-research-report"]')`);
     assert.equal(researchCalls, 1, 'rapid repeated activation creates one research run');
+    assert.equal(runGetCalls > 0, true, 'the running research response is followed by a terminal run poll');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]') === null`), true, 'failed terminal run does not expose draft apply controls');
+    assert.equal(await page.evaluate(`document.body.innerText.includes('Fixture model failure')`), true, 'the failed terminal run error remains visible after polling');
     assert.equal(researchRequests[0].entryId, id);
     assert.equal(researchRequests[0].revision, 1);
     assert.equal(researchRequests[0].sources.length, 2);
@@ -175,6 +190,9 @@ test('research is explicit, partial failures remain visible, and origin points r
     await page.evaluate(`(() => {const button=document.querySelector('[data-testid="ai-draft-research"]'); if(button.disabled) throw Error('research should unlock after coordinate lookup/save'); button.click()})()`);
     await page.wait(`!!document.querySelector('[data-testid="ai-draft-apply"]')`);
     assert.equal(researchCalls, 2);
+    assert.equal(runGetCalls >= 2, true, 'the second running response is resolved by a later ready run poll');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').closest('article').querySelector('input[type="checkbox"]').disabled`), false, 'field selection unlocks when the polled run becomes ready');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').disabled`), false, 'select-all unlocks when the polled run becomes ready without reopening history');
     assert.equal(researchRequests[1].revision, 2, 'origin save refreshed the entry revision before the next run');
     // The server run revision is intentionally unrelated; validity is bound to params.entryId/revision.
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), true, 'draft requires explicit field selection');
@@ -196,7 +214,7 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-region"]').closest('article').querySelector('input[type="checkbox"]').checked`), true);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').value`), 'Редакторская правка названия', 'bulk selection preserves operator text edits');
     assert.equal(draftApplyCalls, 0, 'bulk selection does not apply the draft');
-    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false, 'apply unlocks after selecting fields from the polled ready run');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').disabled`), false, 'select-all remains enabled when every available field is already selected');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').innerText`), 'Всё выбрано');
     assert.equal(await page.evaluate(`document.getElementById(document.querySelector('[data-testid="ai-draft-select-all"]').getAttribute('aria-describedby')).getAttribute('aria-live')`), 'polite', 'accessible selection status is announced politely');

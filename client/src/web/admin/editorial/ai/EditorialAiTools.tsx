@@ -105,9 +105,10 @@ export function EditorialAiCatalog({ onImported }: { onImported: () => void }) {
     enabled: expanded && historyOpen,
     retry: 1,
   });
-  const activeRunId = running(run) ? run?.id : undefined;
-  const polled = useRunPoll(activeRunId, Boolean(activeRunId));
+  const pollingRunId = running(run) ? run?.id : undefined;
+  const polled = useRunPoll(pollingRunId, Boolean(pollingRunId));
   const currentRun = polled.data || run;
+  const activeRunId = running(currentRun) ? currentRun?.id : undefined;
   useEffect(() => {
     if (claimRef.current && currentRun && currentRun.status !== 'running') {
       claimRef.current = false;
@@ -390,9 +391,10 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     retry: 1,
   });
   const visibleRun = runEntryIdRef.current === entry.id ? run : undefined;
-  const activeId = running(visibleRun) ? visibleRun?.id : undefined;
-  const polled = useRunPoll(activeId, Boolean(activeId));
+  const pollingRunId = running(visibleRun) ? visibleRun?.id : undefined;
+  const polled = useRunPoll(pollingRunId, Boolean(pollingRunId));
   const current = polled.data || visibleRun;
+  const activeId = running(current) ? current?.id : undefined;
   useEffect(() => {
     if (lock.current && current && current.status !== 'running') {
       lock.current = false;
