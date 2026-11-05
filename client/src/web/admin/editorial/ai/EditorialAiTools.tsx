@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, ChevronDown, ChevronUp, FileSearch, History, LoaderCircle, RotateCcw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -678,13 +678,31 @@ function DraftPreview({ draft, entryData, edits, selectedFields, selectedPhotoCo
   onToggle: (field: AiField) => void; onSelectAll: () => void; onEdit: (field: AiField, value: string) => void; onApply: () => void; busy: boolean;
 }) {
   const availableFields = AI_FIELDS.filter(field => draft.fields[field.key] !== undefined);
-  const allSelected = availableFields.length > 0 && availableFields.every(field => selectedFields.includes(field.key));
+  const statusId = useId();
+  const selectedCount = availableFields.filter(field => selectedFields.includes(field.key)).length;
+  const allSelected = availableFields.length > 0 && selectedCount === availableFields.length;
+  const applyAction = selectedPhotoCount > 0
+    ? selectedCount > 0 ? '«Применить выбранный текст и фото»' : '«Применить выбранные фото»'
+    : '«Применить выбранные поля»';
+  const selectionStatus = busy
+    ? 'Выбор временно недоступен: выполняется другое действие. Дождитесь его завершения.'
+    : applied
+      ? 'Это предложение уже применено; повторный выбор и сохранение недоступны.'
+      : stale
+        ? 'Версия записи изменилась: выбор недоступен. Сформируйте новое предложение для актуальной версии.'
+        : availableFields.length === 0
+          ? 'В предложении нет текстовых полей для выбора.'
+          : allSelected
+            ? `Все доступные поля уже отмечены. Повторное нажатие безопасно. Выбор сам по себе ничего не сохраняет — для сохранения нажмите ${applyAction}.`
+            : `Отметьте нужные поля или нажмите «Добавить всё». Выбор сам по себе ничего не сохраняет — для сохранения нажмите ${applyAction}.`;
   return <div className="mt-4 space-y-3">
     <div className="rounded border border-[#dfc9b5] bg-[#f5ece2] p-3 text-xs leading-5 text-[#75533e]"><strong>Проверка обязательна.</strong> Цитаты сопоставлены сервером с извлечённым текстом источников; это не семантическая верификация фактов. Оператор проверяет все утверждения.</div>
     {draft.warnings.length > 0 && <div className="rounded border border-[#dfc9b5] bg-[#f5ece2] p-3 text-sm text-[#75533e]"><strong>Замечания модели</strong><ul className="mt-1 list-inside list-disc">{draft.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div>}
     <div className="flex flex-col gap-2 rounded border border-[#e0dfd4] bg-[#f1f0e8] p-3 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs leading-5 text-[#66736a]">Выбор отмечает предложенные поля для последующего применения. Сам по себе он ничего не сохраняет.</p>
-      <Button data-testid="ai-draft-select-all" size="sm" variant="outline" disabled={busy || applied || stale || availableFields.length === 0 || allSelected} onClick={onSelectAll}>Добавить всё</Button>
+      <div>
+        <p className="text-xs leading-5 text-[#66736a]" aria-live="polite" aria-atomic="true" id={statusId}>Выбрано {selectedCount} из {availableFields.length}. {selectionStatus}</p>
+      </div>
+      <Button data-testid="ai-draft-select-all" size="sm" variant="outline" disabled={busy || applied || stale || availableFields.length === 0} onClick={onSelectAll} aria-describedby={statusId}>{allSelected ? 'Всё выбрано' : 'Добавить всё'}</Button>
     </div>
     <div className="space-y-2">{availableFields.map(field => {
       const proposal = draft.fields[field.key] || '';

@@ -197,6 +197,16 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').value`), 'Редакторская правка названия', 'bulk selection preserves operator text edits');
     assert.equal(draftApplyCalls, 0, 'bulk selection does not apply the draft');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').disabled`), false, 'select-all remains enabled when every available field is already selected');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').innerText`), 'Всё выбрано');
+    assert.equal(await page.evaluate(`document.getElementById(document.querySelector('[data-testid="ai-draft-select-all"]').getAttribute('aria-describedby')).getAttribute('aria-live')`), 'polite', 'accessible selection status is announced politely');
+    assert.equal(await page.evaluate(`document.getElementById(document.querySelector('[data-testid="ai-draft-select-all"]').getAttribute('aria-describedby')).innerText`), 'Выбрано 2 из 2. Все доступные поля уже отмечены. Повторное нажатие безопасно. Выбор сам по себе ничего не сохраняет — для сохранения нажмите «Применить выбранные поля».');
+    await clickButton('ai-draft-select-all');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').disabled`), false, 'repeated select-all stays enabled and idempotent');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').value`), 'Редакторская правка названия', 'repeated select-all preserves operator text edits');
+    assert.equal(draftApplyCalls, 0, 'repeated select-all does not apply the draft');
+    assert.equal(researchCalls, 2, 'repeated select-all does not start generation or research');
+    assert.equal(lookupCalls, 1, 'repeated select-all does not start geocoding');
     await page.evaluate(`document.querySelector('[data-testid="ai-proposal-region"]').closest('article').querySelector('input[type="checkbox"]').click()`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-region"]').closest('article').querySelector('input[type="checkbox"]').checked`), false, 'individual fields remain deselectable after bulk selection');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-proposal-title"]').closest('article').querySelector('input[type="checkbox"]').checked`), true);
@@ -218,6 +228,8 @@ test('research is explicit, partial failures remain visible, and origin points r
     await clickButton('ai-draft-apply');
     await page.wait(`document.body.innerText.includes('Уже применено')`);
     assert.equal(draftApplyCalls, 1, 'text is only saved after explicit field selection and apply');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').disabled`), true, 'select-all remains locked after apply');
+    assert.equal(await page.evaluate(`document.getElementById(document.querySelector('[data-testid="ai-draft-select-all"]').getAttribute('aria-describedby')).innerText.includes('Это предложение уже применено')`), true, 'applied state explains why selection is locked');
     assert.deepEqual(draftApplyRequests[0].fields, ['title', 'region']);
     assert.equal(draftApplyRequests[0].edits.title, 'Редакторская правка названия', 'the preserved operator edit is sent only with explicit apply');
     assert.deepEqual(draftApplyRequests[0].photoIds, ['photo-ready'], 'only explicitly selected photos are applied');

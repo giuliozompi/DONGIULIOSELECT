@@ -4,7 +4,8 @@
 
 Estensione del punto 1 approvato: ricerca reale delle fonti con Brave,
 preparazione dei testi documentati e proposta di un punto geografico da
-scegliere nell’admin. Fotografie e video non fanno parte di questa fase.
+scegliere nell’admin, con la successiva estensione approvata per le fotografie.
+I suggerimenti video restano separati.
 Nessuna applicazione automatica, modifica dei prezzi o pubblicazione.
 
 ## Configurazione Timeweb
@@ -59,6 +60,12 @@ Aprire una scheda formaggio e «Подготовить с ИИ».
    Si possono scegliere fino a tre URL per la generazione manuale, senza
    ripetere il servizio di ricerca. Nessun retry AI automatico.
 7. L’operatore confronta, seleziona e applica i campi. Il contenuto resta bozza.
+   «Добавить всё» seleziona tutti i testi disponibili, ma non salva la scheda.
+   Il conteggio mostra quanti campi sono selezionati; a selezione completa
+   il comando indica «Всё выбрано» e resta idempotente. Il salvataggio richiede
+   il distinto pulsante di applicazione e la relativa conferma. Generazioni,
+   salvataggi in corso, proposte già applicate o relative a un’altra revisione
+   mantengono il blocco, accompagnato dal motivo visibile.
 8. Dopo aver applicato il testo, cerca una località pubblica nella zona d’origine
    e sceglie esplicitamente una delle tre proposte geografiche. Nessuna preselezione.
    Il pannello mostra i tre passaggi e spiega il blocco se c’è una proposta
