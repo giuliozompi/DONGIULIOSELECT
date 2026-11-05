@@ -175,6 +175,12 @@ Brave: https://api-dashboard.search.brave.com/documentation/pricing
 
 ## Persistenza e verifiche
 
+Wikipedia è cercata anche nella query storica, entro le cinque ricerche già
+previste. Quando emerge un articolo pertinente e leggibile, è riservato un
+posto tra le sei fonti utilizzate. È una fonte enciclopedica aggiuntiva, non
+istituzionale: i testi restano da revisionare. Pagine bloccate (anche HTTP 403)
+sono segnalate e non usate come evidenza; nessun aggiramento o retry automatico.
+
 Si riusano i job editoriali `draft`, i relativi JSONB e il registro amministrativo
 per riserve, cache e proposte geografiche. Nessuna nuova tabella o migrazione.
 Le pubblicazioni restano snapshot separati: salvare una bozza non le modifica.

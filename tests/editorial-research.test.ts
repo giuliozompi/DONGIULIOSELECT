@@ -133,10 +133,41 @@ test('five bounded searches follow topics in the origin language instead of mixe
   assert.deepEqual(plan.map(item => item.topic), ['history', 'origin', 'characteristics', 'culinaryUses', 'photos']);
   assert.ok(plan.every(item => item.query.includes('Castelmagno formaggio Italia') && item.query.length <= 400));
   assert.match(plan[0].query, /storia/); assert.match(plan[1].query, /disciplinare/);
+  assert.match(plan[0].query, /Wikipedia/);
   assert.match(plan[2].query, /stagionatura/); assert.match(plan[3].query, /ricette/);
   assert.match(plan[4].query, /foto/);
   assert.match(structuredResearchPlan({ ...identity, country: 'Франция', nameOriginal: 'Comté' })[0].query, /Comté fromage France histoire/);
   assert.match(structuredResearchPlan({ ...identity, country: 'Неизвестная страна' })[0].query, /cheese .*history/);
+});
+test('Wikipedia is retained as supplementary evidence within existing research budgets', async () => {
+  let searches = 0, reads = 0;
+  const wiki = 'https://it.wikipedia.org/wiki/Castelmagno_(formaggio)';
+  const found = await researchEditorialSources(identity, [], {
+    search: async () => {
+      searches++;
+      return [hit(searches), hit(searches + 10), hit(searches + 20),
+        { url: wiki, title: 'Castelmagno (formaggio) — Wikipedia', description: 'Castelmagno cheese history' }];
+    },
+    source: async url => { reads++; return source(url); },
+  }, async () => {});
+  assert.equal(searches, 5);
+  assert.ok(reads <= 9);
+  assert.ok(found.sources.length <= 6);
+  assert.ok(found.sources.some(item => item.finalUrl === wiki));
+  assert.match(found.report.warnings.join(' '), /Wikipedia.*не официальный/);
+});
+test('blocked Wikipedia pages do not become evidence and do not prevent other sources', async () => {
+  const wiki = 'https://ru.wikipedia.org/wiki/Castelmagno';
+  const found = await researchEditorialSources(identity, [], {
+    search: async () => [hit(1), { url: wiki, title: 'Castelmagno cheese', description: '' }],
+    source: async url => {
+      if (url === wiki) throw new EditorialSourceError('ru.wikipedia.org: HTTP 403');
+      return source(url);
+    },
+  }, async () => {});
+  assert.equal(found.sources.length, 1);
+  assert.ok(!found.sources.some(item => item.finalUrl === wiki));
+  assert.ok(found.report.failures.some(item => item.url === wiki));
 });
 test('coverage routes real numbered passages by topic and leaves missing subjects explicit', async () => {
   const evidence = { ...await source('https://example.org/history'),

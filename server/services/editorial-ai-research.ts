@@ -72,6 +72,14 @@ export function editorialSourceMatchesCheese(source: SourceEvidence, cheese: Res
   return Boolean(editorialSourceCheeseMatch(source, cheese));
 }
 export const transcriptionWarning = 'Оригинальное название не заполнено. Связь с итальянским названием найдена по ограниченным правилам транскрипции и сырному контексту, а не проверкой фактов. Проверьте соответствие и заполните название на языке происхождения для более точного поиска.';
+function isWikipediaArticle(value: string) {
+  try {
+    const url = new URL(value);
+    return /^[a-z-]+\.wikipedia\.org$/.test(url.hostname)
+      && url.pathname.startsWith('/wiki/') && url.pathname.length > 6
+      && !decodeURIComponent(url.pathname.slice(6)).includes(':');
+  } catch { return false; }
+}
 function priority(hit: ResearchHit) {
   // Ranking preference, NOT a declaration that a site is official.
   try {
@@ -116,7 +124,9 @@ export async function researchEditorialSources(
   const topicFirst = plan.flatMap(item => ranked.find(hit => hit.topic === item.topic) || []);
   const candidates = [
     ...manual.map(url => ({ url, title: '', description: '' })),
-    ...topicFirst, ...ranked,
+    ...topicFirst,
+    ...ranked.filter(hit => isWikipediaArticle(hit.url)).slice(0, 1),
+    ...ranked,
   ].flatMap(hit => {
     try {
       const url = validateSourceUrl(hit.url); url.hash = '';
@@ -155,10 +165,16 @@ export async function researchEditorialSources(
     const score = (source: SourceEvidence) => sourceTopics(source).filter(topic => !covered.has(topic)).length * 10
       + (source.images?.length ? 0.5 : 0) + Math.min(source.text.length, 20_000) / 20_000;
     readable.sort((a, b) => score(b) - score(a));
-    const selected = readable.shift()!;
+    // Reserve one of the six evidence slots for a readable, cheese-matched
+    // encyclopedia article, without adding search or source-read requests.
+    const wikiIndex = sources.length === 1 && !sources.some(source => isWikipediaArticle(source.finalUrl))
+      ? readable.findIndex(source => isWikipediaArticle(source.finalUrl)) : -1;
+    const selected = wikiIndex >= 0 ? readable.splice(wikiIndex, 1)[0] : readable.shift()!;
     sources.push(selected);
     sourceTopics(selected).forEach(topic => covered.add(topic));
   }
+  if (sources.some(source => isWikipediaArticle(source.finalUrl)))
+    report.warnings.push('Wikipedia используется как дополнительный энциклопедический источник, а не официальный. Сверьте сведения с первичными источниками; наличие статьи не подтверждает права на фотографии.');
   report.coverage = researchCoverage(sources);
   report.photos = researchPhotos(sources);
   report.warnings.push('Покрытие тем определено по ключевым словам и фрагментам, а не проверкой фактов. Наличие фрагмента не гарантирует полноту или достоверность сведений.');

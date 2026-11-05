@@ -55,5 +55,5 @@ export function structuredResearchPlan(cheese: Identity) {
   const words = vocabulary[language];
   const name = (cheese.nameOriginal?.trim() || cheese.title).replace(/\s+/g, ' ').slice(0, 160);
   return [...researchTopics.map(t => ({ topic: t.topic, label: t.label })), { topic: 'photos' as const, label: 'Фотографии' }]
-    .map((item, index) => ({ ...item, query: `${name} ${words.cheese} ${words.country || cheese.country.slice(0, 80)} ${words.topics[index]}`.trim().slice(0, 400) }));
+    .map((item, index) => ({ ...item, query: `${name} ${words.cheese} ${words.country || cheese.country.slice(0, 80)} ${words.topics[index]}${index === 0 ? ' Wikipedia' : ''}`.trim().slice(0, 400) }));
 }
