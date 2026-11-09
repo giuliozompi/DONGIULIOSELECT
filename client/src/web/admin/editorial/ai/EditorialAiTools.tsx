@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Check, ChevronDown, ChevronUp, FileSearch, History, LoaderCircle, RotateCcw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { editorialAiCountries, countryName, type CatalogItem, type EditorialAiRun, type AiField, type DraftResult, type CatalogResult } from '@shared/editorial-ai';
 import type { CheeseData, EditorialEntry } from '@shared/editorial';
 import { editorialAiApi } from '../../lib/editorialAiApi';
@@ -21,6 +22,7 @@ const AI_FIELDS: { key: AiField; label: string; prop: keyof CheeseData }[] = [
   { key: 'characteristics', label: 'Характеристики', prop: 'characteristics' },
   { key: 'culinaryUses', label: 'Кулинарное использование', prop: 'culinaryUses' },
 ];
+type AppliedOptions = { openEditor: true };
 const nativeSelect = 'ai-native-select';
 let generationClaimed = false;
 const GLOBAL_AI_LOCK_EVENT = 'editorial-ai-lock-change';
@@ -323,7 +325,7 @@ function CatalogRow({ item, selected, disabled, onToggle, onRank }: { item: Cata
   </article>;
 }
 
-export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onApplied: (saved?: EditorialEntry) => void }) {
+export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onApplied: (saved?: EditorialEntry, options?: AppliedOptions) => void }) {
   const initialSources = ((entry.data as CheeseData).sources || []).filter(url => !/^https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+$/.test(url)).join('\n');
   const [open, setOpen] = useState(false);
   const [sourcesText, setSourcesText] = useState(initialSources);
@@ -340,8 +342,18 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const [serverTransfer, setServerTransfer] = useState<CheeseData['aiResearch']>();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+  const [transferConfirmation, setTransferConfirmation] = useState<{
+    mode: 'apply' | 'photos';
+    identity: string;
+    run: EditorialAiRun;
+    entry: EditorialEntry;
+    fields: AiField[];
+    photoIds: string[];
+    edits: Partial<Record<AiField, string>>;
+  } | null>(null);
   const lock = useRef(false);
   const applyLock = useRef(false);
+  const applyClaimedRef = useRef(false);
   const mountedRef = useRef(false);
   const identity = `${entry.id}:${entry.revision}`;
   const identityRef = useRef(identity);
@@ -351,12 +363,22 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const runEntryIdRef = useRef<string>();
   useEffect(() => () => {
     if (lock.current) { lock.current = false; setGenerationClaimed(false); }
+    if (applyClaimedRef.current) {
+      applyClaimedRef.current = false;
+      applyLock.current = false;
+      setGenerationClaimed(false);
+    }
   }, []);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (lock.current) { lock.current = false; setGenerationClaimed(false); }
+      if (applyClaimedRef.current) {
+        applyClaimedRef.current = false;
+        applyLock.current = false;
+        setGenerationClaimed(false);
+      }
     };
   }, []);
   useEffect(() => {
@@ -375,6 +397,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     setRevisionConflict(false);
     setError('');
     setHistoryOpen(false);
+    setTransferConfirmation(null);
     const nextSources = ((entry.data as CheeseData).sources || []).filter(url => !/^https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+$/.test(url)).join('\n');
     setSourcesText(nextSources);
     sourceBaseline.current = nextSources;
@@ -385,6 +408,9 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     setSelectedPhotoIds([]);
     setPhotoRightsConfirmed(false);
   }, [identity]);
+  useEffect(() => {
+    if (transferConfirmation && transferConfirmation.identity !== identity) setTransferConfirmation(null);
+  }, [identity, transferConfirmation]);
   const sourceBaseline = useRef(initialSources);
   const history = useQuery({
     queryKey: ['/admin/editorial-ai/history', 'draft', entry.id, historyPage],
@@ -551,44 +577,68 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     const selectedPhotos = selectedPhotoIds.length > 0;
     if (!current || current.status !== 'ready' || !draft || (selectedFields.length === 0 && !selectedPhotos)
       || (selectedPhotos && !photoRightsConfirmed) || current.appliedTo || revisionConflict || runStale
-      || busy || suggestionBusy || generationClaimed || applyLock.current) return;
-    applyLock.current = true;
-    setGenerationClaimed(true);
-    const fieldsLabel = selectedFields.map(key => AI_FIELDS.find(field => field.key === key)?.label).join(', ');
-    const photoLabel = selectedPhotos ? ` фотографии (${selectedPhotoIds.length})` : '';
-    const changesLabel = selectedFields.length ? `выбранные текстовые поля (${fieldsLabel})` : 'только выбранные фотографии';
-    const untouched = selectedPhotos
-      ? 'Координаты, видео, товары и фактическая страна производства не изменятся.'
-      : 'Фото, координаты, видео, товары и фактическая страна производства не изменятся.';
-    if (!window.confirm(`Применить ${changesLabel}${photoLabel} к текущей версии статьи? ${untouched} Публикации не будет; статья перейдёт в состояние «Ожидает подтверждения».`)) {
-      applyLock.current = false;
-      setGenerationClaimed(false);
-      return;
-    }
-    setBusy(true);
-    setError('');
+      || busy || suggestionBusy || generationClaimed || applyLock.current || transferConfirmation) return;
     const selectedEdits = Object.fromEntries(selectedFields
       .filter(field => edits[field] !== undefined)
       .map(field => [field, edits[field]])) as Partial<Record<AiField, string>>;
-    const requestIdentity = identity;
+    setTransferConfirmation({
+      mode: 'apply',
+      identity,
+      run: current,
+      entry,
+      fields: [...selectedFields],
+      photoIds: [...selectedPhotoIds],
+      edits: selectedEdits,
+    });
+  }
+  function releaseApplyClaim() {
+    applyLock.current = false;
+    if (applyClaimedRef.current) {
+      applyClaimedRef.current = false;
+      setGenerationClaimed(false);
+    }
+  }
+  async function confirmSelectedTransfer() {
+    const confirmation = transferConfirmation;
+    if (!confirmation || confirmation.mode !== 'apply' || applyLock.current || !mountedRef.current
+      || identityRef.current !== confirmation.identity
+      || entryIdRef.current !== confirmation.entry.id
+      || current?.id !== confirmation.run.id
+      || current.appliedTo || revisionConflict || runStale || busy || suggestionBusy || generationClaimed) return;
+    const photos = confirmation.photoIds.length > 0;
+    if (!confirmation.fields.length && !photos) return;
+    if (photos && (!photoRightsConfirmed || confirmation.photoIds.some(id => !selectedPhotoIds.includes(id)))) {
+      setTransferConfirmation(null);
+      return;
+    }
+    applyLock.current = true;
+    applyClaimedRef.current = true;
+    setGenerationClaimed(true);
+    setBusy(true);
+    setError('');
+    const requestIdentity = confirmation.identity;
     try {
-      const updated = await applyDraftWithEdits(current, entry, selectedFields, selectedEdits,
-        selectedPhotos ? { photoIds: selectedPhotoIds, photoRightsConfirmed: true } : undefined);
-      if (mountedRef.current && identityRef.current === requestIdentity) {
-        setRun({ ...current, appliedTo: { entryId: updated.id, revision: updated.revision } });
-        setServerTransfer((updated.data as CheeseData).aiResearch);
-        setOpen(false);
+      const updated = await applyDraftWithEdits(confirmation.run, confirmation.entry, confirmation.fields, confirmation.edits,
+        photos ? { photoIds: confirmation.photoIds, photoRightsConfirmed: true } : undefined);
+      if (!mountedRef.current || identityRef.current !== requestIdentity || entryIdRef.current !== updated.id) return;
+      setRun({ ...confirmation.run, appliedTo: { entryId: updated.id, revision: updated.revision } });
+      setServerTransfer((updated.data as CheeseData).aiResearch);
+      if (photos) {
+        setSelectedPhotoIds([]);
+        setPhotoRightsConfirmed(false);
       }
-      onApplied(updated);
+      setOpen(false);
+      setTransferConfirmation(null);
+      onApplied(updated, { openEditor: true });
     } catch (issue) {
       if (!mountedRef.current || identityRef.current !== requestIdentity) return;
+      setTransferConfirmation(null);
       if (isConflict(issue)) setRevisionConflict(true);
       setError(isConflict(issue)
         ? 'Статья изменилась после создания предложения. Предпросмотр и правки сохранены. Обновите список и сформируйте новое предложение для актуальной версии.'
         : errorMessage(issue));
     } finally {
-      applyLock.current = false;
-      setGenerationClaimed(false);
+      releaseApplyClaim();
       if (mountedRef.current) setBusy(false);
     }
   }
@@ -597,33 +647,48 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     if (!current || current.kind !== 'draft' || current.status !== 'ready' || !draft
       || runParams?.entryId !== entry.id || photoIds.length < 1 || photoIds.length > 3
       || !photoRightsConfirmed || busy || suggestionBusy || generationClaimed || applyLock.current) return;
+    if (transferConfirmation) return;
+    setTransferConfirmation({
+      mode: 'photos',
+      identity,
+      run: current,
+      entry,
+      fields: [],
+      photoIds,
+      edits: {},
+    });
+  }
+  async function confirmPhotoTransfer() {
+    const confirmation = transferConfirmation;
+    if (!confirmation || confirmation.mode !== 'photos' || confirmation.fields.length > 0 || !confirmation.photoIds.length
+      || applyLock.current || !mountedRef.current || identityRef.current !== confirmation.identity
+      || entryIdRef.current !== confirmation.entry.id || current?.id !== confirmation.run.id
+      || busy || suggestionBusy || generationClaimed || !photoRightsConfirmed
+      || confirmation.photoIds.some(id => !selectedPhotoIds.includes(id))) return;
     applyLock.current = true;
+    applyClaimedRef.current = true;
     setGenerationClaimed(true);
-    const requestIdentity = identity;
-    if (!window.confirm(`Сохранить ${photoIds.length} выбранную фотографию в текущей версии статьи? Будут добавлены только фотографии; текстовое предложение не будет применено или изменено.`)) {
-      applyLock.current = false;
-      setGenerationClaimed(false);
-      return;
-    }
     setBusy(true);
     setError('');
+    const requestIdentity = confirmation.identity;
     try {
-      const updated = await editorialAiApi.importPhotos(current, entry, photoIds, true);
+      const updated = await editorialAiApi.importPhotos(confirmation.run, confirmation.entry, confirmation.photoIds, true);
       if (!mountedRef.current || identityRef.current !== requestIdentity || entryIdRef.current !== updated.id) return;
       setSelectedPhotoIds([]);
       setPhotoRightsConfirmed(false);
       setServerTransfer((updated.data as CheeseData).aiResearch);
       setOpen(false);
-      onApplied(updated);
+      setTransferConfirmation(null);
+      onApplied(updated, { openEditor: true });
     } catch (issue) {
       if (!mountedRef.current || identityRef.current !== requestIdentity || entryIdRef.current !== entry.id) return;
+      setTransferConfirmation(null);
       if (isConflict(issue)) setRevisionConflict(true);
       setError(isConflict(issue)
         ? 'Статья изменилась во время импорта фотографий. Обновите список и повторите импорт для актуальной версии.'
         : errorMessage(issue));
     } finally {
-      applyLock.current = false;
-      setGenerationClaimed(false);
+      releaseApplyClaim();
       if (mountedRef.current) setBusy(false);
     }
   }
@@ -720,6 +785,70 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
         {(history.data?.total || 0) > (history.data?.limit || PAGE_SIZE) && <div className="flex justify-end gap-2"><Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || historyPage <= 1} onClick={() => setHistoryPage(page => page - 1)}>Назад</Button><span className="py-2 text-xs">Страница {historyPage}</span><Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || historyPage * (history.data?.limit || PAGE_SIZE) >= (history.data?.total || 0)} onClick={() => setHistoryPage(page => page + 1)}>Далее</Button></div>}
       </div>}
     </div>}
+    <Dialog open={Boolean(transferConfirmation)} onOpenChange={openDialog => {
+      if (!openDialog && !applyLock.current) setTransferConfirmation(null);
+    }}>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto border-[#d8d9cc] bg-[#fbfaf5] text-[#29352f] sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-xl">Подтвердите перенос</DialogTitle>
+          <DialogDescription className="text-[#68746b]">
+            Проверьте выбранные данные для статьи. До подтверждения ничего не сохраняется.
+          </DialogDescription>
+        </DialogHeader>
+        {transferConfirmation && <div className="space-y-4">
+          <div className="rounded border border-[#deddd2] bg-[#f1f0e8] p-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a654e]">Статья</p>
+            <p className="mt-1 font-serif text-lg">{(transferConfirmation.entry.data as CheeseData).title || 'Без названия'}</p>
+            <p className="mt-1 text-xs text-[#718075]">Текущая версия · ревизия {transferConfirmation.entry.revision}</p>
+          </div>
+          {transferConfirmation.fields.length > 0 && <section aria-label="Текстовые поля к переносу">
+            <h3 className="text-sm font-semibold">Текстовые поля</h3>
+            <ul className="mt-2 space-y-2">
+              {transferConfirmation.fields.map(key => {
+                const field = AI_FIELDS.find(item => item.key === key);
+                if (!field) return null;
+                const value = transferConfirmation.edits[key] ?? (draft?.fields[key] || '');
+                return <li key={key} className="rounded border border-[#e0dfd4] bg-white/70 p-3">
+                  <p className="text-xs font-semibold text-[#526158]">{field.label}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-5 text-[#29352f]">{value || 'Пустое значение'}</p>
+                </li>;
+              })}
+            </ul>
+          </section>}
+          {transferConfirmation.photoIds.length > 0 && <section aria-label="Фотографии к переносу">
+            <h3 className="text-sm font-semibold">Фотографии · {transferConfirmation.photoIds.length}</h3>
+            <ul className="mt-2 space-y-2">
+              {transferConfirmation.photoIds.map(photoId => {
+                const photo = draft?.research?.photos?.find(item => item.id === photoId);
+                return <li key={photoId} className="rounded border border-[#e0dfd4] bg-white/70 p-3">
+                  <p className="break-words text-sm font-medium">{photo?.label || `Фотография ${photoId}`}</p>
+                  {photo?.sourceUrl && <p className="mt-1 break-all text-xs text-[#718075]">{photo.sourceUrl}</p>}
+                  <p className="mt-1 text-xs text-[#718075]">Права использования подтверждены оператором</p>
+                </li>;
+              })}
+            </ul>
+          </section>}
+          <p className="rounded border-l-2 border-[#b66b48] bg-[#f5ece2] px-3 py-2 text-sm leading-5 text-[#684b3d]">
+            После сохранения статья останется в статусе «Ожидает подтверждения». Публикации не будет.
+          </p>
+        </div>}
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button type="button" variant="outline" disabled={busy} onClick={() => setTransferConfirmation(null)}>Отмена</Button>
+          <Button
+            type="button"
+            data-testid="ai-transfer-confirm"
+            disabled={busy || !transferConfirmation}
+            onClick={() => {
+              if (transferConfirmation?.mode === 'photos') void confirmPhotoTransfer();
+              else void confirmSelectedTransfer();
+            }}
+            className="bg-[#315647] text-[#f7f4e9] hover:bg-[#244537]"
+          >
+            {busy ? 'Сохраняем…' : 'Вставить и открыть редактор'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>;
 }
 

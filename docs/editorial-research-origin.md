@@ -108,7 +108,16 @@ non genera nuove ricerche, non riapplica i testi e non modifica la pubblicazione
 
 ### Trasferimento, revisione e pubblicazione
 
-Dopo un trasferimento riuscito di testi o fotografie, la ricerca si richiude.
+Prima di trasferire i testi o le fotografie selezionati, l'operatore deve
+confermare nella finestra del sito quali dati inserire nella scheda. Annullare
+non invia alcuna richiesta di salvataggio e conserva la proposta per la revisione.
+La sola generazione AI non applica i dati.
+
+Dopo un trasferimento riuscito di testi o fotografie, la ricerca si richiude e
+si apre automaticamente l'editor con i dati e la revisione restituiti dal server,
+in stato «Ожидает подтверждения». La conferma del salvataggio non equivale a
+un'approvazione editoriale. Errori, conflitti, semplici aggiornamenti dell'elenco
+e il solo salvataggio delle coordinate non aprono automaticamente l'editor.
 Il riepilogo con la spunta conserva le date della ricerca e del trasferimento,
 anche dopo il ricaricamento, e non dichiara che i contenuti sono verificati.
 I dettagli restano riapribili per consultare le fonti e selezionare altre foto.

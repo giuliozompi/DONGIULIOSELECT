@@ -101,6 +101,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const [rawLines, setRawLines] = useState<Record<string, string>>({});
   const requestLock = useRef(false);
   const [requestBusy, setRequestBusy] = useState(false);
+  const workspaceMounted = useRef(false);
+  const currentKindRef = useRef(kind);
+  const editorDialogRef = useRef(false);
+  currentKindRef.current = kind;
+  useEffect(() => {
+    workspaceMounted.current = true;
+    return () => { workspaceMounted.current = false; };
+  }, []);
 
   const listKey = ['/web-api/admin/editorial', kind, page, PAGE_SIZE];
   const listQuery = useQuery({
@@ -132,7 +140,8 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const invalidateEditorial = async () => {
     await qc.invalidateQueries({ queryKey: ['/web-api/admin/editorial'] });
   };
-  function handleAiEntryApplied(saved?: EditorialEntry) {
+  function handleAiEntryApplied(saved?: EditorialEntry, options?: { openEditor: true }) {
+    if (!workspaceMounted.current || currentKindRef.current !== 'cheese') return;
     if (saved) {
       qc.setQueriesData({ queryKey: ['/web-api/admin/editorial'] }, (cached: any) => {
         const replaceCurrent = (items: EditorialEntry[]) => items.map(item =>
@@ -144,6 +153,15 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
       });
     }
     void invalidateEditorial();
+    if (options?.openEditor && saved?.kind === 'cheese') {
+      toast({
+        title: 'Предложенные данные сохранены',
+        description: (saved.data as CheeseData).status === 'pending_review'
+          ? 'Статья ожидает подтверждения. Публикации не было.'
+          : 'Используется сохранённая версия статьи. Публикации не было.',
+      });
+      if (!editorDialogRef.current) openEdit(saved);
+    }
   }
   const createMutation = useMutation({
     mutationFn: (data: FormData) => editorialApi.create(kind, data),
@@ -213,6 +231,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setForm(fresh(kind));
     setRawLines({});
     setValidation([]);
+    editorDialogRef.current = true;
     setDialog(true);
   }
   function openEdit(entry: EditorialEntry) {
@@ -224,12 +243,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setForm(JSON.parse(JSON.stringify(entry.data)) as FormData);
     setRawLines({});
     setValidation([]);
+    editorDialogRef.current = true;
     setDialog(true);
   }
   function closeDialog(force = false) {
     if (!force && (saving || requestLock.current)) return;
     if (!force && dirty && !window.confirm('Есть несохранённые изменения. Закрыть без сохранения?')) return;
     setDialog(false);
+    editorDialogRef.current = false;
     setEditing(null);
     setValidation([]);
   }
@@ -412,7 +433,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                         <Button size="icon" variant="ghost" className="text-[#9d4d3f] hover:bg-[#f7e9e4]" aria-label={`Удалить ${rowTitle}`} disabled={requestBusy} onClick={() => { void deleteEntry(entry, rowTitle); }}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </CardContent>
-                     {kind === 'cheese' && <div className="px-4 pb-4 md:px-5"><CheeseAiDraft entry={entry} onApplied={handleAiEntryApplied} /></div>}
+                      {kind === 'cheese' && <div className="px-4 pb-4 md:px-5"><CheeseAiDraft entry={entry} onApplied={(saved, options) => handleAiEntryApplied(saved, options)} /></div>}
                   </Card>;
                 })}
               </div>}
@@ -420,7 +441,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
         {!listQuery.isLoading && !listQuery.isError && total > PAGE_SIZE && <div className="mt-5 flex items-center justify-between border-t border-[#d7d8cc] pt-4 text-sm"><span className="text-muted-foreground">Показаны {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} из {total}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}><ArrowLeft className="mr-1 h-4 w-4" />Назад</Button><Button size="sm" variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Далее<ArrowRight className="ml-1 h-4 w-4" /></Button></div></div>}
 
         <Dialog open={dialog} onOpenChange={open => !open && closeDialog()}>
-          <DialogContent className="max-h-[92dvh] max-w-2xl overflow-y-auto border-[#d7d8cc] bg-[#fbfaf6]">
+          <DialogContent data-testid="editorial-entry-editor" data-entry-revision={editing?.revision} className="max-h-[92dvh] max-w-2xl overflow-y-auto border-[#d7d8cc] bg-[#fbfaf6]">
             <DialogHeader><DialogTitle className="font-serif text-2xl">{editing ? 'Редактирование' : 'Новая запись'} · {titles[kind]}</DialogTitle></DialogHeader>
             <div className="space-y-5 py-2">
               {kind !== 'price' && <>
