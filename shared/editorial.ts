@@ -32,7 +32,15 @@ export const videoDataSchema = z.object({
   cheeseIds: ids.default([]),
 }).strict();
 export const cheeseDataSchema = z.object({
-  ...base, nameOriginal: text(200).default(''), photos: z.array(image).max(12).default([]),
+  ...base,
+  status: z.enum(['draft', 'pending_review', 'ready']).default('draft'),
+  // Written only by a successful server-side transfer; regular edits preserve it.
+  aiResearch: z.object({
+    runId: z.string().uuid(),
+    searchedAt: z.string().datetime(),
+    transferredAt: z.string().datetime(),
+  }).strict().optional(),
+  nameOriginal: text(200).default(''), photos: z.array(image).max(12).default([]),
   country: required(100), region: text(200).default(''),
   latitude: z.number().min(-90).max(90).nullable().default(null),
   longitude: z.number().min(-180).max(180).nullable().default(null),

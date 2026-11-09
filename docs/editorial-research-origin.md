@@ -106,6 +106,27 @@ corrente della scheda, conserva gli altri campi e richiede la conferma dei dirit
 Accetta solo candidati di una ricerca pronta appartenente alla stessa scheda;
 non genera nuove ricerche, non riapplica i testi e non modifica la pubblicazione.
 
+### Trasferimento, revisione e pubblicazione
+
+Dopo un trasferimento riuscito di testi o fotografie, la ricerca si richiude.
+Il riepilogo con la spunta conserva le date della ricerca e del trasferimento,
+anche dopo il ricaricamento, e non dichiara che i contenuti sono verificati.
+I dettagli restano riapribili per consultare le fonti e selezionare altre foto.
+Errori e annullamenti non producono questa conferma né richiudono il pannello.
+
+Le schede formaggio distinguono «В редакции» (redazione),
+«Ожидает подтверждения» (attesa di conferma dopo l'importazione),
+«Одобрена» (approvazione manuale dopo i controlli di completezza) e
+«Опубликована» (versione effettivamente pubblicata con un comando separato).
+Se esiste una versione pubblica precedente, viene indicato anche lo stato della
+nuova revisione non ancora pubblicata. L'importazione non sostituisce la versione
+pubblica e richiede una nuova approvazione.
+
+Il riferimento all'ultima ricerca trasferita è scritto dal servizio nella scheda;
+non può essere creato, sostituito o cancellato attraverso la normale modifica
+manuale. Il nuovo stato e il riferimento usano i dati JSON già esistenti e non
+richiedono nuove tabelle o colonne.
+
 La ricerca può proporre fino a tre URL di immagini realmente referenziate
 nell’HTML delle pagine pertinenti lette (metadati OpenGraph/Twitter e immagini
 del contenuto principale). Scarta URL non HTTPS/locali, duplicati, loghi e

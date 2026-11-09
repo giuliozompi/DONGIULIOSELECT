@@ -52,6 +52,13 @@ function dateLabel(value: string) {
 }
 function statusLabel(entry: EditorialEntry) {
   if (entry.kind === 'price') return entry.moderation === 'approved' ? 'Одобрено' : entry.moderation === 'rejected' ? 'Отклонено' : 'На проверке';
+  if (entry.kind === 'cheese') {
+    const state = (entry.data as CheeseData).status as string;
+    const label = state === 'ready' ? 'Одобрена' : state === 'pending_review' ? 'Ожидает подтверждения' : 'В редакции';
+    return entry.publication
+      ? entry.publication.publishedRevision === entry.revision ? 'Опубликована' : `Опубликована · текущая версия: ${label.toLocaleLowerCase('ru')}`
+      : label;
+  }
   if (entry.publication) return entry.publication.publishedRevision === entry.revision ? 'Опубликовано' : 'Опубликовано · изменения не опубликованы';
   return (entry.data as VideoData | CheeseData).status === 'ready' ? 'Готово · не опубликовано' : 'Черновик';
 }
@@ -355,7 +362,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
         <div className="mb-6 flex gap-3 border border-[#d9d7ca] bg-[#eae9df] p-4 text-sm leading-5 text-[#59645d]">
           <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-[#a05d41]" />
-          <p><strong className="font-semibold text-[#36483f]">Работа редакции.</strong> AI-каталог и черновые предложения по указанным оператором источникам доступны в DEVELOPMENT. Это непроверенные подсказки: оператор сверяет факты и цитаты, а публикация всегда выполняется отдельным действием. Статус «Готово» означает редакционную готовность, но не публикацию.</p>
+          <p><strong className="font-semibold text-[#36483f]">Работа редакции.</strong> AI-каталог и черновые предложения по указанным оператором источникам доступны в DEVELOPMENT. Это непроверенные подсказки: оператор сверяет факты и цитаты, а публикация всегда выполняется отдельным действием. {kind === 'cheese' ? 'Статус «Одобрена» означает редакционную готовность, но не публикацию.' : 'Статус «Готово» означает редакционную готовность, но не публикацию.'}</p>
         </div>
 
         {kind === 'cheese' && <EditorialAiCatalog onImported={() => { void invalidateEditorial(); }} />}
@@ -368,7 +375,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
         {listQuery.isLoading ? <div className="space-y-3" aria-label="Загрузка записей">{[0, 1, 2].map(i => <div key={i} className="h-24 animate-pulse rounded-lg bg-[#e5e3d9]" />)}</div> :
           listQuery.isError ? <Card className="border-[#dfdcd0] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center gap-3 py-12 text-center"><AlertCircle className="h-8 w-8 text-[#a05d41]" /><p className="font-medium">Не удалось загрузить записи</p><Button variant="outline" onClick={() => listQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Повторить</Button></CardContent></Card> :
-            entries.length === 0 ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center py-16 text-center"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e6ebe4] text-[#315647]"><FilePlus2 className="h-5 w-5" /></div><h2 className="font-serif text-xl">Пока нет записей</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Создайте первую запись редакции. Публичные страницы доступны только в DEVELOPMENT-превью; публикация выполняется отдельно от статуса «Готово».</p><Button className="mt-5 bg-[#315647] hover:bg-[#244537]" onClick={openCreate}>Создать запись</Button></CardContent></Card> :
+            entries.length === 0 ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center py-16 text-center"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e6ebe4] text-[#315647]"><FilePlus2 className="h-5 w-5" /></div><h2 className="font-serif text-xl">Пока нет записей</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Создайте первую запись редакции. Публичные страницы доступны только в DEVELOPMENT-превью; публикация выполняется отдельно от {kind === 'cheese' ? 'статуса «Одобрена»' : 'статуса «Готово»'}.</p><Button className="mt-5 bg-[#315647] hover:bg-[#244537]" onClick={openCreate}>Создать запись</Button></CardContent></Card> :
               <div className="space-y-3">
                 {entries.map(entry => {
                   const data = entry.data as FormData;
@@ -423,7 +430,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 </div> : field('Заголовок', 'title', (form as VideoData).title, { required: true })}
                 {textarea('Описание', 'description', (form as VideoData | CheeseData).description)}
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5"><Label htmlFor="ed-status">Внутренний статус</Label><select id="ed-status" className={nativeSelectClass} value={(form as VideoData | CheeseData).status} onChange={e => set('status', e.target.value)}><option value="draft">Черновик</option><option value="ready">Готово к редакционному этапу</option></select></div>
+                  <div className="space-y-1.5"><Label htmlFor="ed-status">{kind === 'cheese' ? 'Состояние статьи' : 'Внутренний статус'}</Label><select id="ed-status" className={nativeSelectClass} value={(form as VideoData | CheeseData).status} onChange={e => set('status', e.target.value)}>{kind === 'cheese' ? <><option value="draft">В редакции</option><option value="pending_review">Ожидает подтверждения</option><option value="ready">Одобрена</option></> : <><option value="draft">Черновик</option><option value="ready">Готово к редакционному этапу</option></>}</select>{kind === 'cheese' && <p className="text-xs text-muted-foreground">Публикация — отдельное действие; состояние текущей версии не означает, что она уже опубликована.</p>}</div>
                   {field('Порядок', 'sortOrder', (form as VideoData | CheeseData).sortOrder, { type: 'number', min: '0' })}
                 </div>
               </>}
@@ -443,25 +450,26 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 {textarea('История', 'history')}{textarea('Характеристики', 'characteristics')}{textarea('Кулинарное использование', 'culinaryUses')}
                 <section data-testid="cheese-photo-editor" className="space-y-2 rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <Label htmlFor="ed-photos">Фотографии · обязательны для статуса «Готово»</Label>
+                    <Label htmlFor="ed-photos">Фотографии · обязательны для статуса «Одобрена»</Label>
                     <span className="text-xs text-[#718075]">{cheesePhotos.length} из 12</span>
                   </div>
                   {cheesePhotos.length === 0
-                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. До сохранения как «Готово» выберите AI-фото, подтвердите права и нажмите «Импортировать фото отдельно» — в том числе после применения текста. Или добавьте URL вручную ниже.</p>
+                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. До сохранения как «Одобрена» выберите AI-фото, подтвердите права и нажмите «Импортировать фото отдельно» — в том числе после применения текста. Или добавьте URL вручную ниже.</p>
                     : <p className="text-sm text-[#526158]">Указано фотографий: {cheesePhotos.length}. Можно добавить или удалить URL вручную.</p>}
                   <Textarea id="ed-photos" value={rawLines.photos ?? (Array.isArray(cheeseForm.photos) ? cheeseForm.photos.join('\n') : String(cheeseForm.photos ?? ''))} rows={4} onChange={e => setLines('photos', e.target.value)} placeholder="https://… · по одному URL на строку" />
                   <p className="text-xs text-[#718075]">До 12 URL или путей изображений. Пустые строки игнорируются; редакция не загружает изображения с внешних сайтов автоматически.</p>
                 </section>
-                {lineTextarea('Источники — по одному http(s) URL на строку · обязательны для «Готово»', 'sources', cheeseForm.sources, 'До 30 источников.')}
+                {lineTextarea('Источники — по одному http(s) URL на строку · обязательны для «Одобрена»', 'sources', cheeseForm.sources, 'До 30 источников.')}
                 {relations('Связанные товары каталога', 'productIds', products.filter((product: any) => product.id != null).map((product: any) => ({ id: String(product.id), label: productName(product) })))}
                 {relations('Связанные видео — необязательно', 'videoIds', videos.map(entry => ({ id: entry.id, label: entryName(entry) })))}
-                {lineTextarea('Внешние видео-ссылки — необязательно', 'externalVideoUrls', cheeseForm.externalVideoUrls, 'Не обязательны для статуса «Готово». Ссылки YouTube или публичные посты Telegram.')}
+                {lineTextarea('Внешние видео-ссылки — необязательно', 'externalVideoUrls', cheeseForm.externalVideoUrls, 'Не обязательны для статуса «Одобрена». Ссылки YouTube или публичные посты Telegram.')}
+                {editing && <div data-testid="cheese-saved-status" className="rounded-md border border-[#d9d7ca] bg-[#f2f0e7] px-3 py-2 text-sm text-[#53645a]">Сохранённое состояние: <strong>{statusLabel(editing)}</strong>{editing.publication && <span className="ml-1">· опубликованная версия {editing.publication.publishedRevision}</span>}</div>}
                 {cheeseForm.status === 'ready' && <div data-testid="cheese-ready-requirements" aria-live="polite" className="rounded-md border border-[#dfc9b5] bg-[#f5ece2] p-3 text-sm text-[#684b3d]">
                   {(() => {
                     const missing = missingCheeseReadyRequirements(cheeseForm);
                     return missing.length
-                      ? <><p className="font-semibold">Для статуса «Готово» ещё нужны:</p><ul className="mt-1 list-inside list-disc">{missing.map(item => <li key={item}>{item}</li>)}</ul></>
-                      : <p className="font-semibold">Обязательные поля для «Готово» заполнены. Сохранение всё равно проверит формат ссылок и координат.</p>;
+                      ? <><p className="font-semibold">Для статуса «Одобрена» ещё нужны:</p><ul className="mt-1 list-inside list-disc">{missing.map(item => <li key={item}>{item}</li>)}</ul></>
+                      : <p className="font-semibold">Обязательные поля для «Одобрена» заполнены. Сохранение всё равно проверит формат ссылок и координат.</p>;
                   })()}
                   <p className="mt-2 text-xs">Регион, оригинальное название, связанные товары и видео — необязательны. Для черновика эти требования не блокируют сохранение.</p>
                 </div>}

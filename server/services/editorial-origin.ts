@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { pool } from '../db';
-import { cheeseDataSchema } from '../../shared/editorial';
+import { cheeseDataSchema, type CheeseData } from '../../shared/editorial';
 import {
   originLookupRequestSchema, originApplyRequestSchema, originLookupSchema, type OriginLookup,
 } from '../../shared/editorial-ai';
@@ -89,7 +89,8 @@ export async function applyEditorialOrigin(input: unknown, actor: string, databa
     if (!candidate) throw new EditorialError(400, 'Выберите координаты из сохранённого результата поиска.');
     const data = cheeseDataSchema.parse({
       ...old.data, latitude: candidate.latitude, longitude: candidate.longitude,
-      sources: Array.from(new Set([...(old.data as { sources: string[] }).sources, candidate.url])), status: 'draft',
+      sources: Array.from(new Set([...(old.data as { sources: string[] }).sources, candidate.url])),
+      status: (old.data as CheeseData).aiResearch ? 'pending_review' : 'draft',
     });
     const saved: Row = (await client.query(`UPDATE editorial_entries SET data=$2,revision=revision+1,
       updated_by=$3,updated_at=clock_timestamp() WHERE id=$1 RETURNING *`,

@@ -81,6 +81,14 @@ export async function saveEditorial(kind: EditorialKind, input: unknown, actor: 
       if (previous.kind !== kind) throw new EditorialError(400, 'Нельзя менять тип записи');
       if (previous.revision !== edit.revision) throw new EditorialError(409, 'Запись изменена другим оператором. Откройте её заново.');
     }
+    if (kind === 'cheese') {
+      // A checkbox or a crafted CRUD request cannot claim an AI transfer.
+      // Keep server evidence even when an older client omits the new field.
+      const cheese = data as CheeseData;
+      const research = (previous?.data as CheeseData | undefined)?.aiResearch;
+      if (research) cheese.aiResearch = research;
+      else delete cheese.aiResearch;
+    }
     await references(client, kind, data);
     const id = edit?.id ?? randomUUID();
     const moderation = kind === 'price' ? 'pending' : null;

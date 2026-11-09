@@ -337,6 +337,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const [suggestionBusy, setSuggestionBusy] = useState(false);
   const [globalAiBusy, setGlobalAiBusy] = useState(generationClaimed);
   const [error, setError] = useState('');
+  const [serverTransfer, setServerTransfer] = useState<CheeseData['aiResearch']>();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
   const lock = useRef(false);
@@ -367,6 +368,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     if (entryIdRef.current === entry.id) return;
     entryIdRef.current = entry.id;
     runEntryIdRef.current = undefined;
+    setServerTransfer(undefined);
     setRun(undefined);
     setSelectedFields([]);
     setEdits({});
@@ -415,6 +417,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const readyTextPendingApply = Boolean(draft && !current?.appliedTo
     && Object.values(draft.fields).some(value => typeof value === 'string' && value.trim().length > 0));
   const entryData = entry.data as CheeseData;
+  const researchMarker = entryData.aiResearch || serverTransfer;
   const entryRuns = history.data?.items || [];
   const editedProposal = Object.keys(edits).some(key => edits[key as AiField] !== draft?.fields[key as AiField]);
   const hasUnsavedChanges = sourcesText !== sourceBaseline.current || editedProposal || selectedPhotoIds.length > 0;
@@ -557,7 +560,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     const untouched = selectedPhotos
       ? 'Координаты, видео, товары и фактическая страна производства не изменятся.'
       : 'Фото, координаты, видео, товары и фактическая страна производства не изменятся.';
-    if (!window.confirm(`Применить ${changesLabel}${photoLabel} к текущей версии статьи? ${untouched} Публикации не будет; запись останется черновиком.`)) {
+    if (!window.confirm(`Применить ${changesLabel}${photoLabel} к текущей версии статьи? ${untouched} Публикации не будет; статья перейдёт в состояние «Ожидает подтверждения».`)) {
       applyLock.current = false;
       setGenerationClaimed(false);
       return;
@@ -573,6 +576,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
         selectedPhotos ? { photoIds: selectedPhotoIds, photoRightsConfirmed: true } : undefined);
       if (mountedRef.current && identityRef.current === requestIdentity) {
         setRun({ ...current, appliedTo: { entryId: updated.id, revision: updated.revision } });
+        setServerTransfer((updated.data as CheeseData).aiResearch);
+        setOpen(false);
       }
       onApplied(updated);
     } catch (issue) {
@@ -607,6 +612,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       if (!mountedRef.current || identityRef.current !== requestIdentity || entryIdRef.current !== updated.id) return;
       setSelectedPhotoIds([]);
       setPhotoRightsConfirmed(false);
+      setServerTransfer((updated.data as CheeseData).aiResearch);
+      setOpen(false);
       onApplied(updated);
     } catch (issue) {
       if (!mountedRef.current || identityRef.current !== requestIdentity || entryIdRef.current !== entry.id) return;
@@ -645,11 +652,14 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   return <div data-testid={`ai-draft-entry-${entry.id}`} className="editorial-ai mt-3 border-t border-[#e2e0d5] pt-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div><p className="ai-kicker">Редакторская сверка источников</p><p className="mt-1 text-xs text-[#6f7b71]">Предложение по выбранным ссылкам · не автоматическая проверка истинности</p></div>
+       <div className="flex flex-wrap items-center gap-2">
+       {researchMarker && <span data-testid="ai-research-transferred" role="status" className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-[#b8c9b8] bg-[#edf3eb] px-2.5 py-1 text-xs font-medium text-[#365b42]"><Check className="h-3.5 w-3.5" /><span>Данные исследования перенесены</span><span className="font-normal text-[#627365]">· поиск {prettyDate(researchMarker.searchedAt)} · перенос {prettyDate(researchMarker.transferredAt)}</span></span>}
        <Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => {
         if (lock.current || applyLock.current) return;
         if (!open) setOpen(true);
         else if (confirmDiscardChanges('Закрыть панель')) setOpen(false);
-      }} aria-expanded={open}><Sparkles className="mr-1.5 h-4 w-4" />{open ? 'Свернуть' : 'Подготовить с ИИ'}</Button>
+      }} aria-expanded={open} data-testid={`ai-research-toggle-${entry.id}`}><Sparkles className="mr-1.5 h-4 w-4" />{open ? 'Свернуть' : researchMarker ? 'Открыть исследование' : 'Подготовить с ИИ'}</Button>
+       </div>
     </div>
     {open && <div className="mt-3 rounded border border-[#e0dfd4] bg-[#f8f7f0] p-3">
       <label className="block text-sm font-medium" htmlFor={`ai-sources-${entry.id}`}>Источники для анализа, только выбранные оператором</label>
@@ -759,6 +769,6 @@ function DraftPreview({ draft, entryData, edits, selectedFields, selectedPhotoCo
       </article>;
     })}</div>
     {draft.sources.length > 0 && <div className="rounded border border-[#e0dfd4] bg-[#f1f0e8] p-3 text-xs"><strong>Полученные источники</strong><ul className="mt-1 space-y-1">{draft.sources.map((source, index) => <li key={`${source.sha256}-${index}`}><a className="break-all underline underline-offset-2" href={source.finalUrl} target="_blank" rel="noreferrer">{source.title || source.finalUrl}</a><span className="ml-1 text-[#7a857b]">· получен {prettyDate(source.retrievedAt)} · {source.characters.toLocaleString('ru-RU')} знаков · SHA-256 {source.sha256.slice(0, 12)}…{source.truncated ? ' · текст усечён' : ''}</span></li>)}</ul></div>}
-    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-[#718075]">{stale ? 'Версия записи изменилась. Обновите запись и сформируйте новое предложение; текущий предпросмотр сохранён.' : 'Применяются только отмеченные поля и фотографии. Запись останется черновиком.'}</p><Button data-testid="ai-draft-apply" disabled={busy || applied || stale || (selectedFields.length === 0 && selectedPhotoCount === 0) || (selectedPhotoCount > 0 && !photoRightsConfirmed)} onClick={onApply} className="bg-[#315647] hover:bg-[#244537]">{applied ? 'Уже применено' : selectedFields.length && selectedPhotoCount ? 'Применить выбранный текст и фото' : selectedPhotoCount ? 'Применить выбранные фото' : 'Применить выбранные поля'}</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-[#718075]">{stale ? 'Версия записи изменилась. Обновите запись и сформируйте новое предложение; текущий предпросмотр сохранён.' : 'Применяются только отмеченные поля и фотографии. После переноса статья ожидает подтверждения; публикация — отдельное решение редактора.'}</p><Button data-testid="ai-draft-apply" disabled={busy || applied || stale || (selectedFields.length === 0 && selectedPhotoCount === 0) || (selectedPhotoCount > 0 && !photoRightsConfirmed)} onClick={onApply} className="bg-[#315647] hover:bg-[#244537]">{applied ? 'Уже применено' : selectedFields.length && selectedPhotoCount ? 'Применить выбранный текст и фото' : selectedPhotoCount ? 'Применить выбранные фото' : 'Применить выбранные поля'}</Button></div>
   </div>;
 }

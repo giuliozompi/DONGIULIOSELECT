@@ -15,6 +15,13 @@ async function lockedRun(client: any, id: string, kind: 'catalog' | 'draft'): Pr
   if (row.kind !== kind || row.status !== 'ready') throw new EditorialError(409, 'Эта заготовка ещё не готова или не подходит для операции.');
   return row;
 }
+function researchTransfer(run: RunRow): NonNullable<CheeseData['aiResearch']> {
+  return {
+    runId: run.id,
+    searchedAt: (run.result as DraftResult).research?.searchedAt || new Date(run.created_at).toISOString(),
+    transferredAt: new Date().toISOString(),
+  };
+}
 export async function rankAiCatalog(id: string, input: unknown, actor: string, database = pool) {
   if (!actor) throw new EditorialError(401, 'Требуется авторизация');
   const body = rankRequestSchema.parse(input);
@@ -118,7 +125,8 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     data.photos = Array.from(new Set([...data.photos, ...selectedPhotos.map(photo => photo.imageUrl)]));
     if (data.photos.length > 12)
       throw new EditorialError(400, 'В статье может быть не более 12 фотографий. Сначала удалите лишние изображения.');
-    data.status = 'draft';
+    data.status = 'pending_review';
+    data.aiResearch = researchTransfer(run);
     const parsed = cheeseDataSchema.parse(data);
     const saved: Row = (await client.query(`UPDATE editorial_entries SET data=$2,revision=revision+1,
       updated_by=$3,updated_at=clock_timestamp() WHERE id=$1 RETURNING *`,
@@ -163,7 +171,9 @@ export async function importAiPhotos(id: string, input: unknown, actor: string, 
     const sources = Array.from(new Set([...data.sources, ...selectedPhotos.map(photo => photo.sourceUrl)]));
     if (photos.length > 12) throw new EditorialError(400, 'В статье может быть не более 12 фотографий.');
     if (photos.length === data.photos.length && sources.length === data.sources.length) return entry(old);
-    const parsed = cheeseDataSchema.parse({ ...data, photos, sources, status: 'draft' });
+    const parsed = cheeseDataSchema.parse({
+      ...data, photos, sources, status: 'pending_review', aiResearch: researchTransfer(run),
+    });
     const saved: Row = (await client.query(`UPDATE editorial_entries SET data=$2,revision=revision+1,
       updated_by=$3,updated_at=clock_timestamp() WHERE id=$1 RETURNING *`,
     [old.id, JSON.stringify(parsed), actor])).rows[0];

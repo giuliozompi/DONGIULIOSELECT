@@ -13,7 +13,9 @@ export async function changePublication(id: string, revision: number, publish: b
     if (old.revision !== revision) throw new EditorialError(409, 'Материал изменён. Откройте его заново.');
     if (publish) {
       const data = editorialSchemas[old.kind].parse(old.data);
-      if (data.status !== 'ready') throw new EditorialError(409, 'Сначала подготовьте материал и установите статус «Готово».');
+      if (data.status !== 'ready') throw new EditorialError(409, old.kind === 'cheese'
+        ? 'Сначала проверьте материал и установите статус «Одобрена».'
+        : 'Сначала подготовьте материал и установите статус «Готово».');
       if (old.published_revision === old.revision) return entry(old);
       await client.query(`INSERT INTO editorial_publications
         (entry_id,kind,data,published_revision,published_by)

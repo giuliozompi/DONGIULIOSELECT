@@ -17,7 +17,7 @@ import { structuredResearchPlan, researchCoverage, editorialSourcePassages } fro
 import { sourcePageImages, researchPhotos } from '../server/services/editorial-research-photos';
 import { fetchOriginCandidates, originProviderSettings } from '../server/services/editorial-origin-provider';
 import { lookupEditorialOrigin, applyEditorialOrigin } from '../server/services/editorial-origin';
-import { EditorialError, saveEditorial } from '../server/services/editorial';
+import { EditorialError, saveEditorial, listEditorial } from '../server/services/editorial';
 import { changePublication } from '../server/services/editorial-publication';
 import { EditorialModelError } from '../server/services/editorial-ai-config';
 import { EditorialSourceError } from '../server/services/editorial-ai-sources';
@@ -350,7 +350,9 @@ test('research run is idempotent, source-based, review-only, warns on missing fi
   await assert.rejects(reserveAiRun('draft', parameters(entry), 'operator', db), fails(429));
   const applied = await applyAiDraft(ready.id, { entryId: entry.id, revision: entry.revision, fields: ['history'] }, 'operator', db);
   assert.equal(applied.data.productionCountry, 'Россия'); assert.equal(applied.data.latitude, 40);
-  assert.equal(applied.data.status, 'draft');
+  assert.equal(applied.data.status, 'pending_review');
+  assert.equal(applied.data.aiResearch?.runId, ready.id);
+  assert.ok(applied.data.aiResearch?.transferredAt);
   assert.equal((await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data.history, 'Old history');
 });
 test('model failure keeps search results without storing raw pages, changing the entry, or retrying', async () => {
@@ -398,7 +400,8 @@ test('photos can be imported after text and later article edits without losing d
   assert.equal(saved.data.region, 'Revised region');
   assert.equal(saved.data.latitude, 45.1);
   assert.equal(saved.data.longitude, 7.2);
-  assert.equal(saved.data.status, 'draft');
+  assert.equal(saved.data.status, 'pending_review');
+  assert.equal(saved.data.aiResearch?.runId, ready.id);
   assert.ok(saved.data.sources.includes(photos[0].sourceUrl));
   const pub = (await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data;
   assert.deepEqual(pub.photos, ['https://example.org/photo.jpg']);
@@ -411,6 +414,79 @@ test('photos can be imported after text and later article edits without losing d
   const logs = (await db.query("SELECT action_data FROM admin_action_logs WHERE entity_id=$1 AND action_type='ai_photos_imported'", [entry.id])).rows;
   assert.equal(logs.length, 1);
   assert.ok(JSON.stringify(logs).includes('"photoRightsConfirmed":true'));
+});
+test('research transfer evidence and pending status survive reload and cannot be forged by manual CRUD', async () => {
+  const { entry, ready } = await readyPhotoDraft();
+  const marker = { runId: randomUUID(), searchedAt: new Date().toISOString(), transferredAt: new Date().toISOString() };
+  const created = await saveEditorial('cheese', { ...identity, aiResearch: marker }, 'operator', undefined, db);
+  assert.equal(created.data.aiResearch, undefined, 'manual creation cannot claim a completed transfer');
+  assert.equal((await db.query('SELECT data FROM editorial_entries WHERE id=$1', [entry.id])).rows[0].data.aiResearch, undefined,
+    'a ready search without transfer is not marked as transferred');
+  await assert.rejects(applyAiDraft(ready.id, {
+    entryId: entry.id, revision: entry.revision + 1, fields: ['history'],
+  }, 'operator', db), fails(409));
+  assert.equal((await db.query('SELECT data FROM editorial_entries WHERE id=$1', [entry.id])).rows[0].data.aiResearch, undefined);
+  const saved = await applyAiDraft(ready.id, {
+    entryId: entry.id, revision: entry.revision, fields: ['history'],
+  }, 'operator', db);
+  assert.equal(saved.data.status, 'pending_review');
+  assert.equal(saved.data.aiResearch?.runId, ready.id);
+  assert.equal(saved.data.aiResearch?.searchedAt, (ready.result as DraftResult).research?.searchedAt);
+  assert.ok(Number.isFinite(Date.parse(saved.data.aiResearch!.transferredAt)));
+  const reloaded = (await listEditorial('cheese', 0, 20, db)).items.find(item => item.id === entry.id)!;
+  assert.deepEqual(reloaded.data.aiResearch, saved.data.aiResearch);
+  assert.equal(reloaded.data.status, 'pending_review');
+  const { aiResearch: omitted, ...olderClient } = saved.data;
+  const edited = await saveEditorial('cheese', { ...olderClient, description: 'Manual edit' },
+    'operator', saved, db);
+  assert.deepEqual(edited.data.aiResearch, omitted, 'older clients cannot erase server evidence');
+  const forged = await saveEditorial('cheese', { ...edited.data, aiResearch: marker },
+    'operator', edited, db);
+  assert.deepEqual(forged.data.aiResearch, saved.data.aiResearch, 'manual input cannot forge another transfer');
+  assert.equal(forged.data.status, 'pending_review');
+});
+test('awaiting confirmation is not approval or publication and a later transfer requires fresh review', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft();
+  const applied = await applyAiDraft(ready.id, {
+    entryId: entry.id, revision: entry.revision, fields: ['history'],
+  }, 'operator', db);
+  assert.equal(applied.publication, null);
+  await assert.rejects(changePublication(applied.id, applied.revision, true, 'operator', db), fails(409));
+  const approved = await saveEditorial('cheese', { ...applied.data, status: 'ready' }, 'operator', applied, db);
+  assert.equal(approved.data.status, 'ready');
+  assert.equal(approved.publication, null, 'approval never creates a publication');
+  assert.deepEqual(approved.data.aiResearch, applied.data.aiResearch);
+  const published = await changePublication(approved.id, approved.revision, true, 'operator', db);
+  assert.equal(published.publication?.publishedRevision, published.revision);
+  const before = (await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data;
+  const imported = await importAiPhotos(ready.id, {
+    entryId: entry.id, revision: published.revision, photoIds: [photos[0].id], photoRightsConfirmed: true,
+  }, 'operator', db);
+  assert.equal(imported.data.status, 'pending_review');
+  assert.equal(imported.publication?.publishedRevision, published.revision);
+  assert.notEqual(imported.publication?.publishedRevision, imported.revision);
+  assert.deepEqual((await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data, before);
+  await assert.rejects(changePublication(imported.id, imported.revision, true, 'operator', db), fails(409));
+  const incomplete = await saveEditorial('cheese', { ...imported.data, history: '', status: 'pending_review' },
+    'operator', imported, db);
+  await assert.rejects(saveEditorial('cheese', { ...incomplete.data, status: 'ready' }, 'operator', incomplete, db));
+  assert.deepEqual(incomplete.data.aiResearch, imported.data.aiResearch);
+});
+test('origin selection after AI transfer preserves evidence and awaiting confirmation', async () => {
+  const { entry, ready } = await readyPhotoDraft();
+  const applied = await applyAiDraft(ready.id, {
+    entryId: entry.id, revision: entry.revision, fields: ['history'],
+  }, 'operator', db);
+  const lookup = await lookupEditorialOrigin({
+    entryId: applied.id, revision: applied.revision, place: 'Castelmagno',
+  }, 'operator', db, async () => [candidate], {});
+  const saved = await applyEditorialOrigin({
+    entryId: applied.id, revision: applied.revision, lookupId: lookup.lookupId, candidateId: candidate.id,
+  }, 'operator', db);
+  assert.equal(saved.data.status, 'pending_review');
+  assert.equal(saved.data.latitude, candidate.latitude);
+  assert.equal(saved.data.longitude, candidate.longitude);
+  assert.deepEqual(saved.data.aiResearch, applied.data.aiResearch);
 });
 test('independent photo import rejects stale revisions, forged URLs or IDs, wrong articles and absent rights', async () => {
   const { entry, ready, photos } = await readyPhotoDraft();
@@ -467,7 +543,7 @@ test('selected photos append atomically with text, keep provenance, audit rights
   assert.equal(saved.data.history, 'Документированная история.');
   assert.ok(saved.data.sources.includes(photos[0].sourceUrl));
   assert.equal(saved.data.productionCountry, 'Россия');
-  assert.equal(saved.data.status, 'draft');
+  assert.equal(saved.data.status, 'pending_review');
   const pub = (await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data;
   assert.deepEqual(pub.photos, ['https://example.org/photo.jpg']);
   assert.equal(pub.history, 'Old history');

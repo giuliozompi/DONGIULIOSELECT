@@ -241,7 +241,8 @@ test('source draft has real quote support, sends no private/customer/catalogue c
   assert.equal((applied.data as any).history, draft().fields.history);
   for (const key of ['photos', 'latitude', 'longitude', 'productionCountry', 'productIds', 'videoIds', 'description'])
     assert.deepEqual((applied.data as any)[key], before[key]);
-  assert.equal((applied.data as any).status, 'draft');
+  assert.equal((applied.data as any).status, 'pending_review');
+  assert.equal((applied.data as any).aiResearch.runId, run.id);
   assert.equal((applied.data as any).sources.includes(evidence.url), true);
   assert.equal(applied.publication?.publishedRevision, c.revision);
   assert.equal((await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [c.id])).rows[0].data.history, 'Old history');

@@ -17,7 +17,7 @@ test('research is explicit, partial failures remain visible, and origin points r
     photos: [], videoIds: [], productIds: [], externalVideoUrls: [], sortOrder: 0,
     latitude: null, longitude: null, history: '', characteristics: '', culinaryUses: '', productionCountry: '',
   };
-  let entry = { id, kind: 'cheese', revision: 1, data, publication: null, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' };
+  let entry = { id, kind: 'cheese', revision: 1, data, publication: { publishedAt: '2025-12-30T00:00:00Z', publishedRevision: 0 }, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' };
   const found = 'https://example.com/discovered-cheese-source';
   const report = {
     provider: 'brave', queries: ['Parmigiano Reggiano history Emilia-Romagna'],
@@ -39,7 +39,8 @@ test('research is explicit, partial failures remain visible, and origin points r
       sha256: 'a'.repeat(64), characters: 812, truncated: false,
     }] }, error: 'Fixture model failure', appliedTo: null,
   };
-  let researchCalls = 0, runGetCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0, photoImportCalls = 0;
+  let researchCalls = 0, runGetCalls = 0, lookupCalls = 0, applyCoordinateCalls = 0, draftApplyCalls = 0, successfulDraftApplyCalls = 0, photoImportCalls = 0;
+  let failNextApply = true;
   let imagePreviewCalls = 0;
   let researchRequests = [], lookupRequests = [], coordinateRequests = [], draftApplyRequests = [], photoImportRequests = [];
   const exceptions = [];
@@ -130,18 +131,25 @@ test('research is explicit, partial failures remain visible, and origin points r
       assert.equal(request.revision, entry.revision, 'photo-only import uses the current entry revision');
       assert.equal(request.photoRightsConfirmed, true);
       assert.equal(request.photoIds.length >= 1 && request.photoIds.length <= 3, true);
-      assert.equal(draftApplyCalls, 1, 'photo import is separate from text apply');
+      assert.equal(successfulDraftApplyCalls, 1, 'photo import is separate from text apply');
       entry = {
         ...entry,
         revision: entry.revision + 1,
-        data: { ...entry.data, photos: Array.from(new Set([...entry.data.photos, ...request.photoIds.map(photoId => `https://photo-fixture.example.test/${photoId === 'photo-second' ? 'second' : 'ready'}.jpg`)])) },
+        data: { ...entry.data, status: 'pending_review', aiResearch: entry.data.aiResearch || { runId: '55555555-5555-4555-8555-555555555555', searchedAt: '2026-01-01T12:00:00.000Z', transferredAt: '2026-01-01T12:10:00.000Z' }, photos: Array.from(new Set([...entry.data.photos, ...request.photoIds.map(photoId => `https://photo-fixture.example.test/${photoId === 'photo-second' ? 'second' : 'ready'}.jpg`)])) },
       };
       body = entry;
     } else if (url.pathname.includes('/editorial-ai/') && url.pathname.endsWith('/apply')) {
       draftApplyCalls++;
       draftApplyRequests.push(JSON.parse(event.request.postData));
-      entry = { ...entry, revision: 3, data: { ...entry.data, title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия', photos: draftApplyRequests.at(-1).photoIds?.includes('photo-ready') ? ['https://photo-fixture.example.test/ready.jpg'] : entry.data.photos } };
-      body = entry;
+      if (failNextApply) {
+        failNextApply = false;
+        status = 500;
+        body = { message: 'Fixture transfer failure' };
+      } else {
+        successfulDraftApplyCalls++;
+        entry = { ...entry, revision: 3, data: { ...entry.data, status: 'pending_review', aiResearch: { runId: '55555555-5555-4555-8555-555555555555', searchedAt: '2026-01-01T12:00:00.000Z', transferredAt: '2026-01-01T12:10:00.000Z' }, title: 'Пармиджано Реджано — текст редактора', region: 'Ломбардия', photos: draftApplyRequests.at(-1).photoIds?.includes('photo-ready') ? ['https://photo-fixture.example.test/ready.jpg'] : entry.data.photos } };
+        body = entry;
+      }
     } else if (event.request.method !== 'GET' && url.pathname !== '/web-api/auth/refresh') {
       throw new Error(`Unexpected fixture mutation: ${url.pathname}`);
     }
@@ -157,6 +165,7 @@ test('research is explicit, partial failures remain visible, and origin points r
     await page.wait(`!!document.querySelector('[data-testid="ai-draft-entry-${id}"]')`);
     await page.evaluate(`([...document.querySelectorAll('#entry-${id} button')].find(button=>button.textContent.includes('Изменить'))).click()`);
     await page.wait(`!!document.querySelector('[data-testid="cheese-photo-editor"]')`);
+    assert.equal(await page.evaluate(`Array.from(document.querySelector('#ed-status').options).map(option=>option.textContent).join('|')`), 'В редакции|Ожидает подтверждения|Одобрена', 'cheese state selector distinguishes editorial workflow states');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-photo-editor"]').innerText.includes('Фотографий пока нет')`), true, 'the edit dialog makes missing photos explicit');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-photo-editor"]').innerText.includes('добавьте URL вручную')`), true, 'manual photo URLs are clearly offered');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-photo-editor"]').innerText.includes('0 из 12')`), true, 'the existing photo count is visible');
@@ -165,12 +174,19 @@ test('research is explicit, partial failures remain visible, and origin points r
     await page.wait(`!!document.querySelector('[data-testid="cheese-ready-requirements"]')`);
     const readyGuidance = await page.evaluate(`document.querySelector('[data-testid="cheese-ready-requirements"]').innerText`);
     const missingGuidance = readyGuidance.split('Регион, оригинальное название')[0];
+    assert.equal(missingGuidance.includes('Одобрена'), true, 'cheese readiness guidance uses the approved label');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-photo-editor"]').innerText.includes('До сохранения как «Одобрена»')`), true, 'photo guidance uses the approved label');
     for (const requirement of ['История', 'Характеристики', 'Кулинарное использование', 'Фотография', 'Обе координаты происхождения']) {
       assert.equal(missingGuidance.includes(requirement), true, `ready guidance lists missing ${requirement}`);
     }
     assert.equal(missingGuidance.includes('Источники'), false, 'existing sources satisfy the schema requirement');
     assert.equal(missingGuidance.includes('Регион'), false, 'region is not a ready requirement in the shared schema');
     await page.evaluate(`(() => {const status=document.querySelector('#ed-status');status.value='draft';status.dispatchEvent(new Event('change',{bubbles:true}));[...document.querySelectorAll('[role="dialog"] button')].find(button=>button.textContent.trim()==='Отмена').click()})()`);
+    assert.equal(await page.evaluate(`document.querySelector('#entry-${id}').innerText.includes('Опубликована · текущая версия: в редакции')`), true, 'a live older revision is distinct from the unpublished current draft');
+    await page.evaluate(`([...document.querySelectorAll('#entry-${id} button')].find(button=>button.textContent.includes('Изменить'))).click()`);
+    await page.wait(`!!document.querySelector('[data-testid="cheese-saved-status"]')`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-saved-status"]').innerText.includes('Опубликована · текущая версия: в редакции')`), true, 'edit dialog shows saved publication and current editorial state separately');
+    await page.evaluate(`([...document.querySelectorAll('[role="dialog"] button')].find(button=>button.textContent.trim()==='Отмена')).click()`);
     await page.evaluate(`document.querySelector('[data-testid="ai-draft-entry-${id}"] button').click()`);
     // Opening the panel must not trigger internet search or geocoding.
     assert.equal(researchCalls, 0);
@@ -285,14 +301,27 @@ test('research is explicit, partial failures remain visible, and origin points r
     await page.evaluate(`document.querySelector('[data-testid="ai-photo-rights-confirm"]').click()`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').disabled`), false, 'rights confirmation unlocks the explicit apply action');
     await clickButton('ai-draft-apply');
-    await page.wait(`document.body.innerText.includes('Уже применено')`);
-    assert.equal(draftApplyCalls, 1, 'text is only saved after explicit field selection and apply');
+    await page.wait(`document.querySelector('[data-testid="ai-draft-apply"]')?.disabled === false`);
+    await delay(250);
+    assert.equal(draftApplyCalls, 1, 'the fixture returned a failed transfer response');
+    assert.equal(await page.evaluate(`!!document.querySelector('[data-testid="ai-research-report"]')`), true, 'failed transfer leaves research expanded');
+    assert.equal(await page.evaluate(`!!document.querySelector('[data-testid="ai-research-transferred"]')`), false, 'failed transfer does not claim server success');
+    await clickButton('ai-draft-apply');
+    await page.wait(`!!document.querySelector('[data-testid="ai-research-transferred"]')`);
+    await page.wait(`!document.querySelector('[data-testid="ai-research-report"]')`);
+    assert.equal(await page.evaluate(`!!document.querySelector('[data-testid="ai-research-transferred"]')`), true, 'successful server transfer leaves a persistent check summary while research is collapsed');
+    assert.equal(await page.evaluate(`document.querySelector('#entry-${id}').innerText.toLocaleLowerCase('ru').includes('ожидает подтверждения')`), true, 'successful AI transfer is awaiting confirmation, not approved or published');
+    await page.evaluate(`document.querySelector('[data-testid="ai-research-toggle-${id}"]').click()`);
+    await page.wait(`!!document.querySelector('[data-testid="ai-research-report"]')`);
+    assert.equal(successfulDraftApplyCalls, 1, 'text is only saved after explicit field selection and successful apply');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-select-all"]').disabled`), true, 'select-all remains locked after apply');
     assert.equal(await page.evaluate(`document.getElementById(document.querySelector('[data-testid="ai-draft-select-all"]').getAttribute('aria-describedby')).innerText.includes('Это предложение уже применено')`), true, 'applied state explains why selection is locked');
     assert.deepEqual(draftApplyRequests[0].fields, ['title', 'region']);
     assert.equal(draftApplyRequests[0].edits.title, 'Редакторская правка названия', 'the preserved operator edit is sent only with explicit apply');
     assert.deepEqual(draftApplyRequests[0].photoIds, ['photo-ready'], 'only explicitly selected photos are applied');
     assert.equal(draftApplyRequests[0].photoRightsConfirmed, true, 'photo rights confirmation is sent with the apply request');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').innerText`), 'Уже применено', 'reopened applied proposal remains one-shot');
+    assert.equal(researchCalls, 2, 'reopening transferred research does not start another paid run');
     await page.wait(`document.querySelector('[data-testid="ai-origin-place"]').value === 'Ломбардия'`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-origin-lookup"]').disabled`), false, 'lookup unlocks after the applied region is saved');
     assert.equal(lookupCalls, 1, 'applying region still does not start a paid lookup automatically');
@@ -315,12 +344,16 @@ test('research is explicit, partial failures remain visible, and origin points r
     await page.evaluate(`document.querySelector('[data-testid="ai-photo-rights-confirm"]').click()`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-photo-import"]').disabled`), false);
     await clickButton('ai-photo-import');
-    await page.wait(`document.querySelector('[data-testid="ai-photo-select-photo-second"]')?.checked === false && document.querySelector('[data-testid="ai-photo-import"]')?.disabled === true`);
+    await page.wait(`!document.querySelector('[data-testid="ai-research-report"]')`);
     assert.equal(photoImportCalls, 1);
+    await page.wait(`!document.querySelector('[data-testid="ai-research-report"]')`);
+    assert.equal(await page.evaluate(`!!document.querySelector('[data-testid="ai-research-transferred"]')`), true, 'photo-only transfer also collapses with a persistent summary');
+    await page.evaluate(`document.querySelector('[data-testid="ai-research-toggle-${id}"]').click()`);
+    await page.wait(`!!document.querySelector('[data-testid="ai-research-report"]')`);
     assert.deepEqual(photoImportRequests[0].photoIds, ['photo-second']);
     assert.equal(photoImportRequests[0].revision, 4, 'photo import uses the revision from the later coordinate save');
     assert.equal(researchCalls, 2, 'photo import does not start another research run');
-    assert.equal(draftApplyCalls, 1, 'photo import does not make another text apply request');
+    assert.equal(successfulDraftApplyCalls, 1, 'photo import does not make another text apply request');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-draft-apply"]').innerText`), 'Уже применено', 'photo-only import leaves the original run applied marker unchanged');
     assert.equal(researchRequests.length, 2);
     await page.evaluate(`([...document.querySelectorAll('#entry-${id} button')].find(button=>button.textContent.includes('Изменить'))).click()`);
@@ -328,6 +361,25 @@ test('research is explicit, partial failures remain visible, and origin points r
     assert.equal(await page.evaluate(`document.querySelector('#ed-photos').value`), 'https://photo-fixture.example.test/ready.jpg\nhttps://photo-fixture.example.test/second.jpg', 'the saved photo is appended without replacing the existing photo');
     assert.equal(await page.evaluate(`document.querySelector('#ed-latitude').value`), '44.5', 'saved latitude is visible in the updated article');
     assert.equal(await page.evaluate(`document.querySelector('#ed-longitude').value`), '11', 'saved longitude is visible in the updated article');
+    await page.evaluate(`([...document.querySelectorAll('[role="dialog"] button')].find(button=>button.textContent.trim()==='Отмена')).click()`);
+    await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses` });
+    await page.wait(`!!document.querySelector('[data-testid="ai-research-transferred"]')`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-transferred"]').innerText.includes('2026')`), true, 'transfer confirmation date is restored from the persisted entry marker after reload');
+    entry = { ...entry, revision: entry.revision + 1, publication: null, data: { ...entry.data, status: 'ready' } };
+    await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses` });
+    await page.wait(`document.querySelector('#entry-${id}')?.innerText.includes('Одобрена')`);
+    assert.equal(await page.evaluate(`document.querySelector('#entry-${id}').innerText.includes('Опубликована')`), false, 'approved is not represented as published');
+    entry = { ...entry, publication: { publishedAt: '2026-01-02T00:00:00Z', publishedRevision: entry.revision } };
+    await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses` });
+    await page.wait(`document.querySelector('#entry-${id}')?.innerText.includes('Опубликована')`);
+    await page.evaluate(`([...document.querySelectorAll('#entry-${id} button')].find(button=>button.textContent.includes('Изменить'))).click()`);
+    await page.wait(`!!document.querySelector('[data-testid="cheese-saved-status"]')`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="cheese-saved-status"]').innerText.includes('Опубликована')`), true, 'edit dialog identifies the saved published revision');
+    await page.evaluate(`([...document.querySelectorAll('[role="dialog"] button')].find(button=>button.textContent.trim()==='Отмена')).click()`);
+    entry = { ...entry, publication: { publishedAt: '2026-01-02T00:00:00Z', publishedRevision: entry.revision - 1 }, data: { ...entry.data, status: 'pending_review' } };
+    await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses` });
+    await page.wait(`document.querySelector('#entry-${id}')?.innerText.includes('текущая версия: ожидает подтверждения')`);
+    assert.equal(await page.evaluate(`document.querySelector('#entry-${id}').innerText.includes('Опубликована · текущая версия: ожидает подтверждения')`), true, 'published live content and unpublished edits are both labeled');
     assert.deepEqual(exceptions, []);
   } finally { await browser.close(); }
 });
