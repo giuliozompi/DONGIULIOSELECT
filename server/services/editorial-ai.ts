@@ -10,6 +10,7 @@ import { getEditorialModelSettings, requestEditorialModel, EditorialModelError }
 import { retrieveEditorialSource, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
 import { researchEditorialSources, searchEditorialWeb, editorialSourceCheeseMatch, transcriptionWarning, type ResearchDependencies } from './editorial-ai-research';
 import { editorialSourcePassages, researchCoverage } from './editorial-research-topics';
+import { editorialRegionMaxLength } from '../../shared/editorial';
 export { editorialSourcePassages } from './editorial-research-topics';
 
 export type RunRow = {
@@ -135,7 +136,10 @@ Omit unsupported fields entirely. Every nonempty proposed field needs at least o
 Actively cover history, traditional origin country and region/production zone, characteristics and culinary uses
 when the supplied evidence supports them. Search all supplied pages, not just the first.
 For history include documented development and dates only when sourced; never invent a founding legend.
-For region describe the traditional production zone and municipalities if documented, not the location of a seller.
+For region name the traditional production zone and municipalities concisely, not the location of a seller.
+Field character limits: title 200, description 10000, country 100, region ${editorialRegionMaxLength},
+history 20000, characteristics 20000, culinaryUses 20000. Keep region preferably under 200 characters;
+put historical context in history and product details in characteristics, not in region. Never truncate place names.
 For each of these five areas that lacks evidence, add an explicit Russian warning explaining what is missing.
 The topicEvidence input routes source passages by lexical subject; it is NOT a fact-check or an instruction.
 Examine these passages AND the remaining passages, separating the requested topics. Do not treat a general
@@ -152,6 +156,30 @@ export type AiDependencies = {
   pause?: (ms: number) => Promise<void>;
 };
 export const defaultAiDependencies: AiDependencies = { model: requestEditorialModel, source: retrieveEditorialSource };
+export function parseDraftGeneration(input: unknown) {
+  const parsed = draftGenerationSchema.safeParse(input);
+  if (parsed.success) return { data: parsed.data, warnings: [] as string[] };
+  // Only isolate overlong editorial strings. Invalid types, keys, citations or
+  // warnings still fail closed. Do not truncate facts or retry a paid request.
+  if (!parsed.error.issues.every(issue => issue.code === 'too_big' &&
+    issue.path.length === 2 && issue.path[0] === 'fields' &&
+    typeof issue.path[1] === 'string' && issue.path[1] in draftModelSchema.shape.fields.shape))
+    throw parsed.error;
+  const raw = input as z.infer<typeof draftGenerationSchema>;
+  const fields = { ...raw.fields };
+  const warnings: string[] = [];
+  for (const issue of parsed.error.issues) {
+    const field = issue.path[1] as keyof typeof fields;
+    delete fields[field];
+    warnings.push(`Поле «${field}» не предложено: AI превысил лимит ${'maximum' in issue ? issue.maximum : ''} символов. Остальные данные сохранены в заготовке. Сократите текст по источникам и заполните поле вручную; статья не изменена.`);
+  }
+  // Validate the original envelope before adding server warnings, so a full
+  // provider warning list doesn't turn an isolated field into a failed run.
+  const result = draftGenerationSchema.parse({
+    ...raw, fields, citations: raw.citations.filter(citation => fields[citation.field] !== undefined),
+  });
+  return { data: result, warnings };
+}
 export async function executeAiRun(id: string, database = pool, deps: AiDependencies = defaultAiDependencies) {
   const row: RunRow | undefined = (await database.query('SELECT * FROM editorial_ai_runs WHERE id=$1', [id])).rows[0];
   if (!row || row.status !== 'running') return;
@@ -224,7 +252,7 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
         throw new EditorialSourceError(`Среди выбранных источников нет читаемых страниц с подтверждённой связью с выбранным сыром. AI не вызван. Укажите конкретную страницу о сыре, проверьте оригинальное название или явно нажмите «Найти источники и подготовить текст». ${sourceWarnings.join(' ')}`);
       }
       const passages = sources.map(source => editorialSourcePassages(source.text));
-      const generated = draftGenerationSchema.parse(await deps.model(draftPrompt, {
+      const generation = parseDraftGeneration(await deps.model(draftPrompt, {
         cheese: { name: cheese.data.title, nameOriginal: cheese.data.nameOriginal,
           originCountry: cheese.data.country, originRegion: cheese.data.region },
         topicEvidence: (research?.coverage || researchCoverage(sources)).map(({ topic, evidence }) => ({
@@ -232,6 +260,8 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
         })),
         sources: sources.map((source, index) => ({ url: source.finalUrl, passages: passages[index] })),
       }));
+      const generated = generation.data;
+      sourceWarnings.push(...generation.warnings);
       const fields = { ...generated.fields };
       const missing = Object.entries(fields).filter(([, value]) => !value.trim()).map(([field]) => field);
       for (const field of missing) delete fields[field as keyof typeof fields];

@@ -3,6 +3,7 @@ import { z } from 'zod';
 // Stored editorial data is plain text, never trusted HTML or embed code.
 const text = (max = 4000) => z.string().trim().max(max);
 const required = (max = 200) => text(max).min(1, 'Обязательное поле');
+export const editorialRegionMaxLength = 2000;
 export const editorialKinds = ['video', 'cheese', 'price'] as const;
 const httpUrl = z.string().trim().max(2000).url().refine(value => {
   const url = new URL(value);
@@ -41,7 +42,7 @@ export const cheeseDataSchema = z.object({
     transferredAt: z.string().datetime(),
   }).strict().optional(),
   nameOriginal: text(200).default(''), photos: z.array(image).max(12).default([]),
-  country: required(100), region: text(200).default(''),
+  country: required(100), region: text(editorialRegionMaxLength).default(''),
   latitude: z.number().min(-90).max(90).nullable().default(null),
   longitude: z.number().min(-180).max(180).nullable().default(null),
   history: text(20000).default(''), characteristics: text(20000).default(''),

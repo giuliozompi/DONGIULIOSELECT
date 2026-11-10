@@ -11,14 +11,14 @@ import pg from 'pg';
 import express from 'express';
 import type { Server } from 'node:http';
 import { registerAdminEditorialAiRoutes } from '../server/adminEditorialAiRoutes';
-import { reserveAiRun, executeAiRun, getAiRun, aiHistory, type AiDependencies } from '../server/services/editorial-ai';
+import { reserveAiRun, executeAiRun, getAiRun, aiHistory, parseDraftGeneration, type AiDependencies } from '../server/services/editorial-ai';
 import { EditorialModelError, createEditorialModelRequester } from '../server/services/editorial-ai-model';
 import { importAiCatalog, rankAiCatalog, applyAiDraft } from '../server/services/editorial-ai-changes';
 import { isPublicSourceAddress, validateSourceUrl, sourcePlainText, retrieveEditorialSource } from '../server/services/editorial-ai-sources';
 import { EditorialError, saveEditorial } from '../server/services/editorial';
 import { changePublication } from '../server/services/editorial-publication';
 import { publicEditorialList } from '../server/services/public-editorial';
-import { cheeseDataSchema } from '../shared/editorial';
+import { cheeseDataSchema, editorialRegionMaxLength } from '../shared/editorial';
 import type { CatalogResult, DraftResult } from '../shared/editorial-ai';
 import { suggestEditorialSources, validateSourceSuggestions } from '../server/services/editorial-ai-suggestions';
 import { EditorialModelError } from '../server/services/editorial-ai-model';
@@ -98,6 +98,57 @@ async function readyDraft(c: Awaited<ReturnType<typeof cheese>>, custom = deps) 
   await executeAiRun(run.id, db, custom);
   return getAiRun(run.id, db);
 }
+test('long production zones survive generation, explicit application and article persistence without truncation', async () => {
+  const c = await cheese();
+  const region = 'Эмилия-Романья, традиционная зона производства и муниципалитеты. '.repeat(8).trim();
+  assert.ok(region.length > 200 && region.length < editorialRegionMaxLength);
+  let calls = 0;
+  const run = await readyDraft(c, { ...deps, model: async system => {
+    calls++;
+    assert.ok(system.includes(`region ${editorialRegionMaxLength}`));
+    return { fields: { region }, citations: [{ field: 'region', sourceIndex: 0, passageId: 0 }], warnings: [] };
+  } });
+  assert.equal(run.status, 'ready');
+  assert.equal((run.result as DraftResult).fields.region, region);
+  assert.equal(calls, 1);
+  assert.equal((await db.query('SELECT data FROM editorial_entries WHERE id=$1', [c.id])).rows[0].data.region, c.data.region);
+  const applied = await applyAiDraft(run.id, { entryId: c.id, revision: c.revision, fields: ['region'] }, 'operator', db);
+  assert.equal((applied.data as any).region, region);
+  const edited = await saveEditorial('cheese', applied.data, 'operator', applied, db);
+  assert.equal((edited.data as any).region, region);
+});
+test('an overlong AI field is explicitly isolated without losing other sourced fields or retrying', async () => {
+  const c = await cheese();
+  let calls = 0;
+  const run = await readyDraft(c, { ...deps, model: async () => {
+    calls++;
+    return { fields: { history: 'История по источнику.', region: 'я'.repeat(editorialRegionMaxLength + 1) },
+      citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }, { field: 'region', sourceIndex: 0, passageId: 0 }],
+      warnings: Array.from({ length: 30 }, () => 'Замечание модели') };
+  } });
+  assert.equal(run.status, 'ready');
+  assert.equal(calls, 1);
+  const result = run.result as DraftResult;
+  assert.equal(result.fields.region, undefined);
+  assert.equal(result.fields.history, 'История по источнику.');
+  assert.ok(result.warnings.some(w => w.includes('region') && w.includes('2000')));
+  assert.ok(!result.citations.some(c => c.field === 'region'));
+  const applied = await applyAiDraft(run.id, { entryId: c.id, revision: c.revision, fields: ['history'] }, 'operator', db);
+  assert.equal((applied.data as any).region, c.data.region);
+  assert.equal((applied.data as any).history, result.fields.history);
+});
+test('field length recovery does not accept malformed envelopes, unknown fields, types or citations', () => {
+  const long = 'я'.repeat(editorialRegionMaxLength + 1);
+  for (const invalid of [
+    { fields: { region: long, unknown: 'text' }, citations: [], warnings: [] },
+    { fields: { region: long, history: 123 }, citations: [], warnings: [] },
+    { fields: { region: long }, citations: [{ field: 'region', sourceIndex: 99, passageId: 0 }], warnings: [] },
+    { fields: { region: long }, citations: [], warnings: ['x'.repeat(2001)] },
+  ]) assert.throws(() => parseDraftGeneration(invalid));
+  const boundary = 'я'.repeat(editorialRegionMaxLength);
+  assert.equal(parseDraftGeneration({ fields: { region: boundary }, citations: [], warnings: [] }).data.fields.region, boundary);
+  assert.equal(cheeseDataSchema.safeParse({ title: 'Сыр', country: 'Италия', region: long }).success, false);
+});
 test('generation reservation is idempotent, single-flight and persists history without any automatic article write', async () => {
   const params = catalogParams();
   const a = await reserveAiRun('catalog', params, 'operator', db);
