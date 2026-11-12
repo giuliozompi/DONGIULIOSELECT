@@ -39,6 +39,29 @@ test('a complete fenced response succeeds with one provider call, but truncated 
   await assert.rejects(truncated.request('system', {}), /лимит длины/);
   assert.equal(truncated.calls(), 1);
 });
+test('Timeweb length termination rejects even valid-looking JSON without retry or increasing the token budget', async () => {
+  for (const content of ['{"fields":{"history":"Незавершённая история"}}', '{"fields":']) {
+    let calls = 0;
+    const request = createConfiguredEditorialRequester(timewebEnv, async (_url, init) => {
+      calls++;
+      const sent = JSON.parse(String(init?.body));
+      assert.equal(sent.max_tokens, 6000);
+      assert.equal(sent.reasoning, undefined);
+      return new Response(JSON.stringify(completion(content, 'length')), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    await assert.rejects(request('system', {}), error => {
+      assert.ok(error instanceof EditorialModelError);
+      assert.match(error.message, /6000 токенов/);
+      assert.match(error.message, /статья не изменена/);
+      assert.match(error.message, /Автоматического повтора нет/);
+      assert.ok(!error.message.includes('сократите число источников'));
+      return true;
+    });
+    assert.equal(calls, 1);
+  }
+});
 function requester(body: unknown, status = 200) {
   let calls = 0;
   let sentBody: Record<string, unknown> | undefined;

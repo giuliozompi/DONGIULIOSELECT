@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { editorialForbiddenReason } from './editorial-ai-forbidden';
 import { DEFAULT_EDITORIAL_AI_MODEL, EditorialModelError, getEditorialModelSettings, type EditorialAiProvider } from './editorial-ai-config';
 export { DEFAULT_EDITORIAL_AI_MODEL, EditorialModelError, getEditorialModelSettings };
+export const EDITORIAL_MAX_OUTPUT_TOKENS = 6000;
 // Accept only a complete JSON document, optionally inside one Markdown fence.
 // Never repair syntax, extract a substring, or accept incomplete model output.
 export function parseEditorialJson(content: string): unknown {
@@ -50,7 +51,7 @@ export function createEditorialModelRequester(client: OpenAI, settings = getEdit
   return async (system: string, input: unknown): Promise<unknown> => {
     try {
       const response = await client.chat.completions.create({
-        model: settings.model, temperature: 0.15, max_tokens: 6000,
+        model: settings.model, temperature: 0.15, max_tokens: EDITORIAL_MAX_OUTPUT_TOKENS,
         // Gemini 2.5 Flash supports disabling thinking: reserve the output
         // budget for the reviewed JSON draft, not hidden reasoning tokens.
         ...(settings.provider === 'openrouter' && settings.model === DEFAULT_EDITORIAL_AI_MODEL ? { reasoning: { enabled: false } } : {}),
@@ -66,7 +67,7 @@ export function createEditorialModelRequester(client: OpenAI, settings = getEdit
       }
       const choice = response.choices?.[0];
       if (choice?.finish_reason === 'length')
-        throw new EditorialModelError('AI превысил лимит длины ответа. Попробуйте явно запросить меньше сыров; для статьи сократите число источников.');
+        throw new EditorialModelError(`AI превысил лимит длины ответа (${EDITORIAL_MAX_OUTPUT_TOKENS} токенов) и не завершил JSON. Незавершённый текст не принят; статья не изменена. Автоматического повтора нет. Если ошибка повторяется, сообщите администратору.`);
       if (choice?.finish_reason === 'content_filter' || choice?.message?.refusal)
         throw new EditorialModelError('AI отказался подготовить ответ. Проверьте название и источники перед новым явным запросом.');
       if (choice?.finish_reason !== 'stop' || !choice.message.content?.trim())

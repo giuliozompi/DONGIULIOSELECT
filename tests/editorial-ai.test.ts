@@ -385,6 +385,49 @@ test('safe provider diagnostics persist in failed runs and history without chang
   assert.equal((await aiHistory('draft', 1, db, c.id)).items[0].error, message);
   assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0].revision, c.revision);
 });
+test('article generation requests a compact complete draft and keeps all source passages and supported topics', async () => {
+  const c = await cheese();
+  let calls = 0;
+  const run = await readyDraft(c, { ...deps, model: async (system, input: any) => {
+    calls++;
+    assert.match(system, /storage ceilings, NOT writing targets/);
+    assert.match(system, /complete JSON preferably under 7000 characters/);
+    assert.match(system, /history 1000, characteristics 1000, culinaryUses 800/);
+    assert.match(system, /Do not sacrifice citations, source fidelity/);
+    assert.ok(input.sources[0].passages.length > 0);
+    assert.ok(input.sources[0].passages.some((p: any) => p.text.includes('Parmigiano Reggiano')));
+    return { fields: { history: 'История из источника.', country: 'Италия', region: 'Эмилия-Романья',
+      characteristics: 'Твёрдый сыр.', culinaryUses: 'Использование в кулинарии по источнику.' },
+      citations: ['history', 'country', 'region', 'characteristics', 'culinaryUses'].map(field =>
+        ({ field, sourceIndex: 0, passageId: 0 })), warnings: [] };
+  } });
+  assert.equal(calls, 1);
+  assert.equal(run.status, 'ready');
+  assert.deepEqual(Object.keys((run.result as DraftResult).fields).sort(),
+    ['characteristics', 'country', 'culinaryUses', 'history', 'region']);
+  assert.equal((run.result as DraftResult).citations.length, 5);
+  assert.equal((await db.query('SELECT revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0].revision, c.revision);
+});
+test('length-terminated generation retains source metadata and never writes the article or retries the provider', async () => {
+  const c = await cheese(true);
+  const before = (await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0];
+  let calls = 0;
+  const client = new OpenAI({ apiKey: 'test-not-a-real-key', maxRetries: 0, fetch: async () => {
+    calls++;
+    return new Response(JSON.stringify({ choices: [{ finish_reason: 'length',
+      message: { role: 'assistant', content: '{"fields":{"history":"Partial but valid JSON"}}' } }] }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } });
+  const run = await readyDraft(c, { ...deps, model: createEditorialModelRequester(client) });
+  assert.equal(calls, 1);
+  assert.equal(run.status, 'failed');
+  assert.match(run.error!, /6000 токенов/);
+  assert.equal((run.result as DraftResult).sources[0].url, evidence.url);
+  assert.deepEqual((run.result as DraftResult).fields, {});
+  assert.equal(run.appliedTo, null);
+  assert.deepEqual((await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0], before);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM editorial_publications')).rows[0].n, 1);
+});
 test('a specific provider refusal reaches operator history without copying the provider payload', async () => {
   const c = await cheese();
   let calls = 0;
