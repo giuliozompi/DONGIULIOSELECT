@@ -95,6 +95,126 @@ test('Brave uses the direct fixed endpoint and credential, one request, bounded 
   assert.equal(calls, 1); assert.deepEqual(results, [hit(1)]);
   await assert.rejects(searchEditorialWeb('test', {}, async () => { throw new Error('must not call'); }), /BRAVE_API_KEY/);
 });
+test('complete draft combines sourced text, photo candidates and saved geographic candidates in one explicit atomic transfer', async () => {
+  const c = await cheese(true);
+  const original = c.data;
+  let modelCalls = 0, geoCalls = 0;
+  const run = (await reserveAiRun('draft', { ...parameters(c), fullDraft: true }, 'operator', db)).run;
+  await executeAiRun(run.id, db, {
+    search: async () => [hit(1)], pause: async () => {},
+    source: async url => ({ ...await source(url), images: [{
+      url: 'https://example.org/pecorino-photo.jpg', alt: 'Castelmagno cheese',
+      licenseUrl: 'https://example.org/license',
+    }] }),
+    model: async () => {
+      modelCalls++;
+      return { fields: { history: 'История по источнику.', country: 'Италия', region: 'Пьемонт',
+        characteristics: 'Характеристики по источнику.', culinaryUses: 'Кулинарное применение по источнику.' },
+        citations: ['history', 'country', 'region', 'characteristics', 'culinaryUses'].map(field =>
+          ({ field, sourceIndex: 0, passageId: 0 })), warnings: [] };
+    },
+    origin: async (input, actor, database) => lookupEditorialOrigin(input, actor, database, async () => {
+      geoCalls++; return [candidate];
+    }),
+  });
+  const ready = await getAiRun(run.id, db);
+  assert.equal(ready.status, 'ready');
+  const proposal = ready.result as DraftResult;
+  assert.equal(modelCalls, 1); assert.equal(geoCalls, 1);
+  assert.ok(proposal.research?.photos?.length);
+  assert.equal(proposal.origin?.candidates[0].id, candidate.id);
+  assert.deepEqual((await db.query('SELECT data FROM editorial_entries WHERE id=$1', [c.id])).rows[0].data, original);
+  const body = { entryId: c.id, revision: c.revision, fields: Object.keys(proposal.fields),
+    photoIds: [proposal.research!.photos![0].id], photoRightsConfirmed: true,
+    origin: { lookupId: proposal.origin!.lookupId, candidateId: candidate.id } };
+  const saved = await applyAiDraft(run.id, body, 'operator', db);
+  const data = saved.data as any;
+  assert.equal(data.latitude, candidate.latitude); assert.equal(data.longitude, candidate.longitude);
+  assert.ok(data.sources.includes(candidate.url));
+  assert.ok(data.photos.includes('https://example.org/pecorino-photo.jpg'));
+  assert.equal(data.status, 'pending_review');
+  assert.equal(data.history, proposal.fields.history);
+  assert.equal(data.productionCountry, (original as any).productionCountry);
+  assert.equal((await applyAiDraft(run.id, body, 'operator', db)).revision, saved.revision);
+  assert.deepEqual((await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [c.id])).rows[0].data, original);
+});
+test('geocoder failure preserves complete text and photo evidence as an explicitly incomplete proposal', async () => {
+  const c = await cheese();
+  const run = (await reserveAiRun('draft', { ...parameters(c), fullDraft: true }, 'operator', db)).run;
+  let calls = 0;
+  await executeAiRun(run.id, db, { search: async () => [hit(1)], source, pause: async () => {},
+    model: async () => ({ fields: { region: 'Пьемонт', history: 'История из источника.' },
+      citations: [{ field: 'region', sourceIndex: 0, passageId: 0 }, { field: 'history', sourceIndex: 0, passageId: 0 }], warnings: [] }),
+    origin: async () => { calls++; throw new Error(sensitive); },
+  });
+  const ready = await getAiRun(run.id, db);
+  assert.equal(calls, 1); assert.equal(ready.status, 'ready');
+  const result = ready.result as DraftResult;
+  assert.equal(result.origin, undefined); assert.equal(result.fields.history, 'История из источника.');
+  assert.ok(result.warnings.some(w => w.includes('Координаты не получены')));
+  assert.ok(!JSON.stringify(result).includes(sensitive));
+});
+test('targeted deepening only proposes the selected section, sends its saved text, and never replaces other article fields', async () => {
+  const c = await cheese(true);
+  const run = (await reserveAiRun('draft', { ...parameters(c), intent: {
+    mode: 'deepen', field: 'history', instructions: 'Уточнить документированные даты',
+  } }, 'operator', db)).run;
+  const queries: string[] = [];
+  await executeAiRun(run.id, db, { source, pause: async () => {},
+    search: async q => { queries.push(q); return [hit(1)]; },
+    model: async (system, input: any) => {
+      assert.match(system, /Propose ONLY editorialTask.field/);
+      assert.equal(input.editorialTask.field, 'history');
+      assert.equal(input.editorialTask.existingText, (c.data as any).history);
+      assert.ok(!JSON.stringify(input).includes(sensitive));
+      return { fields: { history: 'История дополнена по источнику.', characteristics: 'Непрошеная замена' },
+        citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }, { field: 'characteristics', sourceIndex: 0, passageId: 0 }], warnings: [] };
+    },
+  });
+  assert.equal(queries.length, 1);
+  const ready = await getAiRun(run.id, db);
+  assert.deepEqual((ready.result as DraftResult).fields, { history: 'История дополнена по источнику.' });
+  const saved = await applyAiDraft(run.id, { entryId: c.id, revision: c.revision, fields: ['history'] }, 'operator', db);
+  assert.equal((saved.data as any).history, 'История дополнена по источнику.');
+  for (const field of ['characteristics', 'culinaryUses', 'photos', 'latitude', 'longitude', 'productIds'])
+    assert.deepEqual((saved.data as any)[field], (c.data as any)[field]);
+  assert.deepEqual((await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [c.id])).rows[0].data, c.data);
+});
+test('alternative research changes queries, prefers novel pages and flags identical generated text', async () => {
+  const c = await cheese();
+  const first = (await reserveAiRun('draft', parameters(c), 'operator', db)).run;
+  const model = async () => ({ fields: { history: 'Одинаковая история.' },
+    citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }], warnings: [] });
+  await executeAiRun(first.id, db, { source, pause: async () => {}, search: async () => [hit(1)], model });
+  await db.query("UPDATE editorial_ai_runs SET created_at=clock_timestamp()-interval '2 minutes' WHERE id=$1", [first.id]);
+  const next = (await reserveAiRun('draft', { ...parameters(c),
+    intent: { mode: 'alternative', previousRunId: first.id } }, 'operator', db)).run;
+  await executeAiRun(next.id, db, { source, pause: async () => {}, search: async () => [hit(1), hit(2)], model });
+  const old = (await getAiRun(first.id, db)).result as DraftResult;
+  const result = (await getAiRun(next.id, db)).result as DraftResult;
+  assert.ok(result.research!.queries.every(q => !old.research!.queries.includes(q)));
+  assert.equal(result.sources[0].url, hit(2).url);
+  assert.ok(result.warnings.some(w => w.includes('повторил текст')));
+  const other = await cheese();
+  await assert.rejects(reserveAiRun('draft', { ...parameters(other),
+    intent: { mode: 'alternative', previousRunId: first.id } }, 'other', db), fails(400));
+});
+test('atomic transfer rejects fabricated geographic candidates and stale revisions without partial text writes', async () => {
+  const c = await cheese();
+  const run = (await reserveAiRun('draft', parameters(c), 'operator', db)).run;
+  await executeAiRun(run.id, db, { source, pause: async () => {}, search: async () => [hit(1)],
+    model: async () => ({ fields: { history: 'Новая история.' },
+      citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }], warnings: [] }),
+  });
+  const lookup = await lookupEditorialOrigin({ entryId: c.id, revision: c.revision, place: 'Castelmagno' },
+    'operator', db, async () => [candidate]);
+  await assert.rejects(applyAiDraft(run.id, { entryId: c.id, revision: c.revision, fields: ['history'],
+    origin: { lookupId: lookup.lookupId, candidateId: 'forged' } }, 'operator', db), fails(400));
+  assert.deepEqual((await db.query('SELECT data FROM editorial_entries WHERE id=$1', [c.id])).rows[0].data, c.data);
+  const edited = await saveEditorial('cheese', { ...c.data, history: 'Ручная правка' }, 'operator', c, db);
+  await assert.rejects(applyAiDraft(run.id, { entryId: c.id, revision: edited.revision, fields: ['history'],
+    origin: { lookupId: lookup.lookupId, candidateId: candidate.id } }, 'operator', db), fails(409));
+});
 for (const status of [401, 402, 403, 429, 503]) {
   test(`Brave ${status} is sanitized and never retried`, async () => {
     let calls = 0;

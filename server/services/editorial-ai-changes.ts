@@ -8,6 +8,7 @@ import {
 import { transaction, audit, entry, EditorialError, type Row } from './editorial';
 import { catalogMatches, normalizedCheeseName, runDto, type RunRow } from './editorial-ai';
 import { validateSourceUrl } from './editorial-ai-sources';
+import { savedOriginCandidate } from './editorial-origin';
 
 async function lockedRun(client: any, id: string, kind: 'catalog' | 'draft'): Promise<RunRow> {
   const row = (await client.query('SELECT * FROM editorial_ai_runs WHERE id=$1 FOR UPDATE', [id])).rows[0];
@@ -87,6 +88,7 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
   if (Object.keys(edits).some(field => !body.fields.includes(field as typeof body.fields[number])))
     throw new EditorialError(400, 'Редактировать можно только выбранные поля');
   const appliedParams = { fields: [...body.fields].sort(), edits,
+    ...(body.origin ? { origin: body.origin } : {}),
     ...(body.photoIds?.length ? { photoIds: [...body.photoIds].sort(), photoRightsConfirmed: true } : {}) };
   return transaction(database, async client => {
     const run = await lockedRun(client, id, 'draft');
@@ -113,6 +115,9 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
       return found.data;
     });
     const data = { ...(old.data as CheeseData) };
+    const origin = body.origin ? await savedOriginCandidate(client, { ...body.origin,
+      entryId: body.entryId, revision: body.revision }) : undefined;
+    if (origin) { data.latitude = origin.latitude; data.longitude = origin.longitude; }
     for (const field of body.fields) {
       const value = proposal.fields[field];
       if (!value?.trim()) throw new EditorialError(400, 'Выбрано поле, которого нет в предложении AI');
@@ -121,7 +126,8 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     }
     const sourceUrls = proposal.citations.filter(citation => body.fields.includes(citation.field))
       .map(citation => proposal.sources[citation.sourceIndex].url);
-    data.sources = Array.from(new Set([...data.sources, ...sourceUrls, ...selectedPhotos.map(photo => photo.sourceUrl)]));
+    data.sources = Array.from(new Set([...data.sources, ...sourceUrls, ...selectedPhotos.map(photo => photo.sourceUrl),
+      ...(origin ? [origin.url] : [])]));
     data.photos = Array.from(new Set([...data.photos, ...selectedPhotos.map(photo => photo.imageUrl)]));
     if (data.photos.length > 12)
       throw new EditorialError(400, 'В статье может быть не более 12 фотографий. Сначала удалите лишние изображения.');
@@ -136,6 +142,7 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     const current = entry({ ...saved, published_at: old.published_at, published_revision: old.published_revision });
     await audit(client, actor, 'ai_applied', old.id, entry(old), {
       ...current, aiRunId: id, appliedFields: body.fields, operatorEdits: edits,
+      ...(origin ? { origin: { ...body.origin, ...origin }, attribution: '© OpenStreetMap contributors' } : {}),
       ...(selectedPhotos.length ? { selectedPhotos, photoRightsConfirmed: true } : {}),
     });
     return current;

@@ -26,9 +26,11 @@ export const editorialAiApi = {
     fields: AiField[],
     edits?: Partial<Record<AiField, string>>,
     photos?: { photoIds: string[]; photoRightsConfirmed: boolean },
+    origin?: { lookupId: string; candidateId: string },
   ) => webApi.post<EditorialEntry>(`${base}/runs/${run.id}/apply`, {
     entryId: entry.id, revision: entry.revision, fields, edits,
     ...(photos?.photoIds.length ? photos : {}),
+    ...(origin ? { origin } : {}),
   }),
   importPhotos: (
     run: EditorialAiRun,

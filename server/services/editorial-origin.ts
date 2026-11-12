@@ -8,6 +8,21 @@ import { transaction, audit, entry, EditorialError, type Row } from './editorial
 import { originProviderSettings, originCountryCode, fetchOriginCandidates } from './editorial-origin-provider';
 
 const attribution = '© OpenStreetMap contributors' as const;
+// Called within the caller's existing transaction and article revision lock.
+export async function savedOriginCandidate(client: any, body: {
+  entryId: string; revision: number; lookupId: string; candidateId: string;
+}) {
+  const savedLookup = (await client.query(`SELECT action_data->'newData'->'result' AS result
+    FROM admin_action_logs WHERE action_type='origin_lookup_ready' AND entity_type='editorial'
+    AND entity_id=$1 AND action_data->'newData'->>'lookupId'=$2 LIMIT 1`, [body.entryId, body.lookupId])).rows[0];
+  const parsed = originLookupSchema.safeParse(savedLookup?.result);
+  if (!parsed.success || parsed.data.entryId !== body.entryId || parsed.data.revision !== body.revision ||
+    Date.parse(parsed.data.retrievedAt) < Date.now() - 30 * 86400000)
+    throw new EditorialError(409, 'Предложение координат отсутствует или устарело. Выполните поиск заново.');
+  const candidate = parsed.data.candidates.find(value => value.id === body.candidateId);
+  if (!candidate) throw new EditorialError(400, 'Выберите координаты из сохранённого результата поиска.');
+  return candidate;
+}
 export async function lookupEditorialOrigin(input: unknown, actor: string, database = pool,
   provider: typeof fetchOriginCandidates = fetchOriginCandidates, env = process.env): Promise<OriginLookup> {
   if (!actor) throw new EditorialError(401, 'Требуется авторизация');
@@ -78,15 +93,7 @@ export async function applyEditorialOrigin(input: unknown, actor: string, databa
       WHERE e.id=$1 AND e.kind='cheese' FOR UPDATE OF e`, [body.entryId])).rows[0];
     if (!old) throw new EditorialError(404, 'Сырная статья не найдена');
     if (old.revision !== body.revision) throw new EditorialError(409, 'Статья изменилась. Координаты не применены.');
-    const savedLookup = (await client.query(`SELECT action_data->'newData'->'result' AS result
-      FROM admin_action_logs WHERE action_type='origin_lookup_ready' AND entity_type='editorial'
-      AND entity_id=$1 AND action_data->'newData'->>'lookupId'=$2 LIMIT 1`, [body.entryId, body.lookupId])).rows[0];
-    const parsed = originLookupSchema.safeParse(savedLookup?.result);
-    if (!parsed.success || parsed.data.entryId !== body.entryId || parsed.data.revision !== body.revision ||
-      Date.parse(parsed.data.retrievedAt) < Date.now() - 30 * 86400000)
-      throw new EditorialError(409, 'Предложение координат отсутствует или устарело. Выполните поиск заново.');
-    const candidate = parsed.data.candidates.find(value => value.id === body.candidateId);
-    if (!candidate) throw new EditorialError(400, 'Выберите координаты из сохранённого результата поиска.');
+    const candidate = await savedOriginCandidate(client, body);
     const data = cheeseDataSchema.parse({
       ...old.data, latitude: candidate.latitude, longitude: candidate.longitude,
       sources: Array.from(new Set([...(old.data as { sources: string[] }).sources, candidate.url])),

@@ -1,15 +1,16 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Check, ChevronDown, ChevronUp, FileSearch, History, LoaderCircle, RotateCcw, Sparkles } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronUp, ExternalLink, FileSearch, History, LoaderCircle, RotateCcw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { editorialAiCountries, countryName, type CatalogItem, type EditorialAiRun, type AiField, type DraftResult, type CatalogResult } from '@shared/editorial-ai';
+import { editorialAiCountries, countryName, type CatalogItem, type EditorialAiRun, type AiField, type DraftResult, type CatalogResult, type ResearchRequest } from '@shared/editorial-ai';
 import type { CheeseData, EditorialEntry } from '@shared/editorial';
 import { editorialAiApi } from '../../lib/editorialAiApi';
 import SourcesSuggestions from './SourcesSuggestions';
 import OriginCoordinates from './OriginCoordinates';
 import ResearchDiagnostics from './ResearchDiagnostics';
+import IntegratedDraftPreview from './IntegratedDraftPreview';
 import './editorial-ai.css';
 
 const PAGE_SIZE = 10;
@@ -42,9 +43,10 @@ type ApplyDraftWithEdits = (
   fields: AiField[],
   edits?: Partial<Record<AiField, string>>,
   photos?: { photoIds: string[]; photoRightsConfirmed: boolean },
+  origin?: { lookupId: string; candidateId: string },
 ) => Promise<EditorialEntry>;
-const applyDraftWithEdits: ApplyDraftWithEdits = (run, entry, fields, edits, photos) =>
-  editorialAiApi.apply(run, entry, fields, edits, photos);
+const applyDraftWithEdits: ApplyDraftWithEdits = (run, entry, fields, edits, photos, origin) =>
+  editorialAiApi.apply(run, entry, fields, edits, photos, origin);
 
 function errorMessage(error: unknown) {
   return (error as { message?: string })?.message || 'Не удалось выполнить запрос. Повторите попытку.';
@@ -350,7 +352,10 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     fields: AiField[];
     photoIds: string[];
     edits: Partial<Record<AiField, string>>;
+    origin?: { lookupId: string; candidateId: string; label: string; latitude: number; longitude: number; url: string };
   } | null>(null);
+  const [selectedOriginId, setSelectedOriginId] = useState('');
+  const [deepInstructions, setDeepInstructions] = useState<Partial<Record<AiField, string>>>({});
   const lock = useRef(false);
   const applyLock = useRef(false);
   const applyClaimedRef = useRef(false);
@@ -394,6 +399,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     setRun(undefined);
     setSelectedFields([]);
     setEdits({});
+    setSelectedOriginId('');
+    setDeepInstructions({});
     setRevisionConflict(false);
     setError('');
     setHistoryOpen(false);
@@ -445,8 +452,13 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const entryData = entry.data as CheeseData;
   const researchMarker = entryData.aiResearch || serverTransfer;
   const entryRuns = history.data?.items || [];
+  const previousSearchRunId = current?.kind === 'draft' && current.status !== 'running'
+    ? current.id
+    : entryRuns.find(item => item.kind === 'draft' && item.status !== 'running')?.id;
   const editedProposal = Object.keys(edits).some(key => edits[key as AiField] !== draft?.fields[key as AiField]);
-  const hasUnsavedChanges = sourcesText !== sourceBaseline.current || editedProposal || selectedPhotoIds.length > 0;
+  const hasUnsavedChanges = sourcesText !== sourceBaseline.current || (!current?.appliedTo && (
+    editedProposal || selectedPhotoIds.length > 0 || selectedFields.length > 0 || Boolean(selectedOriginId)
+  ));
   function tryClaimSuggestion() {
     if (generationClaimed) return false;
     setGenerationClaimed(true);
@@ -482,6 +494,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       runEntryIdRef.current = entry.id;
       setRun(next);
       setSelectedFields([]);
+      setSelectedOriginId('');
       setSelectedPhotoIds([]);
       setPhotoRightsConfirmed(false);
       setEdits({});
@@ -500,8 +513,21 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       setBusy(false);
     }
   }
-  async function researchDraft() {
+  async function researchDraft(options: {
+    fullDraft?: boolean;
+    intent?: NonNullable<ResearchRequest['intent']>;
+    replacingCurrent?: boolean;
+  } = {}) {
     if (lock.current || generationClaimed || suggestionBusy || applyLock.current) return;
+    const workLabel = options.intent?.mode === 'deepen'
+      ? `Углубить раздел «${AI_FIELDS.find(field => field.key === options.intent?.field)?.label || 'статьи'}»`
+      : options.intent?.mode === 'alternative'
+        ? 'Выполнить альтернативный поиск'
+        : options.fullDraft ? 'Подготовить полный черновик с поиском' : 'Найти источники и подготовить текст';
+    const replacementText = options.replacingCurrent
+      ? '\n\nНовый альтернативный полный черновик заменит только текущий AI-предпросмотр. Сохранённая статья останется без изменений.'
+      : '';
+    if (!window.confirm(`${workLabel}?\n\nЗапуск: не более 5 поисковых запросов Brave и 1 генерации. Результат останется предложением на проверку; публикации не будет.${replacementText}`)) return;
     const sources = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
     if (sources.length > 3 || sources.some(url => !/^https:\/\/[^/\s?#]+/i.test(url))) {
       setError('Добавьте не более трёх публичных https-ссылок, по одной на строку.');
@@ -516,6 +542,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     try {
       const next = await editorialAiApi.research({
         requestId: crypto.randomUUID(), entryId: entry.id, revision: entry.revision, sources,
+        ...(options.fullDraft ? { fullDraft: true } : {}),
+        ...(options.intent ? { intent: options.intent } : {}),
       });
       if (!mountedRef.current || identityRef.current !== requestIdentity) {
         if (lock.current) { lock.current = false; setGenerationClaimed(false); }
@@ -525,6 +553,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       runEntryIdRef.current = entry.id;
       setRun(next);
       setSelectedFields([]);
+      setSelectedOriginId('');
       setSelectedPhotoIds([]);
       setPhotoRightsConfirmed(false);
       setEdits({});
@@ -557,6 +586,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       setRun(next);
       setEdits({});
       setSelectedFields([]);
+      setSelectedOriginId('');
       setSelectedPhotoIds([]);
       setPhotoRightsConfirmed(false);
       setRevisionConflict(false);
@@ -575,7 +605,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   }
   async function applySelected() {
     const selectedPhotos = selectedPhotoIds.length > 0;
-    if (!current || current.status !== 'ready' || !draft || (selectedFields.length === 0 && !selectedPhotos)
+    const selectedOrigin = draft?.origin?.candidates.find(candidate => candidate.id === selectedOriginId);
+    if (!current || current.status !== 'ready' || !draft || (selectedFields.length === 0 && !selectedPhotos && !selectedOrigin)
       || (selectedPhotos && !photoRightsConfirmed) || current.appliedTo || revisionConflict || runStale
       || busy || suggestionBusy || generationClaimed || applyLock.current || transferConfirmation) return;
     const selectedEdits = Object.fromEntries(selectedFields
@@ -589,6 +620,14 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       fields: [...selectedFields],
       photoIds: [...selectedPhotoIds],
       edits: selectedEdits,
+      ...(selectedOrigin && draft.origin ? { origin: {
+        lookupId: draft.origin.lookupId,
+        candidateId: selectedOrigin.id,
+        label: selectedOrigin.label,
+        latitude: selectedOrigin.latitude,
+        longitude: selectedOrigin.longitude,
+        url: selectedOrigin.url,
+      } } : {}),
     });
   }
   function releaseApplyClaim() {
@@ -606,9 +645,16 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       || current?.id !== confirmation.run.id
       || current.appliedTo || revisionConflict || runStale || busy || suggestionBusy || generationClaimed) return;
     const photos = confirmation.photoIds.length > 0;
-    if (!confirmation.fields.length && !photos) return;
+    if (!confirmation.fields.length && !photos && !confirmation.origin) return;
     if (photos && (!photoRightsConfirmed || confirmation.photoIds.some(id => !selectedPhotoIds.includes(id)))) {
       setTransferConfirmation(null);
+      return;
+    }
+    if (confirmation.origin && (selectedOriginId !== confirmation.origin.candidateId
+      || draft?.origin?.lookupId !== confirmation.origin.lookupId
+      || !draft.origin.candidates.some(candidate => candidate.id === confirmation.origin?.candidateId))) {
+      setTransferConfirmation(null);
+      setError('Выбранная точка больше не совпадает с предпросмотром. Выберите её повторно и подтвердите перенос.');
       return;
     }
     applyLock.current = true;
@@ -619,7 +665,8 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     const requestIdentity = confirmation.identity;
     try {
       const updated = await applyDraftWithEdits(confirmation.run, confirmation.entry, confirmation.fields, confirmation.edits,
-        photos ? { photoIds: confirmation.photoIds, photoRightsConfirmed: true } : undefined);
+        photos ? { photoIds: confirmation.photoIds, photoRightsConfirmed: true } : undefined,
+        confirmation.origin ? { lookupId: confirmation.origin.lookupId, candidateId: confirmation.origin.candidateId } : undefined);
       if (!mountedRef.current || identityRef.current !== requestIdentity || entryIdRef.current !== updated.id) return;
       setRun({ ...confirmation.run, appliedTo: { entryId: updated.id, revision: updated.revision } });
       setServerTransfer((updated.data as CheeseData).aiResearch);
@@ -751,12 +798,38 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       />
        <div className="mt-3 flex flex-wrap gap-2">
           <Button data-testid="ai-draft-research" size="sm" className="bg-[#315647] hover:bg-[#244537]" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void researchDraft(); }}><FileSearch className="mr-1.5 h-4 w-4" />Найти источники и подготовить текст</Button>
+          <Button data-testid="ai-full-draft-research" size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void researchDraft({ fullDraft: true }); }}><Sparkles className="mr-1.5 h-4 w-4" />Полный черновик · фото и геоточка</Button>
+          <Button data-testid="ai-alternative-full-draft" size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current || !previousSearchRunId} onClick={() => {
+            if (!previousSearchRunId) return;
+            void researchDraft({
+              fullDraft: true,
+              replacingCurrent: true,
+              intent: { mode: 'alternative', previousRunId: previousSearchRunId },
+            });
+          }}><RotateCcw className="mr-1.5 h-4 w-4" />Альтернативный поиск · полный черновик</Button>
           <Button data-testid="ai-draft-generate" size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void generateDraft(); }}><Sparkles className="mr-1.5 h-4 w-4" />Сформировать только по этим ссылкам</Button>
           <button data-testid="ai-draft-history" className="text-xs text-[#51665a] underline underline-offset-2 disabled:opacity-50" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => setHistoryOpen(value => !value)}>История предложений</button>
        </div>
        {error && <div role="alert" className="mt-3 rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{error}{isConflict({ status: 409, message: error }) && <button className="ml-2 underline" onClick={() => onApplied()}>Обновить список</button>}</div>}
       <RunState run={current} error={polled.isError && activeId ? polled.error : undefined} />
       {current && <p className="mt-3 text-xs text-[#718075]">{current.model} · {prettyDate(current.createdAt)} · статус: {current.status === 'ready' ? 'готово' : current.status === 'running' ? 'выполняется' : 'ошибка'}{current.appliedTo ? ' · уже применено' : ''}</p>}
+      {previousSearchRunId && <SectionResearchControls
+        instructions={deepInstructions}
+        onInstructionsChange={setDeepInstructions}
+        disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current}
+        onResearch={(field, mode, instructions) => {
+          const boundedInstructions = instructions.trim().slice(0, 500);
+          void researchDraft({
+            ...(mode === 'alternative' ? { fullDraft: true } : {}),
+            intent: {
+              mode,
+              field,
+              previousRunId: previousSearchRunId,
+              ...(boundedInstructions ? { instructions: boundedInstructions } : {}),
+            },
+          });
+        }}
+      />}
          {current?.kind === 'draft' && (current.result as DraftResult | null)?.research && <ResearchDiagnostics report={(current.result as DraftResult).research!} sources={(current.result as DraftResult).sources || []} missingContext={[
          !entryData.history?.trim() && 'История',
          !entryData.country?.trim() && 'Страна происхождения',
@@ -776,7 +849,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
          setError('');
        }} />}
         <OriginCoordinates entry={entry} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} readyTextPendingApply={readyTextPendingApply} isGlobalBusy={() => generationClaimed} tryClaim={tryClaimSuggestion} releaseClaim={releaseSuggestionClaim} onBusyChange={setSuggestionBusy} onApplied={saved => onApplied(saved)} />
-        {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} selectedPhotoCount={selectedPhotoIds.length} photoRightsConfirmed={photoRightsConfirmed} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onSelectAll={selectAllDraftFields} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} />}
+        {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} selectedPhotoIds={selectedPhotoIds} photoRightsConfirmed={photoRightsConfirmed} selectedOriginId={selectedOriginId} onOriginChange={setSelectedOriginId} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onSelectAll={selectAllDraftFields} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} />}
       {historyOpen && <div className="mt-3 space-y-2">
         {history.isLoading && <div className="h-12 animate-pulse rounded bg-[#e7e6dc]" />}
         {history.isError && <div role="alert" className="flex justify-between rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{errorMessage(history.error)}<Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy} onClick={() => { void history.refetch(); }}>Повторить</Button></div>}
@@ -828,6 +901,12 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
               })}
             </ul>
           </section>}
+          {transferConfirmation.origin && <section aria-label="Географическая точка к переносу" className="rounded border border-[#e0dfd4] bg-white/70 p-3">
+            <h3 className="text-sm font-semibold">Точка происхождения · выбранный геопоиск</h3>
+            <p className="mt-1 text-sm">{transferConfirmation.origin.label}</p>
+            <p className="mt-1 text-xs text-[#718075]">Координаты: {transferConfirmation.origin.latitude}, {transferConfirmation.origin.longitude}. Это представительская точка, не адрес производителя.</p>
+            <a className="mt-1 inline-flex items-center gap-1 text-xs underline" href={transferConfirmation.origin.url} target="_blank" rel="noopener noreferrer">Проверить объект в OpenStreetMap <ExternalLink className="h-3 w-3" /></a>
+          </section>}
           <p className="rounded border-l-2 border-[#b66b48] bg-[#f5ece2] px-3 py-2 text-sm leading-5 text-[#684b3d]">
             После сохранения статья останется в статусе «Ожидает подтверждения». Публикации не будет.
           </p>
@@ -852,17 +931,86 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   </div>;
 }
 
-function DraftPreview({ draft, entryData, edits, selectedFields, selectedPhotoCount, photoRightsConfirmed, applied, stale, onToggle, onSelectAll, onEdit, onApply, busy }: {
-  draft: DraftResult; entryData: CheeseData; edits: Partial<Record<AiField, string>>; selectedFields: AiField[]; selectedPhotoCount: number; photoRightsConfirmed: boolean; applied: boolean; stale: boolean;
-  onToggle: (field: AiField) => void; onSelectAll: () => void; onEdit: (field: AiField, value: string) => void; onApply: () => void; busy: boolean;
+type DeepResearchField = Extract<AiField, 'history' | 'characteristics' | 'culinaryUses' | 'description' | 'region'>;
+const DEEP_RESEARCH_FIELDS: { key: DeepResearchField; label: string }[] = [
+  { key: 'history', label: 'История' },
+  { key: 'characteristics', label: 'Характеристики' },
+  { key: 'culinaryUses', label: 'Кулинарное использование' },
+  { key: 'description', label: 'Описание' },
+  { key: 'region', label: 'Регион' },
+];
+
+function SectionResearchControls({
+  instructions,
+  onInstructionsChange,
+  disabled,
+  onResearch,
+}: {
+  instructions: Partial<Record<AiField, string>>;
+  onInstructionsChange: (next: Partial<Record<AiField, string>>) => void;
+  disabled: boolean;
+  onResearch: (field: DeepResearchField, mode: 'deepen' | 'alternative', instructions: string) => void;
+}) {
+  return <section data-testid="ai-section-research-controls" className="mt-4 rounded border border-[#d8d9cc] bg-[#f1f0e8] p-3">
+    <div>
+      <p className="text-sm font-semibold text-[#43574a]">Точечно доработать раздел</p>
+      <p className="mt-1 text-xs leading-5 text-[#78837a]">Доступно для пустого и заполненного текста, в том числе после переноса предыдущего предложения. Новый запуск учитывает текущую ревизию статьи; текущий сохранённый текст не меняется.</p>
+    </div>
+    <div className="mt-3 grid gap-2 md:grid-cols-2">
+      {DEEP_RESEARCH_FIELDS.map(field => <details key={field.key} className="rounded border border-[#dedfd5] bg-[#fbfaf5] p-2.5">
+        <summary className="cursor-pointer text-xs font-semibold text-[#51665a]">{field.label} · углубить или искать иначе</summary>
+        <label className="mt-2 block text-xs text-[#66736a]" htmlFor={`ai-deepen-instructions-${field.key}`}>Необязательное уточнение · до 500 знаков</label>
+        <textarea id={`ai-deepen-instructions-${field.key}`} data-testid={`ai-deepen-instructions-${field.key}`} className="mt-1 min-h-16 w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] p-2 text-xs" maxLength={500} value={instructions[field.key] || ''} onChange={event => onInstructionsChange({ ...instructions, [field.key]: event.target.value })} disabled={disabled} placeholder="Контекст или тип источника для поиска" />
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" data-testid={`ai-deepen-${field.key}`} disabled={disabled} onClick={() => onResearch(field.key, 'deepen', instructions[field.key] || '')}><FileSearch className="mr-1.5 h-3.5 w-3.5" />Углубить и дополнить с ИИ</Button>
+          <Button type="button" size="sm" variant="outline" data-testid={`ai-alternative-${field.key}`} disabled={disabled} onClick={() => onResearch(field.key, 'alternative', instructions[field.key] || '')}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Искать альтернативные источники</Button>
+        </div>
+        <p className="mt-2 text-[11px] leading-4 text-[#78837a]">До 5 запросов Brave и 1 генерация. Для альтернативного поиска сервер получает ссылку на предыдущий запуск; новые источники не гарантированы.</p>
+      </details>)}
+    </div>
+  </section>;
+}
+
+function DraftPreview({ draft, entryData, edits, selectedFields, selectedPhotoIds, photoRightsConfirmed, selectedOriginId, onOriginChange, applied, stale, onToggle, onSelectAll, onEdit, onApply, busy }: {
+  draft: DraftResult;
+  entryData: CheeseData;
+  edits: Partial<Record<AiField, string>>;
+  selectedFields: AiField[];
+  selectedPhotoIds: string[];
+  photoRightsConfirmed: boolean;
+  selectedOriginId: string;
+  onOriginChange: (id: string) => void;
+  applied: boolean;
+  stale: boolean;
+  onToggle: (field: AiField) => void;
+  onSelectAll: () => void;
+  onEdit: (field: AiField, value: string) => void;
+  onApply: () => void;
+  busy: boolean;
 }) {
   const availableFields = AI_FIELDS.filter(field => draft.fields[field.key] !== undefined);
   const statusId = useId();
   const selectedCount = availableFields.filter(field => selectedFields.includes(field.key)).length;
   const allSelected = availableFields.length > 0 && selectedCount === availableFields.length;
-  const applyAction = selectedPhotoCount > 0
-    ? selectedCount > 0 ? '«Применить выбранный текст и фото»' : '«Применить выбранные фото»'
-    : '«Применить выбранные поля»';
+  const selectedOrigin = draft.origin?.candidates.find(item => item.id === selectedOriginId);
+  const selectedPhotos = (draft.research?.photos || []).filter(photo => selectedPhotoIds.includes(photo.id));
+  const integratedValues: Partial<Record<AiField, string>> = {
+    title: entryData.title || '',
+    description: entryData.description || '',
+    country: entryData.country || '',
+    region: entryData.region || '',
+    history: entryData.history || '',
+    characteristics: entryData.characteristics || '',
+    culinaryUses: entryData.culinaryUses || '',
+  };
+  for (const field of selectedFields) integratedValues[field] = edits[field] ?? draft.fields[field] ?? '';
+  const applyAction = selectedOrigin
+    ? selectedPhotoIds.length && selectedCount ? '«Применить текст, фото и точку»'
+      : selectedPhotoIds.length ? '«Применить фото и точку»'
+        : selectedCount ? '«Применить текст и точку»' : '«Применить выбранную точку»'
+    : selectedPhotoIds.length > 0
+      ? selectedCount > 0 ? '«Применить выбранный текст и фото»' : '«Применить выбранные фото»'
+      : '«Применить выбранные поля»';
   const selectionStatus = busy
     ? 'Выбор временно недоступен: выполняется другое действие. Дождитесь его завершения.'
     : applied
@@ -877,6 +1025,17 @@ function DraftPreview({ draft, entryData, edits, selectedFields, selectedPhotoCo
   return <div className="mt-4 space-y-3">
     <div className="rounded border border-[#dfc9b5] bg-[#f5ece2] p-3 text-xs leading-5 text-[#75533e]"><strong>Проверка обязательна.</strong> Цитаты сопоставлены сервером с извлечённым текстом источников; это не семантическая верификация фактов. Оператор проверяет все утверждения.</div>
     {draft.warnings.length > 0 && <div className="rounded border border-[#dfc9b5] bg-[#f5ece2] p-3 text-sm text-[#75533e]"><strong>Замечания модели</strong><ul className="mt-1 list-inside list-disc">{draft.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div>}
+    <IntegratedDraftPreview values={integratedValues} originalName={entryData.nameOriginal} proposedFields={selectedFields} photos={selectedPhotos} savedPhotos={entryData.photos || []} savedSourceCount={entryData.sources?.length || 0} researchSourceCount={draft.sources.length} candidate={selectedOrigin} savedPoint={{ latitude: entryData.latitude, longitude: entryData.longitude }} hasOriginCandidate={Boolean(draft.origin?.candidates.length)} />
+    {draft.origin && <section data-testid="ai-draft-origin-candidates" className="rounded border border-[#d8d9cc] bg-[#fbfaf5] p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-sm font-semibold text-[#43574a]">Кандидаты точки происхождения</h3><p className="mt-1 text-xs leading-5 text-[#718075]">Результат серверного геопоиска. Ничего не выбрано по умолчанию: проверьте вариант и отметьте подходящую точку.</p></div><span className="text-[11px] text-[#78837a]">{draft.origin.candidates.length} найдено</span></div>
+      {draft.origin.candidates.length ? <fieldset className="mt-3 space-y-2"><legend className="sr-only">Выберите точку для предпросмотра и переноса</legend>
+        {draft.origin.candidates.map(item => <label key={item.id} className="flex cursor-pointer items-start gap-2 rounded border border-[#e0dfd4] bg-[#f8f7f0] p-2.5 text-xs">
+          <input type="radio" name={`draft-origin-${draft.origin?.lookupId}`} className="mt-0.5 accent-[#315647]" checked={selectedOriginId === item.id} onChange={() => onOriginChange(item.id)} disabled={busy || applied || stale} />
+          <span className="min-w-0 flex-1"><strong className="block text-sm text-[#43574a]">{item.label}</strong><span className="mt-1 block">Координаты: {item.latitude}, {item.longitude}</span><a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 break-all underline underline-offset-2">Проверить объект в OpenStreetMap <ExternalLink className="h-3 w-3" /></a></span>
+        </label>)}
+      </fieldset> : <p className="mt-2 rounded border border-dashed border-[#c9cbbf] p-3 text-xs text-[#718075]">Геопоиск не вернул кандидатов. Координаты останутся незаполненными.</p>}
+      {selectedOriginId && <p className="mt-2 text-xs text-[#8b5d43]">Выбранная точка переносится после отдельного подтверждения — самостоятельно или вместе с отмеченным текстом и фото.</p>}
+    </section>}
     <div className="flex flex-col gap-2 rounded border border-[#e0dfd4] bg-[#f1f0e8] p-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="text-xs leading-5 text-[#66736a]" aria-live="polite" aria-atomic="true" id={statusId}>Выбрано {selectedCount} из {availableFields.length}. {selectionStatus}</p>
@@ -898,6 +1057,13 @@ function DraftPreview({ draft, entryData, edits, selectedFields, selectedPhotoCo
       </article>;
     })}</div>
     {draft.sources.length > 0 && <div className="rounded border border-[#e0dfd4] bg-[#f1f0e8] p-3 text-xs"><strong>Полученные источники</strong><ul className="mt-1 space-y-1">{draft.sources.map((source, index) => <li key={`${source.sha256}-${index}`}><a className="break-all underline underline-offset-2" href={source.finalUrl} target="_blank" rel="noreferrer">{source.title || source.finalUrl}</a><span className="ml-1 text-[#7a857b]">· получен {prettyDate(source.retrievedAt)} · {source.characters.toLocaleString('ru-RU')} знаков · SHA-256 {source.sha256.slice(0, 12)}…{source.truncated ? ' · текст усечён' : ''}</span></li>)}</ul></div>}
-    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-[#718075]">{stale ? 'Версия записи изменилась. Обновите запись и сформируйте новое предложение; текущий предпросмотр сохранён.' : 'Применяются только отмеченные поля и фотографии. После переноса статья ожидает подтверждения; публикация — отдельное решение редактора.'}</p><Button data-testid="ai-draft-apply" disabled={busy || applied || stale || (selectedFields.length === 0 && selectedPhotoCount === 0) || (selectedPhotoCount > 0 && !photoRightsConfirmed)} onClick={onApply} className="bg-[#315647] hover:bg-[#244537]">{applied ? 'Уже применено' : selectedFields.length && selectedPhotoCount ? 'Применить выбранный текст и фото' : selectedPhotoCount ? 'Применить выбранные фото' : 'Применить выбранные поля'}</Button></div>
+    {selectedPhotoIds.length > 0 && <p className="text-xs text-[#8b5d43]">{photoRightsConfirmed ? 'Оператор подтвердил право использования отмеченных фотографий.' : 'Для переноса фото отдельно подтвердите право использования в блоке фотографий.'}</p>}
+    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-[#718075]">{stale ? 'Версия записи изменилась. Обновите запись и сформируйте новое предложение для актуальной версии.' : 'Применяются только отмеченные поля, выбранные фотографии и, если отмечена, точка. После переноса статья останется на проверке; публикации не будет.'}</p><Button data-testid="ai-draft-apply" disabled={busy || applied || stale || (selectedFields.length === 0 && selectedPhotoIds.length === 0 && !selectedOrigin) || (selectedPhotoIds.length > 0 && !photoRightsConfirmed)} onClick={onApply} className="bg-[#315647] hover:bg-[#244537]">{applied ? 'Уже применено' : selectedOrigin
+      ? selectedPhotoIds.length && selectedFields.length ? 'Применить текст, фото и точку'
+        : selectedPhotoIds.length ? 'Применить фото и точку'
+          : selectedFields.length ? 'Применить текст и точку' : 'Применить выбранную точку'
+      : selectedFields.length && selectedPhotoIds.length ? 'Применить выбранный текст и фото'
+        : selectedPhotoIds.length ? 'Применить выбранные фото'
+          : 'Применить выбранные поля'}</Button></div>
   </div>;
 }

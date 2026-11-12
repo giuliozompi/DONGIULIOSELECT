@@ -18,17 +18,34 @@ export const catalogRequestSchema = z.object({
   countries: z.array(countryCode).min(1).max(3).refine(values => new Set(values).size === values.length),
   limit: z.number().int().min(1).max(30).default(12),
 }).strict().refine(value => value.limit >= value.countries.length, 'Число сыров должно быть не меньше числа стран');
+export const researchIntentSchema = z.object({
+  mode: z.enum(['deepen', 'alternative']),
+  field: z.enum(['description', 'country', 'region', 'history', 'characteristics', 'culinaryUses']).optional(),
+  instructions: text(1000).optional(),
+  previousRunId: z.string().uuid().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (value.mode === 'deepen' && !value.field)
+    ctx.addIssue({ code: 'custom', path: ['field'], message: 'Выберите раздел для углубления' });
+  if (value.mode === 'alternative' && !value.previousRunId)
+    ctx.addIssue({ code: 'custom', path: ['previousRunId'], message: 'Укажите предыдущий поиск' });
+});
 export const draftRequestSchema = z.object({
   requestId: z.string().uuid(), entryId: z.string().uuid(), revision: z.number().int().positive(),
   sources: z.array(editorialSourceUrl).max(3).refine(values => new Set(values).size === values.length),
   research: z.literal(true).optional(),
+  fullDraft: z.boolean().optional(),
+  intent: researchIntentSchema.optional(),
 }).strict().superRefine((value, ctx) => {
   if (!value.research && !value.sources.length)
     ctx.addIssue({ code: 'custom', message: 'Укажите хотя бы один источник', path: ['sources'] });
+  if ((value.intent || value.fullDraft) && !value.research)
+    ctx.addIssue({ code: 'custom', message: 'Режим доступен при явном поиске', path: ['research'] });
 });
 export const researchRequestSchema = z.object({
   requestId: z.string().uuid(), entryId: z.string().uuid(), revision: z.number().int().positive(),
   sources: z.array(editorialSourceUrl).max(3).refine(values => new Set(values).size === values.length).default([]),
+  fullDraft: z.boolean().optional(),
+  intent: researchIntentSchema.optional(),
 }).strict();
 export type ResearchRequest = z.infer<typeof researchRequestSchema>;
 export const originLookupRequestSchema = z.object({
@@ -122,7 +139,7 @@ export type ResearchReport = {
   queryPlan?: { topic: ResearchTopic | 'photos'; label: string; query: string }[];
 };
 export type CatalogResult = { items: CatalogItem[]; warnings: string[] };
-export type DraftResult = z.infer<typeof draftModelSchema> & { sources: AiSource[]; research?: ResearchReport };
+export type DraftResult = z.infer<typeof draftModelSchema> & { sources: AiSource[]; research?: ResearchReport; origin?: OriginLookup };
 export interface EditorialAiRun {
   id: string; kind: 'catalog' | 'draft'; status: 'running' | 'ready' | 'failed';
   revision: number; model: string; createdAt: string; finishedAt: string | null;
@@ -143,9 +160,10 @@ export const applyRequestSchema = z.object({
   edits: draftModelSchema.shape.fields.optional(),
   photoIds: z.array(text(64).min(1)).max(3).refine(ids => new Set(ids).size === ids.length).optional(),
   photoRightsConfirmed: z.boolean().optional(),
+  origin: z.object({ lookupId: z.string().uuid(), candidateId: text(100).min(1) }).strict().optional(),
 }).strict().superRefine((value, ctx) => {
-  if (!value.fields.length && !value.photoIds?.length)
-    ctx.addIssue({ code: 'custom', message: 'Выберите текстовые поля или фотографии' });
+  if (!value.fields.length && !value.photoIds?.length && !value.origin)
+    ctx.addIssue({ code: 'custom', message: 'Выберите текстовые поля, фотографии или точку происхождения' });
   if (value.photoIds?.length && value.photoRightsConfirmed !== true)
     ctx.addIssue({ code: 'custom', message: 'Подтвердите право использования выбранных фотографий' });
 });

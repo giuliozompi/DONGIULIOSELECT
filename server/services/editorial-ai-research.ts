@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ResearchReport } from '../../shared/editorial-ai';
+import type { ResearchReport, DraftRequest } from '../../shared/editorial-ai';
 import { EditorialModelError } from './editorial-ai-config';
 import { retrieveEditorialSource, validateSourceUrl, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
 import { researchJson } from './editorial-research-http';
@@ -93,10 +93,33 @@ function priority(hit: ResearchHit) {
 export async function researchEditorialSources(
   cheese: ResearchIdentity, manual: string[], deps: ResearchDependencies = defaultResearchDependencies,
   pause: (ms: number) => Promise<void> = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  options: { intent?: DraftRequest['intent']; previousQueries?: string[]; previousSources?: string[] } = {},
 ): Promise<{ sources: SourceEvidence[]; report: ResearchReport }> {
   const report: ResearchReport = { provider: 'brave', queries: [], failures: [], searchedAt: new Date().toISOString(),
     warnings: ['Найденные страницы проверены на читаемость, но официальный статус, связь с сыром и каждый факт проверяет редактор.'] };
-  const plan = structuredResearchPlan(cheese);
+  let plan = structuredResearchPlan(cheese);
+  if (options.intent?.mode === 'deepen') {
+    const topic = options.intent.field === 'country' || options.intent.field === 'region' ? 'origin'
+      : options.intent.field === 'description' ? undefined : options.intent.field;
+    if (topic) plan = plan.filter(item => item.topic === topic);
+    // Overview deepening still uses the bounded original topic plan.
+    plan = plan.map(item => ({ ...item, query: `${item.query} documenti dettagli approfondimento`.slice(0, 400) }));
+  }
+  if (options.intent?.mode === 'alternative') {
+    const previous = new Set(options.previousQueries || []);
+    const variants = ['documentazione bibliografia approfondimento', 'consorzio archivio scheda tecnica',
+      'tradizioni disciplinare patrimonio gastronomico', 'encyclopedia detailed references'];
+    plan = plan.map(item => {
+      let query = item.query;
+      for (const variant of variants) {
+        query = `${item.query.slice(0, 300)} ${variant}`;
+        if (!previous.has(query)) break;
+      }
+      if (previous.has(query)) throw new EditorialModelError('Все подготовленные варианты поиска уже использованы. Уточните нужный раздел вместо повторения того же поиска.');
+      return { ...item, query };
+    });
+    report.warnings.push('Повторный поиск использует другой план и предпочитает новые страницы. Новые результаты не гарантированы; совпадения отмечаются явно.');
+  }
   report.queryPlan = plan;
   const hits: (ResearchHit & { topic: typeof plan[number]['topic'] })[] = [];
   for (const { query, topic } of plan) {
@@ -118,16 +141,22 @@ export async function researchEditorialSources(
   });
   if (relevantHits.length < hits.length) report.warnings.push('Часть результатов поиска исключена: в них не найдено название выбранного сыра. Дополнительных запросов не было.');
   const seen = new Set<string>();
-  const ranked = relevantHits.sort((a, b) => priority(b) - priority(a));
+  const oldSources = new Set(options.previousSources || []);
+  const ranked = relevantHits.sort((a, b) =>
+    (options.intent?.mode === 'alternative' ? Number(oldSources.has(a.url)) - Number(oldSources.has(b.url)) : 0)
+    || priority(b) - priority(a));
   // Reserve room for each requested topic instead of letting a single consortium
   // or repeated homepage consume the whole reading budget.
   const topicFirst = plan.flatMap(item => ranked.find(hit => hit.topic === item.topic) || []);
-  const candidates = [
+  const candidateHits = [
     ...manual.map(url => ({ url, title: '', description: '' })),
     ...topicFirst,
     ...ranked.filter(hit => isWikipediaArticle(hit.url)).slice(0, 1),
     ...ranked,
-  ].flatMap(hit => {
+  ];
+  if (options.intent?.mode === 'alternative') candidateHits.sort((a, b) =>
+    Number(oldSources.has(a.url)) - Number(oldSources.has(b.url)));
+  const candidates = candidateHits.flatMap(hit => {
     try {
       const url = validateSourceUrl(hit.url); url.hash = '';
       if (seen.has(url.href)) return [];
@@ -161,8 +190,12 @@ export async function researchEditorialSources(
       !readable.some(old => old.finalUrl === source.finalUrl)) readable.push(source);
   }
   const sources: SourceEvidence[] = [], covered = new Set<string>();
+  if (options.intent?.mode === 'alternative' && readable.every(source =>
+    oldSources.has(source.url) || oldSources.has(source.finalUrl)))
+    report.warnings.push('Новых читаемых источников не найдено. Не считать эту заготовку независимой новой проверкой.');
   while (readable.length && sources.length < 6) {
     const score = (source: SourceEvidence) => sourceTopics(source).filter(topic => !covered.has(topic)).length * 10
+      + (options.intent?.mode === 'alternative' && !oldSources.has(source.url) && !oldSources.has(source.finalUrl) ? 100 : 0)
       + (source.images?.length ? 0.5 : 0) + Math.min(source.text.length, 20_000) / 20_000;
     readable.sort((a, b) => score(b) - score(a));
     // Reserve one of the six evidence slots for a readable, cheese-matched
