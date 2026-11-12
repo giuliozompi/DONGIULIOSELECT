@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from './lib/adminApi';
@@ -134,21 +134,47 @@ function AdminLoginForm({ onSuccess }: { onSuccess: () => void }) {
 
 export default function WebAdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { logout } = useWebAuth();
+  const { logout, user, isAuthenticated, isLoading: authLoading } = useWebAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
+  const logoutLock = useRef(false);
   const queryClient = useQueryClient();
 
-  const { data: checkData, isLoading, isError, refetch } = useQuery({
-    queryKey: ['/web-api/admin/check'],
+  const { data: checkData, isLoading, isError } = useQuery({
+    queryKey: ['/web-api/admin/check', user?.id],
     queryFn: () => adminApi.check(),
+    enabled: isAuthenticated && !authLoading,
     retry: false,
   });
+
+  const handleLogout = async () => {
+    if (logoutLock.current) return;
+    logoutLock.current = true;
+    setLoggingOut(true);
+    setLogoutError('');
+    try {
+      await logout();
+      await queryClient.cancelQueries({
+        predicate: query => String(query.queryKey[0]).startsWith('/web-api/admin'),
+      });
+      queryClient.removeQueries({
+        predicate: query => String(query.queryKey[0]).startsWith('/web-api/admin'),
+      });
+      setSidebarOpen(false);
+    } catch {
+      setLogoutError('Не удалось выйти. Проверьте соединение и повторите попытку.');
+    } finally {
+      logoutLock.current = false;
+      setLoggingOut(false);
+    }
+  };
 
   useEffect(() => {
     setSidebarOpen(false);
   }, [location]);
 
-  if (isLoading) {
+  if (authLoading || (isAuthenticated && isLoading)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center space-y-2">
@@ -159,11 +185,10 @@ export default function WebAdminLayout({ children }: { children: React.ReactNode
     );
   }
 
-  if (isError || !checkData?.ok) {
+  if (!isAuthenticated || isError || !checkData?.ok) {
     return (
       <AdminLoginForm onSuccess={() => {
         queryClient.invalidateQueries({ queryKey: ['/web-api/admin/check'] });
-        refetch();
       }} />
     );
   }
@@ -188,9 +213,10 @@ export default function WebAdminLayout({ children }: { children: React.ReactNode
         })}
       </nav>
       <div className="p-3 border-t">
-        <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground" onClick={logout}>
+        {logoutError && <p role="alert" className="mb-2 text-xs text-destructive">{logoutError}</p>}
+        <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground" onClick={handleLogout} disabled={loggingOut} data-testid="button-admin-logout">
           <LogOut className="h-4 w-4" />
-          Выйти
+          {loggingOut ? 'Выход…' : 'Выйти'}
         </Button>
       </div>
     </div>

@@ -63,7 +63,9 @@ export const useWebAuth = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    await webApi.post('/auth/logout').catch(() => {});
+    // Do not silently report a logout if the server could not revoke the
+    // refresh session, and do not start a refresh while trying to end it.
+    await webApi.post('/auth/logout', undefined, true);
     setAccessToken(null);
     set({ user: null, accessToken: null, isAuthenticated: false });
   },

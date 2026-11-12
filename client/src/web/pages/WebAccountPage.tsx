@@ -48,8 +48,12 @@ export default function WebAccountPage() {
   };
 
   const handleLogout = async () => {
-    await logout();
-    setLocation('/web');
+    try {
+      await logout();
+      setLocation('/web');
+    } catch {
+      toast({ title: 'Не удалось выйти. Проверьте соединение и повторите попытку.', variant: 'destructive' });
+    }
   };
 
   if (!user) return null;

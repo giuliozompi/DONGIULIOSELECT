@@ -16,8 +16,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import WebAuthModal from './WebAuthModal';
+import { useToast } from '@/hooks/use-toast';
 
 export default function WebHeader() {
+  const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -142,7 +144,12 @@ export default function WebHeader() {
                       <User className="w-4 h-4 mr-2" /> Профиль
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={logout} className="text-red-600">
+                    <DropdownMenuItem onClick={() => {
+                      logout().catch(() => toast({
+                        title: 'Не удалось выйти. Проверьте соединение и повторите попытку.',
+                        variant: 'destructive',
+                      }));
+                    }} className="text-red-600">
                       <LogOut className="w-4 h-4 mr-2" /> Выйти
                     </DropdownMenuItem>
                   </DropdownMenuContent>
