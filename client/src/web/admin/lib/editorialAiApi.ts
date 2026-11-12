@@ -1,5 +1,5 @@
 import { webApi } from '../../lib/webApi';
-import type { EditorialEntry } from '@shared/editorial';
+import type { CheeseData, EditorialEntry } from '@shared/editorial';
 import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField, SourceSuggestions, ResearchRequest, OriginLookup } from '@shared/editorial-ai';
 export type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, CatalogResult, DraftResult, CatalogItem, AiField } from '@shared/editorial-ai';
 const base = '/admin/editorial-ai';
@@ -27,10 +27,12 @@ export const editorialAiApi = {
     edits?: Partial<Record<AiField, string>>,
     photos?: { photoIds: string[]; photoRightsConfirmed: boolean },
     origin?: { lookupId: string; candidateId: string },
+    editorialData?: CheeseData,
   ) => webApi.post<EditorialEntry>(`${base}/runs/${run.id}/apply`, {
     entryId: entry.id, revision: entry.revision, fields, edits,
     ...(photos?.photoIds.length ? photos : {}),
     ...(origin ? { origin } : {}),
+    ...(editorialData ? { editorialData } : {}),
   }),
   importPhotos: (
     run: EditorialAiRun,

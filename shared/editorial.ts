@@ -45,6 +45,14 @@ export const cheeseDataSchema = z.object({
   country: required(100), region: text(editorialRegionMaxLength).default(''),
   latitude: z.number().min(-90).max(90).nullable().default(null),
   longitude: z.number().min(-180).max(180).nullable().default(null),
+  // Separate from the representative historical origin; absent on older articles.
+  productionPoints: z.array(z.object({
+    id: z.string().trim().min(1).max(100),
+    label: z.string().trim().min(1, 'Укажите название места производства').max(200),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+  }).strict()).max(20).refine(points => new Set(points.map(point => point.id)).size === points.length,
+    'Повторяющиеся точки производства').optional(),
   history: text(20000).default(''), characteristics: text(20000).default(''),
   culinaryUses: text(20000).default(''), productionCountry: text(100).default(''),
   sources: z.array(httpUrl).max(30).default([]),

@@ -64,7 +64,7 @@ export async function publicCheeseDetail(id: string, database = pool): Promise<P
   ]);
   return { ...cheeseSummary(row), photos: cheese.photos, history: cheese.history,
     characteristics: cheese.characteristics, culinaryUses: cheese.culinaryUses,
-    productionCountry: cheese.productionCountry, sources: cheese.sources,
+    productionCountry: cheese.productionCountry, productionPoints: cheese.productionPoints || [], sources: cheese.sources,
     externalVideoUrls: cheese.externalVideoUrls, relatedVideos: videos.rows.map(publicVideo),
     products: products.rows.map(p => ({
       id: p.id, name: p.name, slug: p.slug, images: p.images, price: p.price,

@@ -327,7 +327,23 @@ function CatalogRow({ item, selected, disabled, onToggle, onRank }: { item: Cata
   </article>;
 }
 
-export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onApplied: (saved?: EditorialEntry, options?: AppliedOptions) => void }) {
+export function CheeseAiDraft({
+  entry,
+  onApplied,
+  mode = 'editor',
+  onProposalReady,
+  onIdentitySave,
+  actionsDisabled = false,
+  onBusyChange,
+}: {
+  entry: EditorialEntry;
+  onApplied: (saved?: EditorialEntry, options?: AppliedOptions) => void;
+  mode?: 'research' | 'editor';
+  onProposalReady?: (entry: EditorialEntry, run: EditorialAiRun, draft: DraftResult) => void;
+  onIdentitySave?: (entry: EditorialEntry, identity: Pick<CheeseData, 'title' | 'nameOriginal' | 'country' | 'region'>) => Promise<EditorialEntry>;
+  actionsDisabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const initialSources = ((entry.data as CheeseData).sources || []).filter(url => !/^https:\/\/www\.openstreetmap\.org\/(?:node|way|relation)\/\d+$/.test(url)).join('\n');
   const [open, setOpen] = useState(false);
   const [sourcesText, setSourcesText] = useState(initialSources);
@@ -342,6 +358,14 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const [globalAiBusy, setGlobalAiBusy] = useState(generationClaimed);
   const [error, setError] = useState('');
   const [serverTransfer, setServerTransfer] = useState<CheeseData['aiResearch']>();
+  const [identityEntry, setIdentityEntry] = useState(entry);
+  const [identityForm, setIdentityForm] = useState(() => {
+    const data = entry.data as CheeseData;
+    return { title: data.title || '', nameOriginal: data.nameOriginal || '', country: data.country || '', region: data.region || '' };
+  });
+  const [identitySaving, setIdentitySaving] = useState(false);
+  const [identityError, setIdentityError] = useState('');
+  const [identityStale, setIdentityStale] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
   const [transferConfirmation, setTransferConfirmation] = useState<{
@@ -360,12 +384,18 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const applyLock = useRef(false);
   const applyClaimedRef = useRef(false);
   const mountedRef = useRef(false);
-  const identity = `${entry.id}:${entry.revision}`;
+  const activeEntry = mode === 'research' ? identityEntry : entry;
+  const identity = `${activeEntry.id}:${activeEntry.revision}`;
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const photoIdentityRef = useRef(identity);
   const entryIdRef = useRef(entry.id);
+  const identityEntryRef = useRef(activeEntry);
+  const identitySavePendingRef = useRef(false);
+  const identitySavedRevisionRef = useRef<number | null>(null);
+  identityEntryRef.current = activeEntry;
   const runEntryIdRef = useRef<string>();
+  const proposalNotifiedRef = useRef('');
   useEffect(() => () => {
     if (lock.current) { lock.current = false; setGenerationClaimed(false); }
     if (applyClaimedRef.current) {
@@ -394,6 +424,11 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   useEffect(() => {
     if (entryIdRef.current === entry.id) return;
     entryIdRef.current = entry.id;
+    identityEntryRef.current = entry;
+    setIdentityEntry(entry);
+    const data = entry.data as CheeseData;
+    setIdentityForm({ title: data.title || '', nameOriginal: data.nameOriginal || '', country: data.country || '', region: data.region || '' });
+    setIdentityError('');
     runEntryIdRef.current = undefined;
     setServerTransfer(undefined);
     setRun(undefined);
@@ -445,11 +480,11 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const draft = current?.status === 'ready' ? current.result as DraftResult | null : null;
   const runParams = current?.kind === 'draft' ? current.params as { entryId?: string; revision?: number } : undefined;
   const runStale = Boolean(current && (current.appliedTo
-    ? current.appliedTo.entryId !== entry.id || current.appliedTo.revision !== entry.revision
-    : runParams?.entryId !== entry.id || runParams?.revision !== entry.revision));
+    ? current.appliedTo.entryId !== activeEntry.id || current.appliedTo.revision !== activeEntry.revision
+    : runParams?.entryId !== activeEntry.id || runParams?.revision !== activeEntry.revision));
   const readyTextPendingApply = Boolean(draft && !current?.appliedTo
     && Object.values(draft.fields).some(value => typeof value === 'string' && value.trim().length > 0));
-  const entryData = entry.data as CheeseData;
+  const entryData = activeEntry.data as CheeseData;
   const researchMarker = entryData.aiResearch || serverTransfer;
   const entryRuns = history.data?.items || [];
   const previousSearchRunId = current?.kind === 'draft' && current.status !== 'running'
@@ -459,8 +494,43 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
   const hasUnsavedChanges = sourcesText !== sourceBaseline.current || (!current?.appliedTo && (
     editedProposal || selectedPhotoIds.length > 0 || selectedFields.length > 0 || Boolean(selectedOriginId)
   ));
+  const identityDirty = identityForm.title !== (entryData.title || '') || identityForm.nameOriginal !== (entryData.nameOriginal || '')
+    || identityForm.country !== (entryData.country || '') || identityForm.region !== (entryData.region || '');
+  const componentBusy = busy || suggestionBusy || Boolean(activeId) || identitySaving || globalAiBusy;
+  useEffect(() => {
+    if (mode !== 'research' || identitySavePendingRef.current || entry.id !== identityEntry.id || entry.revision === identityEntry.revision) return;
+    if (identitySavedRevisionRef.current === entry.revision) {
+      identityEntryRef.current = entry;
+      setIdentityEntry(entry);
+      setIdentityStale(false);
+      setIdentityError('');
+      return;
+    }
+    if (identityDirty) {
+      setIdentityStale(true);
+      setIdentityError('Сохранённая запись изменилась. Обновите сведения перед новым исследованием.');
+      return;
+    }
+    const latest = entry.data as CheeseData;
+    identityEntryRef.current = entry;
+    setIdentityEntry(entry);
+    setIdentityForm({ title: latest.title || '', nameOriginal: latest.nameOriginal || '', country: latest.country || '', region: latest.region || '' });
+    setIdentityStale(false);
+  }, [mode, entry, identityEntry, identityDirty]);
+  useEffect(() => {
+    onBusyChange?.(componentBusy);
+  }, [componentBusy, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
+  useEffect(() => {
+    const params = current?.kind === 'draft' ? current.params as { fullDraft?: boolean; entryId?: string; revision?: number } : undefined;
+    if (mode !== 'research' || !onProposalReady || !current || current.status !== 'ready' || !draft
+      || !params?.fullDraft || params.entryId !== activeEntry.id || params.revision !== activeEntry.revision
+      || proposalNotifiedRef.current === current.id) return;
+    proposalNotifiedRef.current = current.id;
+    onProposalReady(activeEntry, current, draft);
+  }, [mode, onProposalReady, current?.id, current?.status, activeEntry, draft]);
   function tryClaimSuggestion() {
-    if (generationClaimed) return false;
+    if (actionsDisabled || generationClaimed) return false;
     setGenerationClaimed(true);
     return true;
   }
@@ -471,8 +541,50 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     if (!hasUnsavedChanges) return true;
     return window.confirm(`Есть несохранённые ссылки, правки текста или выбранные фотографии. ${action} и потерять их?`);
   }
+  async function saveIdentity(): Promise<EditorialEntry | undefined> {
+    if (!onIdentitySave || !identityDirty || identitySaving || componentBusy || actionsDisabled || identityStale) return;
+    if (!identityForm.title.trim() || !identityForm.country.trim()) {
+      setIdentityError('Укажите название по-русски и страну происхождения.');
+      return undefined;
+    }
+    const target = identityEntryRef.current;
+    identitySavePendingRef.current = true;
+    setIdentitySaving(true);
+    setIdentityError('');
+    try {
+      const saved = await onIdentitySave(target, identityForm);
+      if (!mountedRef.current || entryIdRef.current !== saved.id) return;
+      identitySavedRevisionRef.current = saved.revision;
+      identityEntryRef.current = saved;
+      identityRef.current = `${saved.id}:${saved.revision}`;
+      setIdentityEntry(saved);
+      setIdentityStale(false);
+      setIdentityForm({
+        title: (saved.data as CheeseData).title || '',
+        nameOriginal: (saved.data as CheeseData).nameOriginal || '',
+        country: (saved.data as CheeseData).country || '',
+        region: (saved.data as CheeseData).region || '',
+      });
+      return saved;
+    } catch (issue) {
+      if (mountedRef.current && entryIdRef.current === target.id) {
+        setIdentityError(errorMessage(issue));
+        if (isConflict(issue)) setIdentityStale(true);
+      }
+      return undefined;
+    } finally {
+      identitySavePendingRef.current = false;
+      if (mountedRef.current && entryIdRef.current === target.id) setIdentitySaving(false);
+    }
+  }
+  async function startFullDraftResearch() {
+    if (mode !== 'research' || actionsDisabled || componentBusy) return;
+    const requestEntry = identityDirty ? await saveIdentity() : activeEntry;
+    if (!requestEntry) return;
+    await researchDraft({ fullDraft: true, entry: requestEntry });
+  }
   async function generateDraft() {
-    if (lock.current || generationClaimed || suggestionBusy) return;
+    if (actionsDisabled || lock.current || generationClaimed || suggestionBusy) return;
     const sources = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
     if (sources.length < 1 || sources.length > 3 || sources.some(url => !/^https:\/\/[^/\s?#]+/i.test(url))) {
       setError('Укажите от одной до трёх ссылок https, по одной на строку.');
@@ -485,13 +597,13 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     setError('');
     const requestIdentity = identity;
     try {
-      const next = await editorialAiApi.draft({ requestId: crypto.randomUUID(), entryId: entry.id, revision: entry.revision, sources });
+      const next = await editorialAiApi.draft({ requestId: crypto.randomUUID(), entryId: activeEntry.id, revision: activeEntry.revision, sources });
       if (!mountedRef.current || identityRef.current !== requestIdentity) {
         if (lock.current) { lock.current = false; setGenerationClaimed(false); }
         if (mountedRef.current) setBusy(false);
         return;
       }
-      runEntryIdRef.current = entry.id;
+      runEntryIdRef.current = activeEntry.id;
       setRun(next);
       setSelectedFields([]);
       setSelectedOriginId('');
@@ -517,8 +629,10 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     fullDraft?: boolean;
     intent?: NonNullable<ResearchRequest['intent']>;
     replacingCurrent?: boolean;
+    entry?: EditorialEntry;
   } = {}) {
-    if (lock.current || generationClaimed || suggestionBusy || applyLock.current) return;
+    if (actionsDisabled || lock.current || generationClaimed || suggestionBusy || applyLock.current) return;
+    const requestEntry = options.entry || activeEntry;
     const workLabel = options.intent?.mode === 'deepen'
       ? `Углубить раздел «${AI_FIELDS.find(field => field.key === options.intent?.field)?.label || 'статьи'}»`
       : options.intent?.mode === 'alternative'
@@ -527,7 +641,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     const replacementText = options.replacingCurrent
       ? '\n\nНовый альтернативный полный черновик заменит только текущий AI-предпросмотр. Сохранённая статья останется без изменений.'
       : '';
-    if (!window.confirm(`${workLabel}?\n\nЗапуск: не более 5 поисковых запросов Brave и 1 генерации. Результат останется предложением на проверку; публикации не будет.${replacementText}`)) return;
+    if (mode !== 'research' && !window.confirm(`${workLabel}?\n\nЗапуск: не более 5 поисковых запросов Brave и 1 генерации. Результат останется предложением на проверку; публикации не будет.${replacementText}`)) return;
     const sources = sourcesText.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
     if (sources.length > 3 || sources.some(url => !/^https:\/\/[^/\s?#]+/i.test(url))) {
       setError('Добавьте не более трёх публичных https-ссылок, по одной на строку.');
@@ -538,10 +652,10 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     setGenerationClaimed(true);
     setBusy(true);
     setError('');
-    const requestIdentity = identity;
+    const requestIdentity = `${requestEntry.id}:${requestEntry.revision}`;
     try {
       const next = await editorialAiApi.research({
-        requestId: crypto.randomUUID(), entryId: entry.id, revision: entry.revision, sources,
+        requestId: crypto.randomUUID(), entryId: requestEntry.id, revision: requestEntry.revision, sources,
         ...(options.fullDraft ? { fullDraft: true } : {}),
         ...(options.intent ? { intent: options.intent } : {}),
       });
@@ -550,7 +664,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
         if (mountedRef.current) setBusy(false);
         return;
       }
-      runEntryIdRef.current = entry.id;
+      runEntryIdRef.current = requestEntry.id;
       setRun(next);
       setSelectedFields([]);
       setSelectedOriginId('');
@@ -608,7 +722,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     const selectedOrigin = draft?.origin?.candidates.find(candidate => candidate.id === selectedOriginId);
     if (!current || current.status !== 'ready' || !draft || (selectedFields.length === 0 && !selectedPhotos && !selectedOrigin)
       || (selectedPhotos && !photoRightsConfirmed) || current.appliedTo || revisionConflict || runStale
-      || busy || suggestionBusy || generationClaimed || applyLock.current || transferConfirmation) return;
+      || actionsDisabled || busy || suggestionBusy || generationClaimed || applyLock.current || transferConfirmation) return;
     const selectedEdits = Object.fromEntries(selectedFields
       .filter(field => edits[field] !== undefined)
       .map(field => [field, edits[field]])) as Partial<Record<AiField, string>>;
@@ -643,7 +757,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       || identityRef.current !== confirmation.identity
       || entryIdRef.current !== confirmation.entry.id
       || current?.id !== confirmation.run.id
-      || current.appliedTo || revisionConflict || runStale || busy || suggestionBusy || generationClaimed) return;
+      || actionsDisabled || current.appliedTo || revisionConflict || runStale || busy || suggestionBusy || generationClaimed) return;
     const photos = confirmation.photoIds.length > 0;
     if (!confirmation.fields.length && !photos && !confirmation.origin) return;
     if (photos && (!photoRightsConfirmed || confirmation.photoIds.some(id => !selectedPhotoIds.includes(id)))) {
@@ -693,7 +807,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     const photoIds = [...selectedPhotoIds];
     if (!current || current.kind !== 'draft' || current.status !== 'ready' || !draft
       || runParams?.entryId !== entry.id || photoIds.length < 1 || photoIds.length > 3
-      || !photoRightsConfirmed || busy || suggestionBusy || generationClaimed || applyLock.current) return;
+      || actionsDisabled || !photoRightsConfirmed || busy || suggestionBusy || generationClaimed || applyLock.current) return;
     if (transferConfirmation) return;
     setTransferConfirmation({
       mode: 'photos',
@@ -710,7 +824,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     if (!confirmation || confirmation.mode !== 'photos' || confirmation.fields.length > 0 || !confirmation.photoIds.length
       || applyLock.current || !mountedRef.current || identityRef.current !== confirmation.identity
       || entryIdRef.current !== confirmation.entry.id || current?.id !== confirmation.run.id
-      || busy || suggestionBusy || generationClaimed || !photoRightsConfirmed
+      || actionsDisabled || busy || suggestionBusy || generationClaimed || !photoRightsConfirmed
       || confirmation.photoIds.some(id => !selectedPhotoIds.includes(id))) return;
     applyLock.current = true;
     applyClaimedRef.current = true;
@@ -761,21 +875,40 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
     if (!draft || current?.appliedTo || revisionConflict || runStale || busy || suggestionBusy || globalAiBusy || generationClaimed || Boolean(activeId) || applyLock.current) return;
     setSelectedFields(AI_FIELDS.filter(field => draft.fields[field.key] !== undefined).map(field => field.key));
   }
-  return <div data-testid={`ai-draft-entry-${entry.id}`} className="editorial-ai mt-3 border-t border-[#e2e0d5] pt-3">
+  if (mode === 'research') {
+    return <section data-testid={`ai-draft-entry-${entry.id}`} className="editorial-ai mt-3 border-t border-[#e2e0d5] pt-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8a654e]" htmlFor={`ai-cheese-title-${entry.id}`}>Сыр по-русски<Input id={`ai-cheese-title-${entry.id}`} value={identityForm.title} maxLength={200} disabled={componentBusy || actionsDisabled} onChange={event => setIdentityForm(current => ({ ...current, title: event.target.value }))} /></label>
+        <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8a654e]" htmlFor={`ai-cheese-original-${entry.id}`}>Оригинальное название<Input id={`ai-cheese-original-${entry.id}`} value={identityForm.nameOriginal} maxLength={200} disabled={componentBusy || actionsDisabled} onChange={event => setIdentityForm(current => ({ ...current, nameOriginal: event.target.value }))} /></label>
+        <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8a654e]" htmlFor={`ai-cheese-country-${entry.id}`}>Страна происхождения<Input id={`ai-cheese-country-${entry.id}`} value={identityForm.country} maxLength={100} disabled={componentBusy || actionsDisabled} onChange={event => setIdentityForm(current => ({ ...current, country: event.target.value }))} /></label>
+        <label className="space-y-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-[#8a654e]" htmlFor={`ai-cheese-region-${entry.id}`}>Регион<Input id={`ai-cheese-region-${entry.id}`} value={identityForm.region} maxLength={2000} disabled={componentBusy || actionsDisabled} onChange={event => setIdentityForm(current => ({ ...current, region: event.target.value }))} /></label>
+      </div>
+      {identityError && <div role="alert" className="mt-2 rounded border border-[#d79c89] bg-[#faeee9] p-2.5 text-xs text-[#8b4535]">{identityError}</div>}
+      <Button data-testid="ai-full-draft-research" className="mt-3 bg-[#315647] text-[#f7f4e9] hover:bg-[#244537]" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current || identitySaving || identityStale || actionsDisabled} onClick={() => { void startFullDraftResearch(); }}>
+        {busy || activeId || identitySaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}{identitySaving ? 'Сохраняем сведения…' : 'Полный черновик…'}
+      </Button>
+      {error && <div role="alert" className="mt-3 rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{error}</div>}
+      <RunState run={current} error={polled.isError && activeId ? polled.error : undefined} />
+      {current?.status === 'running' && <p role="status" className="mt-2 text-xs text-[#718075]">Ищем и готовим редакторское предложение. Запись не меняется до подтверждения в карточке.</p>}
+      {current?.status === 'ready' && <p role="status" className="mt-2 text-xs text-[#365b42]">Черновик готов — открываем редакторскую проверку. Ничего не опубликовано.</p>}
+    </section>;
+  }
+  return <fieldset disabled={actionsDisabled} data-testid={`ai-draft-entry-${entry.id}`} className="editorial-ai m-0 min-w-0 border-0 p-0 pt-3">
+    {actionsDisabled && <p className="mb-2 rounded border border-[#dfc9b5] bg-[#f5ece2] p-2.5 text-xs leading-5 text-[#684b3d]">Сначала сохраните или отмените изменения статьи. Исследование работает только с сохранённой ревизией.</p>}
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div><p className="ai-kicker">Редакторская сверка источников</p><p className="mt-1 text-xs text-[#6f7b71]">Предложение по выбранным ссылкам · не автоматическая проверка истинности</p></div>
        <div className="flex flex-wrap items-center gap-2">
        {researchMarker && <span data-testid="ai-research-transferred" role="status" className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-[#b8c9b8] bg-[#edf3eb] px-2.5 py-1 text-xs font-medium text-[#365b42]"><Check className="h-3.5 w-3.5" /><span>Данные исследования перенесены</span><span className="font-normal text-[#627365]">· поиск {prettyDate(researchMarker.searchedAt)} · перенос {prettyDate(researchMarker.transferredAt)}</span></span>}
-       <Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => {
+      <Button size="sm" variant="outline" disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => {
         if (lock.current || applyLock.current) return;
         if (!open) setOpen(true);
         else if (confirmDiscardChanges('Закрыть панель')) setOpen(false);
       }} aria-expanded={open} data-testid={`ai-research-toggle-${entry.id}`}><Sparkles className="mr-1.5 h-4 w-4" />{open ? 'Свернуть' : researchMarker ? 'Открыть исследование' : 'Подготовить с ИИ'}</Button>
        </div>
     </div>
-    {open && <div className="mt-3 rounded border border-[#e0dfd4] bg-[#f8f7f0] p-3">
+     {open && <div className="mt-3 rounded border border-[#e0dfd4] bg-[#f8f7f0] p-3">
       <label className="block text-sm font-medium" htmlFor={`ai-sources-${entry.id}`}>Источники для анализа, только выбранные оператором</label>
-       <textarea id={`ai-sources-${entry.id}`} className="mt-1 min-h-24 w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] p-2 text-sm" value={sourcesText} onChange={event => setSourcesText(event.target.value)} maxLength={6000} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} placeholder="https://… · до трёх ссылок, по одной на строку" />
+        <textarea id={`ai-sources-${entry.id}`} className="mt-1 min-h-24 w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] p-2 text-sm" value={sourcesText} onChange={event => setSourcesText(event.target.value)} maxLength={6000} disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId)} placeholder="https://… · до трёх ссылок, по одной на строку" />
        <p className="mt-1 text-xs text-[#78837a]">До трёх публичных https-ссылок, по одной на строку. Поиск выполняется только по отдельному нажатию.</p>
       <SourcesSuggestions
         entry={entry}
@@ -797,9 +930,9 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
         }}
       />
        <div className="mt-3 flex flex-wrap gap-2">
-          <Button data-testid="ai-draft-research" size="sm" className="bg-[#315647] hover:bg-[#244537]" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void researchDraft(); }}><FileSearch className="mr-1.5 h-4 w-4" />Найти источники и подготовить текст</Button>
-          <Button data-testid="ai-full-draft-research" size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void researchDraft({ fullDraft: true }); }}><Sparkles className="mr-1.5 h-4 w-4" />Полный черновик · фото и геоточка</Button>
-          <Button data-testid="ai-alternative-full-draft" size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current || !previousSearchRunId} onClick={() => {
+          <Button data-testid="ai-draft-research" size="sm" className="bg-[#315647] hover:bg-[#244537]" disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void researchDraft(); }}><FileSearch className="mr-1.5 h-4 w-4" />Найти источники и подготовить текст</Button>
+          <Button data-testid="ai-full-draft-research" size="sm" variant="outline" disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void researchDraft({ fullDraft: true }); }}><Sparkles className="mr-1.5 h-4 w-4" />Полный черновик · фото и геоточка</Button>
+          <Button data-testid="ai-alternative-full-draft" size="sm" variant="outline" disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current || !previousSearchRunId} onClick={() => {
             if (!previousSearchRunId) return;
             void researchDraft({
               fullDraft: true,
@@ -807,16 +940,17 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
               intent: { mode: 'alternative', previousRunId: previousSearchRunId },
             });
           }}><RotateCcw className="mr-1.5 h-4 w-4" />Альтернативный поиск · полный черновик</Button>
-          <Button data-testid="ai-draft-generate" size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void generateDraft(); }}><Sparkles className="mr-1.5 h-4 w-4" />Сформировать только по этим ссылкам</Button>
-          <button data-testid="ai-draft-history" className="text-xs text-[#51665a] underline underline-offset-2 disabled:opacity-50" disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => setHistoryOpen(value => !value)}>История предложений</button>
+          <Button data-testid="ai-draft-generate" size="sm" variant="outline" disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} onClick={() => { void generateDraft(); }}><Sparkles className="mr-1.5 h-4 w-4" />Сформировать только по этим ссылкам</Button>
+          <button data-testid="ai-draft-history" className="text-xs text-[#51665a] underline underline-offset-2 disabled:opacity-50" disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId)} onClick={() => setHistoryOpen(value => !value)}>История предложений</button>
        </div>
        {error && <div role="alert" className="mt-3 rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{error}{isConflict({ status: 409, message: error }) && <button className="ml-2 underline" onClick={() => onApplied()}>Обновить список</button>}</div>}
       <RunState run={current} error={polled.isError && activeId ? polled.error : undefined} />
       {current && <p className="mt-3 text-xs text-[#718075]">{current.model} · {prettyDate(current.createdAt)} · статус: {current.status === 'ready' ? 'готово' : current.status === 'running' ? 'выполняется' : 'ошибка'}{current.appliedTo ? ' · уже применено' : ''}</p>}
-      {previousSearchRunId && <SectionResearchControls
+        <SectionResearchControls
         instructions={deepInstructions}
         onInstructionsChange={setDeepInstructions}
-        disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current}
+        disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current}
+        hasPreviousRun={Boolean(previousSearchRunId)}
         onResearch={(field, mode, instructions) => {
           const boundedInstructions = instructions.trim().slice(0, 500);
           void researchDraft({
@@ -824,12 +958,12 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
             intent: {
               mode,
               field,
-              previousRunId: previousSearchRunId,
+              ...(previousSearchRunId ? { previousRunId: previousSearchRunId } : {}),
               ...(boundedInstructions ? { instructions: boundedInstructions } : {}),
             },
           });
         }}
-      />}
+      />
          {current?.kind === 'draft' && (current.result as DraftResult | null)?.research && <ResearchDiagnostics report={(current.result as DraftResult).research!} sources={(current.result as DraftResult).sources || []} missingContext={[
          !entryData.history?.trim() && 'История',
          !entryData.country?.trim() && 'Страна происхождения',
@@ -859,7 +993,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
       </div>}
     </div>}
     <Dialog open={Boolean(transferConfirmation)} onOpenChange={openDialog => {
-      if (!openDialog && !applyLock.current) setTransferConfirmation(null);
+      if (!openDialog && !actionsDisabled && !applyLock.current) setTransferConfirmation(null);
     }}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto border-[#d8d9cc] bg-[#fbfaf5] text-[#29352f] sm:max-w-xl">
         <DialogHeader>
@@ -912,11 +1046,11 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
           </p>
         </div>}
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button type="button" variant="outline" disabled={busy} onClick={() => setTransferConfirmation(null)}>Отмена</Button>
+          <Button type="button" variant="outline" disabled={busy || actionsDisabled} onClick={() => setTransferConfirmation(null)}>Отмена</Button>
           <Button
             type="button"
             data-testid="ai-transfer-confirm"
-            disabled={busy || !transferConfirmation}
+            disabled={busy || actionsDisabled || !transferConfirmation}
             onClick={() => {
               if (transferConfirmation?.mode === 'photos') void confirmPhotoTransfer();
               else void confirmSelectedTransfer();
@@ -928,7 +1062,7 @@ export function CheeseAiDraft({ entry, onApplied }: { entry: EditorialEntry; onA
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  </div>;
+  </fieldset>;
 }
 
 type DeepResearchField = Extract<AiField, 'history' | 'characteristics' | 'culinaryUses' | 'description' | 'region'>;
@@ -944,11 +1078,13 @@ function SectionResearchControls({
   instructions,
   onInstructionsChange,
   disabled,
+  hasPreviousRun,
   onResearch,
 }: {
   instructions: Partial<Record<AiField, string>>;
   onInstructionsChange: (next: Partial<Record<AiField, string>>) => void;
   disabled: boolean;
+  hasPreviousRun: boolean;
   onResearch: (field: DeepResearchField, mode: 'deepen' | 'alternative', instructions: string) => void;
 }) {
   return <section data-testid="ai-section-research-controls" className="mt-4 rounded border border-[#d8d9cc] bg-[#f1f0e8] p-3">
@@ -963,7 +1099,7 @@ function SectionResearchControls({
         <textarea id={`ai-deepen-instructions-${field.key}`} data-testid={`ai-deepen-instructions-${field.key}`} className="mt-1 min-h-16 w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] p-2 text-xs" maxLength={500} value={instructions[field.key] || ''} onChange={event => onInstructionsChange({ ...instructions, [field.key]: event.target.value })} disabled={disabled} placeholder="Контекст или тип источника для поиска" />
         <div className="mt-2 flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" data-testid={`ai-deepen-${field.key}`} disabled={disabled} onClick={() => onResearch(field.key, 'deepen', instructions[field.key] || '')}><FileSearch className="mr-1.5 h-3.5 w-3.5" />Углубить и дополнить с ИИ</Button>
-          <Button type="button" size="sm" variant="outline" data-testid={`ai-alternative-${field.key}`} disabled={disabled} onClick={() => onResearch(field.key, 'alternative', instructions[field.key] || '')}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Искать альтернативные источники</Button>
+          <Button type="button" size="sm" variant="outline" data-testid={`ai-alternative-${field.key}`} title={!hasPreviousRun ? 'Для альтернативного поиска сначала выполните исследование' : undefined} disabled={disabled || !hasPreviousRun} onClick={() => onResearch(field.key, 'alternative', instructions[field.key] || '')}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Искать альтернативные источники</Button>
         </div>
         <p className="mt-2 text-[11px] leading-4 text-[#78837a]">До 5 запросов Brave и 1 генерация. Для альтернативного поиска сервер получает ссылку на предыдущий запуск; новые источники не гарантированы.</p>
       </details>)}

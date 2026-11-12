@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, ArrowRight, Check, CircleHelp, FilePlus2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,13 +10,16 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { editorialApi } from '../lib/editorialApi';
+import { editorialAiApi } from '../lib/editorialAiApi';
 import { adminApi } from '../lib/adminApi';
 import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
+import CheeseGeoEditor from './CheeseGeoEditor';
 import MarketMonitor from './market/MarketMonitor';
 import {
   editorialSchemas, pricePerKg,
   type CheeseData, type EditorialEntry, type EditorialKind, type PriceData, type VideoData,
 } from '@shared/editorial';
+import type { AiField, DraftResult, EditorialAiRun } from '@shared/editorial-ai';
 
 const PAGE_SIZE = 20;
 type FormData = any;
@@ -29,7 +32,7 @@ const intros: Record<EditorialKind, string> = {
   price: 'Наблюдения за международными ценами. Эти данные не меняют цены и ассортимент каталога.',
 };
 const EMPTY_VIDEO: VideoData = { title: '', description: '', status: 'draft', sortOrder: 0, url: '', cover: '', category: 'recipe', cheeseIds: [] };
-const EMPTY_CHEESE: CheeseData = { title: '', nameOriginal: '', description: '', status: 'draft', sortOrder: 0, photos: [], country: '', region: '', latitude: null, longitude: null, history: '', characteristics: '', culinaryUses: '', productionCountry: '', sources: [], productIds: [], videoIds: [], externalVideoUrls: [] };
+const EMPTY_CHEESE: CheeseData = { title: '', nameOriginal: '', description: '', status: 'draft', sortOrder: 0, photos: [], country: '', region: '', latitude: null, longitude: null, history: '', characteristics: '', culinaryUses: '', productionCountry: '', sources: [], productIds: [], videoIds: [], externalVideoUrls: [], productionPoints: [] };
 const EMPTY_PRICE: FormData = { cheeseId: '', sourceType: 'internet', price: 0, currency: 'EUR', country: '', store: '', sourceUrl: '', observedOn: new Date().toISOString().slice(0, 10), packageQuantity: 1, packageUnit: 'kg', offerConditions: '', notes: '' };
 
 function fresh(kind: EditorialKind): FormData {
@@ -99,6 +102,8 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const [validation, setValidation] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [rawLines, setRawLines] = useState<Record<string, string>>({});
+  const [aiProposal, setAiProposal] = useState<{ run: EditorialAiRun; draft: DraftResult; selectedOriginId: string; selectedPhotoIds: string[]; photoRightsConfirmed: boolean; operatorConfirmed: boolean } | null>(null);
+  const [editorAiBusy, setEditorAiBusy] = useState(false);
   const requestLock = useRef(false);
   const [requestBusy, setRequestBusy] = useState(false);
   const workspaceMounted = useRef(false);
@@ -191,7 +196,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     mutationFn: (entry: EditorialEntry) => editorialApi.unpublish(entry),
     onSuccess: async () => { await invalidateEditorial(); toast({ title: 'Материал снят с публикации' }); },
   });
-  const saving = requestBusy || createMutation.isPending || updateMutation.isPending || uploading;
+  const saving = requestBusy || createMutation.isPending || updateMutation.isPending || uploading || editorAiBusy;
   const entries = listQuery.data?.items || [];
   const total = listQuery.data?.total || 0;
   const cheeses = cheeseQuery.data || [];
@@ -231,6 +236,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setForm(fresh(kind));
     setRawLines({});
     setValidation([]);
+    setAiProposal(null);
     editorDialogRef.current = true;
     setDialog(true);
   }
@@ -243,9 +249,70 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setForm(JSON.parse(JSON.stringify(entry.data)) as FormData);
     setRawLines({});
     setValidation([]);
+    setAiProposal(null);
     editorDialogRef.current = true;
     setDialog(true);
   }
+  function openAiProposal(entry: EditorialEntry, run: EditorialAiRun, draft: DraftResult) {
+    if (!workspaceMounted.current || currentKindRef.current !== 'cheese' || editorDialogRef.current) return;
+    const latestItems = qc.getQueriesData({ queryKey: ['/web-api/admin/editorial'] })
+      .flatMap(([, data]: any) => Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []);
+    const latest = latestItems.filter((item: EditorialEntry) => item.id === entry.id)
+      .sort((left: EditorialEntry, right: EditorialEntry) => right.revision - left.revision)[0] as EditorialEntry | undefined;
+    if (latest && latest.revision !== entry.revision) return;
+    const base = JSON.parse(JSON.stringify(latest || entry)) as EditorialEntry;
+    const data = base.data as CheeseData;
+    const fields: Partial<Record<AiField, keyof CheeseData>> = {
+      title: 'title', description: 'description', country: 'country', region: 'region',
+      history: 'history', characteristics: 'characteristics', culinaryUses: 'culinaryUses',
+    };
+    const proposed = { ...data, status: 'pending_review' as const, sources: Array.from(new Set([
+      ...(data.sources || []), ...(draft.sources || []).map(source => source.url),
+    ])) };
+    Object.entries(fields).forEach(([key, prop]) => {
+      const value = draft.fields[key as AiField];
+      if (typeof value === 'string' && value.trim()) (proposed as any)[prop] = value;
+    });
+    setEditing(base);
+    setForm(proposed);
+    setRawLines({});
+    setValidation([]);
+    setAiProposal({ run, draft, selectedOriginId: '', selectedPhotoIds: [], photoRightsConfirmed: false, operatorConfirmed: false });
+    editorDialogRef.current = true;
+    setDialog(true);
+    toast({ title: 'Черновик готов к редакторской проверке', description: 'Предложение открыто без автоматической публикации. Проверьте факты и сохраните изменения.' });
+  }
+  function handleAiProposalUpdated(saved?: EditorialEntry, options?: { openEditor: true }) {
+    if (!saved || !options?.openEditor || !editorDialogRef.current || editing?.id !== saved.id || dirty) return;
+    setEditing(saved);
+    setForm(JSON.parse(JSON.stringify(saved.data)) as FormData);
+    setAiProposal(null);
+    void invalidateEditorial();
+  }
+  const updateEditorialIdentity = useCallback(async (
+    entry: EditorialEntry,
+    identity: Pick<CheeseData, 'title' | 'nameOriginal' | 'country' | 'region'>,
+  ): Promise<EditorialEntry> => {
+    if (requestLock.current || entry.kind !== 'cheese') throw new Error('Дождитесь завершения предыдущего действия.');
+    const matches = qc.getQueriesData({ queryKey: ['/web-api/admin/editorial'] })
+      .flatMap(([, data]: any) => Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [])
+      .filter((item: EditorialEntry) => item.id === entry.id);
+    const latest = matches.sort((left: EditorialEntry, right: EditorialEntry) => right.revision - left.revision)[0] as EditorialEntry | undefined;
+    if (latest && latest.revision !== entry.revision) throw new Error('Запись уже изменилась. Обновите список и откройте её заново.');
+    const parsed = editorialSchemas.cheese.safeParse({ ...(entry.data as CheeseData), ...identity });
+    if (!parsed.success) throw new Error(parsed.error.issues.map(issue => issue.message).join(' · '));
+    requestLock.current = true;
+    setRequestBusy(true);
+    try {
+      const saved = await editorialApi.update(entry, parsed.data);
+      handleAiEntryApplied(saved);
+      return saved;
+    } finally {
+      requestLock.current = false;
+      setRequestBusy(false);
+    }
+  }, [qc]);
+  const onEditorAiBusyChange = useCallback((busy: boolean) => setEditorAiBusy(busy), []);
   function closeDialog(force = false) {
     if (!force && (saving || requestLock.current)) return;
     if (!force && dirty && !window.confirm('Есть несохранённые изменения. Закрыть без сохранения?')) return;
@@ -253,12 +320,13 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     editorDialogRef.current = false;
     setEditing(null);
     setValidation([]);
+    setAiProposal(null);
   }
   const dirty = useMemo(() => editing ? JSON.stringify(form) !== JSON.stringify(editing.data) : JSON.stringify(form) !== JSON.stringify(fresh(kind)), [editing, form, kind]);
   function set<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((current: FormData) => ({ ...current, [key]: value } as FormData));
   }
-  function submit() {
+  async function submit() {
     if (requestLock.current) return;
     const schema = editorialSchemas[kind];
     const candidate = { ...form };
@@ -273,9 +341,43 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setValidation([]);
     requestLock.current = true;
     setRequestBusy(true);
-    const request = editing
-      ? updateMutation.mutateAsync({ entry: editing, data: result.data as FormData })
-      : createMutation.mutateAsync(result.data as FormData);
+    const request = (async () => {
+      let target = editing;
+      let candidate = result.data as FormData;
+      if (target && kind === 'cheese' && aiProposal) {
+        if (!aiProposal.operatorConfirmed) {
+          setValidation(['Подтвердите, что вы проверили предложенный текст и географию.']);
+          return;
+        }
+        if (aiProposal.selectedPhotoIds.length > 0 && !aiProposal.photoRightsConfirmed) {
+          setValidation(['Подтвердите права на каждую выбранную фотографию перед переносом в статью.']);
+          return;
+        }
+        const photoIds = aiProposal.selectedPhotoIds;
+        const originCandidate = aiProposal.draft.origin?.candidates.find(item => item.id === aiProposal.selectedOriginId);
+        try {
+          const applied = await editorialAiApi.apply(
+            aiProposal.run,
+            target,
+            Object.keys(aiProposal.draft.fields).filter(key => ['title', 'description', 'country', 'region', 'history', 'characteristics', 'culinaryUses'].includes(key) && aiProposal.draft.fields[key as AiField]?.trim()) as AiField[],
+            undefined,
+            photoIds.length ? { photoIds, photoRightsConfirmed: true } : undefined,
+            originCandidate && aiProposal.draft.origin ? { lookupId: aiProposal.draft.origin.lookupId, candidateId: originCandidate.id } : undefined,
+            { ...candidate, status: 'pending_review' } as CheeseData,
+          );
+          handleAiEntryApplied(applied);
+          closeDialog(true);
+          toast({ title: 'Изменения сохранены', description: 'Статья ожидает подтверждения. Публикации не было.' });
+          return;
+        } catch (error) {
+          setValidation([errorText(error)]);
+          if (isRevisionConflict(error)) void listQuery.refetch();
+          return;
+        }
+      }
+      if (target) await updateMutation.mutateAsync({ entry: target, data: candidate });
+      else await createMutation.mutateAsync(candidate);
+    })();
     void request.catch(() => undefined).finally(() => {
       requestLock.current = false;
       setRequestBusy(false);
@@ -366,6 +468,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const cheeseForm = form as CheeseData;
   const priceForm = form as PriceData;
   const cheesePhotos = (Array.isArray(cheeseForm.photos) ? cheeseForm.photos : String(cheeseForm.photos ?? '').split(/\r?\n/)).filter(value => value.trim());
+  const aiPhotos = aiProposal?.draft.research?.photos || [];
 
   return (
     <div className="min-h-full bg-[#f5f3ed] text-[#29352f]">
@@ -433,7 +536,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                         <Button size="icon" variant="ghost" className="text-[#9d4d3f] hover:bg-[#f7e9e4]" aria-label={`Удалить ${rowTitle}`} disabled={requestBusy} onClick={() => { void deleteEntry(entry, rowTitle); }}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </CardContent>
-                      {kind === 'cheese' && <div className="px-4 pb-4 md:px-5"><CheeseAiDraft entry={entry} onApplied={(saved, options) => handleAiEntryApplied(saved, options)} /></div>}
+                      {kind === 'cheese' && <div className="px-4 pb-4 md:px-5"><CheeseAiDraft mode="research" entry={entry} onApplied={(saved, options) => handleAiEntryApplied(saved, options)} onProposalReady={openAiProposal} onIdentitySave={updateEditorialIdentity} /></div>}
                   </Card>;
                 })}
               </div>}
@@ -441,9 +544,10 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
         {!listQuery.isLoading && !listQuery.isError && total > PAGE_SIZE && <div className="mt-5 flex items-center justify-between border-t border-[#d7d8cc] pt-4 text-sm"><span className="text-muted-foreground">Показаны {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} из {total}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}><ArrowLeft className="mr-1 h-4 w-4" />Назад</Button><Button size="sm" variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Далее<ArrowRight className="ml-1 h-4 w-4" /></Button></div></div>}
 
         <Dialog open={dialog} onOpenChange={open => !open && closeDialog()}>
-          <DialogContent data-testid="editorial-entry-editor" data-entry-revision={editing?.revision} className="max-h-[92dvh] max-w-2xl overflow-y-auto border-[#d7d8cc] bg-[#fbfaf6]">
+          <DialogContent data-testid="editorial-entry-editor" data-entry-revision={editing?.revision} className="!left-4 !w-[calc(100vw-2rem)] !translate-x-0 grid-cols-[minmax(0,1fr)] max-h-[92dvh] max-w-2xl overflow-y-auto border-[#d7d8cc] bg-[#fbfaf6] sm:!left-[50%] sm:!w-full sm:!translate-x-[-50%]">
             <DialogHeader><DialogTitle className="font-serif text-2xl">{editing ? 'Редактирование' : 'Новая запись'} · {titles[kind]}</DialogTitle></DialogHeader>
             <div className="space-y-5 py-2">
+              <fieldset disabled={saving} className="min-w-0 w-full space-y-5 disabled:opacity-70">
               {kind !== 'price' && <>
                 {kind === 'cheese' ? <div className="grid gap-4 sm:grid-cols-2">
                   {field('Название по-русски', 'title', cheeseForm.title, { required: true })}
@@ -451,7 +555,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 </div> : field('Заголовок', 'title', (form as VideoData).title, { required: true })}
                 {textarea('Описание', 'description', (form as VideoData | CheeseData).description)}
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5"><Label htmlFor="ed-status">{kind === 'cheese' ? 'Состояние статьи' : 'Внутренний статус'}</Label><select id="ed-status" className={nativeSelectClass} value={(form as VideoData | CheeseData).status} onChange={e => set('status', e.target.value)}>{kind === 'cheese' ? <><option value="draft">В редакции</option><option value="pending_review">Ожидает подтверждения</option><option value="ready">Одобрена</option></> : <><option value="draft">Черновик</option><option value="ready">Готово к редакционному этапу</option></>}</select>{kind === 'cheese' && <p className="text-xs text-muted-foreground">Публикация — отдельное действие; состояние текущей версии не означает, что она уже опубликована.</p>}</div>
+                  <div className="space-y-1.5"><Label htmlFor="ed-status">{kind === 'cheese' ? 'Состояние статьи' : 'Внутренний статус'}</Label><select id="ed-status" className={nativeSelectClass} disabled={Boolean(aiProposal)} value={(form as VideoData | CheeseData).status} onChange={e => set('status', e.target.value)}>{kind === 'cheese' ? <><option value="draft">В редакции</option><option value="pending_review">Ожидает подтверждения</option><option value="ready">Одобрена</option></> : <><option value="draft">Черновик</option><option value="ready">Готово к редакционному этапу</option></>}</select>{kind === 'cheese' && <p className="text-xs text-muted-foreground">{aiProposal ? 'Предложение сохраняется как ожидающее проверки. Одобрение и публикация — отдельные действия.' : 'Публикация — отдельное действие; состояние текущей версии не означает, что она уже опубликована.'}</p>}</div>
                   {field('Порядок', 'sortOrder', (form as VideoData | CheeseData).sortOrder, { type: 'number', min: '0' })}
                 </div>
               </>}
@@ -463,19 +567,49 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
               </>}
               {kind === 'cheese' && <>
                 <div className="grid gap-4 sm:grid-cols-2">{field('Страна происхождения', 'country', cheeseForm.country, { required: true })}{field('Регион', 'region', cheeseForm.region)}</div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5"><Label htmlFor="ed-latitude">Широта</Label><Input id="ed-latitude" type="number" min="-90" max="90" value={cheeseForm.latitude ?? ''} onChange={e => set('latitude', e.target.value === '' ? null : Number(e.target.value))} /></div>
-                  <div className="space-y-1.5"><Label htmlFor="ed-longitude">Долгота</Label><Input id="ed-longitude" type="number" min="-180" max="180" value={cheeseForm.longitude ?? ''} onChange={e => set('longitude', e.target.value === '' ? null : Number(e.target.value))} /></div>
-                </div>
+                <CheeseGeoEditor disabled={saving} value={{ ...cheeseForm, productionPoints: (cheeseForm as CheeseData & { productionPoints?: { id: string; label: string; latitude: number; longitude: number }[] }).productionPoints || [] }} onChange={next => setForm((current: CheeseData) => ({ ...current, ...next }))} />
                 <div className="space-y-1.5"><Label htmlFor="ed-productionCountry">Фактическая страна производства</Label><Input id="ed-productionCountry" value={cheeseForm.productionCountry} onChange={e => set('productionCountry', e.target.value)} /><p className="text-xs text-muted-foreground">Не подменяет географию происхождения сыра.</p></div>
                 {textarea('История', 'history')}{textarea('Характеристики', 'characteristics')}{textarea('Кулинарное использование', 'culinaryUses')}
+                {aiProposal && <section data-testid="ai-proposal-review" className="space-y-3 rounded-md border border-[#cbd4c8] bg-[#edf1e9] p-3">
+                  <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a654e]">Предложение · ожидает проверки</p><h3 className="mt-1 font-serif text-lg">Сверьте текст и географию</h3><p className="text-xs leading-5 text-[#607066]">Результат исследования не считается подтверждённым. Сохранение перенесёт выбранные данные в статус ожидания; публикации не будет.</p></div>
+                  {!!aiProposal.draft.warnings.length && <div className="rounded border border-[#dfc9b5] bg-[#f5ece2] p-2 text-xs text-[#75533e]"><strong>Замечания поиска</strong><ul className="mt-1 list-inside list-disc">{aiProposal.draft.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div>}
+                  {!!aiProposal.draft.origin?.candidates.length && <fieldset className="space-y-1.5"><legend className="text-xs font-semibold">Предложенные точки происхождения · необязательно</legend>{aiProposal.draft.origin.candidates.map(candidate => <label key={candidate.id} className="flex cursor-pointer items-start gap-2 rounded border border-[#d9d7ca] bg-[#fbfaf6] p-2 text-xs"><input type="radio" name="ai-proposal-origin" className="mt-0.5 accent-[#315647]" checked={aiProposal.selectedOriginId === candidate.id} onChange={() => {
+                    setAiProposal(current => current ? { ...current, selectedOriginId: candidate.id } : current);
+                    setForm((current: CheeseData) => ({ ...current, latitude: candidate.latitude, longitude: candidate.longitude, sources: Array.from(new Set([...(current.sources || []), candidate.url])) }));
+                  }} /><span><strong>{candidate.label}</strong><span className="block text-[#718075]">{candidate.latitude}, {candidate.longitude} · точка происхождения, не место производства</span></span></label>)}</fieldset>}
+                  {!!aiPhotos.length && <fieldset className="space-y-2">
+                    <legend className="text-xs font-semibold">Фотографии · выберите вручную, если права подтверждены</legend>
+                    {aiPhotos.map(photo => <label key={photo.id} className="flex cursor-pointer gap-3 rounded border border-[#d9d7ca] bg-[#fbfaf6] p-2 text-xs">
+                      <input type="checkbox" className="mt-1 accent-[#315647]" checked={aiProposal.selectedPhotoIds.includes(photo.id)} disabled={!aiProposal.selectedPhotoIds.includes(photo.id) && aiProposal.selectedPhotoIds.length >= 3} onChange={event => {
+                        const nextIds = event.target.checked ? [...aiProposal.selectedPhotoIds, photo.id] : aiProposal.selectedPhotoIds.filter(id => id !== photo.id);
+                        setAiProposal(current => current ? { ...current, selectedPhotoIds: nextIds, photoRightsConfirmed: false } : current);
+                        const selectedUrls = aiPhotos.filter(item => nextIds.includes(item.id)).map(item => item.imageUrl);
+                        const priorSuggestions = aiPhotos.map(item => item.imageUrl);
+                        setForm((current: CheeseData) => {
+                          const existing = Array.isArray(current.photos) ? current.photos : String(current.photos || '').split(/\r?\n/).filter(Boolean);
+                          const photos = [...existing.filter(url => !priorSuggestions.includes(url)), ...selectedUrls];
+                          setRawLines(lines => ({ ...lines, photos: photos.join('\n') }));
+                          return { ...current, photos };
+                        });
+                      }} />
+                      <img src={photo.imageUrl} alt="" className="h-14 w-20 shrink-0 rounded object-cover" />
+                      <span className="min-w-0"><strong className="block">{photo.label || 'Фотография-кандидат'}</strong><span className="mt-0.5 block break-all text-[#718075]">Источник: {photo.sourceUrl}</span>{photo.licenseUrl && <span className="block break-all text-[#718075]">Условия: {photo.licenseUrl}</span>}</span>
+                    </label>)}
+                    {aiProposal.selectedPhotoIds.length > 0 && <label className="flex items-start gap-2 rounded border border-[#dfc9b5] bg-[#f5ece2] p-2.5 text-xs text-[#684b3d]"><input data-testid="ai-photo-rights-confirm" type="checkbox" className="mt-0.5 accent-[#315647]" checked={aiProposal.photoRightsConfirmed} onChange={event => setAiProposal(current => current ? { ...current, photoRightsConfirmed: event.target.checked } : current)} /><span>Я проверил(а) лицензию и подтверждаю право использовать каждую выбранную фотографию.</span></label>}
+                  </fieldset>}
+                  <p className="text-[11px] text-[#718075]">Источники исследования добавлены в список источников статьи. Текст можно отредактировать выше до нажатия кнопки сохранения.</p>
+                  <label className="flex items-start gap-2 rounded border border-[#bcc7b9] bg-[#fbfaf6] p-2.5 text-xs text-[#43574a]">
+                    <input data-testid="ai-proposal-editorial-confirm" type="checkbox" className="mt-0.5 accent-[#315647]" checked={aiProposal.operatorConfirmed} onChange={event => setAiProposal(current => current ? { ...current, operatorConfirmed: event.target.checked } : current)} />
+                    <span>Я сверил(а) предложенные сведения и подтверждаю их перенос в статью для редакционной проверки.</span>
+                  </label>
+                </section>}
                 <section data-testid="cheese-photo-editor" className="space-y-2 rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <Label htmlFor="ed-photos">Фотографии · обязательны для статуса «Одобрена»</Label>
                     <span className="text-xs text-[#718075]">{cheesePhotos.length} из 12</span>
                   </div>
                   {cheesePhotos.length === 0
-                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. До сохранения как «Одобрена» выберите AI-фото, подтвердите права и нажмите «Импортировать фото отдельно» — в том числе после применения текста. Или добавьте URL вручную ниже.</p>
+                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. Выберите предложенное фото и подтвердите права либо добавьте URL вручную ниже. Затем нажмите «Сохранить изменения». Для статуса «Одобрена» нужна хотя бы одна фотография.</p>
                     : <p className="text-sm text-[#526158]">Указано фотографий: {cheesePhotos.length}. Можно добавить или удалить URL вручную.</p>}
                   <Textarea id="ed-photos" value={rawLines.photos ?? (Array.isArray(cheeseForm.photos) ? cheeseForm.photos.join('\n') : String(cheeseForm.photos ?? ''))} rows={4} onChange={e => setLines('photos', e.target.value)} placeholder="https://… · по одному URL на строку" />
                   <p className="text-xs text-[#718075]">До 12 URL или путей изображений. Пустые строки игнорируются; редакция не загружает изображения с внешних сайтов автоматически.</p>
@@ -511,8 +645,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
               {validation.length > 0 && <div role="alert" className="rounded-md border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]"><p className="mb-1 font-medium">Проверьте поля:</p><ul className="list-inside list-disc">{validation.map((message, i) => <li key={`${message}-${i}`}>{message}</li>)}</ul></div>}
               {(createMutation.error || updateMutation.error) && <div role="alert" className="rounded-md border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{errorText(createMutation.error || updateMutation.error)} {isRevisionConflict(createMutation.error || updateMutation.error) && <button className="underline underline-offset-2" onClick={() => { void listQuery.refetch(); }}>Обновить список и открыть заново</button>}</div>}
               {editing && dirty && <p className="text-xs text-muted-foreground">Есть несохранённые изменения.</p>}
+              </fieldset>
+              {editing && <section className="rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3">
+                <h3 className="mb-2 text-sm font-semibold text-[#43574a]">Исследование и точечная доработка · AI</h3>
+                {(dirty || aiProposal) && <p className="mb-2 rounded border border-[#dfc9b5] bg-[#f5ece2] p-2.5 text-xs leading-5 text-[#684b3d]">Сначала сохраните или отмените изменения статьи. AI-предложения используют сохранённую ревизию и не должны перезаписывать несохранённую форму.</p>}
+                <CheeseAiDraft mode="editor" entry={editing} onApplied={handleAiProposalUpdated} actionsDisabled={dirty || Boolean(aiProposal)} onBusyChange={onEditorAiBusyChange} />
+              </section>}
             </div>
-            <DialogFooter className="gap-2 sm:gap-2"><Button variant="outline" disabled={saving} onClick={() => closeDialog()}>Отмена</Button><Button disabled={saving || relationLoading} onClick={submit} className="bg-[#315647] hover:bg-[#244537]">{saving ? 'Сохранение…' : 'Сохранить'}</Button></DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-2"><Button variant="outline" disabled={saving} onClick={() => closeDialog()}>Отмена</Button><Button disabled={saving || relationLoading || Boolean(aiProposal && !aiProposal.operatorConfirmed) || Boolean(aiProposal?.selectedPhotoIds.length && !aiProposal.photoRightsConfirmed)} onClick={() => { void submit(); }} className="bg-[#315647] hover:bg-[#244537]">{saving ? 'Сохранение…' : editing ? 'Сохранить изменения' : 'Создать запись'}</Button></DialogFooter>
           </DialogContent>
         </Dialog>
 

@@ -298,7 +298,10 @@ export function CheeseDetailPage() {
           <section><div className="ed-kicker">История</div><p>{cheese.history || 'Исторический материал не предоставлен.'}</p></section>
           <section><div className="ed-kicker">Характеристики</div><p>{cheese.characteristics || 'Характеристики не предоставлены.'}</p></section>
           <section><div className="ed-kicker">Кулинарное использование</div><p>{cheese.culinaryUses || 'Информация о кулинарном использовании не предоставлена.'}</p></section>
-          <section><div className="ed-kicker">Производственная география</div><p>Страна происхождения: {cheese.country}{cheese.productionCountry ? `. Фактическая страна производства, указанная редакцией: ${cheese.productionCountry}.` : '. Фактическая страна производства здесь не указана.'}</p></section>
+          <section><div className="ed-kicker">Производственная география</div><p>Страна происхождения: {cheese.country}{cheese.productionCountry ? `. Фактическая страна производства, указанная редакцией: ${cheese.productionCountry}.` : '. Фактическая страна производства здесь не указана.'}</p>
+            {cheese.latitude != null && cheese.longitude != null && <p><a href={`https://www.openstreetmap.org/?mlat=${cheese.latitude}&mlon=${cheese.longitude}#map=10/${cheese.latitude}/${cheese.longitude}`} target="_blank" rel="noopener noreferrer" className="underline">Представительская точка происхождения</a></p>}
+            {!!cheese.productionPoints?.length && <><p className="mt-3 font-medium">Места производства, указанные редакцией</p><ul>{cheese.productionPoints.map(point => <li key={point.id}><a href={`https://www.openstreetmap.org/?mlat=${point.latitude}&mlon=${point.longitude}#map=12/${point.latitude}/${point.longitude}`} target="_blank" rel="noopener noreferrer" className="underline">{point.label}</a> · {point.latitude}, {point.longitude}</li>)}</ul></>}
+          </section>
         </div></div>
         {cheese.photos?.length > 1 && <div className="ed-photo-strip">{cheese.photos.slice(1).map((photo, i) => <Image key={`${photo}-${i}`} src={photo} alt={`${cheese.title}, фото ${i + 2}`} className="ed-extra-photo" />)}</div>}
         <div className="ed-story-lower">

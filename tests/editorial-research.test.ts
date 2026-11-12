@@ -674,6 +674,53 @@ test('selected photos append atomically with text, keep provenance, audit rights
   assert.ok(JSON.stringify(logs).includes('"photoRightsConfirmed":true'));
   await assert.rejects(applyAiDraft(ready.id, { ...body, photoIds: [photos[1].id] }, 'operator', db), fails(409));
 });
+test('editorial review saves all manual edits, photo rights and map points in one atomic transfer', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft(true);
+  const editorialData = {
+    ...entry.data, status: 'pending_review', history: 'История после редакторской правки.',
+    region: 'Лацио и Сардиния', latitude: 41.91, longitude: 12.51,
+    productionPoints: [{ id: 'factory', label: 'Проверенное место производства', latitude: 40.2, longitude: 9.1 }],
+    photos: [photos[0].imageUrl],
+    sources: ['https://example.org/editorial-reference'],
+  };
+  const body = { entryId: entry.id, revision: entry.revision, fields: ['history'],
+    editorialData, photoIds: [photos[0].id], photoRightsConfirmed: true };
+  const saved = await applyAiDraft(ready.id, body, 'operator', db);
+  assert.equal(saved.revision, entry.revision + 1);
+  assert.equal(saved.data.history, editorialData.history);
+  assert.equal(saved.data.latitude, editorialData.latitude);
+  assert.deepEqual(saved.data.productionPoints, editorialData.productionPoints);
+  assert.equal(saved.data.status, 'pending_review');
+  assert.deepEqual(saved.data.photos, editorialData.photos);
+  assert.ok(saved.data.sources.includes(photos[0].sourceUrl));
+  assert.equal(saved.data.aiResearch.runId, ready.id);
+  const retry = await applyAiDraft(ready.id, body, 'operator', db);
+  assert.equal(retry.revision, saved.revision);
+  assert.equal((await db.query("SELECT count(*)::int n FROM admin_action_logs WHERE entity_id=$1 AND action_type='ai_applied'", [entry.id])).rows[0].n, 1);
+  const pub = (await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [entry.id])).rows[0].data;
+  assert.equal(pub.history, 'Old history');
+  assert.equal(pub.productionPoints, undefined);
+  await assert.rejects(applyAiDraft(ready.id, { ...body, editorialData: { ...editorialData, history: 'Different retry' } }, 'operator', db), fails(409));
+});
+test('editorial review refuses unconfirmed AI photos and invalid links without consuming the proposal', async () => {
+  const { entry, ready, photos } = await readyPhotoDraft();
+  const before = (await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [entry.id])).rows[0];
+  const body = { entryId: entry.id, revision: entry.revision, fields: [],
+    editorialData: { ...entry.data, history: '', photos: [photos[0].imageUrl] } };
+  await assert.rejects(applyAiDraft(ready.id, body, 'operator', db), fails(400));
+  await assert.rejects(applyAiDraft(ready.id, { ...body, photoIds: [photos[0].id], photoRightsConfirmed: false }, 'operator', db));
+  await assert.rejects(applyAiDraft(ready.id, {
+    ...body, photoIds: [photos[0].id], photoRightsConfirmed: true,
+    editorialData: { ...body.editorialData, videoIds: [randomUUID()] },
+  }, 'operator', db), fails(400));
+  assert.deepEqual((await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [entry.id])).rows[0], before);
+  assert.equal((await getAiRun(ready.id, db)).appliedTo, null);
+  const saved = await applyAiDraft(ready.id, {
+    ...body, photoIds: [photos[0].id], photoRightsConfirmed: true,
+  }, 'operator', db);
+  assert.equal(saved.data.history, '', 'editor may remove unsupported proposed text');
+  assert.equal(saved.data.status, 'pending_review');
+});
 test('photo-only application requires rights, saved candidate IDs and the unchanged article revision', async () => {
   const { entry, ready, photos } = await readyPhotoDraft();
   const body = { entryId: entry.id, revision: entry.revision, fields: [],

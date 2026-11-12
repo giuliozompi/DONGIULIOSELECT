@@ -34,7 +34,7 @@ export async function listEditorial(kind: EditorialKind, offset: number, limit: 
     ...r, created_at: new Date(r.created_at), updated_at: new Date(r.updated_at),
   })) };
 }
-async function references(client: pg.PoolClient, kind: EditorialKind, data: any) {
+export async function references(client: pg.PoolClient, kind: EditorialKind, data: any) {
   const checks: [string, string[]][] = kind === 'cheese'
     ? [['video', data.videoIds], ['product', data.productIds]]
     : kind === 'video' ? [['cheese', data.cheeseIds]] : [['cheese', [data.cheeseId]]];

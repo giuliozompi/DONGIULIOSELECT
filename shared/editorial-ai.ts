@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { EditorialEntry } from './editorial';
-import { editorialRegionMaxLength } from './editorial';
+import { cheeseDataSchema, editorialRegionMaxLength } from './editorial';
 
 const codes = ('AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW').split(' ');
 const names = new Intl.DisplayNames(['ru'], { type: 'region' });
@@ -161,8 +161,10 @@ export const applyRequestSchema = z.object({
   photoIds: z.array(text(64).min(1)).max(3).refine(ids => new Set(ids).size === ids.length).optional(),
   photoRightsConfirmed: z.boolean().optional(),
   origin: z.object({ lookupId: z.string().uuid(), candidateId: text(100).min(1) }).strict().optional(),
+  // Explicitly reviewed form; saved with the transfer in a single transaction.
+  editorialData: cheeseDataSchema.optional(),
 }).strict().superRefine((value, ctx) => {
-  if (!value.fields.length && !value.photoIds?.length && !value.origin)
+  if (!value.fields.length && !value.photoIds?.length && !value.origin && !value.editorialData)
     ctx.addIssue({ code: 'custom', message: 'Выберите текстовые поля, фотографии или точку происхождения' });
   if (value.photoIds?.length && value.photoRightsConfirmed !== true)
     ctx.addIssue({ code: 'custom', message: 'Подтвердите право использования выбранных фотографий' });

@@ -109,6 +109,32 @@ test('videos and cheese drafts can exist independently; ready is not published',
   assert.equal((await listEditorial('cheese', 0, 50, database)).total, 1);
   assert.equal((await fetch(base.replace('/admin/editorial', '/editorial'))).status, 404);
 });
+test('production points validate and persist separately from origin without changing the public snapshot', async () => {
+  const origin = { latitude: 41.9, longitude: 12.5 };
+  const points = [
+    { id: 'sardinia', label: 'Сардиния', latitude: 40.1, longitude: 9.1 },
+    { id: 'lazio', label: 'Лацио', latitude: 41.8, longitude: 12.8 },
+  ];
+  assert.equal(cheeseDataSchema.safeParse({ ...cheese(), productionPoints: points }).success, true);
+  for (const invalid of [
+    [{ ...points[0], latitude: 91 }],
+    [{ ...points[0], longitude: -181 }],
+    [{ ...points[0], label: ' ' }],
+    [points[0], points[0]],
+    Array.from({ length: 21 }, (_, i) => ({ ...points[0], id: String(i) })),
+  ]) assert.equal(cheeseDataSchema.safeParse({ ...cheese(), productionPoints: invalid }).success, false);
+  let entry = await saveEditorial('cheese', { ...readyCheese(), ...origin, productionPoints: points }, 'operator', undefined, database);
+  entry = await changePublication(entry.id, entry.revision, true, 'operator', database);
+  assert.deepEqual((await publicCheeseDetail(entry.id, database)).productionPoints, points);
+  const moved = [{ ...points[0], latitude: 40.2, longitude: 9.2 }];
+  entry = await saveEditorial('cheese', { ...entry.data, status: 'pending_review', productionPoints: moved }, 'operator', entry, database);
+  assert.deepEqual((entry.data as CheeseData).productionPoints, moved);
+  assert.equal((entry.data as CheeseData).latitude, origin.latitude);
+  assert.equal((entry.data as CheeseData).longitude, origin.longitude);
+  assert.deepEqual((await publicCheeseDetail(entry.id, database)).productionPoints, points);
+  await assert.rejects(saveEditorial('cheese', { ...entry.data, productionPoints: points }, 'operator',
+    { ...entry, revision: entry.revision - 1 }, database), expectStatus(409));
+});
 test('price observations preserve country/currency, normalize only known weights and require moderation', async () => {
   const c = await saveEditorial('cheese', cheese(), 'operator', undefined, database);
   const p = await saveEditorial('price', price(c.id), 'operator', undefined, database);

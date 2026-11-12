@@ -11,7 +11,7 @@ export interface EditorialProduct {
   priceOld?: string; unit: string; inStock: boolean; descriptionShort?: string;
 }
 export interface PublicCheese extends PublicCheeseSummary,
-  Pick<CheeseData, 'photos' | 'history' | 'characteristics' | 'culinaryUses' | 'productionCountry' | 'sources' | 'externalVideoUrls'> {
+  Pick<CheeseData, 'photos' | 'history' | 'characteristics' | 'culinaryUses' | 'productionCountry' | 'productionPoints' | 'sources' | 'externalVideoUrls'> {
   relatedVideos: PublicVideo[]; products: EditorialProduct[];
 }
 export type PublicMarketPrice = Omit<PriceData, 'notes' | 'cheeseId'> & {

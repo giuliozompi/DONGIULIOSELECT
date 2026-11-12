@@ -5,7 +5,7 @@ import {
   applyRequestSchema, importRequestSchema, importPhotoRequestSchema, rankRequestSchema, countryName, researchPhotoSchema,
   type CatalogResult, type DraftRequest, type DraftResult, type ImportResult,
 } from '../../shared/editorial-ai';
-import { transaction, audit, entry, EditorialError, type Row } from './editorial';
+import { transaction, audit, entry, references, EditorialError, type Row } from './editorial';
 import { catalogMatches, normalizedCheeseName, runDto, type RunRow } from './editorial-ai';
 import { validateSourceUrl } from './editorial-ai-sources';
 import { savedOriginCandidate } from './editorial-origin';
@@ -88,6 +88,7 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
   if (Object.keys(edits).some(field => !body.fields.includes(field as typeof body.fields[number])))
     throw new EditorialError(400, 'Редактировать можно только выбранные поля');
   const appliedParams = { fields: [...body.fields].sort(), edits,
+    ...(body.editorialData ? { editorialData: body.editorialData } : {}),
     ...(body.origin ? { origin: body.origin } : {}),
     ...(body.photoIds?.length ? { photoIds: [...body.photoIds].sort(), photoRightsConfirmed: true } : {}) };
   return transaction(database, async client => {
@@ -114,15 +115,23 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
       validateSourceUrl(found.data.imageUrl); validateSourceUrl(found.data.sourceUrl);
       return found.data;
     });
-    const data = { ...(old.data as CheeseData) };
+    const data = { ...(body.editorialData || old.data as CheeseData) };
+    if (body.editorialData) {
+      const previousPhotos = (old.data as CheeseData).photos;
+      for (const photo of proposal.research?.photos || []) {
+        if (data.photos.includes(photo.imageUrl) && !previousPhotos.includes(photo.imageUrl)
+          && !selectedPhotos.some(selected => selected.id === photo.id))
+          throw new EditorialError(400, 'Для предложенной фотографии выберите её и подтвердите право использования.');
+      }
+    }
     const origin = body.origin ? await savedOriginCandidate(client, { ...body.origin,
       entryId: body.entryId, revision: body.revision }) : undefined;
-    if (origin) { data.latitude = origin.latitude; data.longitude = origin.longitude; }
+    if (origin && !body.editorialData) { data.latitude = origin.latitude; data.longitude = origin.longitude; }
     for (const field of body.fields) {
       const value = proposal.fields[field];
       if (!value?.trim()) throw new EditorialError(400, 'Выбрано поле, которого нет в предложении AI');
       if (edits[field] !== undefined && !edits[field]!.trim()) throw new EditorialError(400, 'Отредактированное поле не может быть пустым');
-      data[field] = edits[field] ?? value;
+      if (!body.editorialData) data[field] = edits[field] ?? value;
     }
     const sourceUrls = proposal.citations.filter(citation => body.fields.includes(citation.field))
       .map(citation => proposal.sources[citation.sourceIndex].url);
@@ -134,6 +143,7 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     data.status = 'pending_review';
     data.aiResearch = researchTransfer(run);
     const parsed = cheeseDataSchema.parse(data);
+    await references(client, 'cheese', parsed);
     const saved: Row = (await client.query(`UPDATE editorial_entries SET data=$2,revision=revision+1,
       updated_by=$3,updated_at=clock_timestamp() WHERE id=$1 RETURNING *`,
       [old.id, JSON.stringify(parsed), actor])).rows[0];
