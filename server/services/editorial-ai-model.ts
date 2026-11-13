@@ -3,6 +3,24 @@ import { editorialForbiddenReason } from './editorial-ai-forbidden';
 import { DEFAULT_EDITORIAL_AI_MODEL, EditorialModelError, getEditorialModelSettings, type EditorialAiProvider } from './editorial-ai-config';
 export { DEFAULT_EDITORIAL_AI_MODEL, EditorialModelError, getEditorialModelSettings };
 export const EDITORIAL_MAX_OUTPUT_TOKENS = 6000;
+export const EDITORIAL_DRAFT_MAX_OUTPUT_TOKENS = 12000;
+export type EditorialModelOptions = { purpose?: 'draft' };
+
+// Read only bounded numeric counters, never provider text or arbitrary metadata.
+function tokenUsageDiagnostic(usage: unknown): string {
+  if (!usage || typeof usage !== 'object') return '';
+  const value = usage as Record<string, unknown>;
+  const details = value.completion_tokens_details;
+  const counters = [
+    ['вход', value.prompt_tokens],
+    ['выход', value.completion_tokens],
+    ['рассуждение', details && typeof details === 'object'
+      ? (details as Record<string, unknown>).reasoning_tokens : undefined],
+  ] as const;
+  const safe = counters.filter(([, count]) => typeof count === 'number'
+    && Number.isSafeInteger(count) && count >= 0 && count <= 1_000_000_000);
+  return safe.length ? ` Счётчики сервиса (токены): ${safe.map(([label, count]) => `${label}: ${count}`).join(', ')}.` : '';
+}
 // Accept only a complete JSON document, optionally inside one Markdown fence.
 // Never repair syntax, extract a substring, or accept incomplete model output.
 export function parseEditorialJson(content: string): unknown {
@@ -48,10 +66,11 @@ export function editorialProviderError(error: unknown, provider: EditorialAiProv
   return new EditorialModelError(message || 'Неизвестная ошибка сервиса AI. Обратитесь к администратору; повторите запрос только явно.');
 }
 export function createEditorialModelRequester(client: OpenAI, settings = getEditorialModelSettings()) {
-  return async (system: string, input: unknown): Promise<unknown> => {
+  return async (system: string, input: unknown, options?: EditorialModelOptions): Promise<unknown> => {
+    const maxTokens = options?.purpose === 'draft' ? EDITORIAL_DRAFT_MAX_OUTPUT_TOKENS : EDITORIAL_MAX_OUTPUT_TOKENS;
     try {
       const response = await client.chat.completions.create({
-        model: settings.model, temperature: 0.15, max_tokens: EDITORIAL_MAX_OUTPUT_TOKENS,
+        model: settings.model, temperature: 0.15, max_tokens: maxTokens,
         // Gemini 2.5 Flash supports disabling thinking: reserve the output
         // budget for the reviewed JSON draft, not hidden reasoning tokens.
         ...(settings.provider === 'openrouter' && settings.model === DEFAULT_EDITORIAL_AI_MODEL ? { reasoning: { enabled: false } } : {}),
@@ -67,7 +86,7 @@ export function createEditorialModelRequester(client: OpenAI, settings = getEdit
       }
       const choice = response.choices?.[0];
       if (choice?.finish_reason === 'length')
-        throw new EditorialModelError(`AI превысил лимит длины ответа (${EDITORIAL_MAX_OUTPUT_TOKENS} токенов) и не завершил JSON. Незавершённый текст не принят; статья не изменена. Автоматического повтора нет. Если ошибка повторяется, сообщите администратору.`);
+        throw new EditorialModelError(`AI превысил лимит длины ответа (${maxTokens} токенов) и не завершил JSON. Незавершённый текст не принят; статья не изменена. Автоматического повтора нет. Если ошибка повторяется, сообщите администратору.${tokenUsageDiagnostic(response.usage)}`);
       if (choice?.finish_reason === 'content_filter' || choice?.message?.refusal)
         throw new EditorialModelError('AI отказался подготовить ответ. Проверьте название и источники перед новым явным запросом.');
       if (choice?.finish_reason !== 'stop' || !choice.message.content?.trim())
@@ -92,6 +111,6 @@ export function createConfiguredEditorialRequester(
   });
   return createEditorialModelRequester(client, settings);
 }
-export async function requestEditorialModel(system: string, input: unknown): Promise<unknown> {
-  return createConfiguredEditorialRequester()(system, input);
+export async function requestEditorialModel(system: string, input: unknown, options?: EditorialModelOptions): Promise<unknown> {
+  return createConfiguredEditorialRequester()(system, input, options);
 }

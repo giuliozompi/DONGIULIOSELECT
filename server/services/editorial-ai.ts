@@ -169,7 +169,7 @@ Cite support for every factual assertion, not merely a cheese name. The server w
 Conflicting sources/production geography require warnings. If insufficient evidence return fields{},citations[],warnings.
 Do not propose productionCountry, coordinates, products, photographs, videos, prices, legal certification or publication status.`;
 export type AiDependencies = {
-  model: (system: string, input: unknown) => Promise<unknown>;
+  model: typeof requestEditorialModel;
   source: (url: string) => Promise<SourceEvidence>;
   search?: ResearchDependencies['search'];
   pause?: (ms: number) => Promise<void>;
@@ -308,7 +308,7 @@ If sources add nothing, explicitly warn that no additional evidence was found. D
             .filter(([field]) => params.intent?.mode !== 'deepen' || field === params.intent.field)
             .map(([field, value]) => [field, value.slice(0, 1000)])),
         } } : {}),
-      }));
+      }, { purpose: 'draft' }));
       const generated = generation.data;
       sourceWarnings.push(...generation.warnings);
       const fields = { ...generated.fields };

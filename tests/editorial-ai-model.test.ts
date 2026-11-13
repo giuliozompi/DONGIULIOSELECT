@@ -75,6 +75,67 @@ function requester(body: unknown, status = 200) {
   });
   return { request: createEditorialModelRequester(client), calls: () => calls, body: () => sentBody };
 }
+test('Timeweb draft budget is 12000 while other operations remain at 6000, without retries', async () => {
+  const budgets: number[] = [];
+  const request = createConfiguredEditorialRequester(timewebEnv, async (_url, init) => {
+    const sent = JSON.parse(String(init?.body));
+    budgets.push(sent.max_tokens);
+    assert.equal(sent.reasoning, undefined);
+    return new Response(JSON.stringify(completion('{"ok":true}')), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  });
+  assert.deepEqual(await request('draft', {}, { purpose: 'draft' }), { ok: true });
+  assert.deepEqual(await request('catalog', {}), { ok: true });
+  assert.deepEqual(await request('suggestions', {}), { ok: true });
+  assert.deepEqual(budgets, [12000, 6000, 6000]);
+});
+test('draft truncation remains rejected with sanitized numeric usage and no retry', async () => {
+  for (const content of ['{"fields":{"history":"looks complete"}}', '{"fields":']) {
+    const mock = requester({
+      ...completion(content, 'length'),
+      usage: { prompt_tokens: 2300, completion_tokens: 12000,
+        completion_tokens_details: { reasoning_tokens: 10000, secret: sensitive }, secret: sensitive },
+    });
+    await assert.rejects(mock.request('draft', {}, { purpose: 'draft' }), error => {
+      assert.ok(error instanceof EditorialModelError);
+      assert.match(error.message, /12000 токенов/);
+      assert.match(error.message, /вход: 2300, выход: 12000, рассуждение: 10000/);
+      assert.match(error.message, /статья не изменена/);
+      assert.match(error.message, /Автоматического повтора нет/);
+      assert.ok(!error.message.includes(sensitive));
+      return true;
+    });
+    assert.equal(mock.calls(), 1);
+    assert.equal(mock.body()?.max_tokens, 12000);
+  }
+});
+test('a completed draft above the previous budget is accepted in one call', async () => {
+  const mock = requester({
+    ...completion('{"fields":{"history":"Полная история из источников"},"citations":[],"warnings":[]}'),
+    usage: { prompt_tokens: 2300, completion_tokens: 8100 },
+  });
+  assert.deepEqual(await mock.request('draft', {}, { purpose: 'draft' }), {
+    fields: { history: 'Полная история из источников' }, citations: [], warnings: [],
+  });
+  assert.equal(mock.body()?.max_tokens, 12000);
+  assert.equal(mock.calls(), 1);
+});
+test('untrusted usage values are omitted from length diagnostics', async () => {
+  for (const usage of [undefined, sensitive, {
+    prompt_tokens: sensitive, completion_tokens: -1,
+    completion_tokens_details: { reasoning_tokens: 1.5 },
+  }, { prompt_tokens: 1e100, completion_tokens: { secret: sensitive } }]) {
+    const mock = requester({ ...completion('{"ok":true}', 'length'), usage });
+    await assert.rejects(mock.request('draft', {}, { purpose: 'draft' }), error => {
+      assert.ok(error instanceof EditorialModelError);
+      assert.ok(!error.message.includes(sensitive));
+      assert.ok(!error.message.includes('Счётчики'));
+      return true;
+    });
+    assert.equal(mock.calls(), 1);
+  }
+});
 function completion(content: string | null, finish_reason = 'stop') {
   return { choices: [{ message: { role: 'assistant', content }, finish_reason }] };
 }

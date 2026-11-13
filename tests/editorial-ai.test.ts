@@ -21,7 +21,6 @@ import { publicEditorialList } from '../server/services/public-editorial';
 import { cheeseDataSchema, editorialRegionMaxLength } from '../shared/editorial';
 import type { CatalogResult, DraftResult } from '../shared/editorial-ai';
 import { suggestEditorialSources, validateSourceSuggestions } from '../server/services/editorial-ai-suggestions';
-import { EditorialModelError } from '../server/services/editorial-ai-model';
 
 const exec = promisify(execFile);
 let dir: string, db: pg.Pool, server: Server, base: string;
@@ -412,8 +411,9 @@ test('length-terminated generation retains source metadata and never writes the 
   const c = await cheese(true);
   const before = (await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0];
   let calls = 0;
-  const client = new OpenAI({ apiKey: 'test-not-a-real-key', maxRetries: 0, fetch: async () => {
+  const client = new OpenAI({ apiKey: 'test-not-a-real-key', maxRetries: 0, fetch: async (_url, init) => {
     calls++;
+    assert.equal(JSON.parse(String(init?.body)).max_tokens, 12000);
     return new Response(JSON.stringify({ choices: [{ finish_reason: 'length',
       message: { role: 'assistant', content: '{"fields":{"history":"Partial but valid JSON"}}' } }] }),
       { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -421,7 +421,7 @@ test('length-terminated generation retains source metadata and never writes the 
   const run = await readyDraft(c, { ...deps, model: createEditorialModelRequester(client) });
   assert.equal(calls, 1);
   assert.equal(run.status, 'failed');
-  assert.match(run.error!, /6000 токенов/);
+  assert.match(run.error!, /12000 токенов/);
   assert.equal((run.result as DraftResult).sources[0].url, evidence.url);
   assert.deepEqual((run.result as DraftResult).fields, {});
   assert.equal(run.appliedTo, null);
