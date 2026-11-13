@@ -254,19 +254,22 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     await setInput('[aria-label="Происхождение: широта"]', originalOrigin.latitude);
     await setInput('[aria-label="Происхождение: долгота"]', originalOrigin.longitude);
 
+    const zoomBefore = await page.evaluate(`Number(document.querySelector('[data-testid="cheese-map-country-focus"]').dataset.zoom)`);
     await page.evaluate(`document.querySelector('[aria-label="Увеличить масштаб карты"]').click()`);
-    assert.equal(await page.evaluate(`document.querySelector('[data-map-tile]').src.includes('/5/')`), true, 'zoom controls select a new tile zoom');
+    assert.equal(await page.evaluate(`Number(document.querySelector('[data-testid="cheese-map-country-focus"]').dataset.zoom)`), zoomBefore + 1, 'zoom controls select a new tile zoom');
     await page.evaluate(`Array.from(document.querySelectorAll('[data-testid="cheese-geo-editor"] button')).find(button => button.textContent.trim() === 'Происхождение').click()`);
     await setInput('[aria-label="Происхождение: широта"]', 90);
     await setInput('[aria-label="Происхождение: долгота"]', 180);
     await page.wait(`document.querySelector('[aria-label="Происхождение: широта"]').value === '90'`);
+    await page.evaluate(`Array.from(document.querySelectorAll('[data-testid="cheese-geo-editor"] button')).find(button => button.textContent.trim() === 'Происхождение').click()`);
     const polarTiles = await page.evaluate(`Array.from(document.querySelectorAll('[data-testid="cheese-geo-editor"] [data-map-tile]')).map(tile => {
       const parts = new URL(tile.src).pathname.split('/');
       return { zoom: Number(parts.at(-3)), x: Number(parts.at(-2)), y: Number(parts.at(-1).replace('.png', '')) };
     })`);
     assert.equal(polarTiles.length, 6, 'tiles beyond the valid Mercator y range are omitted');
-    assert.equal(polarTiles.every(tile => tile.zoom === 5 && tile.x >= 0 && tile.x < 32 && tile.y >= 0 && tile.y < 32), true);
-    assert.equal(polarTiles.some(tile => tile.x === 0) && polarTiles.some(tile => tile.x === 31), true, 'tile x wraps across the antimeridian');
+    const tileCount = 2 ** (zoomBefore + 1);
+    assert.equal(polarTiles.every(tile => tile.zoom === zoomBefore + 1 && tile.x >= 0 && tile.x < tileCount && tile.y >= 0 && tile.y < tileCount), true);
+    assert.equal(polarTiles.some(tile => tile.x === 0) && polarTiles.some(tile => tile.x === tileCount - 1), true, 'tile x wraps across the antimeridian');
     await setInput('[aria-label="Происхождение: широта"]', originalOrigin.latitude);
     await setInput('[aria-label="Происхождение: долгота"]', originalOrigin.longitude);
     assert.equal(applies.length, 0);
