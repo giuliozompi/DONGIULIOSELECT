@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
-import { ShoppingCart, Search, User, ChevronDown, Menu, X, LogOut, Package, MapPin } from 'lucide-react';
+import { ShoppingCart, Search, User, ChevronDown, Menu, X, LogOut, Package, MapPin, Settings } from 'lucide-react';
 import { CheeseSliceIcon } from '@/components/CheeseSliceIcon';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { useWebCart } from '../hooks/useWebCart';
@@ -112,6 +112,19 @@ export default function WebHeader() {
                   </Badge>
                 )}
               </Button>
+
+              {(location === '/web' || location === '/web/') && (
+                <Button asChild size="icon" variant="ghost" className="h-9 w-9 min-h-9 min-w-9">
+                  <Link
+                    href="/web/admin"
+                    aria-label="Вход в панель управления"
+                    title="Вход в панель управления"
+                    data-testid="button-admin-entry"
+                  >
+                    <Settings className="w-4 h-4" aria-hidden="true" />
+                  </Link>
+                </Button>
+              )}
 
               {/* Auth */}
               {isAuthenticated && user ? (
