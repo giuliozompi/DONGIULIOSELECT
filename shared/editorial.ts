@@ -6,11 +6,18 @@ const required = (max = 200) => text(max).min(1, 'Обязательное по�
 export const editorialRegionMaxLength = 2000;
 export const editorialKinds = ['video', 'cheese', 'price'] as const;
 const httpUrl = z.string().trim().max(2000).url().refine(value => {
-  const url = new URL(value);
-  return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+  } catch {
+    // Refinements also run on invalid URL strings and on the local-path
+    // alternative of the image union. Validation must return an issue, not throw.
+    return false;
+  }
 }, 'Нужна ссылка http(s) без пароля');
 const image = z.union([z.literal(''), httpUrl, z.string().regex(/^\/(?:objects|public-objects|uploads)\/[^\s?#]+$/)]).default('');
 export const videoUrl = httpUrl.refine(value => {
+  try {
   const u = new URL(value);
   return (
     ['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(u.hostname) &&
@@ -19,6 +26,7 @@ export const videoUrl = httpUrl.refine(value => {
       /^\/(?:shorts|live)\/[\w-]+\/?$/.test(u.pathname))
   ) || (u.hostname === 'youtu.be' && /^\/[\w-]+\/?$/.test(u.pathname)) ||
     (u.hostname === 't.me' && /^\/[A-Za-z0-9_]+\/\d+\/?$/.test(u.pathname));
+  } catch { return false; }
 }, 'Укажите ссылку на видео/плейлист YouTube или публичный пост Telegram');
 const ids = z.array(z.string().uuid()).max(100).refine(a => new Set(a).size === a.length, 'Повторяющиеся связи');
 const base = {

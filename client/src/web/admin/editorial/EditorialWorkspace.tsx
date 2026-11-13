@@ -13,6 +13,7 @@ import { editorialApi } from '../lib/editorialApi';
 import { editorialAiApi } from '../lib/editorialAiApi';
 import { adminApi } from '../lib/adminApi';
 import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
+import EditorialPhotoUpload from './EditorialPhotoUpload';
 import CheeseGeoEditor from './CheeseGeoEditor';
 import MarketMonitor from './market/MarketMonitor';
 import {
@@ -84,7 +85,7 @@ function missingCheeseReadyRequirements(data: CheeseData) {
   if (!data.characteristics.trim()) missing.push('Характеристики');
   if (!data.culinaryUses.trim()) missing.push('Кулинарное использование');
   if (!sources.some(value => value.trim())) missing.push('Источники');
-  if (!photos.some(value => value.trim())) missing.push('Фотография');
+  if (!photos.some(value => value.trim())) missing.push('Фотография (загрузите файл или укажите URL)');
   if (data.latitude === null || data.longitude === null) missing.push('Обе координаты происхождения');
   return missing;
 }
@@ -104,11 +105,16 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const [rawLines, setRawLines] = useState<Record<string, string>>({});
   const [aiProposal, setAiProposal] = useState<{ run: EditorialAiRun; draft: DraftResult; selectedOriginId: string; selectedPhotoIds: string[]; photoRightsConfirmed: boolean; operatorConfirmed: boolean } | null>(null);
   const [editorAiBusy, setEditorAiBusy] = useState(false);
+  const editorAiBusyRef = useRef(false);
   const requestLock = useRef(false);
+  const photoUploadLock = useRef(false);
   const [requestBusy, setRequestBusy] = useState(false);
   const workspaceMounted = useRef(false);
   const currentKindRef = useRef(kind);
   const editorDialogRef = useRef(false);
+  const editorSessionRef = useRef(0);
+  const formRef = useRef(form);
+  formRef.current = form;
   currentKindRef.current = kind;
   useEffect(() => {
     workspaceMounted.current = true;
@@ -228,7 +234,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const busyError = createMutation.error || updateMutation.error || deleteMutation.error || moderateMutation.error || publishMutation.error || unpublishMutation.error;
 
   function openCreate() {
-    if (requestLock.current) return;
+    if (requestLock.current || photoUploadLock.current) return;
     createMutation.reset();
     updateMutation.reset();
     deleteMutation.reset();
@@ -237,11 +243,12 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setRawLines({});
     setValidation([]);
     setAiProposal(null);
+    editorSessionRef.current += 1;
     editorDialogRef.current = true;
     setDialog(true);
   }
   function openEdit(entry: EditorialEntry) {
-    if (requestLock.current) return;
+    if (requestLock.current || photoUploadLock.current) return;
     createMutation.reset();
     updateMutation.reset();
     deleteMutation.reset();
@@ -250,6 +257,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setRawLines({});
     setValidation([]);
     setAiProposal(null);
+    editorSessionRef.current += 1;
     editorDialogRef.current = true;
     setDialog(true);
   }
@@ -278,6 +286,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setRawLines({});
     setValidation([]);
     setAiProposal({ run, draft, selectedOriginId: '', selectedPhotoIds: [], photoRightsConfirmed: false, operatorConfirmed: false });
+    editorSessionRef.current += 1;
     editorDialogRef.current = true;
     setDialog(true);
     toast({ title: 'Черновик готов к редакторской проверке', description: 'Предложение открыто без автоматической публикации. Проверьте факты и сохраните изменения.' });
@@ -312,10 +321,18 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
       setRequestBusy(false);
     }
   }, [qc]);
-  const onEditorAiBusyChange = useCallback((busy: boolean) => setEditorAiBusy(busy), []);
+  const onEditorAiBusyChange = useCallback((busy: boolean) => {
+    editorAiBusyRef.current = busy;
+    setEditorAiBusy(busy);
+  }, []);
   function closeDialog(force = false) {
-    if (!force && (saving || requestLock.current)) return;
+    if (!force && (saving || requestLock.current || photoUploadLock.current)) return;
     if (!force && dirty && !window.confirm('Есть несохранённые изменения. Закрыть без сохранения?')) return;
+    editorSessionRef.current += 1;
+    if (force) {
+      photoUploadLock.current = false;
+      setUploading(false);
+    }
     setDialog(false);
     editorDialogRef.current = false;
     setEditing(null);
@@ -327,7 +344,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setForm((current: FormData) => ({ ...current, [key]: value } as FormData));
   }
   async function submit() {
-    if (requestLock.current) return;
+    if (requestLock.current || photoUploadLock.current) return;
     const schema = editorialSchemas[kind];
     const candidate = { ...form };
     for (const key of ['photos', 'sources', 'externalVideoUrls'] as const) {
@@ -440,6 +457,33 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setRawLines(current => ({ ...current, [key]: value }));
     set(key, value);
   };
+  function setDraftPhotos(nextPhotos: string[], sessionKey: number) {
+    if (!editorDialogRef.current || editorSessionRef.current !== sessionKey) return;
+    const next = { ...formRef.current, photos: nextPhotos };
+    formRef.current = next;
+    setForm(next);
+    setRawLines(current => ({ ...current, photos: nextPhotos.join('\n') }));
+  }
+  function appendUploadedPhotos(paths: string[], sessionKey: number) {
+    if (!editorDialogRef.current || editorSessionRef.current !== sessionKey) return;
+    const currentPhotos = formRef.current.photos;
+    const existing = (Array.isArray(currentPhotos) ? currentPhotos : String(currentPhotos ?? '').split(/\r?\n/))
+      .filter((photo: string) => photo.trim());
+    setDraftPhotos([...existing, ...paths], sessionKey);
+  }
+  function setPhotoUploading(busy: boolean, sessionKey: number) {
+    if (!editorDialogRef.current || editorSessionRef.current !== sessionKey) return false;
+    if (busy) {
+      if (requestLock.current || editorAiBusyRef.current || photoUploadLock.current) return false;
+      photoUploadLock.current = true;
+      if (workspaceMounted.current) setUploading(true);
+      return true;
+    }
+    if (!photoUploadLock.current) return false;
+    photoUploadLock.current = false;
+    if (workspaceMounted.current) setUploading(false);
+    return true;
+  }
   const lineTextarea = (label: string, name: 'photos' | 'sources' | 'externalVideoUrls', value: string[], helper?: string) => (
     <div className="space-y-1.5" key={name}><Label htmlFor={`ed-${name}`}>{label}</Label><Textarea id={`ed-${name}`} value={rawLines[name] ?? (Array.isArray(form[name]) ? value.join('\n') : String(form[name] ?? ''))} rows={4} onChange={e => setLines(name, e.target.value)} />{helper && <p className="text-xs text-muted-foreground">{helper}</p>}</div>
   );
@@ -609,10 +653,35 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                     <span className="text-xs text-[#718075]">{cheesePhotos.length} из 12</span>
                   </div>
                   {cheesePhotos.length === 0
-                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. Выберите предложенное фото и подтвердите права либо добавьте URL вручную ниже. Затем нажмите «Сохранить изменения». Для статуса «Одобрена» нужна хотя бы одна фотография.</p>
-                    : <p className="text-sm text-[#526158]">Указано фотографий: {cheesePhotos.length}. Можно добавить или удалить URL вручную.</p>}
+                    ? <p className="text-sm text-[#79583f]">Фотографий пока нет. Добавьте файл, вставьте изображение из буфера или укажите URL ниже. Для статуса «Одобрена» нужна хотя бы одна фотография.</p>
+                    : <p className="text-sm text-[#526158]">Указано фотографий: {cheesePhotos.length}. Удаление убирает фото только из текущего черновика.</p>}
+                  <p className="text-xs text-[#718075]">Добавляйте только изображения, на использование которых у редакции есть права.</p>
+                  <EditorialPhotoUpload
+                    key={editorSessionRef.current}
+                    photos={cheesePhotos}
+                    sessionKey={editorSessionRef.current}
+                    disabled={saving}
+                    onAppendPhotos={appendUploadedPhotos}
+                    onRemovePhoto={(index, sessionKey) => {
+                      if (editorSessionRef.current !== sessionKey) return;
+                      const currentPhotos = formRef.current.photos;
+                      const current = (Array.isArray(currentPhotos) ? currentPhotos : String(currentPhotos ?? '').split(/\r?\n/))
+                        .filter((photo: string) => photo.trim());
+                      setDraftPhotos(current.filter((_, photoIndex) => photoIndex !== index), sessionKey);
+                      const removedUrl = current[index];
+                      setAiProposal(proposal => {
+                        if (!proposal) return proposal;
+                        const removedIds = new Set((proposal.draft.research?.photos || [])
+                          .filter(photo => photo.imageUrl === removedUrl).map(photo => photo.id));
+                        const nextIds = proposal.selectedPhotoIds.filter(id => !removedIds.has(id));
+                        return nextIds.length === proposal.selectedPhotoIds.length ? proposal
+                          : { ...proposal, selectedPhotoIds: nextIds, photoRightsConfirmed: false };
+                      });
+                    }}
+                    onUploadingChange={setPhotoUploading}
+                  />
                   <Textarea id="ed-photos" value={rawLines.photos ?? (Array.isArray(cheeseForm.photos) ? cheeseForm.photos.join('\n') : String(cheeseForm.photos ?? ''))} rows={4} onChange={e => setLines('photos', e.target.value)} placeholder="https://… · по одному URL на строку" />
-                  <p className="text-xs text-[#718075]">До 12 URL или путей изображений. Пустые строки игнорируются; редакция не загружает изображения с внешних сайтов автоматически.</p>
+                  <p className="text-xs text-[#718075]">До 12 URL или путей изображений. Пустые строки игнорируются. Внешние URL не загружаются автоматически; добавленные файлы сохраняются в черновике после обычного нажатия «Сохранить изменения».</p>
                 </section>
                 {lineTextarea('Источники — по одному http(s) URL на строку · обязательны для «Одобрена»', 'sources', cheeseForm.sources, 'До 30 источников.')}
                 {relations('Связанные товары каталога', 'productIds', products.filter((product: any) => product.id != null).map((product: any) => ({ id: String(product.id), label: productName(product) })))}
@@ -649,7 +718,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
               {editing && <section className="rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3">
                 <h3 className="mb-2 text-sm font-semibold text-[#43574a]">Исследование и точечная доработка · AI</h3>
                 {(dirty || aiProposal) && <p className="mb-2 rounded border border-[#dfc9b5] bg-[#f5ece2] p-2.5 text-xs leading-5 text-[#684b3d]">Сначала сохраните или отмените изменения статьи. AI-предложения используют сохранённую ревизию и не должны перезаписывать несохранённую форму.</p>}
-                <CheeseAiDraft mode="editor" entry={editing} onApplied={handleAiProposalUpdated} actionsDisabled={dirty || Boolean(aiProposal)} onBusyChange={onEditorAiBusyChange} />
+                 <CheeseAiDraft mode="editor" entry={editing} onApplied={handleAiProposalUpdated} actionsDisabled={dirty || Boolean(aiProposal) || uploading || photoUploadLock.current} onBusyChange={onEditorAiBusyChange} />
               </section>}
             </div>
             <DialogFooter className="gap-2 sm:gap-2"><Button variant="outline" disabled={saving} onClick={() => closeDialog()}>Отмена</Button><Button disabled={saving || relationLoading || Boolean(aiProposal && !aiProposal.operatorConfirmed) || Boolean(aiProposal?.selectedPhotoIds.length && !aiProposal.photoRightsConfirmed)} onClick={() => { void submit(); }} className="bg-[#315647] hover:bg-[#244537]">{saving ? 'Сохранение…' : editing ? 'Сохранить изменения' : 'Создать запись'}</Button></DialogFooter>
