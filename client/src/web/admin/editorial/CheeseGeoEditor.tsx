@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import { MapPin, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +66,9 @@ export default function CheeseGeoEditor({
   const [focusState, setFocusState] = useState<CountryFocusState>('idle');
   const [retryCount, setRetryCount] = useState(0);
   const mapRef = useRef<HTMLDivElement>(null);
+  const gesture = useRef<{ pointerId: number; x: number; y: number; center: { x: number; y: number }; zoom: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const [panning, setPanning] = useState(false);
   const requestSequence = useRef(0);
   const interactionSequence = useRef(0);
   const fitMode = useRef<'country' | 'manual'>('manual');
@@ -162,12 +165,52 @@ export default function CheeseGeoEditor({
   }
 
   function mapClick(event: MouseEvent<HTMLDivElement>) {
+    // The browser also emits click after a drag. Never treat that as a new
+    // geographical position; only a fresh stationary click may move a marker.
+    if (suppressClick.current) { suppressClick.current = false; return; }
     const rect = event.currentTarget.getBoundingClientRect();
     const x = center.x + (event.clientX - rect.left - rect.width / 2) / 256;
     const y = center.y + (event.clientY - rect.top - rect.height / 2) / 256;
     const location = coordinates(x, y, view.zoom);
     moveMarker(selected, location.latitude, location.longitude);
   }
+
+  function startPan(event: PointerEvent<HTMLDivElement>) {
+    if (disabled || !event.isPrimary || event.button !== 0 || (event.target as HTMLElement).closest('button,a')) return;
+    markManualInteraction();
+    suppressClick.current = false;
+    gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, center, zoom: view.zoom, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function pan(event: PointerEvent<HTMLDivElement>) {
+    const active = gesture.current;
+    if (disabled || !active || active.pointerId !== event.pointerId) return;
+    const dx = event.clientX - active.x, dy = event.clientY - active.y;
+    if (!active.moved && Math.hypot(dx, dy) < 5) return;
+    active.moved = true;
+    suppressClick.current = true;
+    setPanning(true);
+    setView({ ...coordinates(active.center.x - dx / 256, active.center.y - dy / 256, active.zoom), zoom: active.zoom });
+  }
+
+  function endPan(event: PointerEvent<HTMLDivElement>, cancelled = false) {
+    const active = gesture.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    suppressClick.current = active.moved || cancelled;
+    gesture.current = null;
+    setPanning(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  useEffect(() => {
+    if (!disabled || !gesture.current) return;
+    const id = gesture.current.pointerId;
+    gesture.current = null;
+    suppressClick.current = true;
+    setPanning(false);
+    if (mapRef.current?.hasPointerCapture(id)) mapRef.current.releasePointerCapture(id);
+  }, [disabled]);
 
   function focusCountry() {
     if (!countryBounds) return;
@@ -196,7 +239,7 @@ export default function CheeseGeoEditor({
 
   return <section className="min-w-0 max-w-full space-y-3 overflow-hidden rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3" data-testid="cheese-geo-editor">
     <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
-      <div className="min-w-0"><h3 className="font-serif text-lg">География сыра</h3><p className="text-xs leading-5 text-[#718075]">Происхождение и места производства — разные точки. Выберите точку, затем нажмите на карту или введите координаты.</p></div>
+      <div className="min-w-0"><h3 className="font-serif text-lg">География сыра</h3><p className="text-xs leading-5 text-[#718075]">Перетаскивайте карту мышью или пальцем для поиска места — координаты при этом не меняются. Чтобы перенести точку, выберите её и нажмите на карту или введите координаты. Alt + стрелки перемещают карту.</p></div>
       <div className="flex shrink-0 flex-wrap justify-start gap-2 sm:justify-end">
         <Button type="button" size="icon" variant="outline" aria-label="Уменьшить масштаб карты" title="Уменьшить масштаб" disabled={disabled || view.zoom <= 0} onClick={() => { markManualInteraction(); setView(current => ({ ...current, zoom: Math.max(0, current.zoom - 1) })); }}><ZoomOut className="h-4 w-4" /></Button>
         <Button type="button" size="icon" variant="outline" aria-label="Увеличить масштаб карты" title="Увеличить масштаб" disabled={disabled || view.zoom >= 19} onClick={() => { markManualInteraction(); setView(current => ({ ...current, zoom: Math.min(19, current.zoom + 1) })); }}><ZoomIn className="h-4 w-4" /></Button>
@@ -222,8 +265,20 @@ export default function CheeseGeoEditor({
       <span>{statusMessage}</span>
       {focusState === 'error' && <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setRetryCount(count => count + 1)}>Повторить</Button>}
     </div>}
-    <div ref={mapRef} role="application" aria-label="Карта координат. Нажмите, чтобы переместить выбранную точку." aria-disabled={disabled} tabIndex={disabled ? -1 : 0} onClick={disabled ? undefined : mapClick} onKeyDown={event => {
-      if (disabled) return;
+    <div ref={mapRef} role="application" aria-label="Карта координат. Перетаскивайте для просмотра. Нажмите, чтобы переместить выбранную точку. Alt и стрелки перемещают карту." aria-disabled={disabled} tabIndex={disabled ? -1 : 0}
+      onPointerDown={startPan} onPointerMove={pan} onPointerUp={event => endPan(event)}
+      onPointerCancel={event => endPan(event, true)} onLostPointerCapture={event => endPan(event, true)}
+      style={{ touchAction: 'none' }} onClick={disabled ? undefined : mapClick} onKeyDown={event => {
+      if (disabled || event.target !== event.currentTarget) return;
+      if (event.altKey) {
+        const delta = { ArrowUp: [0, -64], ArrowDown: [0, 64], ArrowLeft: [-64, 0], ArrowRight: [64, 0] }[event.key];
+        if (delta) {
+          event.preventDefault();
+          markManualInteraction();
+          setView({ ...coordinates(center.x + delta[0] / 256, center.y + delta[1] / 256, view.zoom), zoom: view.zoom });
+        }
+        return;
+      }
       const step = event.shiftKey ? 1 : 0.1;
       const active = selected.kind === 'origin'
         ? value.latitude == null || value.longitude == null ? null : { latitude: value.latitude, longitude: value.longitude }
@@ -231,7 +286,7 @@ export default function CheeseGeoEditor({
       if (!active) return;
       const delta = { ArrowUp: [step, 0], ArrowDown: [-step, 0], ArrowLeft: [0, -step], ArrowRight: [0, step] }[event.key];
       if (delta) { event.preventDefault(); moveMarker(selected, clamp(active.latitude + delta[0], -90, 90), clamp(active.longitude + delta[1], -180, 180)); }
-    }} className={`relative h-56 overflow-hidden rounded border border-[#c9cbbf] bg-[#e6e7d9] outline-none focus-visible:ring-2 focus-visible:ring-[#315647] ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-crosshair'}`}
+    }} className={`relative h-56 select-none overflow-hidden rounded border border-[#c9cbbf] bg-[#e6e7d9] outline-none focus-visible:ring-2 focus-visible:ring-[#315647] ${disabled ? 'cursor-not-allowed opacity-60' : panning ? 'cursor-grabbing' : 'cursor-grab'}`}
       data-testid="cheese-map-country-focus"
       data-country={diagnosticCountry}
       data-center-latitude={view.latitude}
@@ -248,11 +303,11 @@ export default function CheeseGeoEditor({
             : <img key={`${rawX}-${y}`} data-map-tile="true" draggable={false} className="max-w-none" style={{ width: 256, height: 256 }} src={`https://tile.openstreetmap.org/${view.zoom}/${x}/${y}.png`} alt="" />;
         })}
       </div>
-      <div className="absolute inset-0 cursor-crosshair">
+      <div className="absolute inset-0">
         {origin && <button type="button" disabled={disabled} title="Точка происхождения" aria-label="Выбрать точку происхождения" onClick={event => { event.stopPropagation(); focusMarker({ kind: 'origin' }); }} className="absolute z-10 -translate-x-1/2 -translate-y-full text-[#315647]" style={{ left: `calc(50% + ${wrappedTileDelta(origin.x, center.x, view.zoom) * 256}px)`, top: `calc(50% + ${(origin.y - center.y) * 256}px)` }}><MapPin className="h-7 w-7 fill-[#f7f4e9] drop-shadow" /></button>}
         {markerPoints.map(({ point, projected }, index) => <button key={point.id} type="button" disabled={disabled} title={point.label} aria-label={`Выбрать точку производства ${point.label}`} onClick={event => { event.stopPropagation(); focusMarker({ kind: 'production', id: point.id }); }} className="absolute z-10 -translate-x-1/2 -translate-y-full text-[#a05d41]" style={{ left: `calc(50% + ${wrappedTileDelta(projected.x, center.x, view.zoom) * 256}px)`, top: `calc(50% + ${(projected.y - center.y) * 256}px)` }}><MapPin className="h-7 w-7 fill-[#fbfaf6] drop-shadow" /><span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] font-bold text-[#a05d41]">{index + 1}</span></button>)}
       </div>
-      <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-[#fbfaf6]/90 px-1.5 py-1 text-[10px] text-[#53645a]"><a className="pointer-events-auto underline underline-offset-2" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}>© OpenStreetMap contributors</a> · нажмите на карту для переноса выбранной точки</span>
+      <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-[#fbfaf6]/90 px-1.5 py-1 text-[10px] text-[#53645a]"><a className="pointer-events-auto underline underline-offset-2" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}>© OpenStreetMap contributors</a> · перетаскивайте карту для просмотра; нажмите для переноса точки</span>
     </div>
     {countryBounds && focusState === 'available' && <div className="flex justify-end">
       <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={focusCountry}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Вернуться к стране происхождения</Button>

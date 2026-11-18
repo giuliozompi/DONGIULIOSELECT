@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { launchBrowser } from './helpers/browser.mjs';
+import { join } from 'node:path';
 
-test('editorial map focuses the origin country without changing saved coordinates', {
-  skip: !process.env.REPLIT_DEV_DOMAIN, timeout: 90000,
+const build = process.env.EDITORIAL_MAP_BUILD_DIR;
+const base = build ? 'https://editorial-map.example.test' : process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '';
+test('editorial map focuses, pans by mouse/touch/keyboard and separates navigation from marker edits', {
+  skip: !base, timeout: 90000,
 }, async () => {
   const browser = await launchBrowser();
   const page = await browser.newPage();
@@ -28,11 +31,19 @@ test('editorial map focuses the origin country without changing saved coordinate
   });
   page.on('Runtime.exceptionThrown', e => errors.push(e.exceptionDetails.exception?.description || e.exceptionDetails.text));
   await page.send('Fetch.enable', { patterns: [
-    { urlPattern: '*/web-api/*' }, { urlPattern: '*/editorial/world.geojson' },
+    { urlPattern: '*/web-api/*' }, { urlPattern: '*/api/*' }, { urlPattern: '*/editorial/world.geojson' },
     { urlPattern: '*tile.openstreetmap.org/*' }, { urlPattern: '*telegram.org/js/telegram-web-app.js*' },
+    ...(build ? [{ urlPattern: '*', resourceType: 'Document' }, { urlPattern: '*/assets/*' }] : []),
   ] });
   page.on('Fetch.requestPaused', async event => {
     const url = new URL(event.request.url), path = url.pathname;
+    if (build && (event.resourceType === 'Document' || path.startsWith('/assets/'))) {
+      const asset = event.resourceType === 'Document' ? '/index.html' : path;
+      await page.send('Fetch.fulfillRequest', { requestId: event.requestId, responseCode: 200,
+        responseHeaders: [{ name: 'Content-Type', value: asset.endsWith('.html') ? 'text/html' : asset.endsWith('.css') ? 'text/css' : 'application/javascript' }],
+        body: (await readFile(join(build, asset))).toString('base64') });
+      return;
+    }
     if (path === '/editorial/world.geojson') {
       await page.send('Fetch.fulfillRequest', {
         requestId: event.requestId, responseCode: 200,
@@ -78,12 +89,42 @@ test('editorial map focuses the origin country without changing saved coordinate
     await page.wait(`document.querySelector('${map}')?.dataset.country===${JSON.stringify(name)} && document.querySelector('${map}')?.dataset.countryFocusState==='available'`);
     return readView();
   };
+  const mapRect = async () => {
+    await page.evaluate(`document.querySelector('${map}').scrollIntoView({block:'center'})`);
+    return page.evaluate(`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>{const r=document.querySelector('${map}').getBoundingClientRect();resolve({x:r.left+r.width*.3,y:r.top+r.height*.4,width:r.width});})))`);
+  };
+  const mouseDrag = async (dx, dy) => {
+    const { x, y } = await mapRect();
+    await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 4; i++) await page.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved', x: x + dx * i / 4, y: y + dy * i / 4, buttons: 1,
+    });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x + dx, y: y + dy, button: 'left', buttons: 0, clickCount: 1 });
+  };
   try {
-    await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses?entry=${id}` });
+    await page.send('Page.navigate', { url: `${base}/web/admin/cheeses?entry=${id}` });
     await page.wait(`document.querySelector('${map}')?.dataset.country==='Италия' && document.querySelector('${map}')?.dataset.countryFocusState==='available'`);
     const original = await storedPoints(), italy = await readView();
     assert.ok(italy.lat > 35 && italy.lat < 48 && italy.lon > 5 && italy.lon < 20);
     assert.deepEqual(original, { lat: '51.5', lon: '-0.12', factoryLat: '43', factoryLon: '5' });
+    await mouseDrag(100, 40);
+    const panned = await readView();
+    assert.ok(panned.lon < italy.lon && panned.lat > italy.lat);
+    assert.equal(panned.zoom, italy.zoom);
+    assert.deepEqual(await storedPoints(), original, 'dragging must not place the selected marker on release');
+    // Pointer capture continues the pan beyond the original map bounds.
+    await mouseDrag(500, 0);
+    assert.notEqual((await readView()).lon, panned.lon);
+    assert.deepEqual(await storedPoints(), original);
+    await page.evaluate(`document.querySelector('${map}').focus()`);
+    const beforeKeyboard = await readView();
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', modifiers: 1, windowsVirtualKeyCode: 39 });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', modifiers: 1, windowsVirtualKeyCode: 39 });
+    assert.notEqual((await readView()).lon, beforeKeyboard.lon);
+    assert.deepEqual(await storedPoints(), original, 'Alt+arrows pan without editing coordinates');
+    await page.evaluate(`[...document.querySelectorAll('[data-testid="cheese-geo-editor"] button')].find(b=>b.textContent.includes('Вернуться к стране')).click()`);
+    await page.wait(`Math.abs(Number(document.querySelector('${map}').dataset.centerLongitude)-${italy.lon})<0.001`);
+    assert.deepEqual(await storedPoints(), original);
     const france = await focusCountry('France', 'FR');
     assert.ok(france.lat > 40 && france.lat < 52 && france.lon > -6 && france.lon < 10);
     const russia = await focusCountry('Россия', 'RU');
@@ -117,6 +158,32 @@ test('editorial map focuses the origin country without changing saved coordinate
       await writeFile(`generated-artifacts/verification/editorial-country-map/country-${width}.png`, Buffer.from(screenshot.data, 'base64'));
     }
     assert.ok((await readView()).zoom <= desktop.zoom);
+    await page.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    const touchRect = await mapRect(), beforeTouch = await readView(), beforeTouchPoints = await storedPoints();
+    const scroll = await page.evaluate(`document.querySelector('[data-testid="editorial-entry-editor"]').scrollTop`);
+    await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: touchRect.x, y: touchRect.y, id: 1 }] });
+    await page.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: touchRect.x + 60, y: touchRect.y + 30, id: 1 }] });
+    await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.wait(`Math.abs(Number(document.querySelector('${map}').dataset.centerLongitude)-${beforeTouch.lon})>0.01`);
+    assert.deepEqual(await storedPoints(), beforeTouchPoints, 'touch pan must not change origin or factory');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="editorial-entry-editor"]').scrollTop`), scroll, 'map touch does not scroll the editor');
+    const cancelRect = await mapRect();
+    await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cancelRect.x, y: cancelRect.y, id: 2 }] });
+    await page.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+    assert.deepEqual(await storedPoints(), beforeTouchPoints, 'cancelled touch does not place a pin');
+    await page.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    // A new ordinary click still places the selected pin after any pan/cancel.
+    const click = await mapRect();
+    await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: click.x, y: click.y, button: 'left', buttons: 1, clickCount: 1 });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: click.x, y: click.y, button: 'left', buttons: 0, clickCount: 1 });
+    await page.wait(`document.querySelector('[aria-label="Происхождение: широта"]').value!==''`);
+    const afterClick = await storedPoints();
+    assert.equal(afterClick.factoryLat, beforeTouchPoints.factoryLat);
+    assert.equal(afterClick.factoryLon, beforeTouchPoints.factoryLon);
+    await page.evaluate(`document.querySelector('${map}').focus()`);
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 });
+    assert.ok(Number((await storedPoints()).lat) > Number(afterClick.lat), 'existing marker keyboard adjustment remains available');
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
