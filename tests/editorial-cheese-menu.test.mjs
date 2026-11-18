@@ -13,7 +13,8 @@ test('cheese sections paginate independently, follow saved states and publicatio
 }, async () => {
   const browser = await launchBrowser();
   const page = await browser.newPage();
-  const requests = [], unexpected = [], exceptions = [];
+  const requests = [], unexpected = [], exceptions = [], writes = [];
+  let failNextSave = false;
   const entries = Array.from({ length: 26 }, (_, i) => ({
     id: `11111111-1111-4111-8111-${String(i).padStart(12, '0')}`,
     kind: 'cheese', revision: 2, createdBy: 'fixture', updatedBy: 'fixture',
@@ -69,9 +70,15 @@ test('cheese sections paginate independently, follow saved states and publicatio
       body = entry;
     } else if (path.match(/\/editorial\/[^/]+$/) && event.request.method === 'PATCH') {
       const entry = entries.find(e => e.id === path.split('/').at(-1));
-      entry.data = JSON.parse(event.request.postData).data;
-      entry.revision++;
-      body = entry;
+      const request = JSON.parse(event.request.postData);
+      writes.push(request);
+      if (failNextSave) { failNextSave = false; code = 503; body = { error: 'Fixture save unavailable' }; }
+      else {
+        entry.data = request.data;
+        entry.revision += request.publish ? 2 : 1;
+        if (request.publish) entry.publication = { publishedRevision: entry.revision, publishedAt: '2026-01-02T00:00:00Z' };
+        body = entry;
+      }
     } else if (path === '/web-api/admin/editorial-ai/history') body = { items: [], total: 0 };
     else if (event.request.method !== 'GET') { unexpected.push(`${event.request.method} ${path}`); code = 400; }
     await page.send('Fetch.fulfillRequest', { requestId: event.requestId, responseCode: code,
@@ -105,10 +112,54 @@ test('cheese sections paginate independently, follow saved states and publicatio
     await clickText('Изменить', `document.getElementById('entry-${entries[22].id}')`);
     await page.wait(`!!document.querySelector('#ed-status')`);
     await page.evaluate(`(() => {const select=document.querySelector('#ed-status');select.value='draft';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
-    await clickText('Сохранить изменения', `document.querySelector('[role="dialog"]')`);
+    await page.click('[data-testid="button-editorial-save-bottom"]');
     await page.wait(`${selected('drafts')} && !document.querySelector('[role="dialog"]')`);
     assert.equal(requests.filter(r => r.stage === 'drafts').at(-1).offset, 0);
 
+    await clickText('Изменить', `document.getElementById('entry-${entries[0].id}')`);
+    await page.wait(`!!document.querySelector('[data-testid="button-editorial-save-top"]')`);
+    assert.equal(await page.evaluate(`document.querySelectorAll('[data-testid^="button-editorial-save-"]').length`), 2);
+    await page.fill('#ed-title', 'Edited from upper save button');
+    await page.click('[data-testid="button-editorial-save-top"]');
+    await page.wait(`!document.querySelector('[role="dialog"]')`);
+    assert.equal(entries[0].data.title, 'Edited from upper save button');
+    assert.equal(writes.at(-1).publish, undefined, 'ordinary top save never publishes');
+    await clickText('Изменить', `document.getElementById('entry-${entries[0].id}')`);
+    await page.wait(`!!document.querySelector('#ed-status')`);
+    await page.evaluate(`(() => { const s=document.querySelector('#ed-status');s.value='publish';s.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+    await page.wait(`document.querySelector('[data-testid="button-editorial-save-top"]')?.textContent==='Сохранить и опубликовать'`);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-editorial-save-bottom"]').textContent`), 'Сохранить и опубликовать');
+    const beforeInvalid = writes.length;
+    await page.fill('#ed-history', '');
+    await page.click('[data-testid="button-editorial-save-top"]');
+    await page.wait(`!!document.querySelector('[role="dialog"] [role="alert"]')`);
+    assert.equal(writes.length, beforeInvalid, 'incomplete article cannot be published from either button');
+    await page.fill('#ed-history', 'Verified expanded history');
+    // Both controls are reachable on phones; the upper one starts in view.
+    await page.evaluate(`document.activeElement?.blur()`);
+    await page.setViewport({ width: 390, height: 844, mobile: true });
+    await page.evaluate(`new Promise(resolve=>requestAnimationFrame(()=>{document.querySelector('[role="dialog"]').scrollTop=0;requestAnimationFrame(resolve);}))`);
+    await page.wait(`(() => {const r=document.querySelector('[data-testid="button-editorial-save-top"]').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&r.right<=innerWidth;})()`);
+    await mkdir('generated-artifacts', { recursive: true });
+    const editorImage = await page.send('Page.captureScreenshot', { format: 'jpeg', quality: 75 });
+    await writeFile('generated-artifacts/editorial-save-top-390.jpg', Buffer.from(editorImage.data, 'base64'));
+    await page.setViewport({ width: 1280, height: 844, mobile: false });
+    failNextSave = true;
+    await page.evaluate(`(() => {document.querySelector('[data-testid="button-editorial-save-top"]').click();document.querySelector('[data-testid="button-editorial-save-bottom"]').click();})()`);
+    await page.wait(`document.querySelector('[role="dialog"]')?.innerText.includes('Fixture save unavailable') && !document.querySelector('[data-testid="button-editorial-save-top"]').disabled`);
+    assert.equal(writes.length, beforeInvalid + 1, 'rapid use of both buttons submits only once');
+    assert.equal(entries[0].publication, null, 'failed combined save stays private');
+    await page.click('[data-testid="button-editorial-save-bottom"]');
+    await page.wait(`${selected('published')} && !document.querySelector('[role="dialog"]')`);
+    assert.equal(writes.at(-1).publish, true);
+    assert.equal(writes.at(-1).data.status, 'ready', 'combined action is never stored as an unsupported article status');
+    assert.equal(entries[0].data.history, 'Verified expanded history');
+    await clickText('Изменить', `document.getElementById('entry-${entries[0].id}')`);
+    await page.wait(`!!document.querySelector('#ed-status')`);
+    assert.equal(await page.evaluate(`document.querySelector('#ed-status').value`), 'ready', 'publication intent resets on reopening');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-editorial-save-top"]').textContent`), 'Сохранить изменения');
+    await clickText('Отмена', `document.querySelector('[role="dialog"]')`);
+    await page.wait(`!document.querySelector('[role="dialog"]')`);
     await page.click('[data-testid="cheese-stage-approved"]');
     await page.wait(selected('approved'));
     await mkdir('generated-artifacts', { recursive: true });

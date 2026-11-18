@@ -77,9 +77,11 @@ export async function audit(client: pg.PoolClient, actor: string, action: string
     [actor, action, id, JSON.stringify({ oldData, newData })]);
 }
 export async function saveEditorial(kind: EditorialKind, input: unknown, actor: string,
-  edit?: { id: string; revision: number }, database = pool) {
+  edit?: { id: string; revision: number }, database = pool, publish = false) {
   if (!actor) throw new EditorialError(401, 'Требуется авторизация');
   const data = editorialSchemas[kind].parse(input);
+  if (publish && (kind !== 'cheese' || (data as CheeseData).status !== 'ready'))
+    throw new EditorialError(400, 'Одобрить и опубликовать можно только полностью подготовленную сырную статью.');
   return transaction(database, async client => {
     let previous: Row | undefined;
     if (edit) {
@@ -113,6 +115,20 @@ export async function saveEditorial(kind: EditorialKind, input: unknown, actor: 
     }
     const current = entry({ ...saved, published_at: previous?.published_at, published_revision: previous?.published_revision });
     await audit(client, actor, edit ? 'updated' : 'created', id, previous ? entry(previous) : null, current);
+    if (publish) {
+      // Save and publish one validated revision atomically. A failure in either
+      // audit or publication must leave both the draft and live snapshot intact.
+      await client.query(`INSERT INTO editorial_publications
+        (entry_id,kind,data,published_revision,published_by) VALUES($1,'cheese',$2,$3,$4)
+        ON CONFLICT(entry_id) DO UPDATE SET data=excluded.data,
+          published_revision=excluded.published_revision,published_by=excluded.published_by,published_at=now()`,
+        [id, JSON.stringify(saved.data), saved.revision + 1, actor]);
+      await client.query(`UPDATE editorial_entries SET revision=revision+1,updated_by=$2,updated_at=now() WHERE id=$1`, [id, actor]);
+      const published = entry((await client.query(`SELECT e.*,p.published_at,p.published_revision
+        FROM editorial_entries e JOIN editorial_publications p ON p.entry_id=e.id WHERE e.id=$1`, [id])).rows[0]);
+      await audit(client, actor, 'published', id, current, published);
+      return published;
+    }
     return current;
   });
 }

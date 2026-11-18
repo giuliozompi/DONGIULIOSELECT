@@ -100,6 +100,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const [dialog, setDialog] = useState(false);
   const [editing, setEditing] = useState<EditorialEntry | null>(null);
   const [form, setForm] = useState<FormData>(() => fresh(kind));
+  const [publishOnSave, setPublishOnSave] = useState(false);
   const [moderationTarget, setModerationTarget] = useState<EditorialEntry | null>(null);
   const [decision, setDecision] = useState<'approved' | 'rejected'>('approved');
   const [moderationNote, setModerationNote] = useState('');
@@ -187,12 +188,12 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     }
   }
   const createMutation = useMutation({
-    mutationFn: (data: FormData) => editorialApi.create(kind, data),
-    onSuccess: async saved => { showSavedEntry(saved); await invalidateEditorial(); closeDialog(true); toast({ title: 'Запись создана' }); },
+    mutationFn: ({ data, publish }: { data: FormData; publish: boolean }) => editorialApi.create(kind, data, publish),
+    onSuccess: async (saved, variables) => { showSavedEntry(saved); await invalidateEditorial(); closeDialog(true); toast({ title: variables.publish ? 'Статья сохранена и опубликована' : 'Запись создана' }); },
   });
   const updateMutation = useMutation({
-    mutationFn: ({ entry, data }: { entry: EditorialEntry; data: FormData }) => editorialApi.update(entry, data),
-    onSuccess: async saved => { showSavedEntry(saved); await invalidateEditorial(); closeDialog(true); toast({ title: kind === 'price' ? 'Цена обновлена и отправлена на повторную проверку' : 'Изменения сохранены' }); },
+    mutationFn: ({ entry, data, publish }: { entry: EditorialEntry; data: FormData; publish: boolean }) => editorialApi.update(entry, data, publish),
+    onSuccess: async (saved, variables) => { showSavedEntry(saved); await invalidateEditorial(); closeDialog(true); toast({ title: variables.publish ? 'Статья сохранена и опубликована' : kind === 'price' ? 'Цена обновлена и отправлена на повторную проверку' : 'Изменения сохранены' }); },
   });
   const deleteMutation = useMutation({
     mutationFn: (entry: EditorialEntry) => editorialApi.remove(entry),
@@ -252,6 +253,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     deleteMutation.reset();
     setEditing(null);
     setForm(fresh(kind));
+    setPublishOnSave(false);
     setRawLines({});
     setValidation([]);
     setAiProposal(null);
@@ -266,6 +268,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     deleteMutation.reset();
     setEditing(entry);
     setForm(JSON.parse(JSON.stringify(entry.data)) as FormData);
+    setPublishOnSave(false);
     setRawLines({});
     setValidation([]);
     setAiProposal(null);
@@ -275,6 +278,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   }
   function openAiProposal(entry: EditorialEntry, run: EditorialAiRun, draft: DraftResult) {
     if (!workspaceMounted.current || currentKindRef.current !== 'cheese' || editorDialogRef.current) return;
+    setPublishOnSave(false);
     const latestItems = qc.getQueriesData({ queryKey: ['/web-api/admin/editorial'] })
       .flatMap(([, data]: any) => Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []);
     const latest = latestItems.filter((item: EditorialEntry) => item.id === entry.id)
@@ -307,6 +311,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     if (!saved || !options?.openEditor || !editorDialogRef.current || editing?.id !== saved.id || dirty) return;
     setEditing(saved);
     setForm(JSON.parse(JSON.stringify(saved.data)) as FormData);
+    setPublishOnSave(false);
     setAiProposal(null);
     void invalidateEditorial();
   }
@@ -348,15 +353,16 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setDialog(false);
     editorDialogRef.current = false;
     setEditing(null);
+    setPublishOnSave(false);
     setValidation([]);
     setAiProposal(null);
   }
-  const dirty = useMemo(() => editing ? JSON.stringify(form) !== JSON.stringify(editing.data) : JSON.stringify(form) !== JSON.stringify(fresh(kind)), [editing, form, kind]);
+  const dirty = useMemo(() => publishOnSave || (editing ? JSON.stringify(form) !== JSON.stringify(editing.data) : JSON.stringify(form) !== JSON.stringify(fresh(kind))), [editing, form, kind, publishOnSave]);
   function set<K extends keyof FormData>(key: K, value: FormData[K]) {
     setForm((current: FormData) => ({ ...current, [key]: value } as FormData));
   }
   async function submit() {
-    if (requestLock.current || photoUploadLock.current) return;
+    if (requestLock.current || photoUploadLock.current || editorAiBusyRef.current) return;
     const schema = editorialSchemas[kind];
     const candidate = { ...form };
     for (const key of ['photos', 'sources', 'externalVideoUrls'] as const) {
@@ -373,6 +379,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     const request = (async () => {
       let target = editing;
       let candidate = result.data as FormData;
+      const publish = kind === 'cheese' && publishOnSave;
       if (target && kind === 'cheese' && aiProposal) {
         if (!aiProposal.operatorConfirmed) {
           setValidation(['Подтвердите, что вы проверили предложенный текст и географию.']);
@@ -404,13 +411,20 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
           return;
         }
       }
-      if (target) await updateMutation.mutateAsync({ entry: target, data: candidate });
-      else await createMutation.mutateAsync(candidate);
+      if (target) await updateMutation.mutateAsync({ entry: target, data: candidate, publish });
+      else await createMutation.mutateAsync({ data: candidate, publish });
     })();
     void request.catch(() => undefined).finally(() => {
       requestLock.current = false;
       setRequestBusy(false);
     });
+  }
+  function saveButton(position: 'top' | 'bottom') {
+    return <Button type="button" data-testid={`button-editorial-save-${position}`}
+      disabled={saving || relationLoading || Boolean(aiProposal && !aiProposal.operatorConfirmed) || Boolean(aiProposal?.selectedPhotoIds.length && !aiProposal.photoRightsConfirmed)}
+      onClick={() => { void submit(); }} className="bg-[#315647] hover:bg-[#244537]">
+      {saving ? 'Сохранение…' : kind === 'cheese' && publishOnSave ? 'Сохранить и опубликовать' : editing ? 'Сохранить изменения' : 'Создать запись'}
+    </Button>;
   }
   async function uploadCover(file?: File) {
     if (!file || kind !== 'video') return;
@@ -604,6 +618,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
         <Dialog open={dialog} onOpenChange={open => !open && closeDialog()}>
           <DialogContent data-testid="editorial-entry-editor" data-entry-revision={editing?.revision} className="!left-4 !w-[calc(100vw-2rem)] !translate-x-0 grid-cols-[minmax(0,1fr)] max-h-[92dvh] max-w-2xl overflow-y-auto border-[#d7d8cc] bg-[#fbfaf6] sm:!left-[50%] sm:!w-full sm:!translate-x-[-50%]">
             <DialogHeader><DialogTitle className="font-serif text-2xl">{editing ? 'Редактирование' : 'Новая запись'} · {titles[kind]}</DialogTitle></DialogHeader>
+            {kind === 'cheese' && <div className="space-y-3 border-b border-[#d7d8cc] pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">{publishOnSave ? 'При сохранении статья будет одобрена и опубликована для читателей.' : 'Сохранить изменения можно здесь или внизу статьи.'}</p>
+                {saveButton('top')}
+              </div>
+              {validation.length > 0 && <div role="alert" className="text-sm text-[#8b4535]">{validation.join(' · ')}</div>}
+              {(createMutation.error || updateMutation.error) && <div role="alert" className="text-sm text-[#8b4535]">{errorText(createMutation.error || updateMutation.error)}</div>}
+            </div>}
             <div className="space-y-5 py-2">
               <fieldset disabled={saving} className="min-w-0 w-full space-y-5 disabled:opacity-70">
               {kind !== 'price' && <>
@@ -613,7 +635,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 </div> : field('Заголовок', 'title', (form as VideoData).title, { required: true })}
                 {textarea('Описание', 'description', (form as VideoData | CheeseData).description)}
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5"><Label htmlFor="ed-status">{kind === 'cheese' ? 'Состояние статьи' : 'Внутренний статус'}</Label><select id="ed-status" className={nativeSelectClass} disabled={Boolean(aiProposal)} value={(form as VideoData | CheeseData).status} onChange={e => set('status', e.target.value)}>{kind === 'cheese' ? <><option value="draft">В редакции</option><option value="pending_review">Ожидает подтверждения</option><option value="ready">Одобрена</option></> : <><option value="draft">Черновик</option><option value="ready">Готово к редакционному этапу</option></>}</select>{kind === 'cheese' && <p className="text-xs text-muted-foreground">{aiProposal ? 'Предложение сохраняется как ожидающее проверки. Одобрение и публикация — отдельные действия.' : 'Публикация — отдельное действие; состояние текущей версии не означает, что она уже опубликована.'}</p>}</div>
+                  <div className="space-y-1.5"><Label htmlFor="ed-status">{kind === 'cheese' ? 'Состояние статьи' : 'Внутренний статус'}</Label><select id="ed-status" className={nativeSelectClass} disabled={Boolean(aiProposal)} value={kind === 'cheese' && publishOnSave ? 'publish' : (form as VideoData | CheeseData).status} onChange={e => { const publish = kind === 'cheese' && e.target.value === 'publish'; setPublishOnSave(publish); set('status', publish ? 'ready' : e.target.value); }}>{kind === 'cheese' ? <><option value="draft">В редакции</option><option value="pending_review">Ожидает подтверждения</option><option value="ready">Одобрена</option><option value="publish">Одобрить и опубликовать</option></> : <><option value="draft">Черновик</option><option value="ready">Готово к редакционному этапу</option></>}</select>{kind === 'cheese' && <p className="text-xs text-muted-foreground">{aiProposal ? 'Предложение сохраняется как ожидающее проверки. Одобрение и публикация — отдельные действия.' : publishOnSave ? 'Сохранение одобрит и опубликует эту версию. Все обязательные поля должны быть заполнены.' : 'Статус «Одобрена» сам по себе не публикует статью. Для публикации при сохранении выберите «Одобрить и опубликовать».'}</p>}</div>
                   {field('Порядок', 'sortOrder', (form as VideoData | CheeseData).sortOrder, { type: 'number', min: '0' })}
                 </div>
               </>}
@@ -735,7 +757,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                  <CheeseAiDraft mode="editor" entry={editing} onApplied={handleAiProposalUpdated} actionsDisabled={dirty || Boolean(aiProposal) || uploading || photoUploadLock.current} onBusyChange={onEditorAiBusyChange} />
               </section>}
             </div>
-            <DialogFooter className="gap-2 sm:gap-2"><Button variant="outline" disabled={saving} onClick={() => closeDialog()}>Отмена</Button><Button disabled={saving || relationLoading || Boolean(aiProposal && !aiProposal.operatorConfirmed) || Boolean(aiProposal?.selectedPhotoIds.length && !aiProposal.photoRightsConfirmed)} onClick={() => { void submit(); }} className="bg-[#315647] hover:bg-[#244537]">{saving ? 'Сохранение…' : editing ? 'Сохранить изменения' : 'Создать запись'}</Button></DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-2"><Button variant="outline" disabled={saving} onClick={() => closeDialog()}>Отмена</Button>{saveButton('bottom')}</DialogFooter>
           </DialogContent>
         </Dialog>
 

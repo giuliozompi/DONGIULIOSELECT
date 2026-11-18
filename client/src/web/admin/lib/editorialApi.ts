@@ -6,10 +6,10 @@ const base = '/admin/editorial';
 export const editorialApi = {
   list: (kind: EditorialKind, offset = 0, limit = 50, stage?: CheeseEditorialStage) =>
     webApi.get<{ items: EditorialEntry[]; total: number }>(`${base}?kind=${kind}&offset=${offset}&limit=${limit}${stage ? `&stage=${stage}` : ''}`),
-  create: (kind: EditorialKind, data: EditorialData) =>
-    webApi.post<EditorialEntry>(base, { kind, data }),
-  update: (record: EditorialEntry, data: EditorialData) =>
-    webApi.patch<EditorialEntry>(`${base}/${record.id}`, { kind: record.kind, revision: record.revision, data }),
+  create: (kind: EditorialKind, data: EditorialData, publish = false) =>
+    webApi.post<EditorialEntry>(base, { kind, data, ...(publish ? { publish: true } : {}) }),
+  update: (record: EditorialEntry, data: EditorialData, publish = false) =>
+    webApi.patch<EditorialEntry>(`${base}/${record.id}`, { kind: record.kind, revision: record.revision, data, ...(publish ? { publish: true } : {}) }),
   remove: (record: EditorialEntry) =>
     webApi.delete<void>(`${base}/${record.id}?revision=${record.revision}`),
   moderate: (record: EditorialEntry, decision: 'approved' | 'rejected', note: string) =>

@@ -284,6 +284,63 @@ test('cheese menu validates filters and does not weaken admin authorization or v
   assert.equal((await listEditorial('cheese', 0, 20, database, 'approved')).total, 0);
   assert.equal((await listEditorial('cheese', 0, 20, database, 'published')).items[0].id, approved.id);
 });
+test('explicit combined save approves and publishes the submitted cheese revision with both audits', async () => {
+  const created = await api('POST', '', { kind: 'cheese', data: readyCheese(), publish: true });
+  assert.equal(created.status, 201);
+  const saved = await created.json();
+  assert.equal(saved.data.status, 'ready');
+  assert.equal(saved.publication.publishedRevision, saved.revision);
+  assert.equal((await publicCheeseDetail(saved.id, database)).history, readyCheese().history);
+  assert.deepEqual((await database.query('SELECT action_type FROM admin_action_logs WHERE entity_id=$1', [saved.id])).rows.map(r => r.action_type).sort(), ['created', 'published']);
+  const updated = await api('PATCH', `/${saved.id}`, { kind: 'cheese', revision: saved.revision,
+    data: { ...saved.data, history: 'Expanded verified history' }, publish: true });
+  assert.equal(updated.status, 200);
+  const live = await updated.json();
+  assert.equal(live.publication.publishedRevision, live.revision);
+  assert.equal((await publicCheeseDetail(saved.id, database)).history, 'Expanded verified history');
+  assert.equal((await api('PATCH', `/${saved.id}`, { kind: 'cheese', revision: saved.revision, data: saved.data, publish: true })).status, 409);
+  // The next ordinary save must not silently republish.
+  await api('PATCH', `/${live.id}`, { kind: 'cheese', revision: live.revision, data: { ...live.data, history: 'Private next revision' } });
+  assert.equal((await publicCheeseDetail(saved.id, database)).history, 'Expanded verified history');
+});
+test('combined save rejects incomplete data, other kinds, malformed flags and unauthorized callers before publishing', async () => {
+  for (const data of [cheese(), { ...readyCheese(), history: '' }, { ...readyCheese(), photos: [] }, { ...readyCheese(), latitude: null }]) {
+    assert.equal((await api('POST', '', { kind: 'cheese', data, publish: true })).status, 400);
+  }
+  assert.equal((await api('POST', '', { kind: 'video', data: video(), publish: true })).status, 400);
+  assert.equal((await api('POST', '', { kind: 'cheese', data: readyCheese(), publish: 'true' })).status, 400);
+  for (const token of [null, 'test-client'])
+    assert.equal((await api('POST', '', { kind: 'cheese', data: readyCheese(), publish: true }, token)).status, token ? 403 : 401);
+  assert.equal((await database.query('SELECT count(*)::int AS n FROM editorial_entries')).rows[0].n, 0);
+});
+test('combined save rolls back draft, public snapshot and both logs when publication audit fails', async () => {
+  const original = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database, true);
+  const count = (await database.query('SELECT count(*)::int AS n FROM admin_action_logs')).rows[0].n;
+  await database.query(`CREATE FUNCTION fail_combined_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN IF NEW.action_type='published' THEN RAISE EXCEPTION 'test publication audit unavailable'; END IF; RETURN NEW; END $$;
+    CREATE TRIGGER fail_combined BEFORE INSERT ON admin_action_logs FOR EACH ROW EXECUTE FUNCTION fail_combined_audit();`);
+  try {
+    await assert.rejects(saveEditorial('cheese', readyCheese(), 'operator', undefined, database, true));
+    await assert.rejects(saveEditorial('cheese', { ...original.data, history: 'Must not leak' }, 'operator', original, database, true));
+    const current = (await listEditorial('cheese', 0, 10, database)).items;
+    assert.equal(current.length, 1);
+    assert.equal(current[0].revision, original.revision);
+    assert.equal(current[0].data.history, readyCheese().history);
+    assert.equal((await publicCheeseDetail(original.id, database)).history, readyCheese().history);
+    assert.equal((await database.query('SELECT count(*)::int AS n FROM admin_action_logs')).rows[0].n, count);
+  } finally { await database.query('DROP TRIGGER fail_combined ON admin_action_logs; DROP FUNCTION fail_combined_audit()'); }
+});
+test('concurrent combined saves accept only one editor revision and publish that exact snapshot', async () => {
+  const original = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database);
+  const results = await Promise.allSettled(['First history', 'Second history'].map(history =>
+    saveEditorial('cheese', { ...original.data, history }, 'operator', original, database, true)));
+  const fulfilled = results.filter(result => result.status === 'fulfilled');
+  assert.equal(fulfilled.length, 1);
+  const rejected = results.find(result => result.status === 'rejected');
+  assert.ok(rejected?.status === 'rejected' && expectStatus(409)(rejected.reason));
+  if (fulfilled[0].status === 'fulfilled')
+    assert.equal((await publicCheeseDetail(original.id, database)).history, fulfilled[0].value.data.history);
+});
 test('only explicitly published snapshots are public; edits stay private until republish and withdraw is immediate', async () => {
   let c = await saveEditorial('cheese', readyCheese(), 'PRIVATE_ACTOR', undefined, database);
   assert.equal((await publicEditorialList('cheese', publicFilters, database)).total, 0);

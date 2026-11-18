@@ -34,12 +34,12 @@ export function registerAdminEditorialRoutes(app: Express, guards: RequestHandle
     res.json(await listEditorial(query.kind, query.offset, query.limit, database, query.stage));
   }));
   app.post(base, ...guards, handle(async (req, res, operator) => {
-    const body = z.object({ kind, data: z.unknown() }).strict().parse(req.body);
-    res.status(201).json(await saveEditorial(body.kind, body.data, operator, undefined, database));
+    const body = z.object({ kind, data: z.unknown(), publish: z.boolean().default(false) }).strict().parse(req.body);
+    res.status(201).json(await saveEditorial(body.kind, body.data, operator, undefined, database, body.publish));
   }));
   app.patch(`${base}/:id`, ...guards, handle(async (req, res, operator) => {
-    const body = z.object({ kind, data: z.unknown(), revision }).strict().parse(req.body);
-    res.json(await saveEditorial(body.kind, body.data, operator, { id: idSchema.parse(req.params.id), revision: body.revision }, database));
+    const body = z.object({ kind, data: z.unknown(), revision, publish: z.boolean().default(false) }).strict().parse(req.body);
+    res.json(await saveEditorial(body.kind, body.data, operator, { id: idSchema.parse(req.params.id), revision: body.revision }, database, body.publish));
   }));
   app.post(`${base}/:id/moderate`, ...guards, handle(async (req, res, operator) => {
     const body = z.object({ revision, decision: z.enum(['approved', 'rejected']),
