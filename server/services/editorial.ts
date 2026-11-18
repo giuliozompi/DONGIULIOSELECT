@@ -2,6 +2,7 @@ import type pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { pool } from '../db';
 import { editorialSchemas, type EditorialKind, type EditorialEntry, type CheeseData, type VideoData, type PriceData } from '../../shared/editorial';
+import type { CheeseEditorialStage } from '../../shared/editorial-stages';
 
 export class EditorialError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -21,15 +22,23 @@ export function entry(row: Row): EditorialEntry {
       publishedAt: new Date(row.published_at).toISOString(), publishedRevision: row.published_revision!,
     } : null };
 }
-export async function listEditorial(kind: EditorialKind, offset: number, limit: number, database = pool) {
+export async function listEditorial(kind: EditorialKind, offset: number, limit: number, database = pool,
+  stage?: CheeseEditorialStage) {
+  if (stage && kind !== 'cheese') throw new EditorialError(400, 'Разделы доступны только для сырных статей');
   // One statement keeps count and page on the same snapshot.
   const { rows } = await database.query(`
-    SELECT (SELECT count(*)::int FROM editorial_entries WHERE kind=$1) AS total,
-      COALESCE(jsonb_agg(page ORDER BY page.updated_at DESC, page.id), '[]'::jsonb) AS items
-    FROM (SELECT e.*,p.published_at,p.published_revision FROM editorial_entries e
+    WITH eligible AS (
+      SELECT e.*,p.published_at,p.published_revision FROM editorial_entries e
       LEFT JOIN editorial_publications p ON p.entry_id=e.id
-      WHERE e.kind=$1 ORDER BY e.updated_at DESC,e.id LIMIT $2 OFFSET $3) page`,
-    [kind, limit, offset]);
+      WHERE e.kind=$1 AND ($4::text IS NULL
+        OR ($4='published' AND p.entry_id IS NOT NULL)
+        OR ($4='approved' AND p.entry_id IS NULL AND e.data->>'status'='ready')
+        OR ($4='drafts' AND p.entry_id IS NULL AND (e.data->>'status') IS DISTINCT FROM 'ready'))
+    )
+    SELECT (SELECT count(*)::int FROM eligible) AS total,
+      COALESCE(jsonb_agg(page ORDER BY page.updated_at DESC, page.id), '[]'::jsonb) AS items
+    FROM (SELECT * FROM eligible ORDER BY updated_at DESC,id LIMIT $2 OFFSET $3) page`,
+    [kind, limit, offset, stage ?? null]);
   return { total: rows[0].total, items: rows[0].items.map((r: Row) => entry({
     ...r, created_at: new Date(r.created_at), updated_at: new Date(r.updated_at),
   })) };

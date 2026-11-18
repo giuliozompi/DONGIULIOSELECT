@@ -1,10 +1,11 @@
 import { webApi } from '../../lib/webApi';
 import type { EditorialKind, EditorialData, EditorialEntry } from '@shared/editorial';
+import type { CheeseEditorialStage } from '@shared/editorial-stages';
 
 const base = '/admin/editorial';
 export const editorialApi = {
-  list: (kind: EditorialKind, offset = 0, limit = 50) =>
-    webApi.get<{ items: EditorialEntry[]; total: number }>(`${base}?kind=${kind}&offset=${offset}&limit=${limit}`),
+  list: (kind: EditorialKind, offset = 0, limit = 50, stage?: CheeseEditorialStage) =>
+    webApi.get<{ items: EditorialEntry[]; total: number }>(`${base}?kind=${kind}&offset=${offset}&limit=${limit}${stage ? `&stage=${stage}` : ''}`),
   create: (kind: EditorialKind, data: EditorialData) =>
     webApi.post<EditorialEntry>(base, { kind, data }),
   update: (record: EditorialEntry, data: EditorialData) =>

@@ -1,6 +1,7 @@
 import type { Express, Request, RequestHandler, Response } from 'express';
 import { z } from 'zod';
 import { editorialKinds } from '../shared/editorial';
+import { cheeseEditorialStages } from '../shared/editorial-stages';
 import { pool } from './db';
 import { EditorialError, listEditorial, saveEditorial, deleteEditorial, moderateEditorial } from './services/editorial';
 import { changePublication } from './services/editorial-publication';
@@ -28,8 +29,9 @@ export function registerAdminEditorialRoutes(app: Express, guards: RequestHandle
     };
   app.get(base, ...guards, handle(async (req, res) => {
     const query = z.object({ kind, offset: z.coerce.number().int().min(0).default(0),
-      limit: z.coerce.number().int().min(1).max(200).default(50) }).strict().parse(req.query);
-    res.json(await listEditorial(query.kind, query.offset, query.limit, database));
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+      stage: z.enum(cheeseEditorialStages).optional() }).strict().parse(req.query);
+    res.json(await listEditorial(query.kind, query.offset, query.limit, database, query.stage));
   }));
   app.post(base, ...guards, handle(async (req, res, operator) => {
     const body = z.object({ kind, data: z.unknown() }).strict().parse(req.body);

@@ -15,6 +15,8 @@ import { adminApi } from '../lib/adminApi';
 import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
 import EditorialPhotoUpload from './EditorialPhotoUpload';
 import CheeseGeoEditor from './CheeseGeoEditor';
+import CheeseEditorialMenu from './CheeseEditorialMenu';
+import { cheeseEditorialStage, type CheeseEditorialStage } from '@shared/editorial-stages';
 import MarketMonitor from './market/MarketMonitor';
 import {
   editorialSchemas, pricePerKg,
@@ -94,6 +96,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [page, setPage] = useState(0);
+  const [cheeseStage, setCheeseStage] = useState<CheeseEditorialStage>('drafts');
   const [dialog, setDialog] = useState(false);
   const [editing, setEditing] = useState<EditorialEntry | null>(null);
   const [form, setForm] = useState<FormData>(() => fresh(kind));
@@ -121,11 +124,19 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     return () => { workspaceMounted.current = false; };
   }, []);
 
-  const listKey = ['/web-api/admin/editorial', kind, page, PAGE_SIZE];
+  const stage = kind === 'cheese' ? cheeseStage : undefined;
+  const listKey = ['/web-api/admin/editorial', kind, page, PAGE_SIZE, stage ?? 'all'];
   const listQuery = useQuery({
     queryKey: listKey,
-    queryFn: () => editorialApi.list(kind, page * PAGE_SIZE, PAGE_SIZE),
+    queryFn: () => editorialApi.list(kind, page * PAGE_SIZE, PAGE_SIZE, stage),
   });
+  function selectCheeseStage(value: CheeseEditorialStage) {
+    setCheeseStage(value);
+    setPage(0);
+  }
+  function showSavedEntry(saved: EditorialEntry) {
+    if (saved.kind === 'cheese') selectCheeseStage(cheeseEditorialStage(saved));
+  }
   const linkedEntryId = new URLSearchParams(window.location.search).get('entry');
   const linkedPriceQuery = useQuery({
     queryKey: ['/web-api/admin/editorial', 'linked-price-entry', linkedEntryId],
@@ -153,6 +164,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   };
   function handleAiEntryApplied(saved?: EditorialEntry, options?: { openEditor: true }) {
     if (!workspaceMounted.current || currentKindRef.current !== 'cheese') return;
+    if (saved) showSavedEntry(saved);
     if (saved) {
       qc.setQueriesData({ queryKey: ['/web-api/admin/editorial'] }, (cached: any) => {
         const replaceCurrent = (items: EditorialEntry[]) => items.map(item =>
@@ -176,11 +188,11 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   }
   const createMutation = useMutation({
     mutationFn: (data: FormData) => editorialApi.create(kind, data),
-    onSuccess: async () => { await invalidateEditorial(); closeDialog(true); toast({ title: 'Запись создана' }); },
+    onSuccess: async saved => { showSavedEntry(saved); await invalidateEditorial(); closeDialog(true); toast({ title: 'Запись создана' }); },
   });
   const updateMutation = useMutation({
     mutationFn: ({ entry, data }: { entry: EditorialEntry; data: FormData }) => editorialApi.update(entry, data),
-    onSuccess: async () => { await invalidateEditorial(); closeDialog(true); toast({ title: kind === 'price' ? 'Цена обновлена и отправлена на повторную проверку' : 'Изменения сохранены' }); },
+    onSuccess: async saved => { showSavedEntry(saved); await invalidateEditorial(); closeDialog(true); toast({ title: kind === 'price' ? 'Цена обновлена и отправлена на повторную проверку' : 'Изменения сохранены' }); },
   });
   const deleteMutation = useMutation({
     mutationFn: (entry: EditorialEntry) => editorialApi.remove(entry),
@@ -196,11 +208,11 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   });
   const publishMutation = useMutation({
     mutationFn: (entry: EditorialEntry) => editorialApi.publish(entry),
-    onSuccess: async () => { await invalidateEditorial(); toast({ title: 'Материал опубликован' }); },
+    onSuccess: async saved => { showSavedEntry(saved); await invalidateEditorial(); toast({ title: 'Материал опубликован' }); },
   });
   const unpublishMutation = useMutation({
     mutationFn: (entry: EditorialEntry) => editorialApi.unpublish(entry),
-    onSuccess: async () => { await invalidateEditorial(); toast({ title: 'Материал снят с публикации' }); },
+    onSuccess: async saved => { showSavedEntry(saved); await invalidateEditorial(); toast({ title: 'Материал снят с публикации' }); },
   });
   const saving = requestBusy || createMutation.isPending || updateMutation.isPending || uploading || editorAiBusy;
   const entries = listQuery.data?.items || [];
@@ -528,12 +540,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
           </div>
         </div>
 
+        {kind === 'cheese' && <CheeseEditorialMenu value={cheeseStage} onChange={selectCheeseStage} />}
+
         <div className="mb-6 flex gap-3 border border-[#d9d7ca] bg-[#eae9df] p-4 text-sm leading-5 text-[#59645d]">
           <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-[#a05d41]" />
           <p><strong className="font-semibold text-[#36483f]">Работа редакции.</strong> AI-каталог и черновые предложения по указанным оператором источникам доступны в DEVELOPMENT. Это непроверенные подсказки: оператор сверяет факты и цитаты, а публикация всегда выполняется отдельным действием. {kind === 'cheese' ? 'Статус «Одобрена» означает редакционную готовность, но не публикацию.' : 'Статус «Готово» означает редакционную готовность, но не публикацию.'}</p>
         </div>
 
-        {kind === 'cheese' && <EditorialAiCatalog onImported={() => { void invalidateEditorial(); }} />}
+        {kind === 'cheese' && cheeseStage === 'drafts' && <EditorialAiCatalog onImported={() => { selectCheeseStage('drafts'); void invalidateEditorial(); }} />}
 
         {kind === 'price' && <div className="mb-6 rounded-md border-l-4 border-[#b66b48] bg-[#f0e6d9] px-4 py-3 text-sm text-[#684b3d]">Рыночные наблюдения никогда не изменяют цену или доступность товара в каталоге. Новая и отредактированная запись цены всегда возвращается в очередь проверки.</div>}
 
@@ -543,7 +557,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
         {listQuery.isLoading ? <div className="space-y-3" aria-label="Загрузка записей">{[0, 1, 2].map(i => <div key={i} className="h-24 animate-pulse rounded-lg bg-[#e5e3d9]" />)}</div> :
           listQuery.isError ? <Card className="border-[#dfdcd0] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center gap-3 py-12 text-center"><AlertCircle className="h-8 w-8 text-[#a05d41]" /><p className="font-medium">Не удалось загрузить записи</p><Button variant="outline" onClick={() => listQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Повторить</Button></CardContent></Card> :
-            entries.length === 0 ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center py-16 text-center"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e6ebe4] text-[#315647]"><FilePlus2 className="h-5 w-5" /></div><h2 className="font-serif text-xl">Пока нет записей</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">Создайте первую запись редакции. Публичные страницы доступны только в DEVELOPMENT-превью; публикация выполняется отдельно от {kind === 'cheese' ? 'статуса «Одобрена»' : 'статуса «Готово»'}.</p><Button className="mt-5 bg-[#315647] hover:bg-[#244537]" onClick={openCreate}>Создать запись</Button></CardContent></Card> :
+            entries.length === 0 ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center py-16 text-center"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e6ebe4] text-[#315647]"><FilePlus2 className="h-5 w-5" /></div><h2 className="font-serif text-xl">{kind === 'cheese' ? 'В этом разделе пока нет статей' : 'Пока нет записей'}</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">{kind === 'cheese' ? 'Выберите другой раздел или создайте новую статью. Одобрение и публикация выполняются отдельно.' : 'Создайте первую запись редакции. Публикация выполняется отдельно от статуса «Готово».'}</p><Button className="mt-5 bg-[#315647] hover:bg-[#244537]" onClick={openCreate}>Создать запись</Button></CardContent></Card> :
               <div className="space-y-3">
                 {entries.map(entry => {
                   const data = entry.data as FormData;

@@ -17,6 +17,7 @@ import { priceSubmissionSchema } from '../shared/price-submissions';
 import { changePublication } from '../server/services/editorial-publication';
 import { publicEditorialList, publicCheeseDetail, publicCheesePrices, publicVideoDetail } from '../server/services/public-editorial';
 import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg, type CheeseData, type PriceData } from '../shared/editorial';
+import { cheeseEditorialStage } from '../shared/editorial-stages';
 
 const exec = promisify(execFile);
 let directory: string;
@@ -234,6 +235,55 @@ function readyCheese(): CheeseData {
     photos: ['https://example.org/cheese.jpg'], history: 'History', characteristics: 'Characteristics',
     culinaryUses: 'Uses', sources: ['https://example.org/source'] });
 }
+test('cheese menu filters before pagination, includes review drafts and keeps live snapshots in published', async () => {
+  const drafts = [];
+  for (let i = 0; i < 21; i++)
+    drafts.push(await saveEditorial('cheese', { ...cheese(), title: `Draft ${i}` }, 'operator', undefined, database));
+  const pending = await saveEditorial('cheese', { ...cheese(), status: 'pending_review' }, 'operator', undefined, database);
+  const approved = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database);
+  let live = await publishedCheese();
+  const liveReady = await publishedCheese();
+  live = await saveEditorial('cheese', { ...cheese(), title: 'Unpublished next revision' }, 'operator', live, database);
+  const expected = {
+    drafts: [...drafts.map(d => d.id), pending.id],
+    approved: [approved.id],
+    published: [live.id, liveReady.id],
+  };
+  for (const stage of ['drafts', 'approved', 'published'] as const) {
+    const response = await api('GET', `?kind=cheese&stage=${stage}&limit=20`);
+    assert.equal(response.status, 200);
+    const first = await response.json();
+    const second = await (await api('GET', `?kind=cheese&stage=${stage}&limit=20&offset=20`)).json();
+    assert.equal(first.total, expected[stage].length);
+    assert.equal(second.total, expected[stage].length);
+    const all = [...first.items, ...second.items];
+    assert.deepEqual(all.map(item => item.id).sort(), expected[stage].sort());
+    assert.ok(all.every(item => cheeseEditorialStage(item) === stage));
+  }
+  assert.equal((await listEditorial('cheese', 0, 50, database)).total, 25, 'legacy relation selectors still receive every stage');
+  await changePublication(live.id, live.revision, false, 'operator', database);
+  assert.equal((await listEditorial('cheese', 0, 50, database, 'drafts')).total, 23);
+  await changePublication(liveReady.id, liveReady.revision, false, 'operator', database);
+  assert.equal((await listEditorial('cheese', 0, 50, database, 'approved')).total, 2);
+  assert.equal((await listEditorial('cheese', 0, 50, database, 'published')).total, 0);
+});
+test('cheese menu validates filters and does not weaken admin authorization or video/price lists', async () => {
+  for (const path of [
+    '?kind=cheese&stage=unknown', '?kind=cheese&stage[]=drafts',
+    '?kind=video&stage=drafts', '?kind=price&stage=approved',
+  ]) assert.equal((await api('GET', path)).status, 400);
+  for (const token of [null, 'test-client'])
+    assert.equal((await api('GET', '?kind=cheese&stage=published', undefined, token)).status, token ? 403 : 401);
+  await saveEditorial('video', video(), 'operator', undefined, database);
+  assert.equal((await (await api('GET', '?kind=video')).json()).total, 1);
+  const draft = await saveEditorial('cheese', cheese(), 'operator', undefined, database);
+  const approved = await saveEditorial('cheese', readyCheese(), 'operator', draft, database);
+  assert.equal((await listEditorial('cheese', 0, 20, database, 'drafts')).total, 0);
+  assert.equal((await listEditorial('cheese', 0, 20, database, 'approved')).items[0].id, approved.id);
+  await changePublication(approved.id, approved.revision, true, 'operator', database);
+  assert.equal((await listEditorial('cheese', 0, 20, database, 'approved')).total, 0);
+  assert.equal((await listEditorial('cheese', 0, 20, database, 'published')).items[0].id, approved.id);
+});
 test('only explicitly published snapshots are public; edits stay private until republish and withdraw is immediate', async () => {
   let c = await saveEditorial('cheese', readyCheese(), 'PRIVATE_ACTOR', undefined, database);
   assert.equal((await publicEditorialList('cheese', publicFilters, database)).total, 0);
