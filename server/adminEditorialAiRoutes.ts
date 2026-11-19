@@ -7,6 +7,8 @@ import { rankAiCatalog, importAiCatalog, applyAiDraft, importAiPhotos } from './
 import { suggestEditorialSources } from './services/editorial-ai-suggestions';
 import { researchRequestSchema } from '../shared/editorial-ai';
 import { lookupEditorialOrigin, applyEditorialOrigin, lookupMapPlace } from './services/editorial-origin';
+import { searchEditorialPhotos } from './services/editorial-photo-search';
+import { searchEditorialWeb } from './services/editorial-ai-research';
 
 export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHandler[],
   actor: (req: Request) => string | undefined, database = pool, deps: AiDependencies = defaultAiDependencies) {
@@ -33,6 +35,9 @@ export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHand
   }
   app.post(`${base}/sources`, ...guards, handle(async (req, res, operator) => {
     res.json(await suggestEditorialSources(req.body, operator, database, deps));
+  }));
+  app.post(`${base}/photo-search`, ...guards, handle(async (req, res, operator) => {
+    res.json(await searchEditorialPhotos(req.body, operator, database, { search: deps.search ?? searchEditorialWeb, source: deps.source }));
   }));
   app.post(`${base}/research`, ...guards, handle(async (req, res, operator) => {
     const body = researchRequestSchema.parse(req.body);

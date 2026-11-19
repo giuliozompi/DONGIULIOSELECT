@@ -10,8 +10,10 @@ export const countryName = (code: string) => names.of(code) || code;
 const countryCode = z.string().refine(value => codes.includes(value), 'Выберите страну из списка');
 const text = (max: number) => z.string().trim().max(max);
 export const editorialSourceUrl = z.string().trim().max(2000).url().refine(value => {
-  const url = new URL(value);
-  return url.protocol === 'https:' && !url.username && !url.password && (!url.port || url.port === '443');
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && (!url.port || url.port === '443');
+  } catch { return false; }
 }, 'Нужна публичная ссылка https без пароля и нестандартного порта');
 export const catalogRequestSchema = z.object({
   requestId: z.string().uuid(),
@@ -136,6 +138,17 @@ export const researchPhotoSchema = z.object({
   label: text(300), licenseUrl: editorialSourceUrl.optional(),
 }).strict();
 export type ResearchPhoto = z.infer<typeof researchPhotoSchema>;
+export const photoSearchRequestSchema = z.object({
+  entry: z.object({ id: z.string().uuid(), revision: z.number().int().positive() }).strict().optional(),
+  title: text(200),
+  nameOriginal: text(200),
+  country: text(100),
+  region: text(editorialRegionMaxLength),
+  excludedUrls: z.array(editorialSourceUrl).max(48),
+  attempt: z.number().int().min(0).max(3),
+}).strict().refine(value => value.title || value.nameOriginal, 'Укажите название сыра.');
+export type PhotoSearchRequest = z.infer<typeof photoSearchRequestSchema>;
+export type PhotoSearchResult = { photos: ResearchPhoto[]; unavailablePages: number };
 export type ResearchReport = {
   provider: 'brave'; queries: string[];
   failures: { url: string; reason: string }[];

@@ -70,7 +70,7 @@ export async function transaction<T>(database: pg.Pool, work: (client: pg.PoolCl
     throw error;
   } finally { client.release(); }
 }
-export async function audit(client: pg.PoolClient, actor: string, action: string, id: string, oldData: unknown, newData: unknown) {
+export async function audit(client: pg.PoolClient, actor: string, action: string, id: string | null, oldData: unknown, newData: unknown) {
   await client.query(`INSERT INTO admin_action_logs
     (admin_user_id,action_type,entity_type,entity_id,action_data)
     VALUES ($1,$2,'editorial',$3,$4::jsonb)`,

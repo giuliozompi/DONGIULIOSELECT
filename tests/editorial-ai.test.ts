@@ -21,10 +21,12 @@ import { publicEditorialList } from '../server/services/public-editorial';
 import { cheeseDataSchema, editorialRegionMaxLength } from '../shared/editorial';
 import type { CatalogResult, DraftResult } from '../shared/editorial-ai';
 import { suggestEditorialSources, validateSourceSuggestions } from '../server/services/editorial-ai-suggestions';
+import type { ResearchDependencies } from '../server/services/editorial-ai-research';
 
 const exec = promisify(execFile);
 let dir: string, db: pg.Pool, server: Server, base: string;
 let apiModelCalls = 0;
+let photoSearchFixture: ResearchDependencies | undefined;
 const quote = 'Parmigiano Reggiano is a hard cheese traditionally made in Emilia-Romagna. Пармиджано Реджано — итальянский сыр.';
 const evidence = { url: 'https://example.org/cheese', finalUrl: 'https://example.org/cheese',
   title: 'Cheese source', text: quote.repeat(4), sha256: 'evidence-hash', retrievedAt: new Date().toISOString(), characters: 300, truncated: false };
@@ -62,7 +64,15 @@ before(async () => {
   registerAdminEditorialAiRoutes(app, [
     (req, res, next) => req.headers.authorization ? next() : void res.sendStatus(401),
     (req, res, next) => req.headers.authorization === 'admin' ? next() : void res.sendStatus(403),
-  ], () => 'operator', db, { ...deps, model: async (...args) => { apiModelCalls++; return deps.model(...args); } });
+  ], () => 'operator', db, {
+    ...deps,
+    model: async (...args) => { apiModelCalls++; return deps.model(...args); },
+    search: async query => {
+      assert.ok(photoSearchFixture, 'no external search in tests');
+      return photoSearchFixture.search(query);
+    },
+    source: async url => photoSearchFixture ? photoSearchFixture.source(url) : deps.source(url),
+  });
   server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as any).port}/web-api/admin/editorial-ai`;
@@ -75,6 +85,7 @@ after(async () => {
 beforeEach(async () => {
   await db.query('TRUNCATE editorial_ai_imports,editorial_ai_runs,editorial_publications,editorial_entries,admin_action_logs');
   apiModelCalls = 0;
+  photoSearchFixture = undefined;
 });
 async function readyCatalog(custom = deps, params = catalogParams()) {
   const reserved = await reserveAiRun('catalog', params, 'operator', db);
@@ -97,6 +108,67 @@ async function readyDraft(c: Awaited<ReturnType<typeof cheese>>, custom = deps) 
   await executeAiRun(run.id, db, custom);
   return getAiRun(run.id, db);
 }
+test('photo search is admin-only, bounded and excludes existing and previously suggested images without changing the article', async () => {
+  const saved = await cheese(true);
+  const run = await readyDraft(saved);
+  const oldUrl = 'https://media.example.org/already-suggested.jpg';
+  const candidate = 'https://media.example.org/new.jpg';
+  await db.query('UPDATE editorial_ai_runs SET result=$2 WHERE id=$1', [run.id, JSON.stringify({
+    ...run.result, research: { photos: [{ id: 'old', imageUrl: oldUrl, sourceUrl: evidence.url, label: 'Old' }] },
+  })]);
+  const searched: string[] = [], fetched: string[] = [];
+  const other = 'https://example.org/unrelated';
+  const unavailable = 'https://example.org/unavailable';
+  photoSearchFixture = {
+    search: async query => {
+      searched.push(query);
+      return [evidence.url, other, 'https://127.0.0.1/blocked', unavailable].map(url => ({ url, title: '', description: '' }));
+    },
+    source: async url => {
+      fetched.push(url);
+      if (url === unavailable) throw new Error('simulated inaccessible source');
+      return url === other ? { ...evidence, url, finalUrl: url, text: 'Gorgonzola is a blue cheese.', images: [{ url: 'https://media.example.org/unrelated.jpg', alt: '' }] }
+        : { ...evidence, images: [
+          { url: 'https://example.org/photo.jpg?utm_source=x', alt: 'Saved photo' },
+          { url: oldUrl, alt: 'Old proposal' },
+          { url: 'https://media.example.org/shown.jpg', alt: 'Recently shown' },
+          { url: candidate, alt: 'Parmigiano Reggiano', licenseUrl: 'https://example.org/license' },
+          { url: `${candidate}#duplicate`, alt: 'Same photo' },
+        ] };
+    },
+  };
+  const body = { entry: { id: saved.id, revision: saved.revision }, title: 'Пармиджано Реджано',
+    nameOriginal: 'Parmigiano Reggiano', country: 'Италия', region: 'Эмилия-Романья',
+    excludedUrls: ['https://media.example.org/shown.jpg'], attempt: 0 };
+  const search = (input: unknown, token?: string) => fetch(`${base}/photo-search`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: token } : {}) },
+    body: JSON.stringify(input),
+  });
+  assert.equal((await search(body)).status, 401);
+  assert.equal((await search(body, 'customer')).status, 403);
+  assert.equal((await search({ ...body, excludedUrls: ['/objects/photo.png'] }, 'admin')).status, 400);
+  assert.equal((await search({ ...body, entry: { ...body.entry, revision: saved.revision - 1 } }, 'admin')).status, 409);
+  assert.equal(searched.length, 0);
+  const response = await search(body, 'admin');
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.deepEqual(result.photos.map((photo: { imageUrl: string }) => photo.imageUrl), [candidate]);
+  assert.equal(result.photos[0].sourceUrl, evidence.url);
+  assert.equal(result.photos[0].licenseUrl, 'https://example.org/license');
+  assert.equal(result.unavailablePages, 1);
+  assert.equal((await search({ ...body, attempt: 1 }, 'admin')).status, 429);
+  assert.equal(searched.length, 1);
+  assert.match(searched[0], /^Parmigiano Reggiano/);
+  assert.deepEqual(fetched.sort(), [evidence.url, other, unavailable].sort());
+  await db.query("DELETE FROM admin_action_logs WHERE action_type='photo_search_requested'");
+  const fresh = await search({ ...body, entry: undefined, attempt: 1, excludedUrls: [...body.excludedUrls, candidate, oldUrl, 'https://example.org/photo.jpg'] }, 'admin');
+  assert.equal(fresh.status, 200);
+  assert.deepEqual((await fresh.json()).photos, []);
+  assert.notEqual(searched[0], searched[1]);
+  assert.equal(apiModelCalls, 0);
+  const state = await db.query('SELECT e.data,e.revision,p.data AS published FROM editorial_entries e JOIN editorial_publications p ON p.entry_id=e.id WHERE e.id=$1', [saved.id]);
+  assert.deepEqual(state.rows[0], { data: saved.data, revision: saved.revision, published: saved.data });
+});
 test('long production zones survive generation, explicit application and article persistence without truncation', async () => {
   const c = await cheese();
   const region = 'Эмилия-Романья, традиционная зона производства и муниципалитеты. '.repeat(8).trim();

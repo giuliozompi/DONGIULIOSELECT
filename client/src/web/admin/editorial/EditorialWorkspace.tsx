@@ -14,6 +14,7 @@ import { editorialAiApi } from '../lib/editorialAiApi';
 import { adminApi } from '../lib/adminApi';
 import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
 import EditorialPhotoUpload from './EditorialPhotoUpload';
+import EditorialPhotoSearch from './EditorialPhotoSearch';
 import CheeseGeoEditor from './CheeseGeoEditor';
 import CheeseEditorialMenu from './CheeseEditorialMenu';
 import CheeseBatchAction, { type CheeseBatchSelection } from './CheeseBatchAction';
@@ -23,7 +24,7 @@ import {
   cheeseDataSchema, cheeseEditorialBatchLimit, editorialSchemas, pricePerKg,
   type CheeseData, type CheeseEditorialBatchAction, type EditorialEntry, type EditorialKind, type PriceData, type VideoData,
 } from '@shared/editorial';
-import type { AiField, DraftResult, EditorialAiRun } from '@shared/editorial-ai';
+import type { AiField, DraftResult, EditorialAiRun, ResearchPhoto } from '@shared/editorial-ai';
 
 const PAGE_SIZE = cheeseEditorialBatchLimit;
 type FormData = any;
@@ -568,6 +569,23 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
       .filter((photo: string) => photo.trim());
     setDraftPhotos([...existing, ...paths], sessionKey);
   }
+  function appendSearchedPhotos(selected: ResearchPhoto[], sessionKey: number) {
+    if (!editorDialogRef.current || editorSessionRef.current !== sessionKey || requestLock.current || photoUploadLock.current || editorAiBusyRef.current)
+      return 'Сейчас нельзя изменить фотографии. Дождитесь завершения операции.';
+    const lines = (value: unknown): string[] =>
+      (Array.isArray(value) ? value : String(value ?? '').split(/\r?\n/)).map(line => String(line).trim()).filter(Boolean);
+    const existing = lines(formRef.current.photos);
+    const added = selected.filter(photo => !existing.includes(photo.imageUrl));
+    const photos = Array.from(new Set([...existing, ...added.map(photo => photo.imageUrl)]));
+    const sources = Array.from(new Set([...lines(formRef.current.sources), ...added.map(photo => photo.sourceUrl)]));
+    if (!added.length) return 'Выбранные фотографии уже есть в статье.';
+    if (photos.length > 12) return 'В статье может быть не более 12 фотографий.';
+    if (sources.length > 30) return 'Не удалось добавить фото: в статье может быть не более 30 источников.';
+    const next = { ...formRef.current, photos, sources };
+    formRef.current = next;
+    setForm(next);
+    setRawLines(current => ({ ...current, photos: photos.join('\n'), sources: sources.join('\n') }));
+  }
   function setPhotoUploading(busy: boolean, sessionKey: number) {
     if (!editorDialogRef.current || editorSessionRef.current !== sessionKey) return false;
     if (busy) {
@@ -610,6 +628,12 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const priceForm = form as PriceData;
   const cheesePhotos = (Array.isArray(cheeseForm.photos) ? cheeseForm.photos : String(cheeseForm.photos ?? '').split(/\r?\n/)).filter(value => value.trim());
   const aiPhotos = aiProposal?.draft.research?.photos || [];
+  const photoIdentity = {
+    ...(editing ? { entry: { id: editing.id, revision: editing.revision } } : {}),
+    title: cheeseForm.title ?? '', nameOriginal: cheeseForm.nameOriginal ?? '',
+    country: cheeseForm.country ?? '', region: cheeseForm.region ?? '',
+  };
+  const photoSession = editorSessionRef.current;
 
   return (
     <div className="min-h-full bg-[#f5f3ed] text-[#29352f]">
@@ -786,6 +810,9 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                     ? <p className="text-sm text-[#79583f]">Фотографий пока нет. Добавьте файл, вставьте изображение из буфера или укажите URL ниже. Для статуса «Одобрена» нужна хотя бы одна фотография.</p>
                     : <p className="text-sm text-[#526158]">Указано фотографий: {cheesePhotos.length}. Удаление убирает фото только из текущего черновика.</p>}
                   <p className="text-xs text-[#718075]">Добавляйте только изображения, на использование которых у редакции есть права.</p>
+                  <EditorialPhotoSearch key={`${photoSession}:${JSON.stringify(photoIdentity)}`} identity={photoIdentity}
+                    photos={cheesePhotos} priorSuggestions={aiPhotos} disabled={saving}
+                    onAdd={selected => appendSearchedPhotos(selected, photoSession)} />
                   <EditorialPhotoUpload
                     key={editorSessionRef.current}
                     photos={cheesePhotos}

@@ -1,6 +1,6 @@
 import { webApi } from '../../lib/webApi';
 import type { CheeseData, EditorialEntry } from '@shared/editorial';
-import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField, SourceSuggestions, ResearchRequest, OriginLookup, MapPlaceLookup } from '@shared/editorial-ai';
+import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField, SourceSuggestions, ResearchRequest, OriginLookup, MapPlaceLookup, PhotoSearchRequest, PhotoSearchResult } from '@shared/editorial-ai';
 export type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, CatalogResult, DraftResult, CatalogItem, AiField } from '@shared/editorial-ai';
 const base = '/admin/editorial-ai';
 export const editorialAiApi = {
@@ -14,6 +14,7 @@ export const editorialAiApi = {
     webApi.post<EditorialEntry>(`${base}/origin-geocoding/apply`, { entryId: entry.id, revision: entry.revision, lookupId, candidateId }),
   suggestSources: (entry: EditorialEntry) =>
     webApi.post<SourceSuggestions>(`${base}/sources`, { entryId: entry.id, revision: entry.revision }),
+  searchPhotos: (body: PhotoSearchRequest) => webApi.post<PhotoSearchResult>(`${base}/photo-search`, body),
   run: (id: string) => webApi.get<EditorialAiRun>(`${base}/runs/${id}`),
   history: (kind: 'catalog' | 'draft', page = 1, entryId?: string) =>
     webApi.get<{ items: EditorialAiRun[]; total: number; page: number; limit: number }>(`${base}/runs?kind=${kind}&page=${page}${entryId ? `&entryId=${encodeURIComponent(entryId)}` : ''}`),

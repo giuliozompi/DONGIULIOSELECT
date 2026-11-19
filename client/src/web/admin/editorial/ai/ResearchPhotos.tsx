@@ -4,7 +4,7 @@ import type { ResearchPhoto } from '@shared/editorial-ai';
 import { Button } from '@/components/ui/button';
 
 export default function ResearchPhotos({
-  photos, selectedIds, rightsConfirmed, disabled, onToggle, onRightsConfirmedChange, canImport, onImport,
+  photos, selectedIds, rightsConfirmed, disabled, onToggle, onRightsConfirmedChange, canImport, onImport, draftOnly = false,
 }: {
   photos: ResearchPhoto[];
   selectedIds: string[];
@@ -14,13 +14,15 @@ export default function ResearchPhotos({
   onRightsConfirmedChange: (checked: boolean) => void;
   canImport: boolean;
   onImport: () => void;
+  draftOnly?: boolean;
 }) {
   const [previewIds, setPreviewIds] = useState<string[]>([]);
   const [imageErrors, setImageErrors] = useState<string[]>([]);
   if (!photos.length) return null;
   const selectedPhotos = photos.filter(photo => selectedIds.includes(photo.id));
+  const testId = draftOnly ? 'alternative-photo' : 'ai-photo';
 
-  return <section data-testid="ai-research-photos" className="mt-4 rounded border border-[#d8d9cc] bg-[#f1f0e8] p-3" aria-label="Кандидаты фотографий">
+  return <section data-testid={draftOnly ? 'alternative-photo-results' : 'ai-research-photos'} className="mt-4 rounded border border-[#d8d9cc] bg-[#f1f0e8] p-3" aria-label={draftOnly ? 'Альтернативные фотографии' : 'Кандидаты фотографий'}>
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div>
         <p className="flex items-center gap-1.5 text-sm font-semibold text-[#43574a]"><ImageIcon className="h-4 w-4" />Фотографии с найденных страниц</p>
@@ -42,7 +44,7 @@ export default function ResearchPhotos({
               disabled={disabled || (!selected && selectedIds.length >= 3)}
               onChange={() => onToggle(photo.id)}
               aria-label={`Выбрать фотографию: ${photo.label || `кандидат ${index + 1}`}`}
-              data-testid={`ai-photo-select-${photo.id}`}
+              data-testid={`${testId}-select-${photo.id}`}
             />
             <div className="min-w-0">
               <p className="break-words text-sm font-medium text-[#43574a]">{photo.label || `Кандидат ${index + 1}`}</p>
@@ -55,7 +57,7 @@ export default function ResearchPhotos({
           </div>
           <button
             type="button"
-            data-testid={`ai-photo-preview-${photo.id}`}
+            data-testid={`${testId}-preview-${photo.id}`}
             className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded border border-[#bcc7b9] bg-[#f7f6ef] px-3 text-xs font-medium text-[#43574a] hover:bg-[#edf0e8] disabled:opacity-60"
             onClick={() => {
               setImageErrors(current => current.filter(id => id !== photo.id));
@@ -81,7 +83,7 @@ export default function ResearchPhotos({
     {selectedPhotos.length > 0 && <div className="mt-3 rounded border border-[#dfc9b5] bg-[#f5ece2] p-3">
       <label className="flex cursor-pointer items-start gap-2 text-xs leading-5 text-[#75533e]">
         <input
-          data-testid="ai-photo-rights-confirm"
+          data-testid={`${testId}-rights-confirm`}
           type="checkbox"
           className="mt-1 h-4 w-4 accent-[#315647]"
           checked={rightsConfirmed}
@@ -92,15 +94,17 @@ export default function ResearchPhotos({
       </label>
     </div>}
     <div className="mt-3 flex flex-col gap-2 border-t border-[#d8d9cc] pt-3 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs leading-5 text-[#78837a]">Импорт фотографий сохраняет только выбранные изображения в текущую версию статьи. Текст предложения и его статус не меняются.</p>
+      <p className="text-xs leading-5 text-[#78837a]">{draftOnly
+        ? 'Выбранные фотографии и их источники появятся в форме. Чтобы сохранить их в статье, нажмите «Сохранить изменения».'
+        : 'Импорт фотографий сохраняет только выбранные изображения в текущую версию статьи. Текст предложения и его статус не меняются.'}</p>
       <Button
-        data-testid="ai-photo-import"
+        data-testid={`${testId}-import`}
         type="button"
         size="sm"
         className="shrink-0 bg-[#315647] hover:bg-[#244537]"
         disabled={!canImport || disabled || selectedIds.length < 1 || selectedIds.length > 3 || !rightsConfirmed}
         onClick={onImport}
-      ><Check className="mr-1.5 h-4 w-4" />Импортировать фото отдельно</Button>
+      ><Check className="mr-1.5 h-4 w-4" />{draftOnly ? 'Добавить выбранные фото' : 'Импортировать фото отдельно'}</Button>
     </div>
   </section>;
 }

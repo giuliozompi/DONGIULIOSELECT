@@ -22,6 +22,9 @@ test('editorial images support paste, drop, file choice, validation and explicit
   };
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l4sAAAAASUVORK5CYII=';
   let uploadCount = 0, holdUpload = false, heldUpload, failNext = false;
+  const searched = [];
+  const imageUrl = 'https://media.example.org/objects/alternative.png';
+  const sourceUrl = 'https://media.example.org/castelmagno';
   const saves = [], unexpected = [], errors = [], requests = [];
   await page.send('Network.enable');
   await page.send('Network.setBypassServiceWorker', { bypass: true });
@@ -51,6 +54,10 @@ test('editorial images support paste, drop, file choice, validation and explicit
     else if (path === '/web-api/admin/editorial')
       body = url.searchParams.get('kind') === 'cheese' ? { items: [entry], total: 1 } : { items: [], total: 0 };
     else if (path === '/web-api/admin/editorial-ai/history') body = { items: [], total: 0 };
+    else if (path === '/web-api/admin/editorial-ai/photo-search') {
+      searched.push(JSON.parse(event.request.postData));
+      body = { unavailablePages: 0, photos: searched.length === 1 ? [{ id: 'candidate', imageUrl, sourceUrl, label: 'Castelmagno' }] : [] };
+    }
     else if (path === '/web-api/admin/uploads/image') {
       uploadCount++;
       if (holdUpload) await new Promise(resolve => { heldUpload = resolve; });
@@ -71,6 +78,15 @@ test('editorial images support paste, drop, file choice, validation and explicit
   const zone = '[data-testid="editorial-photo-dropzone"]';
   const dialog = '[data-testid="editorial-entry-editor"]';
   const photos = () => page.evaluate(`document.querySelector('#ed-photos').value.split('\\n').filter(Boolean)`);
+  const clickPhotoControl = async selector => {
+    const query = JSON.stringify(selector);
+    await page.wait(`!!document.querySelector(${query}) && !document.querySelector(${query}).matches(':disabled')`);
+    await page.evaluate(`(async () => {
+      document.querySelector(${query}).scrollIntoView({block: 'center', behavior: 'instant'});
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    })()`);
+    await page.click(selector);
+  };
   const button = async text => {
     await page.evaluate(`(() => {
       const b=[...document.querySelectorAll('${dialog} button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});
@@ -132,6 +148,31 @@ test('editorial images support paste, drop, file choice, validation and explicit
       const e=new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true});
       document.querySelector('#ed-photos').dispatchEvent(e);return e.defaultPrevented;
     })()`), false);
+    // A separate search returns proposals; nothing is added before operator selection and rights confirmation.
+    const search = '[data-testid="search-alternative-photos"]';
+    await clickPhotoControl(search);
+    await page.wait(`!!document.querySelector('[data-testid="alternative-photo-results"], [data-testid="editorial-photo-search"] [role="alert"]')`, 10000).catch(async failure => {
+      console.error({ searched: searched.length, searchPanel: await page.evaluate(`document.querySelector('[data-testid="editorial-photo-search"]')?.innerText`) });
+      throw failure;
+    });
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="editorial-photo-search"] [role="alert"]')?.innerText`), undefined);
+    assert.deepEqual(searched[0].entry, { id, revision: 1 });
+    assert.equal(searched[0].nameOriginal, 'Castelmagno');
+    assert.equal((await photos()).includes(imageUrl), false);
+    assert.equal(requests.some(row => row.path === '/objects/alternative.png'), false);
+    await clickPhotoControl('[data-testid="alternative-photo-preview-candidate"]');
+    await page.wait(`document.querySelector('[data-testid="alternative-photo-results"] img')?.naturalWidth > 0`);
+    await clickPhotoControl('[data-testid="alternative-photo-select-candidate"]');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="alternative-photo-import"]').disabled`), true);
+    await clickPhotoControl('[data-testid="alternative-photo-rights-confirm"]');
+    await clickPhotoControl('[data-testid="alternative-photo-import"]');
+    await page.wait(`document.querySelector('#ed-photos').value.includes('${imageUrl}')`);
+    assert.equal(saves.length, 0);
+    assert.equal(await page.evaluate(`document.querySelector('#ed-sources').value`), sourceUrl);
+    await clickPhotoControl(search);
+    await page.wait(`document.querySelector('[data-testid="editorial-photo-search"]').textContent.includes('Новых фотографий не найдено')`);
+    assert.equal(searched[1].attempt, 1);
+    assert.ok(searched[1].excludedUrls.includes(imageUrl));
     const twelve = Array.from({ length: 12 }, (_, i) => `/objects/limit-${i}.png`);
     const beforeCapacityTest = await photos();
     await page.fill('#ed-photos', twelve.join('\n'));
@@ -154,6 +195,7 @@ test('editorial images support paste, drop, file choice, validation and explicit
     });
     assert.equal(saves.length, 1);
     assert.deepEqual(saves[0].data.photos, beforeCapacityTest);
+    assert.deepEqual(saves[0].data.sources, [sourceUrl]);
     assert.equal(saves[0].data.status, 'draft');
     assert.deepEqual(unexpected, []);
     assert.deepEqual(errors, []);

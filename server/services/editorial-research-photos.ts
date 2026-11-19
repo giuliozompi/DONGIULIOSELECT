@@ -46,16 +46,28 @@ export function sourcePageImages(html: string, finalUrl: string): SourceImage[] 
   }
   return images;
 }
-export function researchPhotos(sources: SourceEvidence[]): ResearchPhoto[] {
-  const candidates: ResearchPhoto[] = [], seen = new Set<string>();
+export function photoReferenceKey(value: string) {
+  const url = new URL(value);
+  url.hash = '';
+  for (const key of Array.from(url.searchParams.keys()))
+    if (/^(?:utm_.*|fbclid|gclid)$/i.test(key)) url.searchParams.delete(key);
+  url.searchParams.sort();
+  return url.href;
+}
+export function researchPhotos(sources: SourceEvidence[], excludedUrls: string[] = []): ResearchPhoto[] {
+  const candidates: ResearchPhoto[] = [], seen = new Set(excludedUrls.flatMap(url => {
+    try { return [photoReferenceKey(url)]; } catch { return []; }
+  }));
   // Round-robin across sources rather than three copies from the same page.
   for (let index = 0; index < 8 && candidates.length < 3; index++) for (const source of sources) {
     const image = source.images?.[index];
-    if (!image || seen.has(image.url)) continue;
+    if (!image) continue;
     try {
       const imageUrl = validateSourceUrl(image.url).href, sourceUrl = validateSourceUrl(source.finalUrl).href;
+      const key = photoReferenceKey(imageUrl);
+      if (seen.has(key)) continue;
       const licenseUrl = image.licenseUrl ? validateSourceUrl(image.licenseUrl).href : undefined;
-      seen.add(imageUrl);
+      seen.add(key);
       candidates.push({
         id: createHash('sha256').update(`${sourceUrl}\n${imageUrl}`).digest('hex').slice(0, 24),
         imageUrl, sourceUrl, label: image.alt || source.title.slice(0, 300), ...(licenseUrl ? { licenseUrl } : {}),
