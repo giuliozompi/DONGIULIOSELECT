@@ -16,15 +16,16 @@ import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
 import EditorialPhotoUpload from './EditorialPhotoUpload';
 import CheeseGeoEditor from './CheeseGeoEditor';
 import CheeseEditorialMenu from './CheeseEditorialMenu';
+import CheeseBatchPublish, { type CheesePublicationSelection } from './CheeseBatchPublish';
 import { cheeseEditorialStage, type CheeseEditorialStage } from '@shared/editorial-stages';
 import MarketMonitor from './market/MarketMonitor';
 import {
-  editorialSchemas, pricePerKg,
+  cheesePublicationBatchLimit, editorialSchemas, pricePerKg,
   type CheeseData, type EditorialEntry, type EditorialKind, type PriceData, type VideoData,
 } from '@shared/editorial';
 import type { AiField, DraftResult, EditorialAiRun } from '@shared/editorial-ai';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = cheesePublicationBatchLimit;
 type FormData = any;
 const nativeSelectClass = 'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -97,6 +98,8 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const { toast } = useToast();
   const [page, setPage] = useState(0);
   const [cheeseStage, setCheeseStage] = useState<CheeseEditorialStage>('drafts');
+  const [batchSelection, setBatchSelection] = useState<Record<string, number>>({});
+  const [batchReview, setBatchReview] = useState<CheesePublicationSelection[] | null>(null);
   const [dialog, setDialog] = useState(false);
   const [editing, setEditing] = useState<EditorialEntry | null>(null);
   const [form, setForm] = useState<FormData>(() => fresh(kind));
@@ -132,6 +135,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     queryFn: () => editorialApi.list(kind, page * PAGE_SIZE, PAGE_SIZE, stage),
   });
   function selectCheeseStage(value: CheeseEditorialStage) {
+    setBatchSelection({});
     setCheeseStage(value);
     setPage(0);
   }
@@ -215,6 +219,15 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     mutationFn: (entry: EditorialEntry) => editorialApi.publish(entry),
     onSuccess: async saved => { showSavedEntry(saved, true); await invalidateEditorial(); toast({ title: 'Материал опубликован' }); },
   });
+  const batchPublication = useMutation({
+    mutationFn: editorialApi.publishApprovedCheeses,
+    onSuccess: async ({ publishedCount }) => {
+      setBatchReview(null);
+      selectCheeseStage('drafts');
+      await invalidateEditorial();
+      toast({ title: `Опубликовано статей: ${publishedCount}` });
+    },
+  });
   const unpublishMutation = useMutation({
     mutationFn: (entry: EditorialEntry) => editorialApi.unpublish(entry),
     onSuccess: async saved => { showSavedEntry(saved); await invalidateEditorial(); toast({ title: 'Материал снят с публикации' }); },
@@ -222,10 +235,19 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const saving = requestBusy || createMutation.isPending || updateMutation.isPending || uploading || editorAiBusy;
   const entries = listQuery.data?.items || [];
   const total = listQuery.data?.total || 0;
+  const eligibleCheeses = stage === 'approved' && !listQuery.isError
+    ? entries.filter(item => cheeseEditorialStage(item) === 'approved') : [];
+  const selectedCheeses = eligibleCheeses.filter(item => batchSelection[item.id] === item.revision);
+  const batchErrorStatus = (batchPublication.error as { status?: number } | null)?.status;
+  const batchStale = batchErrorStatus === 404 || batchErrorStatus === 409 ||
+    Boolean(batchReview?.some(item => !selectedCheeses.some(selected => selected.id === item.id && selected.revision === item.revision)));
   useEffect(() => {
-    if (stage !== 'drafts' || !listQuery.isSuccess || listQuery.isFetching) return;
+    if ((stage !== 'drafts' && stage !== 'approved') || !listQuery.isSuccess || listQuery.isFetching) return;
     const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
-    if (page > lastPage) setPage(lastPage);
+    if (page > lastPage) {
+      setBatchSelection({});
+      setPage(lastPage);
+    }
   }, [stage, page, total, listQuery.isSuccess, listQuery.isFetching]);
   const cheeses = cheeseQuery.data || [];
   const openedLinkedEntry = useRef(false);
@@ -481,6 +503,29 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     } catch { /* mutation error is shown in the workspace alert */ }
     finally { requestLock.current = false; setRequestBusy(false); }
   }
+  function openBatchReview() {
+    if (requestLock.current || !selectedCheeses.length) return;
+    batchPublication.reset();
+    setBatchReview(selectedCheeses.map(({ id, revision, data }) => ({ id, revision, title: (data as CheeseData).title })));
+  }
+  async function publishBatch() {
+    if (requestLock.current || !batchReview || batchStale) return;
+    requestLock.current = true;
+    setRequestBusy(true);
+    try { await batchPublication.mutateAsync(batchReview.map(({ id, revision }) => ({ id, revision }))); }
+    catch { /* Keep the confirmation open and show the server error. */ }
+    finally { requestLock.current = false; setRequestBusy(false); }
+  }
+  function refreshBatchList() {
+    if (requestLock.current) return;
+    setBatchReview(null);
+    setBatchSelection({});
+    void listQuery.refetch();
+  }
+  function navigatePage(delta: number) {
+    setBatchSelection({});
+    setPage(p => Math.max(0, p + delta));
+  }
   function updateListError(error: unknown) {
     toast({ title: 'Ошибка', description: errorText(error), variant: 'destructive' });
   }
@@ -578,6 +623,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
         {busyError && <div role="alert" className="mb-4 flex items-start gap-2 rounded-md border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{errorText(busyError)} {isRevisionConflict(busyError) && <button className="underline underline-offset-2" onClick={() => listQuery.refetch()}>Обновить список и открыть заново</button>}</span></div>}
 
+        {stage === 'approved' && (eligibleCheeses.length > 0 || batchReview) &&
+          <CheeseBatchPublish count={selectedCheeses.length} eligibleCount={eligibleCheeses.length} busy={requestBusy}
+            review={batchReview} error={batchPublication.error ? errorText(batchPublication.error) : undefined} stale={batchStale}
+            onSelectPage={() => setBatchSelection(Object.fromEntries(eligibleCheeses.map(item => [item.id, item.revision])))}
+            onClear={() => setBatchSelection({})} onReview={openBatchReview}
+            onClose={() => { if (!requestLock.current) setBatchReview(null); }}
+            onConfirm={() => { void publishBatch(); }} onRefresh={refreshBatchList} />}
+
         {listQuery.isLoading ? <div className="space-y-3" aria-label="Загрузка записей">{[0, 1, 2].map(i => <div key={i} className="h-24 animate-pulse rounded-lg bg-[#e5e3d9]" />)}</div> :
           listQuery.isError ? <Card className="border-[#dfdcd0] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center gap-3 py-12 text-center"><AlertCircle className="h-8 w-8 text-[#a05d41]" /><p className="font-medium">Не удалось загрузить записи</p><Button variant="outline" onClick={() => listQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Повторить</Button></CardContent></Card> :
             entries.length === 0 ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center py-16 text-center"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e6ebe4] text-[#315647]"><FilePlus2 className="h-5 w-5" /></div><h2 className="font-serif text-xl">{kind === 'cheese' ? 'В этом разделе пока нет статей' : 'Пока нет записей'}</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">{kind === 'cheese' ? 'Выберите другой раздел или создайте новую статью. Одобрение и публикация выполняются отдельно.' : 'Создайте первую запись редакции. Публикация выполняется отдельно от статуса «Готово».'}</p><Button className="mt-5 bg-[#315647] hover:bg-[#244537]" onClick={openCreate}>Создать запись</Button></CardContent></Card> :
@@ -592,6 +645,19 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                   const relatedCheese = entry.kind === 'video' ? cheeses.find(item => item.id === (entry.data as VideoData).cheeseIds[0]) : null;
                   return <Card id={`entry-${entry.id}`} key={entry.id} className="overflow-hidden border-[#deddd2] bg-[#fbfaf6] shadow-[0_2px_10px_rgba(42,55,47,0.035)]">
                     <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:p-5">
+                      {stage === 'approved' && cheeseEditorialStage(entry) === 'approved' &&
+                        <label className="flex min-h-8 shrink-0 cursor-pointer items-center gap-2 text-xs text-[#486252]">
+                          <input type="checkbox" aria-label={`Выбрать «${rowTitle}»`} data-testid={`cheese-batch-select-${entry.id}`}
+                            className="h-5 w-5 accent-[#315647]" disabled={requestBusy}
+                            checked={batchSelection[entry.id] === entry.revision}
+                            onChange={event => { const checked = event.target.checked; setBatchSelection(previous => {
+                              const next = { ...previous };
+                              if (checked) next[entry.id] = entry.revision;
+                              else delete next[entry.id];
+                              return next;
+                            }); }} />
+                          <span className="md:sr-only">Выбрать</span>
+                        </label>}
                       {entry.kind === 'video' && (entry.data as VideoData).cover && <img src={(entry.data as VideoData).cover} alt="" className="h-20 w-28 rounded object-cover" />}
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex flex-wrap items-center gap-2"><h2 className="font-serif text-lg">{rowTitle}</h2>
@@ -622,7 +688,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 })}
               </div>}
 
-        {!listQuery.isLoading && !listQuery.isError && total > PAGE_SIZE && <div className="mt-5 flex items-center justify-between border-t border-[#d7d8cc] pt-4 text-sm"><span className="text-muted-foreground">Показаны {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} из {total}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}><ArrowLeft className="mr-1 h-4 w-4" />Назад</Button><Button size="sm" variant="outline" disabled={(page + 1) * PAGE_SIZE >= total} onClick={() => setPage(p => p + 1)}>Далее<ArrowRight className="ml-1 h-4 w-4" /></Button></div></div>}
+        {!listQuery.isLoading && !listQuery.isError && total > PAGE_SIZE && <div className="mt-5 flex items-center justify-between border-t border-[#d7d8cc] pt-4 text-sm"><span className="text-muted-foreground">Показаны {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} из {total}</span><div className="flex gap-2"><Button size="sm" variant="outline" disabled={page === 0 || requestBusy} onClick={() => navigatePage(-1)}><ArrowLeft className="mr-1 h-4 w-4" />Назад</Button><Button size="sm" variant="outline" disabled={(page + 1) * PAGE_SIZE >= total || requestBusy} onClick={() => navigatePage(1)}>Далее<ArrowRight className="ml-1 h-4 w-4" /></Button></div></div>}
 
         <Dialog open={dialog} onOpenChange={open => !open && closeDialog()}>
           <DialogContent data-testid="editorial-entry-editor" data-entry-revision={editing?.revision} className="!left-4 !w-[calc(100vw-2rem)] !translate-x-0 grid-cols-[minmax(0,1fr)] max-h-[92dvh] max-w-2xl overflow-y-auto border-[#d7d8cc] bg-[#fbfaf6] sm:!left-[50%] sm:!w-full sm:!translate-x-[-50%]">

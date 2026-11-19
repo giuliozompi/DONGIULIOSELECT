@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import pg from 'pg';
 import express from 'express';
@@ -14,7 +15,7 @@ import { registerPublicEditorialRoutes } from '../server/publicEditorialRoutes';
 import { registerPriceSubmissionRoutes } from '../server/priceSubmissionRoutes';
 import { submitPrice, ownPriceSubmissions, PriceSubmissionLimitError } from '../server/services/price-submissions';
 import { priceSubmissionSchema } from '../shared/price-submissions';
-import { changePublication } from '../server/services/editorial-publication';
+import { changePublication, publishApprovedCheeses } from '../server/services/editorial-publication';
 import { publicEditorialList, publicCheeseDetail, publicCheesePrices, publicVideoDetail } from '../server/services/public-editorial';
 import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg, type CheeseData, type PriceData } from '../shared/editorial';
 import { cheeseEditorialStage } from '../shared/editorial-stages';
@@ -208,7 +209,7 @@ test('all editorial API methods reject guests and non-admins before work', async
   for (const [method, path, body] of [
     ['GET', '?kind=video', undefined], ['POST', '', {}], ['PATCH', `/${id}`, {}],
     ['DELETE', `/${id}?revision=1`, undefined], ['POST', `/${id}/moderate`, {}],
-    ['POST', `/${id}/publish`, {}], ['POST', `/${id}/unpublish`, {}],
+    ['POST', `/${id}/publish`, {}], ['POST', `/${id}/unpublish`, {}], ['POST', '/cheese/publish-batch', {}],
   ] as const) {
     assert.equal((await api(method, path, body, null)).status, 401);
     assert.equal((await api(method, path, body, 'test-client')).status, 403);
@@ -340,6 +341,72 @@ test('concurrent combined saves accept only one editor revision and publish that
   assert.ok(rejected?.status === 'rejected' && expectStatus(409)(rejected.reason));
   if (fulfilled[0].status === 'fulfilled')
     assert.equal((await publicCheeseDetail(original.id, database)).history, fulfilled[0].value.data.history);
+});
+const batchItem = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
+const batchPath = '/cheese/publish-batch';
+
+test('bulk publication exposes exactly the selected approved cheeses with a single timestamp and one audit each', async () => {
+  const cards = [];
+  for (const title of ['First selected', 'Second selected', 'Not selected'])
+    cards.push(await saveEditorial('cheese', { ...readyCheese(), title }, 'editor', undefined, database));
+  const entries = cards.slice(0, 2).map(batchItem);
+  const response = await api('POST', batchPath, { entries });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { publishedCount: 2 });
+  const published = await listEditorial('cheese', 0, 20, database, 'published');
+  assert.equal(published.total, 2);
+  const snapshots = await Promise.all(cards.slice(0, 2).map(card => publicCheeseDetail(card.id, database)));
+  assert.deepEqual(snapshots.map(item => item.title), ['First selected', 'Second selected']);
+  assert.equal(new Set(published.items.map(item => item.publication?.publishedAt)).size, 1);
+  assert.ok(published.items.every(item => item.publication?.publishedRevision === item.revision && item.revision === 2));
+  assert.deepEqual((await listEditorial('cheese', 0, 20, database, 'approved')).items.map(item => item.id), [cards[2].id]);
+  const logs = (await database.query("SELECT entity_id, admin_user_id FROM admin_action_logs WHERE action_type='published'")).rows;
+  assert.deepEqual(new Set(logs.map(row => row.entity_id)), new Set(entries.map(item => item.id)));
+  assert.ok(logs.every(row => row.admin_user_id === 'operator-test'));
+  assert.equal((await api('POST', batchPath, { entries })).status, 409, 'duplicate submission cannot republish');
+});
+
+test('bulk publication rejects invalid payloads and rolls back if any selected revision is ineligible', async () => {
+  const ready = await saveEditorial('cheese', readyCheese(), 'editor', undefined, database);
+  const pending = await saveEditorial('cheese', { ...cheese(), status: 'pending_review' }, 'editor', undefined, database);
+  const nonCheese = await saveEditorial('video', { ...video(), status: 'ready' }, 'editor', undefined, database);
+  const existing = await publishedCheese();
+  const valid = batchItem(ready);
+  for (const entries of [[], [valid, { ...valid, id: valid.id.toUpperCase() }],
+    [{ id: ready.id, revision: '1' }], [{ ...valid, status: 'ready' }],
+    Array.from({ length: 21 }, () => ({ id: randomUUID(), revision: 1 }))]) {
+    assert.equal((await api('POST', batchPath, { entries })).status, 400);
+  }
+  for (const item of [batchItem(pending), batchItem(nonCheese), batchItem(existing), { ...batchItem(existing), revision: 1 }])
+    assert.equal((await api('POST', batchPath, { entries: [valid, item] })).status, 409);
+  assert.equal((await api('POST', batchPath, { entries: [valid, { id: randomUUID(), revision: 1 }] })).status, 404);
+  const changed = await saveEditorial('cheese', { ...readyCheese(), title: 'Edited by another operator' }, 'another', ready, database);
+  const other = await saveEditorial('cheese', readyCheese(), 'editor', undefined, database);
+  assert.equal((await api('POST', batchPath, { entries: [batchItem(other), valid] })).status, 409);
+  assert.equal(changed.revision, 2);
+  assert.deepEqual((await listEditorial('cheese', 0, 20, database, 'published')).items.map(item => item.id), [existing.id]);
+  assert.equal((await listEditorial('cheese', 0, 20, database, 'approved')).items.find(item => item.id === other.id)?.revision, other.revision);
+  assert.equal((await database.query("SELECT count(*)::int AS n FROM admin_action_logs WHERE action_type='published'")).rows[0].n, 1);
+});
+
+test('failure of the second bulk audit rolls back both public snapshots and logs', async () => {
+  const first = await saveEditorial('cheese', readyCheese(), 'editor', undefined, database);
+  const second = await saveEditorial('cheese', { ...readyCheese(), title: 'Reject audit' }, 'editor', undefined, database);
+  await database.query(`CREATE FUNCTION fail_second_batch_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.action_type='published' AND NEW.action_data #>> '{newData,data,title}'='Reject audit'
+      THEN RAISE EXCEPTION 'test bulk audit failure'; END IF;
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER fail_batch BEFORE INSERT ON admin_action_logs FOR EACH ROW EXECUTE FUNCTION fail_second_batch_audit();`);
+  try {
+    await assert.rejects(publishApprovedCheeses({ entries: [first, second].map(batchItem) }, 'editor', database), /bulk audit failure/);
+    assert.equal((await listEditorial('cheese', 0, 20, database, 'published')).total, 0);
+    assert.equal((await listEditorial('cheese', 0, 20, database, 'approved')).total, 2);
+    assert.equal((await database.query("SELECT count(*)::int AS n FROM admin_action_logs WHERE action_type='published'")).rows[0].n, 0);
+  } finally {
+    await database.query('DROP TRIGGER fail_batch ON admin_action_logs; DROP FUNCTION fail_second_batch_audit()');
+  }
 });
 test('only explicitly published snapshots are public; edits stay private until republish and withdraw is immediate', async () => {
   let c = await saveEditorial('cheese', readyCheese(), 'PRIVATE_ACTOR', undefined, database);

@@ -4,7 +4,7 @@ import { editorialKinds } from '../shared/editorial';
 import { cheeseEditorialStages } from '../shared/editorial-stages';
 import { pool } from './db';
 import { EditorialError, listEditorial, saveEditorial, deleteEditorial, moderateEditorial } from './services/editorial';
-import { changePublication } from './services/editorial-publication';
+import { changePublication, publishApprovedCheeses } from './services/editorial-publication';
 
 const kind = z.enum(editorialKinds);
 const idSchema = z.string().uuid();
@@ -36,6 +36,9 @@ export function registerAdminEditorialRoutes(app: Express, guards: RequestHandle
   app.post(base, ...guards, handle(async (req, res, operator) => {
     const body = z.object({ kind, data: z.unknown(), publish: z.boolean().default(false) }).strict().parse(req.body);
     res.status(201).json(await saveEditorial(body.kind, body.data, operator, undefined, database, body.publish));
+  }));
+  app.post(`${base}/cheese/publish-batch`, ...guards, handle(async (req, res, operator) => {
+    res.json(await publishApprovedCheeses(req.body, operator, database));
   }));
   app.patch(`${base}/:id`, ...guards, handle(async (req, res, operator) => {
     const body = z.object({ kind, data: z.unknown(), revision, publish: z.boolean().default(false) }).strict().parse(req.body);

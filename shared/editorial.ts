@@ -5,6 +5,14 @@ const text = (max = 4000) => z.string().trim().max(max);
 const required = (max = 200) => text(max).min(1, 'Обязательное поле');
 export const editorialRegionMaxLength = 2000;
 export const editorialKinds = ['video', 'cheese', 'price'] as const;
+export const cheesePublicationBatchLimit = 20;
+export const cheesePublicationBatchSchema = z.object({
+  entries: z.array(z.object({
+    id: z.string().uuid().transform(id => id.toLowerCase()),
+    revision: z.number().int().positive(),
+  }).strict()).min(1).max(cheesePublicationBatchLimit)
+    .refine(items => new Set(items.map(item => item.id)).size === items.length, 'Статьи не должны повторяться'),
+}).strict();
 const httpUrl = z.string().trim().max(2000).url().refine(value => {
   try {
     const url = new URL(value);
