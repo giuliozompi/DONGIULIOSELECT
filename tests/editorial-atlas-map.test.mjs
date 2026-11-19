@@ -23,7 +23,7 @@ const items = [
   cheese('tokachi', 'Сыр Токати', 42.92, 143.20, 'Япония'),
 ];
 
-test('atlas filters articles by country on mobile and desktop, with all pins on the world map', {
+test('atlas filters by country, shows world pins and opens articles at the top', {
   skip: !build, timeout: 90000,
 }, async () => {
   const browser = await launchBrowser();
@@ -57,6 +57,13 @@ test('atlas filters articles by country on mobile and desktop, with all pins on 
       const batch = worldBatch ? (mapPage === '1' ? filtered.slice(0, -1) : filtered.slice(-1)) : filtered;
       body = JSON.stringify({ items: batch, total: filtered.length, truncated: worldBatch && mapPage === '1',
         page: 1, limit: 12, countries: ['Италия', 'Франция', 'Германия', 'Россия', 'Грузия', 'США', 'Япония'] });
+    } else if (path.startsWith('/web-api/editorial/cheeses/')) {
+      const [, id, section] = path.split('/web-api/editorial/cheeses/')[1].match(/^([^/]+)(?:\/(.+))?$/);
+      const item = items.find(cheese => cheese.id === id);
+      body = JSON.stringify(section === 'prices' ? { items: [], total: 0, page: 1, limit: 10 } : {
+        ...item, history: 'История сыра. '.repeat(120), photos: [image],
+        sources: [], products: [], relatedVideos: [], externalVideoUrls: [],
+      });
     } else if (path.startsWith('/web-api/auth/')) {
       status = 401;
       body = '{}';
@@ -152,6 +159,33 @@ test('atlas filters articles by country on mobile and desktop, with all pins on 
     await page.tap('.ed-map-controls button:first-child');
     await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Италия"]') && document.querySelectorAll('${cards}').length === 5`);
     assert.deepEqual(await visibleCards(), italianCards);
+
+    const captureScroll = selector => page.evaluate(`document.querySelector(${JSON.stringify(selector)})
+      .addEventListener('click', () => { window.atlasScrollBeforeOpen = window.scrollY; }, { once: true })`);
+    const expectArticleStart = async title => {
+      await page.wait(`document.querySelector('.ed-article-head h1')?.textContent.includes(${JSON.stringify(title)})`);
+      assert.ok(await page.evaluate('window.atlasScrollBeforeOpen > 200'), 'the article was opened from a scrolled atlas');
+      assert.equal(await page.evaluate('Math.round(window.scrollY)'), 0, 'navigation starts at the top of the detail page');
+      assert.ok(await page.evaluate(`(() => {
+        const title = document.querySelector('.ed-article-head h1').getBoundingClientRect();
+        return title.top >= 0 && title.bottom <= window.innerHeight;
+      })()`), 'the article title is visible as soon as it opens');
+    };
+
+    await page.tap(pin('Пекорино'));
+    const previewLink = '.ed-map-aside a[href="/web/cheeses/sicilia"]';
+    await page.wait(`!!document.querySelector('${previewLink}')`);
+    await captureScroll(previewLink);
+    await page.tap(previewLink);
+    await expectArticleStart('Пекорино');
+
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.click('.ed-back');
+    const listCard = `${cards}[href="/web/cheeses/gorgonzola"]`;
+    await page.wait(`!!document.querySelector('${listCard}') && !!document.querySelector('${focused}')`);
+    await captureScroll(listCard);
+    await page.click(listCard);
+    await expectArticleStart('Горгонзола');
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

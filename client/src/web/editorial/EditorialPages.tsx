@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, ExternalLink, Globe2, MapPin, Play, Search, ShoppingCart } from 'lucide-react';
@@ -281,6 +281,10 @@ function PriceRows({ prices }: { prices: PublicMarketPrice[] }) {
 }
 export function CheeseDetailPage() {
   const { id } = useParams<{ id: string }>();
+  // Atlas links use client-side routing, which otherwise preserves the list's scroll position.
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [id]);
   const priceSubmissionOwner = useWebAuth(state => state.isAuthenticated ? state.user?.id ?? 'guest' : 'guest');
   const [pricePage, setPricePage] = useState(1);
   const cheeseQuery = useQuery({ queryKey: ['/web-api/editorial/cheese', id], queryFn: () => editorialPublicApi.cheese(id!), enabled: !!id });
