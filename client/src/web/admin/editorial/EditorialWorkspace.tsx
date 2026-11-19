@@ -135,8 +135,12 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setCheeseStage(value);
     setPage(0);
   }
-  function showSavedEntry(saved: EditorialEntry) {
-    if (saved.kind === 'cheese') selectCheeseStage(cheeseEditorialStage(saved));
+  function showSavedEntry(saved: EditorialEntry, publishedNow = false) {
+    if (saved.kind !== 'cheese') return;
+    if (publishedNow) {
+      // Continue with the preparation queue, without resetting a valid page.
+      if (cheeseStage !== 'drafts') selectCheeseStage('drafts');
+    } else selectCheeseStage(cheeseEditorialStage(saved));
   }
   const linkedEntryId = new URLSearchParams(window.location.search).get('entry');
   const linkedPriceQuery = useQuery({
@@ -189,11 +193,11 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   }
   const createMutation = useMutation({
     mutationFn: ({ data, publish }: { data: FormData; publish: boolean }) => editorialApi.create(kind, data, publish),
-    onSuccess: async (saved, variables) => { showSavedEntry(saved); await invalidateEditorial(); closeDialog(true); toast({ title: variables.publish ? 'Статья сохранена и опубликована' : 'Запись создана' }); },
+    onSuccess: async (saved, variables) => { showSavedEntry(saved, variables.publish); await invalidateEditorial(); closeDialog(true); toast({ title: variables.publish ? 'Статья сохранена и опубликована' : 'Запись создана' }); },
   });
   const updateMutation = useMutation({
     mutationFn: ({ entry, data, publish }: { entry: EditorialEntry; data: FormData; publish: boolean }) => editorialApi.update(entry, data, publish),
-    onSuccess: async (saved, variables) => { showSavedEntry(saved); await invalidateEditorial(); closeDialog(true); toast({ title: variables.publish ? 'Статья сохранена и опубликована' : kind === 'price' ? 'Цена обновлена и отправлена на повторную проверку' : 'Изменения сохранены' }); },
+    onSuccess: async (saved, variables) => { showSavedEntry(saved, variables.publish); await invalidateEditorial(); closeDialog(true); toast({ title: variables.publish ? 'Статья сохранена и опубликована' : kind === 'price' ? 'Цена обновлена и отправлена на повторную проверку' : 'Изменения сохранены' }); },
   });
   const deleteMutation = useMutation({
     mutationFn: (entry: EditorialEntry) => editorialApi.remove(entry),
@@ -209,7 +213,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   });
   const publishMutation = useMutation({
     mutationFn: (entry: EditorialEntry) => editorialApi.publish(entry),
-    onSuccess: async saved => { showSavedEntry(saved); await invalidateEditorial(); toast({ title: 'Материал опубликован' }); },
+    onSuccess: async saved => { showSavedEntry(saved, true); await invalidateEditorial(); toast({ title: 'Материал опубликован' }); },
   });
   const unpublishMutation = useMutation({
     mutationFn: (entry: EditorialEntry) => editorialApi.unpublish(entry),
@@ -218,6 +222,11 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const saving = requestBusy || createMutation.isPending || updateMutation.isPending || uploading || editorAiBusy;
   const entries = listQuery.data?.items || [];
   const total = listQuery.data?.total || 0;
+  useEffect(() => {
+    if (stage !== 'drafts' || !listQuery.isSuccess || listQuery.isFetching) return;
+    const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
+    if (page > lastPage) setPage(lastPage);
+  }, [stage, page, total, listQuery.isSuccess, listQuery.isFetching]);
   const cheeses = cheeseQuery.data || [];
   const openedLinkedEntry = useRef(false);
   const linkedEntry = linkedEntryId;

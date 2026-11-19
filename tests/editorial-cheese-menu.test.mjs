@@ -8,7 +8,7 @@ const build = process.env.EDITORIAL_MENU_BUILD_DIR;
 const base = build ? 'https://editorial-menu.example.test'
   : process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '';
 
-test('cheese sections paginate independently, follow saved states and publication, and fit mobile', {
+test('cheese publication returns to preparation, preserving pagination and the published article', {
   skip: !base, timeout: 90000,
 }, async () => {
   const browser = await launchBrowser();
@@ -39,6 +39,8 @@ test('cheese sections paginate independently, follow saved states and publicatio
   }
   const selected = stage => `document.querySelector('[data-testid="cheese-stage-${stage}"]')?.getAttribute('aria-pressed')==='true'`;
   page.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails.text));
+  await page.send('Network.enable');
+  await page.send('Network.setBypassServiceWorker', { bypass: true });
   await page.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `if('serviceWorker' in navigator)navigator.serviceWorker.register=async()=>({});window.confirm=()=>true;`,
   });
@@ -56,7 +58,19 @@ test('cheese sections paginate independently, follow saved states and publicatio
     } else if (path === '/web-api/auth/refresh') {
       body = { accessToken: 'isolated-menu-fixture', user: { id: 'fixture', firstName: 'Fixture' } };
     } else if (path === '/web-api/admin/check') body = { ok: true, isMasterAdmin: true };
-    else if (path === '/web-api/admin/editorial') {
+    else if (path === '/web-api/admin/editorial' && event.request.method === 'POST') {
+      const request = JSON.parse(event.request.postData);
+      writes.push(request);
+      const revision = request.publish ? 2 : 1;
+      body = {
+        ...entries[0],
+        id: '11111111-1111-4111-8111-000000000999',
+        revision, kind: request.kind, data: request.data,
+        publication: request.publish ? { publishedRevision: revision, publishedAt: '2026-01-02T00:00:00Z' } : null,
+      };
+      entries.push(body);
+      code = 201;
+    } else if (path === '/web-api/admin/editorial') {
       const stage = url.searchParams.get('stage'), kind = url.searchParams.get('kind');
       const offset = Number(url.searchParams.get('offset') || 0), limit = Number(url.searchParams.get('limit') || 50);
       requests.push({ stage, kind, offset });
@@ -104,7 +118,12 @@ test('cheese sections paginate independently, follow saved states and publicatio
     await page.wait(`${selected('published')} && document.querySelectorAll('[id^="entry-"]').length===2`);
     await page.click('[data-testid="cheese-stage-approved"]');
     await page.wait(`${selected('approved')} && !!document.getElementById('entry-${entries[22].id}')`);
+    const beforePublish = requests.length;
     await clickText('Опубликовать', `document.getElementById('entry-${entries[22].id}')`);
+    await page.wait(`${selected('drafts')} && document.querySelectorAll('[id^="entry-"]').length===20`);
+    assert.equal(requests.slice(beforePublish).some(r => r.stage === 'published'), false);
+    assert.ok(entries[22].publication, 'moving to preparation does not change the publication');
+    await page.click('[data-testid="cheese-stage-published"]');
     await page.wait(`${selected('published')} && document.querySelectorAll('[id^="entry-"]').length===3`);
     assert.ok(await page.evaluate(`document.body.innerText.includes('текущая версия: в редакции')`));
     await clickText('Снять с публикации', `document.getElementById('entry-${entries[22].id}')`);
@@ -149,17 +168,53 @@ test('cheese sections paginate independently, follow saved states and publicatio
     await page.wait(`document.querySelector('[role="dialog"]')?.innerText.includes('Fixture save unavailable') && !document.querySelector('[data-testid="button-editorial-save-top"]').disabled`);
     assert.equal(writes.length, beforeInvalid + 1, 'rapid use of both buttons submits only once');
     assert.equal(entries[0].publication, null, 'failed combined save stays private');
+    const beforeSaveAndPublish = requests.length;
     await page.click('[data-testid="button-editorial-save-bottom"]');
-    await page.wait(`${selected('published')} && !document.querySelector('[role="dialog"]')`);
+    await page.wait(`${selected('drafts')} && !document.querySelector('[role="dialog"]') && !document.getElementById('entry-${entries[0].id}')`);
+    assert.equal(requests.slice(beforeSaveAndPublish).some(r => r.stage === 'published'), false);
     assert.equal(writes.at(-1).publish, true);
     assert.equal(writes.at(-1).data.status, 'ready', 'combined action is never stored as an unsupported article status');
     assert.equal(entries[0].data.history, 'Verified expanded history');
+    await page.click('[data-testid="cheese-stage-published"]');
+    await page.wait(`${selected('published')} && !!document.getElementById('entry-${entries[0].id}')`);
     await clickText('Изменить', `document.getElementById('entry-${entries[0].id}')`);
     await page.wait(`!!document.querySelector('#ed-status')`);
     assert.equal(await page.evaluate(`document.querySelector('#ed-status').value`), 'ready', 'publication intent resets on reopening');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="button-editorial-save-top"]').textContent`), 'Сохранить изменения');
     await clickText('Отмена', `document.querySelector('[role="dialog"]')`);
     await page.wait(`!document.querySelector('[role="dialog"]')`);
+
+    await page.click('[data-testid="cheese-stage-drafts"]');
+    await page.wait(`${selected('drafts')} && document.querySelectorAll('[id^="entry-"]').length===20`);
+    assert.equal(entries.filter(entry => stageOf(entry) === 'drafts').length, 22);
+    await page.evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Далее').click()`);
+    await page.wait(`!!document.getElementById('entry-${entries[22].id}') && document.querySelectorAll('[id^="entry-"]').length===2`);
+    await clickText('Новая запись');
+    await page.wait(`!!document.querySelector('#ed-status')`);
+    for (const [selector, value] of [
+      ['#ed-title', 'New cheese'], ['#ed-country', 'Италия'],
+      ['#ed-history', 'History'], ['#ed-characteristics', 'Characteristics'],
+      ['#ed-culinaryUses', 'Uses'], ['#ed-photos', 'https://example.org/new-cheese.jpg'],
+      ['#ed-sources', 'https://example.org/source'],
+      ['[aria-label="Происхождение: широта"]', '45'], ['[aria-label="Происхождение: долгота"]', '9'],
+    ]) await page.fill(selector, value);
+    const choosePublish = `(() => {const s=document.querySelector('#ed-status');s.value='publish';s.dispatchEvent(new Event('change',{bubbles:true}));})()`;
+    await page.evaluate(choosePublish);
+    await page.click('[data-testid="button-editorial-save-top"]');
+    await page.wait(`${selected('drafts')} && !document.querySelector('[role="dialog"]') && document.querySelectorAll('[id^="entry-"]').length===2`);
+    assert.equal(requests.filter(r => r.stage === 'drafts').at(-1).offset, 20);
+    assert.equal(entries.at(-1).data.title, 'New cheese');
+    assert.ok(entries.at(-1).publication);
+    // When the last draft is published from the final page, return to a valid page.
+    for (const [index, id] of [entries[21].id, entries[22].id].entries()) {
+      await clickText('Изменить', `document.getElementById('entry-${id}')`);
+      await page.wait(`!!document.querySelector('#ed-status')`);
+      await page.evaluate(choosePublish);
+      await page.click('[data-testid="button-editorial-save-top"]');
+      await page.wait(`${selected('drafts')} && !document.querySelector('[role="dialog"]') && document.querySelectorAll('[id^="entry-"]').length===${index === 0 ? 1 : 20}`);
+    }
+    assert.equal(requests.filter(r => r.stage === 'drafts').at(-1).offset, 0);
+
     await page.click('[data-testid="cheese-stage-approved"]');
     await page.wait(selected('approved'));
     await mkdir('generated-artifacts', { recursive: true });
