@@ -1,13 +1,5 @@
-export type GeoPosition = [number, number, ...number[]];
-export type GeoPolygon = GeoPosition[][];
-export type CountryGeometry =
-  | { type: 'Polygon'; coordinates: GeoPolygon }
-  | { type: 'MultiPolygon'; coordinates: GeoPolygon[] };
-export type CountryFeature = {
-  type: 'Feature';
-  properties: Record<string, unknown>;
-  geometry: CountryGeometry;
-};
+import { countryPolygons, createCountryIndex, type CountryFeature, type GeoPolygon } from '../../../../../shared/editorial-geography';
+export type { CountryFeature, GeoPosition } from '../../../../../shared/editorial-geography';
 export type CountryBounds = {
   south: number;
   north: number;
@@ -21,62 +13,11 @@ export type MapFit = { latitude: number; longitude: number; zoom: number };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const MAX_MERCATOR_LATITUDE = 85.0511287798066;
 
-function normalizeCountryName(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('ru')
-    .replace(/[ё]/g, 'е')
-    .replace(/[^a-zа-я0-9]+/gi, ' ')
-    .trim()
-    .replace(/\s+/g, ' ');
-}
-
-const explicitAliases: Record<string, string[]> = {
-  [normalizeCountryName('РФ')]: ['RU'],
-  [normalizeCountryName('Россия')]: ['RU'],
-  [normalizeCountryName('Российская Федерация')]: ['RU'],
-  [normalizeCountryName('UK')]: ['GB'],
-  [normalizeCountryName('Великобритания')]: ['GB'],
-  [normalizeCountryName('Соединённое Королевство')]: ['GB'],
-  [normalizeCountryName('USA')]: ['US'],
-  [normalizeCountryName('США')]: ['US'],
-  [normalizeCountryName('Соединённые Штаты')]: ['US'],
-};
-
-function featureNames(feature: CountryFeature): Set<string> {
-  const names = new Set<string>();
-  for (const [key, raw] of Object.entries(feature.properties)) {
-    if (typeof raw !== 'string' || !raw.trim()) continue;
-    if (/^NAME(?:_|$)|^FORMAL_/i.test(key)) {
-      names.add(normalizeCountryName(raw));
-    }
-  }
-  return names;
-}
-
-function featureCodes(feature: CountryFeature): Set<string> {
-  return new Set(Object.entries(feature.properties)
-    .filter(([key, value]) => /^ISO_(?:A2|A3|N3)(?:_EH)?$/i.test(key) && typeof value === 'string')
-    .map(([, value]) => String(value).trim().toUpperCase())
-    .filter(value => value && value !== '-99'));
-}
-
-/** Exact normalized name/code matching only; no substring or fuzzy guesses. */
+const indexes = new WeakMap<CountryFeature[], ReturnType<typeof createCountryIndex>>();
 export function matchCountryFeature(features: CountryFeature[], country: string): CountryFeature | null {
-  const normalized = normalizeCountryName(country);
-  if (!normalized) return null;
-  const aliases = explicitAliases[normalized] || [];
-  const code = country.trim().toUpperCase();
-  return features.find(feature =>
-    featureNames(feature).has(normalized) ||
-    featureCodes(feature).has(code) ||
-    aliases.some(alias => featureCodes(feature).has(alias)),
-  ) || null;
-}
-
-function allPolygons(feature: CountryFeature): GeoPolygon[] {
-  if (feature.geometry.type === 'Polygon') return [feature.geometry.coordinates];
-  if (feature.geometry.type === 'MultiPolygon') return feature.geometry.coordinates;
-  return [];
+  let match = indexes.get(features);
+  if (!match) { match = createCountryIndex(features); indexes.set(features, match); }
+  return match(country);
 }
 
 function featureLabel(feature: CountryFeature): [number, number] | null {
@@ -105,7 +46,7 @@ function polygonCenter(polygon: GeoPolygon): [number, number] | null {
 }
 
 function chooseCountryPolygons(feature: CountryFeature): GeoPolygon[] {
-  const polygons = allPolygons(feature).filter(polygon => polygon[0]?.length);
+  const polygons = countryPolygons(feature).filter(polygon => polygon[0]?.length);
   if (polygons.length <= 1) return polygons;
   const label = featureLabel(feature);
   if (!label) return [polygons.reduce((largest, current) =>
@@ -149,9 +90,9 @@ function minimalLongitudeArc(longitudes: number[]): { center: number; span: numb
   return { center, span, west, east };
 }
 
-/** Bounds use the minimal circular longitude arc and label-near land components. */
-export function getCountryBounds(feature: CountryFeature): CountryBounds | null {
-  const polygons = chooseCountryPolygons(feature);
+/** The atlas fits the entire country; the editor can keep the local working area. */
+export function getCountryBounds(feature: CountryFeature, includeAllTerritories = false): CountryBounds | null {
+  const polygons = includeAllTerritories ? countryPolygons(feature) : chooseCountryPolygons(feature);
   const positions = polygons.flatMap(polygon => polygon.flat());
   if (!positions.length) return null;
   const longitudes: number[] = [];

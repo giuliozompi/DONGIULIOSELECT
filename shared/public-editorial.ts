@@ -4,7 +4,7 @@ export interface PublicVideo extends Pick<VideoData, 'title' | 'description' | '
   id: string; publishedAt: string;
 }
 export interface PublicCheeseSummary extends Pick<CheeseData, 'title' | 'nameOriginal' | 'description' | 'country' | 'region' | 'latitude' | 'longitude'> {
-  id: string; photo: string; publishedAt: string;
+  id: string; photo: string; publishedAt: string; atlasCountry?: string;
 }
 export interface EditorialProduct {
   id: string; name: string; slug: string; images: string[]; price: string;

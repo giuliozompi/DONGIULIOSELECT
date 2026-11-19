@@ -10,7 +10,10 @@ let browser;
 before(async () => { browser = await launchBrowser(); });
 after(async () => { await browser?.close(); });
 
-async function fixture(context, { paid = false, rejected = false, historyFailure = false, telegram = false, website = false } = {}) {
+async function fixture(context, {
+  paid = false, rejected = false, historyFailure = false, telegram = false, website = false,
+  notes = website ? 'Позвонить заранее' : undefined,
+} = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
   if (telegram) await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `
@@ -26,9 +29,9 @@ async function fixture(context, { paid = false, rejected = false, historyFailure
   const live = {
     order: { id: A, createdAt: '2026-10-22T10:00:00.000Z', status: paid ? 'ОПЛАЧЕН' : 'СОБРАН',
       paymentMethod: 'yookassa', customerName: 'Тестовый клиент', customerPhone: 'fixture-phone',
-      amount: '100.00', items: [], deliveryAddress: 'Тестовый адрес',
+      amount: '100.00', items: [], deliveryAddress: 'Тестовый адрес', deliveryNotes: notes,
       ...(website ? { userId: 'web:fixture-client', deliveryMethod: 'web_regional', desiredDeliveryDate: '2026-11-21',
-        deliveryNotes: 'Позвонить заранее', deliveryFeeInOrder: null } : {}) },
+        deliveryFeeInOrder: null } : {}) },
     logs: [], patches: 0, prints: [], requests: [], rejected, historyFailure,
     printFailure: null, releasePrint: null,
   };
@@ -103,17 +106,24 @@ async function openDetail(page) {
 }
 
 test('website order exposes delivery method, date, comment and recalculated total after the fee is saved', async context => {
-  const { page, live } = await fixture(context, { website: true });
+  const notes = 'Позвонить заранее\nКод <b>123</b>';
+  const { page, live } = await fixture(context, { website: true, notes });
   await openDetail(page);
   assert.match(await page.evaluate(text), /Курьерская доставка по Московской области и регионам/);
   assert.match(await page.evaluate(text), /21\.11\.2026/);
-  assert.match(await page.evaluate(text), /Позвонить заранее/);
+  const comment = '[data-testid="order-customer-comment-text"]';
+  assert.equal(await page.evaluate(`document.querySelector('${comment}').textContent`), notes);
+  assert.equal(await page.evaluate(`document.querySelector('${comment}').childElementCount`), 0);
+  assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('${comment}')).whiteSpace`), 'pre-wrap');
+  assert.equal(await page.evaluate(`Boolean(document.querySelector('${comment}').compareDocumentPosition(document.querySelector('[data-testid="button-print-packing-list"]')) & Node.DOCUMENT_POSITION_FOLLOWING)`), true);
+  assert.deepEqual(live.prints, []);
   await page.fill('#order-delivery-fee', '550,50');
   await page.click('form:has(#order-delivery-fee) button[type=submit]');
   await page.wait(`${text}.includes('Стоимость доставки сохранена')`);
   assert.equal(live.deliveryFee, '550,50');
   assert.match(await page.evaluate(text), /650,5\s*₽/);
   assert.equal(await page.evaluate('document.querySelector("#order-payment-method").disabled'), true);
+  assert.equal(await page.evaluate(`document.querySelector('${comment}').textContent`), notes);
 });
 
 test('operator confirms method change; refreshed details preserve the method and log with actor', async context => {
@@ -138,8 +148,9 @@ test('operator confirms method change; refreshed details preserve the method and
 });
 
 test('paid orders cannot be switched, and failed history is not shown as empty', async context => {
-  const { page, live } = await fixture(context, { paid: true, historyFailure: true });
+  const { page, live } = await fixture(context, { paid: true, historyFailure: true, notes: ' \n ' });
   await openDetail(page);
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="order-customer-comment"]')`), null);
   await page.wait(`${text}.includes('Не удалось загрузить историю изменений')`);
   assert.equal(await page.evaluate('document.querySelector("#order-payment-method")?.hasAttribute("data-disabled")'), true);
   assert.equal(live.patches, 0);
@@ -219,11 +230,13 @@ test('Telegram admin offers the same payment change, history, and three print fo
 });
 
 test('Telegram order viewer also opens the complete priced order through the print helper', async context => {
-  const { page, live } = await fixture(context, { telegram: true });
+  const { page, live } = await fixture(context, { telegram: true, paid: true, notes: 'Передать покупателю лично' });
   await page.send('Page.navigate', { url: `${base}/admin?section=orders` });
   await page.wait(`!!document.querySelector('[data-testid="button-view-order-${A}"]')`);
   await page.click(`[data-testid="button-view-order-${A}"]`);
   await page.wait('!!document.querySelector(\'[data-testid="dialog-order-view"] [data-testid="button-print-order-summary"]\')');
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="dialog-order-view"] [data-testid="order-customer-comment-text"]').textContent`), live.order.deliveryNotes);
+  assert.deepEqual(live.prints, []);
   await page.evaluate(`window.fixturePrintWindows=[]; window.open=()=>{
     const output={html:'',printed:0};window.fixturePrintWindows.push(output);
     return {document:{open(){output.html=''},write(html){output.html+=html},close(){}},
@@ -236,11 +249,13 @@ test('Telegram order viewer also opens the complete priced order through the pri
 });
 
 test('Telegram admin shows the server reason when a payment already exists', async context => {
-  const { page, live } = await fixture(context, { telegram: true, rejected: true });
+  const { page, live } = await fixture(context, { telegram: true, rejected: true, notes: 'Без звонка в домофон' });
   await page.send('Page.navigate', { url: `${base}/admin?section=orders` });
   await page.wait(`!!document.querySelector('[data-testid="button-edit-order-${A}"]')`);
   await page.click(`[data-testid="button-edit-order-${A}"]`);
   await page.wait('!!document.querySelector(\'button[aria-label="Способ оплаты заказа"]\')');
+  assert.equal(await page.evaluate(`document.querySelector('[role="dialog"] [data-testid="order-customer-comment-text"]').textContent`), live.order.deliveryNotes);
+  assert.deepEqual(live.prints, []);
   await page.evaluate('window.confirm=()=>true');
   await page.click('button[aria-label="Способ оплаты заказа"]');
   await page.wait(`document.querySelectorAll('[role="option"]').length===2`);

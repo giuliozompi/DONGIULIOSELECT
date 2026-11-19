@@ -6,7 +6,8 @@ import {
   type CatalogResult, type DraftRequest, type DraftResult, type ImportResult,
 } from '../../shared/editorial-ai';
 import { transaction, audit, entry, references, EditorialError, type Row } from './editorial';
-import { catalogMatches, normalizedCheeseName, runDto, type RunRow } from './editorial-ai';
+import { runDto, type RunRow } from './editorial-ai';
+import { catalogMatches, normalizedCheeseName } from './editorial-ai-catalog';
 import { validateSourceUrl } from './editorial-ai-sources';
 import { savedOriginCandidate } from './editorial-origin';
 

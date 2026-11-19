@@ -571,6 +571,62 @@ test('public APIs have pagination/search/filter/map and reject malformed queries
   const draft = await saveEditorial('video', video(), 'operator', undefined, database);
   assert.equal((await fetch(`${publicBase}/videos/${draft.id}`)).status, 404);
 });
+test('map pages expose published points beyond the first thousand', async () => {
+  await database.query(`WITH records AS (
+      INSERT INTO editorial_entries(kind,data,created_by,updated_by)
+      SELECT 'cheese', $1::jsonb || jsonb_build_object('title','Cheese ' || n, 'sortOrder',n),
+        'fixture','fixture' FROM generate_series(1,1001) AS n
+      RETURNING id,data,revision
+    ) INSERT INTO editorial_publications(entry_id,kind,data,published_revision,published_by)
+    SELECT id,'cheese',data,revision,'fixture' FROM records`, [JSON.stringify(readyCheese())]);
+  const publicMap = base.replace('/admin/editorial', '/editorial/map');
+  const first = await fetch(`${publicMap}?page=1`).then(response => response.json());
+  const next = await fetch(`${publicMap}?page=2`).then(response => response.json());
+  assert.equal(first.total, 1001);
+  assert.equal(first.items.length, 1000);
+  assert.equal(first.truncated, true);
+  assert.equal(next.total, 1001);
+  assert.deepEqual(next.items.map((item: { title: string }) => item.title), ['Cheese 1001']);
+  assert.equal(next.truncated, false);
+});
+test('atlas filters by the current country without rewriting the published origin or pin', async () => {
+  async function publish(title: string, country: string, latitude: number, longitude: number) {
+    const draft = await saveEditorial('cheese', { ...readyCheese(), title, country, latitude, longitude,
+      // Production is deliberately unrelated to the historical origin.
+      productionCountry: 'Италия',
+    }, 'operator', undefined, database);
+    return changePublication(draft.id, draft.revision, true, 'operator', database);
+  }
+  const russian = await publish('Вологодский сыр', 'СССР', 59.22, 39.89);
+  const georgian = await publish('Сулугуни', 'СССР', 41.71, 44.79);
+  const slovak = await publish('Брынза', 'Чехословакия', 48.15, 17.11);
+  const russianModern = await publish('Другой сыр', 'Российская Федерация', 55.75, 37.62);
+  await saveEditorial('cheese', { ...readyCheese(), title: 'Невидимый', country: 'Цейлон' }, 'operator', undefined, database);
+  const publicBase = base.replace('/admin/editorial', '/editorial');
+  const get = async (path: string, params = {}) => {
+    const response = await fetch(`${publicBase}${path}?${new URLSearchParams(params)}`);
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const russia = await get('/cheeses', { country: 'Россия', limit: '1' });
+  assert.deepEqual(russia.countries, ['Грузия', 'Россия', 'Словакия']);
+  assert.equal(russia.total, 2);
+  assert.equal(russia.items.length, 1);
+  const map = await get('/map', { country: 'RU' });
+  assert.deepEqual(new Set(map.items.map((item: { id: string }) => item.id)), new Set([russian.id, russianModern.id]));
+  const pin = map.items.find((item: { id: string }) => item.id === russian.id);
+  assert.equal(pin.latitude, 59.22);
+  assert.equal(pin.longitude, 39.89);
+  assert.equal(pin.country, 'СССР');
+  assert.equal(pin.atlasCountry, 'Россия');
+  assert.deepEqual((await get('/map', { country: 'Грузия' })).items.map((item: { id: string }) => item.id), [georgian.id]);
+  assert.deepEqual((await get('/map', { country: 'Словакия' })).items.map((item: { id: string }) => item.id), [slovak.id]);
+  assert.equal((await get('/cheeses', { search: 'СССР' })).total, 2);
+  assert.equal((await get('/cheeses', { search: 'Россия' })).total, 2);
+  const detail = await get(`/cheeses/${russian.id}`);
+  assert.equal(detail.country, 'СССР');
+  assert.equal(detail.productionCountry, 'Италия');
+});
 test('publication audit failure rolls back exposure; stale/concurrent publication cannot override newer decisions', async () => {
   let v = await saveEditorial('video', { ...video(), status: 'ready' }, 'operator', undefined, database);
   await database.query(`CREATE FUNCTION fail_publication_audit() RETURNS trigger LANGUAGE plpgsql AS $$

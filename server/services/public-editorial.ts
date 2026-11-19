@@ -2,6 +2,7 @@ import { pool } from '../db';
 import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg } from '../../shared/editorial';
 import type { PublicVideo, PublicCheeseSummary, PublicCheese, PublicMarketPrice, EditorialPage } from '../../shared/public-editorial';
 import { EditorialError } from './editorial';
+import { atlasCountryScope } from './editorial-atlas-country';
 
 type Publication = { entry_id: string; kind: 'video' | 'cheese'; data: unknown; published_at: Date };
 function publicVideo(row: Publication): PublicVideo {
@@ -9,33 +10,40 @@ function publicVideo(row: Publication): PublicVideo {
   return { id: row.entry_id, title: v.title, description: v.description, url: v.url,
     cover: v.cover, category: v.category, publishedAt: row.published_at.toISOString() };
 }
-function cheeseSummary(row: Publication): PublicCheeseSummary {
+function cheeseSummary(row: Publication, atlasCountry?: string): PublicCheeseSummary {
   const c = cheeseDataSchema.parse(row.data);
   return { id: row.entry_id, title: c.title, nameOriginal: c.nameOriginal, description: c.description, country: c.country,
     region: c.region, latitude: c.latitude, longitude: c.longitude, photo: c.photos.find(Boolean) || '',
-    publishedAt: row.published_at.toISOString() };
+    publishedAt: row.published_at.toISOString(), ...(atlasCountry ? { atlasCountry } : {}) };
 }
 export interface PublicFilters { search: string; category?: string; country?: string; page: number; limit: number }
 const filterSql = `kind=$1 AND ($2='' OR strpos(lower(concat_ws(' ',data->>'title',data->>'nameOriginal',data->>'description',data->>'country',data->>'region')),lower($2))>0)
   AND ($3='' OR data->>'category'=$3) AND ($4='' OR data->>'country'=$4)`;
 export async function publicEditorialList(kind: 'video' | 'cheese', filters: PublicFilters, database = pool) {
-  const params = [kind, filters.search, filters.category || '', filters.country || ''];
+  const atlas = kind === 'cheese' ? await atlasCountryScope(database, filters.country || '', filters.search) : undefined;
+  const condition = atlas ? `kind='cheese'
+    AND ($1='' OR strpos(lower(concat_ws(' ',data->>'title',data->>'nameOriginal',data->>'description',data->>'country',data->>'region')),lower($1))>0
+      OR entry_id=ANY($4::uuid[]))
+    AND ($2='' OR data->>'category'=$2)
+    AND ($3::uuid[] IS NULL OR entry_id=ANY($3::uuid[]))` : filterSql;
+  const params = atlas
+    ? [filters.search, filters.category || '', atlas.matchingCountryIds, atlas.matchingSearchIds]
+    : [kind, filters.search, filters.category || '', filters.country || ''];
   const [list, count] = await Promise.all([
-    database.query(`SELECT * FROM editorial_publications WHERE ${filterSql}
+    database.query(`SELECT * FROM editorial_publications WHERE ${condition}
       ORDER BY (data->>'sortOrder')::int, published_at DESC,entry_id LIMIT $5 OFFSET $6`,
       [...params, filters.limit, (filters.page - 1) * filters.limit]),
-    database.query(`SELECT count(*)::int n FROM editorial_publications WHERE ${filterSql}`, params),
+    database.query(`SELECT count(*)::int n FROM editorial_publications WHERE ${condition}`, params),
   ]);
-  const page = { items: list.rows.map((row: Publication) => kind === 'video' ? publicVideo(row) : cheeseSummary(row)),
+  const page = { items: list.rows.map((row: Publication) => atlas
+    ? cheeseSummary(row, atlas.groupById.get(row.entry_id)) : publicVideo(row)),
     total: count.rows[0].n, page: filters.page, limit: filters.limit };
-  if (kind === 'video') return page;
-  const countries = await database.query(`SELECT DISTINCT data->>'country' AS country
-    FROM editorial_publications WHERE kind='cheese' ORDER BY country`);
-  return { ...page, countries: countries.rows.map(r => r.country) };
+  return atlas ? { ...page, countries: atlas.countries } : page;
 }
 export async function publicCheeseMap(filters: PublicFilters, database = pool) {
-  const result = await publicEditorialList('cheese', { ...filters, page: 1, limit: 1000 }, database);
-  return { items: result.items, total: result.total, truncated: result.total > result.items.length };
+  const size = 1000;
+  const result = await publicEditorialList('cheese', { ...filters, limit: size }, database);
+  return { items: result.items, total: result.total, truncated: result.total > filters.page * size };
 }
 async function publication(id: string, kind: 'video' | 'cheese', database: typeof pool) {
   const row: Publication | undefined = (await database.query(
@@ -49,7 +57,7 @@ export async function publicVideoDetail(id: string, database = pool) {
   const related = await database.query(`SELECT * FROM editorial_publications WHERE kind='cheese'
     AND ((data->'videoIds') ? $1 OR entry_id=ANY($2::uuid[]))
     ORDER BY (data->>'sortOrder')::int,entry_id`, [id, video.cheeseIds]);
-  return { ...publicVideo(row), relatedCheeses: related.rows.map(cheeseSummary) };
+  return { ...publicVideo(row), relatedCheeses: related.rows.map(row => cheeseSummary(row)) };
 }
 export async function publicCheeseDetail(id: string, database = pool): Promise<PublicCheese> {
   const row = await publication(id, 'cheese', database);

@@ -13,6 +13,7 @@ import { editorialSourcePassages, researchCoverage } from './editorial-research-
 import { editorialRegionMaxLength } from '../../shared/editorial';
 import { lookupEditorialOrigin } from './editorial-origin';
 import { originCountryCode } from './editorial-origin-provider';
+import { catalogExclusions, catalogMatches, normalizedCheeseName } from './editorial-ai-catalog';
 export { editorialSourcePassages } from './editorial-research-topics';
 
 export type RunRow = {
@@ -21,34 +22,11 @@ export type RunRow = {
   created_by: string; created_at: Date; finished_at: Date | null; error: string | null;
   applied_entry_id: string | null; applied_revision: number | null;
 };
-export const normalizedCheeseName = (text: string) => text.normalize('NFKD').replace(new RegExp('\\p{M}', 'gu'), '')
-  .toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').replace(new RegExp('[^\\p{L}\\p{N}]+', 'gu'), ' ').trim();
 export function runDto(row: RunRow): EditorialAiRun {
   return { id: row.id, kind: row.kind, status: row.status, revision: row.revision, params: row.params,
     result: row.result, model: row.model, createdAt: new Date(row.created_at).toISOString(),
     finishedAt: row.finished_at ? new Date(row.finished_at).toISOString() : null, error: row.error,
     appliedTo: row.applied_entry_id ? { entryId: row.applied_entry_id, revision: row.applied_revision! } : null };
-}
-export async function catalogMatches(result: CatalogResult, database: Pick<typeof pool, 'query'>): Promise<CatalogResult> {
-  const entries = (await database.query("SELECT id,data FROM editorial_entries WHERE kind='cheese'")).rows;
-  const imports = (await database.query(`SELECT i.name_keys,i.country_code,e.id,e.data FROM editorial_ai_imports i
-    JOIN editorial_entries e ON e.id=i.entry_id`)).rows;
-  return { ...result, items: result.items.map(item => {
-    const keys = [normalizedCheeseName(item.nameOriginal), normalizedCheeseName(item.titleRu)];
-    const countries = [countryName(item.countryCode), item.countryCode,
-      new Intl.DisplayNames(['en'], { type: 'region' }).of(item.countryCode)!].map(normalizedCheeseName);
-    const matches = new Map<string, { id: string; title: string }>();
-    for (const row of entries) {
-      const entryKeys = [row.data.title, row.data.nameOriginal].filter(Boolean).map(normalizedCheeseName);
-      if (countries.includes(normalizedCheeseName(row.data.country)) && entryKeys.some(key => keys.includes(key)))
-        matches.set(row.id, { id: row.id, title: row.data.title });
-    }
-    for (const row of imports) {
-      if (row.country_code === item.countryCode && row.name_keys.some((key: string) => keys.includes(key)))
-        matches.set(row.id, { id: row.id, title: row.data.title });
-    }
-    return { ...item, matches: Array.from(matches.values()) };
-  }) };
 }
 export async function getAiRun(id: string, database = pool): Promise<EditorialAiRun> {
   let row: (RunRow & { expired?: boolean }) | undefined = (await database.query(
@@ -131,8 +109,10 @@ Propose a non-exhaustive cheese discovery list, explicitly unverified. Cultural 
 Return {"items":[{"nameOriginal":"original name","titleRu":"Russian name","countryCode":"ISO2",
 "regions":["Russian region names, multiple if appropriate"],"importance":1,"importanceNote":"why this subjective priority",
 "summary":"brief Russian description"}],"warnings":["all names/origins/priorities require operator verification"]}.
-Use only requested country codes, no duplicate cheeses, at most requested limit total. Include every requested country with
-balanced coverage. importance integer1..100(higher first).
+Use only requested country codes, no duplicate cheeses, at most requested limit total. Aim for balanced coverage of
+requested countries. The existingNames list contains cheese names already in the editor's catalogue; skip them
+including spelling variants, translations and aliases. Suggest other real cheeses instead. Fewer items, an omitted
+country or an empty items array is acceptable if there are no reliable alternatives. importance integer1..100(higher first).
 nameOriginal must preserve the cheese's name in its language of origin, with original spelling and diacritics,
 not an English translation or Russian transliteration. titleRu is the separate Russian name.
 For IT and FR provide traditional regions when known, otherwise empty array plus warning; never force a single region.`;
@@ -207,11 +187,12 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
   try {
     if (row.kind === 'catalog') {
       const params = row.params as CatalogRequest;
-      const raw = catalogModelSchema.parse(await deps.model(catalogPrompt, { countries: params.countries, limit: params.limit }));
+      const existingNames = await catalogExclusions(params.countries, database);
+      const raw = catalogModelSchema.parse(await deps.model(catalogPrompt, {
+        countries: params.countries, limit: params.limit, existingNames,
+      }));
       if (raw.items.length > params.limit || raw.items.some(item => !params.countries.includes(item.countryCode)))
         throw new Error('catalog outside requested scope');
-      if (params.countries.some(code => !raw.items.some(item => item.countryCode === code)))
-        throw new Error('missing requested country');
       const seen = new Set<string>();
       const items = raw.items.map(item => {
         const key = `${item.countryCode}:${normalizedCheeseName(item.nameOriginal)}`;
@@ -220,8 +201,10 @@ export async function executeAiRun(id: string, database = pool, deps: AiDependen
         return { ...item, id: randomUUID(), country: countryName(item.countryCode),
           suggestedImportance: item.importance, matches: [] };
       });
-      result = { items, warnings: [...raw.warnings,
-        ...items.filter(item => ['IT', 'FR'].includes(item.countryCode) && !item.regions.length)
+      const matched = await catalogMatches({ items, warnings: [] }, database);
+      const novel = matched.items.filter(item => item.matches.length === 0);
+      result = { items: novel, excludedCount: items.length - novel.length, warnings: [...raw.warnings,
+        ...novel.filter(item => ['IT', 'FR'].includes(item.countryCode) && !item.regions.length)
           .map(item => `Не указан регион происхождения: ${item.titleRu}. Уточните его по источникам; AI не заполняет пробелы догадками.`),
         'Предложение AI: происхождение, названия и приоритеты требуют проверки редактора.'] };
     } else {

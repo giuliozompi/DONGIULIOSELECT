@@ -270,6 +270,7 @@ export function EditorialAiCatalog({ onImported }: { onImported: () => void }) {
         {importResult.skipped.length > 0 && <p className="mt-1">Пропущены как совпадения: {importResult.skipped.map((item, index) => <span key={item.entryId}>{index > 0 && ' · '}<a className="underline underline-offset-2" href={`#entry-${encodeURIComponent(item.entryId)}`}>{item.title}</a></span>)}.</p>}
       </div>}
       {result && <>
+        {!!result.excludedCount && <p role="status" className="mt-3 text-sm text-[#51665a]">Уже есть в энциклопедии и исключены из каталога: {result.excludedCount}.</p>}
         {result.warnings.length > 0 && <div className="mt-3 rounded border border-[#dfc9b5] bg-[#f5ece2] p-3 text-sm text-[#75533e]"><strong>Замечания модели</strong><ul className="mt-1 list-inside list-disc">{result.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div>}
         <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_250px]">
           <Input value={query} onChange={event => setQuery(event.target.value)} placeholder="Поиск по сыру, стране или региону" aria-label="Поиск в каталоге" />
@@ -281,7 +282,7 @@ export function EditorialAiCatalog({ onImported }: { onImported: () => void }) {
           {regions.map(region => <option key={region} value={region}>{region}</option>)}
         </select></div>}
         {regions.length > 0 && <p className="mt-1 text-xs text-[#7a857b]">Фильтр регионов Италии и Франции: можно выбрать несколько. Сыр может иметь несколько регионов происхождения.</p>}
-        {visibleItems.length === 0 ? <div className="mt-4 rounded border border-dashed border-[#c9cbbf] p-7 text-center text-sm text-[#718075]"><FileSearch className="mx-auto mb-2 h-5 w-5" />По заданным условиям сыров не найдено.</div> :
+        {visibleItems.length === 0 ? <div className="mt-4 rounded border border-dashed border-[#c9cbbf] p-7 text-center text-sm text-[#718075]"><FileSearch className="mx-auto mb-2 h-5 w-5" />{items.length === 0 ? 'Нет новых предложений для выбранных стран. Уже существующие статьи не добавляются в каталог.' : 'По заданным условиям сыров не найдено.'}</div> :
           <div className="mt-4 space-y-2">
             {visibleItems.map((item, index) => <div key={item.id}>
               {(index === 0 || visibleItems[index - 1].countryCode !== item.countryCode) && <h3 className="mb-2 mt-4 font-serif text-lg text-[#315647]">{item.country}</h3>}

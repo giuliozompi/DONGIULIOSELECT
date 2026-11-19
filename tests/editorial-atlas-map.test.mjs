@@ -17,6 +17,10 @@ const items = [
   cheese('sicilia', 'Пекорино', 37.56, 14.27),
   cheese('sardegna', 'Фьоре Сардо', 40.5, 8.3),
   cheese('camembert', 'Камамбер', 48.89, 0.18, 'Франция'),
+  { ...cheese('vologda', 'Вологодский сыр', 59.22, 39.89, 'СССР'), atlasCountry: 'Россия' },
+  { ...cheese('sulguni', 'Сулугуни', 41.71, 44.79, 'СССР'), atlasCountry: 'Грузия' },
+  cheese('vermont', 'Вермонтский чеддер', 44.26, -72.57, 'США'),
+  cheese('tokachi', 'Сыр Токати', 42.92, 143.20, 'Япония'),
 ];
 
 test('atlas zooms to Italy and the selected country, keeping distinct places clickable on desktop and mobile', {
@@ -47,8 +51,12 @@ test('atlas zooms to Italy and the selected country, keeping distinct places cli
     } else if (path === '/web-api/editorial/map' || path === '/web-api/editorial/cheeses') {
       const country = searchParams.get('country');
       const search = searchParams.get('search')?.toLowerCase();
-      const filtered = items.filter(item => (!country || item.country === country) && (!search || item.title.toLowerCase().includes(search)));
-      body = JSON.stringify({ items: filtered, total: filtered.length, truncated: false, page: 1, limit: 12, countries: ['Италия', 'Франция', 'Германия'] });
+      const filtered = items.filter(item => (!country || (item.atlasCountry || item.country) === country) && (!search || item.title.toLowerCase().includes(search)));
+      const mapPage = searchParams.get('page');
+      const worldBatch = path.endsWith('/map') && mapPage !== null && country === null && search === undefined;
+      const batch = worldBatch ? (mapPage === '1' ? filtered.slice(0, -1) : filtered.slice(-1)) : filtered;
+      body = JSON.stringify({ items: batch, total: filtered.length, truncated: worldBatch && mapPage === '1',
+        page: 1, limit: 12, countries: ['Италия', 'Франция', 'Германия', 'Россия', 'Грузия', 'США', 'Япония'] });
     } else if (path.startsWith('/web-api/auth/')) {
       status = 401;
       body = '{}';
@@ -101,11 +109,30 @@ test('atlas zooms to Italy and the selected country, keeping distinct places cli
     await country('Франция');
     await page.wait(`!!document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Франция"]') && document.querySelectorAll('.ed-map-pin').length === 1 && !!document.querySelector('${pin('Камамбер')}')`);
     assert.equal(await page.evaluate(`document.querySelector('.ed-map-controls button').getAttribute('aria-pressed')`), 'true');
+    const searchInput = 'input[aria-label="Поиск сырных статей"]';
+    await page.fill(searchInput, 'Камамбер');
     await page.tap('.ed-map-controls button:last-child');
     await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта мира"]') && !document.querySelector('${focused}')`);
+    await page.wait(`!!document.querySelector('${pin('Вермонтский чеддер')}') && !!document.querySelector('${pin('Сыр Токати')}')`);
+    const globalPins = await page.evaluate(`Array.from(document.querySelectorAll('.ed-map-pin'), button => button.getAttribute('aria-label'))`);
+    for (const item of items) assert.ok(globalPins.some(label => label.includes(item.title)), item.title);
     assert.equal(await page.evaluate(`document.querySelector('.ed-filter-select select').value`), 'Франция');
+    assert.equal(await page.evaluate(`document.querySelector('${searchInput}').value`), 'Камамбер');
+    assert.equal(await page.evaluate(`document.querySelectorAll('.ed-cheese-grid a[href^="/web/cheeses/"]').length`), 1);
+    await page.tap('.ed-map-controls button:first-child');
+    await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Франция"]') && document.querySelectorAll('.ed-map-pin').length === 1 && !!document.querySelector('${pin('Камамбер')}')`);
+    await page.fill(searchInput, '');
     await country('Германия');
     await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Германия"]') && document.querySelector('.ed-map-box [role="status"]')?.textContent.includes('нет опубликованных')`);
+    await country('Россия');
+    await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Россия"]') && !!document.querySelector('${pin('Вологодский сыр')}')`);
+    await fit();
+    assert.equal(await page.evaluate(`Boolean(document.querySelector('${pin('Сулугуни')}'))`), false);
+    await page.tap(pin('Вологодский сыр'));
+    assert.match(await page.evaluate(`document.querySelector('.ed-map-aside').innerText`), /СССР[\s\S]*На современной карте: Россия/);
+    await country('Грузия');
+    await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Грузия"]') && !!document.querySelector('${pin('Сулугуни')}')`);
+    await fit();
     await country('');
     await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Италия"]') && document.querySelectorAll('.ed-map-pin').length === 4`);
     assert.deepEqual(errors, []);

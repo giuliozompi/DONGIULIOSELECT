@@ -15,6 +15,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { Order } from '@shared/schema';
 import { DELIVERY_METHOD_LABELS } from '@shared/schema';
 import { printAdminOrder, type AdminPrintFormat } from '@/lib/printAdminOrder';
+import { OrderCustomerComment } from '@/components/admin/OrderCustomerComment';
 
 interface MarkingLog {
   id: string;
@@ -167,6 +168,8 @@ export function OrderViewDialog({ order, open, onOpenChange }: OrderViewDialogPr
         </DialogHeader>
 
         <div className="space-y-6 print:space-y-4">
+          <OrderCustomerComment notes={order.deliveryNotes} />
+
           {/* Order Status */}
           <div className="flex items-center gap-4 print:gap-2">
             <span className="font-semibold">Статус:</span>

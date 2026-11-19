@@ -140,9 +140,12 @@ export function CheeseAtlasPage() {
     queryKey: ['/web-api/editorial/cheeses', search, country, page],
     queryFn: () => editorialPublicApi.cheeses({ search: search.trim() || undefined, country: country || undefined, page, limit: PAGE_SIZE }),
   });
+  const mapSearch = view === 'world' ? undefined : search.trim() || undefined;
+  const mapCountry = view === 'world' ? undefined : country || undefined;
   const map = useQuery({
-    queryKey: ['/web-api/editorial/map', search, country],
-    queryFn: () => editorialPublicApi.map({ search: search.trim() || undefined, country: country || undefined }),
+    queryKey: ['/web-api/editorial/map', view, mapSearch, mapCountry],
+    queryFn: ({ signal }) => view === 'world' ? editorialPublicApi.worldMap(signal)
+      : editorialPublicApi.map({ search: mapSearch, country: mapCountry }),
   });
   useEffect(() => {
     let active = true;
@@ -164,7 +167,7 @@ export function CheeseAtlasPage() {
   }, []);
   const countryName = country || 'Италия';
   const countryFeature = useMemo(() => view === 'country' ? matchCountryFeature(features, country || 'IT') : null, [features, country, view]);
-  const bounds = useMemo(() => countryFeature && getCountryBounds(countryFeature), [countryFeature]);
+  const bounds = useMemo(() => countryFeature && getCountryBounds(countryFeature, true), [countryFeature]);
   const frame = useMemo(() => fitAtlasMap(size.width, size.height, bounds), [size, bounds]);
   const shapes = useMemo(() => size.width && size.height ? features.map((feature, index) => ({
     key: index, d: atlasCountryPath(feature, frame), focused: feature === countryFeature,
@@ -196,11 +199,12 @@ export function CheeseAtlasPage() {
           })}
         </div>
         {map.isLoading ? <p className="ed-map-caption" role="status">Загружаем географию…</p> : map.data && !groups.length && <p className="ed-map-caption" role="status">В этой области нет опубликованных сырных статей с координатами.</p>}
-        <p className="ed-map-caption">География происхождения сыра; не место производства товара в каталоге. Нажмите точку или группу, чтобы выбрать статью.</p>
+        {view === 'world' && (country || search.trim()) && <p className="ed-map-caption">На карте мира показаны сыры всех стран. Фильтры применяются только к списку статей.</p>}
+        <p className="ed-map-caption">Точки происхождения показаны на карте современных стран. Историческое название страны указано в статье. Нажмите точку или группу, чтобы выбрать статью.</p>
       </section>
       <aside className="ed-map-aside">
         <div className="ed-kicker">{focus ? `Регион происхождения · ${focus.country}` : nearbyCheeses.length ? `Сыры рядом · ${nearbyCheeses.length}` : 'Сырная география'}</div>
-        {focus ? <><h2>{focus.title}{focus.nameOriginal && <span className="ml-2 text-sm font-normal italic text-[#738078]">{focus.nameOriginal}</span>}</h2><p>{focus.region || focus.country}</p><Image src={focus.photo} alt={focus.title} className="ed-aside-photo" /><p>{focus.description || 'Описание не предоставлено.'}</p><Link href={`/web/cheeses/${focus.id}`} className="ed-primary-link">Открыть статью <ArrowRight size={15} /></Link></> :
+        {focus ? <><h2>{focus.title}{focus.nameOriginal && <span className="ml-2 text-sm font-normal italic text-[#738078]">{focus.nameOriginal}</span>}</h2><p>{focus.region || focus.country}</p>{focus.atlasCountry && focus.atlasCountry !== focus.country && <p>На современной карте: {focus.atlasCountry}</p>}<Image src={focus.photo} alt={focus.title} className="ed-aside-photo" /><p>{focus.description || 'Описание не предоставлено.'}</p><Link href={`/web/cheeses/${focus.id}`} className="ed-primary-link">Открыть статью <ArrowRight size={15} /></Link></> :
           nearbyCheeses.length ? <div className="ed-pin-list">{nearbyCheeses.map(item => <Link key={item.id} href={`/web/cheeses/${item.id}`} className="ed-pin-list-item"><Image src={item.photo} alt="" className="ed-pin-list-photo" /><span><strong>{item.title}</strong>{item.nameOriginal && <small>{item.nameOriginal}</small>}<small>{item.region || item.country}</small></span></Link>)}</div> :
           <p>Выберите точку на карте или статью из списка. Если карта недоступна, список остаётся основным способом навигации.</p>}
         <div className="ed-note">Историческое происхождение не означает, что конкретный товар произведён в этом регионе.</div>

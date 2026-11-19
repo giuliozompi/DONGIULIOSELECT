@@ -41,6 +41,7 @@ import { ImageUploadField } from '@/components/ImageUploadField';
 import { MarkingCodesDialog } from '@/components/MarkingCodesDialog';
 import { DeliveryDialog } from '@/components/DeliveryDialog';
 import { OrderViewDialog } from '@/components/OrderViewDialog';
+import { OrderCustomerComment } from '@/components/admin/OrderCustomerComment';
 import { AddressAutocomplete, type AddressSuggestion } from '@/components/AddressAutocomplete';
 import { CdekPvzSelector } from '@/components/CdekPvzSelector';
 import { getAbsoluteImageUrl } from '@/lib/imageUtils';
@@ -1375,6 +1376,8 @@ function OrderEditDialog({ order, open, onOpenChange, isMasterAdmin = false }: O
             {order.customerName} • {format(new Date(order.createdAt), 'dd.MM.yyyy HH:mm')}
           </DialogDescription>
         </DialogHeader>
+
+        <OrderCustomerComment notes={displayOrder.deliveryNotes} />
 
         {!editable && (
           <div className="bg-muted p-4 rounded-md" data-testid="order-not-editable-notice">

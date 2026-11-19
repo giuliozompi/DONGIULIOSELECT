@@ -15,6 +15,7 @@ import { isKilogramUnit, parseOrderQuantity } from '@shared/order-quantity';
 import { OrderWeightEditor } from '../components/OrderWeightEditor';
 import { PaymentLinkControls } from '../components/PaymentLinkControls';
 import { PaymentLinkNotice } from '@/components/admin/PaymentLinkNotice';
+import { OrderCustomerComment } from '@/components/admin/OrderCustomerComment';
 import type { PaymentNotificationFields } from '@shared/payment-link-delivery';
 import type { PaymentLinkState } from '@shared/payment-link-attempts';
 import { printAdminOrder, type AdminPrintFormat } from '@/lib/printAdminOrder';
@@ -248,6 +249,7 @@ export default function AdminOrders() {
 
         {o && (
           <>
+            <OrderCustomerComment notes={o.deliveryNotes} />
             <PaymentLinkControls
               orderId={o.id}
               state={orderError ? undefined : o.paymentLinkState as PaymentLinkState | undefined}
@@ -278,7 +280,6 @@ export default function AdminOrders() {
                   <div><p className="text-muted-foreground text-xs">Способ получения</p><p className="font-medium">{deliveryMethodLabel(o.deliveryMethod || o.deliveryType)}</p></div>
                   {o.deliveryAddress && <div className="col-span-2"><p className="text-muted-foreground text-xs">Адрес</p><p className="font-medium">{o.deliveryAddress}</p></div>}
                   {o.desiredDeliveryDate && <div className="col-span-2"><p className="text-muted-foreground text-xs">Желаемая дата получения</p><p className="font-medium">{formatDesiredDate(o.desiredDeliveryDate)}</p></div>}
-                  {o.deliveryNotes && <div className="col-span-2"><p className="text-muted-foreground text-xs">Комментарий к заказу</p><p className="font-medium whitespace-pre-wrap break-words">{o.deliveryNotes}</p></div>}
                 </div>
                 <Separator />
                 <div className="space-y-2">

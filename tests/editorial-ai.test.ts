@@ -76,9 +76,9 @@ beforeEach(async () => {
   await db.query('TRUNCATE editorial_ai_imports,editorial_ai_runs,editorial_publications,editorial_entries,admin_action_logs');
   apiModelCalls = 0;
 });
-async function readyCatalog() {
-  const reserved = await reserveAiRun('catalog', catalogParams(), 'operator', db);
-  await executeAiRun(reserved.run.id, db, deps);
+async function readyCatalog(custom = deps, params = catalogParams()) {
+  const reserved = await reserveAiRun('catalog', params, 'operator', db);
+  await executeAiRun(reserved.run.id, db, custom);
   return getAiRun(reserved.run.id, db);
 }
 async function cheese(published = false) {
@@ -163,19 +163,22 @@ test('generation reservation is idempotent, single-flight and persists history w
   assert.equal((await aiHistory('catalog', 1, db)).total, 1);
   assert.equal((await aiHistory('catalog', 2, db)).items.length, 0);
 });
-test('catalogue ranking persists; imports are drafts, preserve multi-region origins and skip manual/cross-run/racing duplicates', async () => {
-  const existing = await cheese();
+test('catalogue ranking persists and imports recheck entries created after generation', async () => {
   let run = await readyCatalog();
   const result = run.result as CatalogResult, italy = result.items[0], france = result.items[1];
-  assert.equal(italy.matches[0].id, existing.id);
+  assert.equal(italy.matches.length, 0);
+  const existing = await cheese();
   run = await rankAiCatalog(run.id, { revision: run.revision, ranks: [{ id: france.id, importance: 99 }] }, 'operator', db);
-  const ranked = (run.result as CatalogResult).items[1];
+  const revised = run.result as CatalogResult;
+  const ranked = revised.items[1];
+  assert.equal(revised.items[0].matches[0].id, existing.id);
   assert.equal(ranked.importance, 99); assert.equal(ranked.suggestedImportance, 90);
   const [a, b] = await Promise.all([
     importAiCatalog(run.id, { revision: run.revision, itemIds: [italy.id, france.id] }, 'operator', db),
     importAiCatalog(run.id, { revision: run.revision, itemIds: [france.id] }, 'operator', db),
   ]);
   assert.equal(a.created.length + b.created.length, 1);
+  assert.equal(a.skipped.find(item => item.itemId === italy.id)?.entryId, existing.id);
   const imported = [...a.created, ...b.created][0];
   assert.equal((imported.data as any).status, 'draft');
   assert.equal((imported.data as any).history, '');
@@ -183,10 +186,54 @@ test('catalogue ranking persists; imports are drafts, preserve multi-region orig
   assert.equal(imported.publication, null);
   assert.equal((await publicEditorialList('cheese', { search: '', page: 1, limit: 12 }, db)).total, 0);
   const second = await readyCatalog();
-  const secondResult = await importAiCatalog(second.id, { revision: second.revision,
-    itemIds: (second.result as CatalogResult).items.map(item => item.id) }, 'operator', db);
-  assert.equal(secondResult.created.length, 0); assert.equal(secondResult.skipped.length, 2);
+  assert.equal(second.status, 'ready');
+  assert.deepEqual((second.result as CatalogResult).items, []);
+  assert.equal((second.result as CatalogResult).excludedCount, 2);
   await assert.rejects(rankAiCatalog(run.id, { revision: 1, ranks: [{ id: france.id, importance: 1 }] }, 'operator', db), fails(409));
+});
+test('catalogue excludes draft, approved and live identities before presenting suggestions', async () => {
+  const initial = await cheese(true);
+  await saveEditorial('cheese', { ...initial.data, title: 'Рабочее название', nameOriginal: 'Working name' },
+    'operator', initial, db);
+  await saveEditorial('cheese', { ...initial.data, title: 'Камамбер', nameOriginal: '', country: 'France', status: 'ready' },
+    'operator', undefined, db);
+  await saveEditorial('cheese', { title: 'Том де Савуа', nameOriginal: 'Tome des Bauges', country: 'Франция', status: 'draft' },
+    'operator', undefined, db);
+  await saveEditorial('cheese', { title: 'Советский сыр', country: 'СССР', status: 'draft' },
+    'operator', undefined, db);
+  const before = await db.query('SELECT id,revision,data FROM editorial_entries ORDER BY id');
+  const [italy, france] = catalog().items;
+  let calls = 0;
+  const ready = await readyCatalog({ ...deps, model: async (system, input) => {
+    calls++;
+    assert.match(system, /skip them/);
+    const request = input as { existingNames: string[] };
+    assert.ok(['Пармиджано Реджано', 'Рабочее название', 'Камамбер', 'Tome des Bauges', 'Советский сыр'].every(name => request.existingNames.includes(name)));
+    assert.doesNotMatch(JSON.stringify(input), /PRIVATE_DO_NOT_SEND|Old history|example\.org/);
+    return { items: [
+      { ...italy, titleRu: 'ПАРМИДЖАНО–РЕДЖАНО' },
+      { ...france, titleRu: 'Камамбер' },
+      { ...france, titleRu: 'Том-де-Бож', nameOriginal: 'Tôme des Bauges' },
+      { ...france, titleRu: 'Советский сыр', nameOriginal: 'Sovetsky', countryCode: 'RU' },
+      { ...italy, titleRu: 'Азиаго', nameOriginal: 'Asiago' },
+    ], warnings: [] };
+  } }, { ...catalogParams(), countries: ['IT', 'FR', 'RU'], limit: 5 });
+  assert.equal(ready.status, 'ready', ready.error ?? '');
+  assert.equal(calls, 1);
+  const result = ready.result as CatalogResult;
+  assert.equal(result.excludedCount, 4);
+  assert.deepEqual(result.items.map(item => item.nameOriginal), ['Asiago']);
+  const saved = await db.query('SELECT result FROM editorial_ai_runs WHERE id=$1', [ready.id]);
+  assert.deepEqual(saved.rows[0].result, result);
+  assert.deepEqual((await db.query('SELECT id,revision,data FROM editorial_entries ORDER BY id')).rows, before.rows);
+});
+test('catalogue accepts no reliable alternatives without retrying or importing', async () => {
+  let calls = 0;
+  const ready = await readyCatalog({ ...deps, model: async () => { calls++; return { items: [], warnings: [] }; } });
+  assert.equal(ready.status, 'ready');
+  assert.equal(calls, 1);
+  assert.deepEqual((ready.result as CatalogResult).items, []);
+  assert.equal(await publicEditorialList('cheese', { search: '', page: 1, limit: 12 }, db).then(page => page.total), 0);
 });
 test('original cheese name persists, is optional for legacy data, and is public/searchable only after publication', async () => {
   const c = await cheese();
@@ -197,7 +244,8 @@ test('original cheese name persists, is optional for legacy data, and is public/
   const alternateTitle = await saveEditorial('cheese', { ...updated.data, title: 'Другой русский вариант' },
     'operator', updated, db);
   const run = await readyCatalog();
-  assert.equal((run.result as CatalogResult).items[0].matches[0].id, c.id);
+  assert.equal((run.result as CatalogResult).excludedCount, 1);
+  assert.deepEqual((run.result as CatalogResult).items.map(item => item.nameOriginal), ['Camembert']);
   await changePublication(alternateTitle.id, alternateTitle.revision, true, 'operator', db);
   const page = await publicEditorialList('cheese', { search: 'Parmigiano', page: 1, limit: 10 }, db);
   assert.equal(page.total, 1);

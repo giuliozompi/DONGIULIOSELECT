@@ -92,7 +92,7 @@ export const catalogModelItemSchema = z.object({
   importanceNote: text(1000).min(1), summary: text(2000),
 }).strict();
 export const catalogModelSchema = z.object({
-  items: z.array(catalogModelItemSchema).min(1).max(30),
+  items: z.array(catalogModelItemSchema).max(30),
   warnings: z.array(text(2000)).max(20),
 }).strict();
 export const aiFieldNames = ['title', 'description', 'country', 'region', 'history', 'characteristics', 'culinaryUses'] as const;
@@ -143,7 +143,7 @@ export type ResearchReport = {
   coverage?: ResearchCoverage[]; photos?: ResearchPhoto[];
   queryPlan?: { topic: ResearchTopic | 'photos'; label: string; query: string }[];
 };
-export type CatalogResult = { items: CatalogItem[]; warnings: string[] };
+export type CatalogResult = { items: CatalogItem[]; warnings: string[]; excludedCount?: number };
 export type DraftResult = z.infer<typeof draftModelSchema> & { sources: AiSource[]; research?: ResearchReport; origin?: OriginLookup };
 export interface EditorialAiRun {
   id: string; kind: 'catalog' | 'draft'; status: 'running' | 'ready' | 'failed';
