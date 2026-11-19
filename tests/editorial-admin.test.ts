@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import pg from 'pg';
 import express from 'express';
 import type { Server } from 'node:http';
-import { saveEditorial, deleteEditorial, moderateEditorial, listEditorial, EditorialError } from '../server/services/editorial';
+import { saveEditorial, deleteEditorial, moderateEditorial, listEditorial, approveDraftCheeses, EditorialError } from '../server/services/editorial';
 import { registerAdminEditorialRoutes } from '../server/adminEditorialRoutes';
 import { registerPublicEditorialRoutes } from '../server/publicEditorialRoutes';
 import { registerPriceSubmissionRoutes } from '../server/priceSubmissionRoutes';
@@ -209,7 +209,8 @@ test('all editorial API methods reject guests and non-admins before work', async
   for (const [method, path, body] of [
     ['GET', '?kind=video', undefined], ['POST', '', {}], ['PATCH', `/${id}`, {}],
     ['DELETE', `/${id}?revision=1`, undefined], ['POST', `/${id}/moderate`, {}],
-    ['POST', `/${id}/publish`, {}], ['POST', `/${id}/unpublish`, {}], ['POST', '/cheese/publish-batch', {}],
+    ['POST', `/${id}/publish`, {}], ['POST', `/${id}/unpublish`, {}],
+    ['POST', '/cheese/publish-batch', {}], ['POST', '/cheese/approve-batch', {}],
   ] as const) {
     assert.equal((await api(method, path, body, null)).status, 401);
     assert.equal((await api(method, path, body, 'test-client')).status, 403);
@@ -344,6 +345,79 @@ test('concurrent combined saves accept only one editor revision and publish that
 });
 const batchItem = ({ id, revision }: { id: string; revision: number }) => ({ id, revision });
 const batchPath = '/cheese/publish-batch';
+const approvalPath = '/cheese/approve-batch';
+
+test('bulk approval moves complete drafts and review requests only to the private approved queue', async () => {
+  const draft = await saveEditorial('cheese', { ...readyCheese(), title: 'Draft selection', status: 'draft' }, 'editor', undefined, database);
+  const review = await saveEditorial('cheese', { ...readyCheese(), title: 'Review selection', status: 'pending_review' }, 'editor', undefined, database);
+  const unselected = await saveEditorial('cheese', { ...readyCheese(), status: 'draft' }, 'editor', undefined, database);
+  const selection = [draft, review].map(batchItem);
+  const response = await api('POST', approvalPath, { entries: selection });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { approvedCount: 2 });
+  const approved = await listEditorial('cheese', 0, 20, database, 'approved');
+  assert.equal(approved.total, 2);
+  for (const old of [draft, review]) {
+    const current = approved.items.find(item => item.id === old.id);
+    assert.ok(current);
+    assert.deepEqual(current.data, { ...old.data, status: 'ready' });
+    assert.equal(current.revision, old.revision + 1);
+    assert.equal(current.publication, null);
+  }
+  assert.deepEqual((await listEditorial('cheese', 0, 20, database, 'drafts')).items.map(item => item.id), [unselected.id]);
+  assert.equal((await publicEditorialList('cheese', publicFilters, database)).total, 0);
+  const logs = (await database.query(`SELECT entity_id, admin_user_id, action_data FROM admin_action_logs WHERE action_type='approved'`)).rows;
+  assert.equal(logs.length, 2);
+  assert.deepEqual(new Set(logs.map(log => log.entity_id)), new Set(selection.map(item => item.id)));
+  assert.ok(logs.every(log => log.admin_user_id === 'operator-test' && log.action_data.newData.data.status === 'ready'));
+  assert.equal((await api('POST', approvalPath, { entries: selection })).status, 409);
+  assert.equal((await api('POST', batchPath, { entries: approved.items.map(batchItem) })).status, 200, 'publication is a separate confirmed operation');
+  assert.equal((await publicEditorialList('cheese', publicFilters, database)).total, 2);
+});
+
+test('bulk approval rejects incomplete, changed, approved or public records without approving the rest', async () => {
+  const draftData = { ...readyCheese(), status: 'draft' as const };
+  const first = await saveEditorial('cheese', draftData, 'editor', undefined, database);
+  const incomplete = await saveEditorial('cheese', cheese(), 'editor', undefined, database);
+  const approved = await saveEditorial('cheese', readyCheese(), 'editor', undefined, database);
+  const published = await publishedCheese();
+  const editedPublic = await saveEditorial('cheese', draftData, 'editor', published, database);
+  const videoEntry = await saveEditorial('video', video(), 'editor', undefined, database);
+  const outdated = await saveEditorial('cheese', draftData, 'editor', undefined, database);
+  await saveEditorial('cheese', { ...draftData, title: 'Edited' }, 'another', outdated, database);
+  const approveWith = (item: { id: string; revision: number }) => api('POST', approvalPath, { entries: [batchItem(first), batchItem(item)] });
+  for (const item of [incomplete, approved, editedPublic, videoEntry, outdated])
+    assert.equal((await approveWith(item)).status, 409);
+  assert.equal((await approveWith({ id: randomUUID(), revision: 1 })).status, 404);
+  assert.equal((await approveWith(first)).status, 400);
+  const stillDraft = (await listEditorial('cheese', 0, 20, database, 'drafts')).items.find(item => item.id === first.id);
+  assert.deepEqual(stillDraft, first);
+  assert.deepEqual((await listEditorial('cheese', 0, 20, database, 'approved')).items.map(item => item.id), [approved.id]);
+  assert.equal((await publicEditorialList('cheese', publicFilters, database)).total, 1);
+  assert.equal((await database.query("SELECT count(*)::int AS n FROM admin_action_logs WHERE action_type='approved'")).rows[0].n, 0);
+});
+
+test('a failed audit on the second approval leaves both revisions in preparation', async () => {
+  const draft = { ...readyCheese(), status: 'pending_review' as const };
+  const first = await saveEditorial('cheese', draft, 'editor', undefined, database);
+  const second = await saveEditorial('cheese', { ...draft, title: 'Reject approval audit' }, 'editor', undefined, database);
+  await database.query(`CREATE FUNCTION fail_second_approval_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.action_type='approved' AND NEW.action_data #>> '{newData,data,title}'='Reject approval audit'
+      THEN RAISE EXCEPTION 'test bulk approval audit failure'; END IF;
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER fail_approval BEFORE INSERT ON admin_action_logs FOR EACH ROW EXECUTE FUNCTION fail_second_approval_audit();`);
+  try {
+    await assert.rejects(approveDraftCheeses({ entries: [first, second].map(batchItem) }, 'editor', database), /bulk approval audit failure/);
+    const items = (await listEditorial('cheese', 0, 20, database, 'drafts')).items;
+    assert.equal(items.length, 2);
+    assert.ok(items.every(item => item.revision === 1 && 'status' in item.data && item.data.status === 'pending_review'));
+    assert.equal((await database.query("SELECT count(*)::int AS n FROM admin_action_logs WHERE action_type='approved'")).rows[0].n, 0);
+  } finally {
+    await database.query('DROP TRIGGER fail_approval ON admin_action_logs; DROP FUNCTION fail_second_approval_audit()');
+  }
+});
 
 test('bulk publication exposes exactly the selected approved cheeses with a single timestamp and one audit each', async () => {
   const cards = [];

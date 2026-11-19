@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { editorialKinds } from '../shared/editorial';
 import { cheeseEditorialStages } from '../shared/editorial-stages';
 import { pool } from './db';
-import { EditorialError, listEditorial, saveEditorial, deleteEditorial, moderateEditorial } from './services/editorial';
+import { EditorialError, listEditorial, saveEditorial, deleteEditorial, moderateEditorial, approveDraftCheeses } from './services/editorial';
 import { changePublication, publishApprovedCheeses } from './services/editorial-publication';
 
 const kind = z.enum(editorialKinds);
@@ -36,6 +36,9 @@ export function registerAdminEditorialRoutes(app: Express, guards: RequestHandle
   app.post(base, ...guards, handle(async (req, res, operator) => {
     const body = z.object({ kind, data: z.unknown(), publish: z.boolean().default(false) }).strict().parse(req.body);
     res.status(201).json(await saveEditorial(body.kind, body.data, operator, undefined, database, body.publish));
+  }));
+  app.post(`${base}/cheese/approve-batch`, ...guards, handle(async (req, res, operator) => {
+    res.json(await approveDraftCheeses(req.body, operator, database));
   }));
   app.post(`${base}/cheese/publish-batch`, ...guards, handle(async (req, res, operator) => {
     res.json(await publishApprovedCheeses(req.body, operator, database));

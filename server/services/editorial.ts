@@ -1,7 +1,7 @@
 import type pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { pool } from '../db';
-import { editorialSchemas, type EditorialKind, type EditorialEntry, type CheeseData, type VideoData, type PriceData } from '../../shared/editorial';
+import { cheeseDataSchema, cheeseEditorialBatchSchema, editorialSchemas, type EditorialKind, type EditorialEntry, type CheeseData, type VideoData, type PriceData } from '../../shared/editorial';
 import type { CheeseEditorialStage } from '../../shared/editorial-stages';
 
 export class EditorialError extends Error {
@@ -130,6 +130,32 @@ export async function saveEditorial(kind: EditorialKind, input: unknown, actor: 
       return published;
     }
     return current;
+  });
+}
+export async function approveDraftCheeses(input: unknown, actor: string, database = pool) {
+  if (!actor) throw new EditorialError(401, 'Требуется авторизация');
+  const { entries } = cheeseEditorialBatchSchema.parse(input);
+  return transaction(database, async client => {
+    for (const { id, revision } of entries) {
+      const previous: Row | undefined = (await client.query(`SELECT e.*,p.published_at,p.published_revision
+        FROM editorial_entries e LEFT JOIN editorial_publications p ON p.entry_id=e.id
+        WHERE e.id=$1 FOR UPDATE OF e`, [id])).rows[0];
+      if (!previous) throw new EditorialError(404, 'Статья не найдена. Ни одна статья не одобрена.');
+      const cheese = previous.data as CheeseData;
+      if (previous.kind !== 'cheese' || previous.published_at || previous.revision !== revision ||
+        (cheese.status !== 'draft' && cheese.status !== 'pending_review'))
+        throw new EditorialError(409, 'Одна из выбранных статей изменилась или уже не находится в подготовке. Ни одна статья не одобрена.');
+      const validated = cheeseDataSchema.safeParse({ ...cheese, status: 'ready' });
+      if (!validated.success)
+        throw new EditorialError(409, `«${cheese.title}» не готова к одобрению: проверьте обязательные поля. Ни одна статья не одобрена.`);
+      await references(client, 'cheese', validated.data);
+      // Approval changes only the editorial status, not the saved content or a public snapshot.
+      const saved: Row = (await client.query(`UPDATE editorial_entries SET
+        data=jsonb_set(data,'{status}',to_jsonb('ready'::text)),revision=revision+1,updated_by=$2,updated_at=now()
+        WHERE id=$1 RETURNING *`, [id, actor])).rows[0];
+      await audit(client, actor, 'approved', id, entry(previous), entry(saved));
+    }
+    return { approvedCount: entries.length };
   });
 }
 export async function moderateEditorial(id: string, revision: number, decision: 'approved' | 'rejected',

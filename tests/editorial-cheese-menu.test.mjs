@@ -8,14 +8,14 @@ const build = process.env.EDITORIAL_MENU_BUILD_DIR;
 const base = build ? 'https://editorial-menu.example.test'
   : process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '';
 
-test('single and bulk cheese publication return to preparation and preserve the selected public snapshots', {
+test('cheese staging separates bulk approval from publication and preserves single-card workflows', {
   skip: !base, timeout: 90000,
 }, async () => {
   const browser = await launchBrowser();
   const page = await browser.newPage();
   const requests = [], unexpected = [], exceptions = [], writes = [];
-  const batchRequests = [];
-  let failNextSave = false, conflictNextBatch = false;
+  const batchRequests = [], approvalRequests = [];
+  let failNextSave = false, conflictNextBatch = false, conflictNextApproval = false;
   const entries = Array.from({ length: 26 }, (_, i) => ({
     id: `11111111-1111-4111-8111-${String(i).padStart(12, '0')}`,
     kind: 'cheese', revision: 2, createdBy: 'fixture', updatedBy: 'fixture',
@@ -32,6 +32,8 @@ test('single and bulk cheese publication return to preparation and preserve the 
   }));
   entries[25].data.status = 'draft';
   entries[25].revision = 3;
+  entries[2].data.history = '';
+  entries[3].data.status = 'pending_review';
   const stageOf = entry => entry.publication ? 'published' : entry.data.status === 'ready' ? 'approved' : 'drafts';
   async function clickText(text, scope = 'document') {
     await page.evaluate(`(() => { const el=[...${scope}.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(text)}); if(!el)throw Error('Missing button');el.setAttribute('data-test-click',''); })()`);
@@ -77,6 +79,24 @@ test('single and bulk cheese publication return to preparation and preserve the 
       requests.push({ stage, kind, offset });
       const filtered = kind === 'cheese' ? entries.filter(e => !stage || stageOf(e) === stage) : [];
       body = { items: filtered.slice(offset, offset + limit), total: filtered.length };
+    } else if (path === '/web-api/admin/editorial/cheese/approve-batch' && event.request.method === 'POST') {
+      const request = JSON.parse(event.request.postData);
+      approvalRequests.push(request);
+      if (conflictNextApproval) {
+        conflictNextApproval = false;
+        entries.find(e => e.id === request.entries[1].id).revision++;
+        code = 409;
+        body = { error: 'Fixture approval conflict' };
+      } else {
+        for (const { id, revision } of request.entries) {
+          const item = entries.find(e => e.id === id);
+          if (item.revision !== revision || stageOf(item) !== 'drafts' || !item.data.history)
+            unexpected.push(`Invalid approval selection: ${id}`);
+          item.revision++;
+          item.data.status = 'ready';
+        }
+        body = { approvedCount: request.entries.length };
+      }
     } else if (path === '/web-api/admin/editorial/cheese/publish-batch' && event.request.method === 'POST') {
       const request = JSON.parse(event.request.postData);
       batchRequests.push(request);
@@ -255,7 +275,7 @@ test('single and bulk cheese publication return to preparation and preserve the 
     const review = '[data-testid="cheese-batch-review"]', confirm = '[data-testid="cheese-batch-confirm"]';
     const pick = row => `[data-testid="cheese-batch-select-${row.id}"]`;
     await page.wait(`${selected('drafts')} && document.querySelectorAll('[id^="entry-"]').length===20`);
-    assert.equal(await page.evaluate(`Boolean(document.querySelector('${toolbar}'))`), false);
+    assert.equal(await page.evaluate(`document.querySelector('${toolbar}')?.dataset.action`), 'approve');
     await page.click('[data-testid="cheese-stage-approved"]');
     await page.wait(`${selected('approved')} && !!document.querySelector('${pick(approvedRows[0])}')`);
     assert.equal(await page.evaluate(`document.querySelector('${review}').disabled`), true);
@@ -296,6 +316,44 @@ test('single and bulk cheese publication return to preparation and preserve the 
     await page.click('[data-testid="cheese-stage-published"]');
     await page.wait(`${selected('published')} && !!document.getElementById('entry-${approvedRows[0].id}')`);
     assert.equal(await page.evaluate(`Boolean(document.querySelector('${toolbar}'))`), false);
+
+    await page.click('[data-testid="cheese-stage-drafts"]');
+    await page.wait(`${selected('drafts')} && !!document.querySelector('${pick(entries[1])}')`);
+    assert.equal(await page.evaluate(`Boolean(document.querySelector('${pick(entries[2])}'))`), false, 'incomplete article is not selectable');
+    assert.ok(await page.evaluate(`document.getElementById('entry-${entries[2].id}').innerText.includes('заполните обязательные поля')`));
+    await clickText('Выбрать все готовые на странице', `document.querySelector('${toolbar}')`);
+    await page.wait(`document.querySelectorAll('[data-testid^="cheese-batch-select-"]:checked').length===19`);
+    await clickText('Снять выбор', `document.querySelector('${toolbar}')`);
+    await page.wait(`document.querySelector('${review}').disabled`);
+    const toApprove = [entries[1], entries[3]];
+    for (const item of toApprove) await page.click(pick(item));
+    await page.click(review);
+    await page.wait(`document.querySelector('${dialog}')?.querySelectorAll('li').length===2`);
+    assert.ok(await page.evaluate(`document.querySelector('${dialog}').innerText.includes('не будут опубликованы')`));
+    assert.equal(approvalRequests.length, 0);
+    await clickText('Отмена', `document.querySelector('${dialog}')`);
+    await page.wait(`!document.querySelector('${dialog}')`);
+    assert.equal(approvalRequests.length, 0);
+    conflictNextApproval = true;
+    await page.evaluate(`document.querySelector('${review}').click()`);
+    await page.wait(`Boolean(document.querySelector('${confirm}'))`);
+    await page.click(confirm);
+    await page.wait(`document.querySelector('${dialog}')?.innerText.includes('Fixture approval conflict')`);
+    assert.ok(toApprove.every(row => stageOf(row) === 'drafts'));
+    await clickText('Обновить список', `document.querySelector('${dialog}')`);
+    await page.wait(`!document.querySelector('${dialog}') && Boolean(document.querySelector('${review}')?.disabled)`);
+    for (const item of toApprove) await page.click(pick(item));
+    await page.click(review);
+    await page.wait(`Boolean(document.querySelector('${confirm}'))`);
+    await page.click(confirm);
+    await page.wait(`${selected('drafts')} && !document.querySelector('${dialog}') && document.body.innerText.includes('Одобрено статей: 2')`);
+    assert.equal(approvalRequests.length, 2);
+    assert.deepEqual(approvalRequests[1].entries, toApprove.map(({ id, revision }) => ({ id, revision: revision - 1 })));
+    assert.equal(batchRequests.length, 2, 'approval never calls publication');
+    assert.ok(toApprove.every(row => stageOf(row) === 'approved'));
+    assert.equal(stageOf(entries[2]), 'drafts');
+    await page.click('[data-testid="cheese-stage-approved"]');
+    await page.wait(`${selected('approved')} && !!document.querySelector('${pick(entries[1])}') && !!document.querySelector('${pick(entries[3])}')`);
 
     await page.send('Page.navigate', { url: `${base}/web/admin/videos` });
     await page.wait(`document.body.innerText.includes('Видео и материалы')`);

@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import { pool } from '../db';
-import { cheesePublicationBatchSchema, editorialSchemas } from '../../shared/editorial';
+import { cheeseEditorialBatchSchema, editorialSchemas } from '../../shared/editorial';
 import { transaction, audit, entry, EditorialError, type Row } from './editorial';
 
 export async function changePublication(id: string, revision: number, publish: boolean, actor: string, database = pool) {
@@ -10,7 +10,7 @@ export async function changePublication(id: string, revision: number, publish: b
 
 export async function publishApprovedCheeses(input: unknown, actor: string, database = pool) {
   if (!actor) throw new EditorialError(401, 'Требуется авторизация');
-  const { entries } = cheesePublicationBatchSchema.parse(input);
+  const { entries } = cheeseEditorialBatchSchema.parse(input);
   return transaction(database, async client => {
     // A conflict or an audit failure rolls back every snapshot in the batch.
     for (const { id, revision } of entries)

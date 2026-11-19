@@ -16,6 +16,8 @@ export const editorialApi = {
     webApi.post<EditorialEntry>(`${base}/${record.id}/moderate`, { revision: record.revision, decision, note }),
   publish: (record: EditorialEntry) =>
     webApi.post<EditorialEntry>(`${base}/${record.id}/publish`, { revision: record.revision }),
+  approveDraftCheeses: (entries: Pick<EditorialEntry, 'id' | 'revision'>[]) =>
+    webApi.post<{ approvedCount: number }>(`${base}/cheese/approve-batch`, { entries }),
   publishApprovedCheeses: (entries: Pick<EditorialEntry, 'id' | 'revision'>[]) =>
     webApi.post<{ publishedCount: number }>(`${base}/cheese/publish-batch`, { entries }),
   unpublish: (record: EditorialEntry) =>
