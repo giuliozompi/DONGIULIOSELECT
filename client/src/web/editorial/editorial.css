@@ -68,14 +68,15 @@
 .ed-map-controls button.active { border-color: var(--ed-olive); background: var(--ed-olive); color: white; }
 .ed-map-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(260px, .78fr); gap: 18px; align-items: stretch; }
 .ed-map-box { padding: 12px; min-width: 0; }
-.ed-map-canvas { position: relative; width: 100%; overflow: hidden; background: #e7eee8; }
+.ed-map-canvas { position: relative; width: 100%; min-height: 320px; aspect-ratio: 860 / 540; overflow: hidden; background: #e7eee8; }
+.ed-map-canvas.ed-map-world { min-height: 225px; aspect-ratio: 860 / 440; }
 .ed-map-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.ed-map-pin { position: absolute; z-index: 1; display: grid; justify-items: center; align-content: center; gap: 2px; min-width: 48px; min-height: 48px; padding: 2px; transform: translate(-50%, -50%); border: 0; background: transparent; cursor: pointer; }
+.ed-map-pin { position: absolute; z-index: 1; display: grid; place-items: center; padding: 0; transform: translate(-50%, -50%); border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
 .ed-map-pin:focus-visible, .ed-pin-list-item:focus-visible { outline: 3px solid var(--ed-gold); outline-offset: 2px; }
-.ed-pin-photo { width: 48px; height: 48px; border: 3px solid #fff8e8; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 8px #38452d50; }
-.ed-pin-label { max-width: 140px; overflow: hidden; padding: 2px 5px; border-radius: 3px; background: #fffdf8ed; color: var(--ed-ink); font-size: 10px; font-weight: 700; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.ed-pin-count { display: grid; place-items: center; min-width: 42px; height: 42px; padding: 0 7px; border: 3px solid #fff8e8; border-radius: 50%; background: var(--ed-olive); color: white; font-size: 12px; font-weight: 700; box-shadow: 0 2px 8px #38452d50; }
-.ed-map-pin.cluster-active .ed-pin-count { background: var(--ed-gold); }
+.ed-pin-photo, .ed-pin-count { width: 24px; height: 24px; min-height: 0; border: 2px solid #fff8e8; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 5px #38452d55; }
+.ed-pin-photo.ed-image-empty { overflow: hidden; padding: 0; background: var(--ed-olive); font-size: 0; }
+.ed-pin-count { display: grid; place-items: center; background: var(--ed-olive); color: white; font-size: 10px; font-weight: 700; }
+.ed-map-pin:hover, .ed-map-pin[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ed-gold); z-index: 2; }
 .ed-map-caption { margin: 10px 3px 1px; color: var(--ed-muted); font-size: 10px; line-height: 1.6; }
 .ed-map-warning { padding: 12px; margin-bottom: 10px; background: #f0eadb; color: #665638; font-size: 12px; }
 .ed-map-aside { display: flex; flex-direction: column; align-items: flex-start; padding: 20px; }

@@ -7,6 +7,8 @@ import { webApi } from '../lib/webApi';
 import { useWebCart } from '../hooks/useWebCart';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { getCartQuantityRules } from '@shared/order-quantity';
+import { getCountryBounds, loadWorldCountryFeatures, matchCountryFeature, type CountryFeature } from '../admin/editorial/cheeseCountryMap';
+import { ATLAS_MARKER_SIZE, atlasCountryPath, atlasMarkerGroups, fitAtlasMap } from './atlasMap';
 import CheesePriceSubmissions from './CheesePriceSubmissions';
 import RubleConversion from './RubleConversion';
 import './cheese-price-submissions.css';
@@ -123,30 +125,17 @@ export function VideoDetailPage() {
   </div>;
 }
 
-type GeoFeature = { geometry?: { type: string; coordinates: any } };
-function pathGeometry(coords: any, project: (point: number[]) => [number, number]): string {
-  if (!Array.isArray(coords) || !coords.length) return '';
-  if (typeof coords[0] === 'number') return '';
-  if (typeof coords[0]?.[0] === 'number') return coords.map((point: number[], index: number) => {
-    const [x, y] = project(point);
-    return `${index ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ') + ' Z';
-  return coords.map((part: any) => pathGeometry(part, project)).join(' ');
-}
-type MapPin = { item: PublicCheeseSummary; x: number; y: number };
-
 export function CheeseAtlasPage() {
   const [search, setSearch] = useState('');
   const [country, setCountry] = useState('');
   const [page, setPage] = useState(1);
-  const [view, setView] = useState<'italy' | 'world'>('italy');
+  const [view, setView] = useState<'country' | 'world'>('country');
   const [selected, setSelected] = useState<string | null>(null);
-  const [clusterIds, setClusterIds] = useState<string[]>([]);
-  useEffect(() => { setSelected(null); setClusterIds([]); }, [search, country, view]);
-  const [features, setFeatures] = useState<GeoFeature[]>([]);
+  useEffect(() => { setSelected(null); }, [search, country, view]);
+  const [features, setFeatures] = useState<CountryFeature[]>([]);
   const [geometryError, setGeometryError] = useState(false);
   const mapBoxRef = useRef<HTMLDivElement>(null);
-  const [mapScale, setMapScale] = useState(1);
+  const [size, setSize] = useState({ width: 0, height: 0 });
   const list = useQuery({
     queryKey: ['/web-api/editorial/cheeses', search, country, page],
     queryFn: () => editorialPublicApi.cheeses({ search: search.trim() || undefined, country: country || undefined, page, limit: PAGE_SIZE }),
@@ -157,66 +146,62 @@ export function CheeseAtlasPage() {
   });
   useEffect(() => {
     let active = true;
-    fetch('/editorial/world.geojson').then(response => { if (!response.ok) throw new Error('Не удалось загрузить географический контур.'); return response.json(); })
-      .then(data => { if (active) setFeatures(data.features || []); })
+    loadWorldCountryFeatures().then(data => { if (active) setFeatures(data); })
       .catch(() => { if (active) setGeometryError(true); });
     return () => { active = false; };
   }, []);
   useEffect(() => {
     const element = mapBoxRef.current;
     if (!element) return;
-    const updateScale = () => setMapScale(element.clientWidth / 860 || 1);
-    updateScale();
-    const observer = new ResizeObserver(updateScale);
+    const measure = () => {
+      const { width, height } = element.getBoundingClientRect();
+      setSize(current => current.width === width && current.height === height ? current : { width, height });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const W = 860, H = view === 'italy' ? 490 : 390;
-  const bounds = view === 'italy' ? [-7, 20, 35, 52] : [-180, 180, -60, 85];
-  const project = (point: number[]): [number, number] => [(point[0] - bounds[0]) / (bounds[1] - bounds[0]) * W, (bounds[3] - point[1]) / (bounds[3] - bounds[2]) * H];
-  const shapes = useMemo(() => features.map((feature, index) => {
-    const geometry = feature.geometry;
-    if (!geometry) return { key: String(index), d: '' };
-    const d = geometry.type === 'Polygon' ? pathGeometry(geometry.coordinates, project) : geometry.type === 'MultiPolygon' ? geometry.coordinates.map((part: any) => pathGeometry(part, project)).join(' ') : '';
-    return { key: String(index), d };
-  }).filter(shape => shape.d), [features, view]);
-  const pins = useMemo(() => (map.data?.items || []).flatMap(item => item.latitude == null || item.longitude == null ? [] : (() => { const [x, y] = project([item.longitude, item.latitude]); return x < 0 || x > W || y < 0 || y > H ? [] : [{ item, x, y }]; })()), [map.data, view]);
-  const clusters = useMemo(() => {
-    const grouped: MapPin[][] = [];
-    pins.forEach(pin => {
-      const prior = grouped.find(group => Math.hypot(group[0].x - pin.x, group[0].y - pin.y) * mapScale < 125);
-      if (prior) prior.push(pin); else grouped.push([pin]);
-    });
-    return grouped;
-  }, [pins, mapScale]);
-  const focus = map.data?.items.find(item => item.id === selected);
+  const countryName = country || 'Италия';
+  const countryFeature = useMemo(() => view === 'country' ? matchCountryFeature(features, country || 'IT') : null, [features, country, view]);
+  const bounds = useMemo(() => countryFeature && getCountryBounds(countryFeature), [countryFeature]);
+  const frame = useMemo(() => fitAtlasMap(size.width, size.height, bounds), [size, bounds]);
+  const shapes = useMemo(() => size.width && size.height ? features.map((feature, index) => ({
+    key: index, d: atlasCountryPath(feature, frame), focused: feature === countryFeature,
+  })).filter(shape => shape.d) : [], [features, frame, countryFeature, size]);
+  const groups = useMemo(() => size.width && size.height ? atlasMarkerGroups(map.data?.items || [], frame) : [], [map.data, frame, size]);
+  const selectedGroup = groups.find(group => group.items.some(item => item.id === selected));
+  const focus = selectedGroup?.items.length === 1 ? selectedGroup.items[0] : null;
+  const nearbyCheeses = selectedGroup && selectedGroup.items.length > 1 ? selectedGroup.items : [];
   const countries = list.data?.countries || [];
   const cheesePage = list.data;
   return <div className="ed-page">
     <Intro eyebrow="ATLANTE DEI FORMAGGI · СЫРНЫЙ АТЛАС" title="У каждого вкуса есть адрес." text="Энциклопедия сырной географии: статьи о традициях и регионах. Географическое происхождение не подтверждает место производства конкретного продукта." />
-    <div className="ed-map-controls"><button className={view === 'italy' ? 'active' : ''} onClick={() => setView('italy')}><MapPin size={16} /> Италия и окрестности</button><button className={view === 'world' ? 'active' : ''} onClick={() => setView('world')}><Globe2 size={16} /> Весь мир</button></div>
-    <div className="ed-filter-row"><label className="ed-search"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); setSelected(null); }} placeholder="Название, страна или регион" aria-label="Поиск сырных статей" /></label><label className="ed-filter-select">Страна <select value={country} onChange={e => { setCountry(e.target.value); setPage(1); setSelected(null); }}><option value="">Все страны</option>{countries.map(value => <option key={value} value={value}>{value}</option>)}</select></label></div>
+    <div className="ed-map-controls"><button className={view === 'country' ? 'active' : ''} aria-pressed={view === 'country'} onClick={() => setView('country')}><MapPin size={16} /> {countryName}</button><button className={view === 'world' ? 'active' : ''} aria-pressed={view === 'world'} onClick={() => setView('world')}><Globe2 size={16} /> Весь мир</button></div>
+    <div className="ed-filter-row"><label className="ed-search"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); setSelected(null); }} placeholder="Название, страна или регион" aria-label="Поиск сырных статей" /></label><label className="ed-filter-select">Страна <select value={country} onChange={e => { setCountry(e.target.value); setView('country'); setPage(1); setSelected(null); }}><option value="">Все страны</option>{countries.map(value => <option key={value} value={value}>{value}</option>)}</select></label></div>
     {map.isError && <ErrorBox error={map.error} retry={() => map.refetch()} />}
     {map.data?.truncated && <div className="ed-note">Показаны первые 1000 статей на карте. Используйте поиск или список, чтобы найти другие.</div>}
     <div className="ed-map-layout">
       <section className="ed-map-box">
         {geometryError && <div className="ed-map-warning" role="status">Контур карты не загрузился. Список статей ниже остаётся доступен.</div>}
-        {map.isLoading ? <div className="ed-loading">Загружаем географию…</div> : map.data && !map.data.items.length ? <Empty>Нет опубликованных сырных статей с координатами для карты.</Empty> : <div ref={mapBoxRef} className="ed-map-canvas" style={{ aspectRatio: `${W}/${H}` }}>
-          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={view === 'italy' ? 'Карта Италии и Европы' : 'Карта мира'}><rect width={W} height={H} fill="#e7eee8" />{shapes.map(shape => <path key={shape.key} d={shape.d} fill="#d2d7c7" stroke="#f8f5ed" strokeWidth={view === 'italy' ? 1.2 : .65} />)}</svg>
-          {clusters.map((cluster, i) => {
-            const center = cluster.reduce((acc, pin) => ({ x: acc.x + pin.x / cluster.length, y: acc.y + pin.y / cluster.length }), { x: 0, y: 0 });
-            const sole = cluster.length === 1 ? cluster[0] : null;
-            return <button key={cluster.map(pin => pin.item.id).join(':') || i} className={`ed-map-pin ${clusterIds.includes(cluster[0].item.id) ? 'cluster-active' : ''}`} style={{ left: `${center.x / W * 100}%`, top: `${center.y / H * 100}%` }} aria-label={sole ? `${sole.item.title}, ${sole.item.region || sole.item.country}` : `Группа из ${cluster.length} сыров`} onClick={() => { if (sole) { setSelected(sole.item.id); setClusterIds([]); } else { setClusterIds(cluster.map(pin => pin.item.id)); setSelected(null); } }}>
-              {sole ? <><Image src={sole.item.photo} alt="" className="ed-pin-photo" /><span className="ed-pin-label">{sole.item.title}</span></> : <span className="ed-pin-count">{cluster.length}</span>}
+        {features.length > 0 && view === 'country' && !bounds && <div className="ed-map-warning" role="status">Контур выбранной страны не найден. Показана карта мира.</div>}
+        <div ref={mapBoxRef} className={`ed-map-canvas ${view === 'world' ? 'ed-map-world' : ''}`}>
+          {size.width > 0 && size.height > 0 && <svg viewBox={`0 0 ${size.width} ${size.height}`} role="img" aria-label={bounds ? `Карта: ${countryName}` : 'Карта мира'}>{shapes.map(shape => <path key={shape.key} className={shape.focused ? 'ed-map-country-focus' : undefined} d={shape.d} fill={shape.focused ? '#aab99f' : '#d2d7c7'} fillRule="evenodd" stroke={shape.focused ? '#819776' : '#f8f5ed'} strokeWidth={shape.focused ? 1.2 : .7} />)}</svg>}
+          {groups.map(group => {
+            const sole = group.items.length === 1 ? group.items[0] : null;
+            const label = sole ? `${sole.title}, ${sole.region || sole.country}` : `Группа: ${group.items.length} · ${group.items.map(item => item.title).join(', ')}`;
+            return <button type="button" key={group.items[0].id} className="ed-map-pin" style={{ left: group.x, top: group.y, width: ATLAS_MARKER_SIZE, height: ATLAS_MARKER_SIZE }} aria-label={label} aria-pressed={selectedGroup === group} title={label} onClick={() => setSelected(group.items[0].id)}>
+              {sole ? <Image src={sole.photo} alt="" className="ed-pin-photo" /> : <span className="ed-pin-count">{group.items.length}</span>}
             </button>;
           })}
-        </div>}
+        </div>
+        {map.isLoading ? <p className="ed-map-caption" role="status">Загружаем географию…</p> : map.data && !groups.length && <p className="ed-map-caption" role="status">В этой области нет опубликованных сырных статей с координатами.</p>}
         <p className="ed-map-caption">География происхождения сыра; не место производства товара в каталоге. Нажмите точку или группу, чтобы выбрать статью.</p>
       </section>
       <aside className="ed-map-aside">
-        <div className="ed-kicker">{focus ? `Регион происхождения · ${focus.country}` : clusterIds.length ? `${clusterIds.length} точки рядом` : 'Сырная география'}</div>
+        <div className="ed-kicker">{focus ? `Регион происхождения · ${focus.country}` : nearbyCheeses.length ? `Сыры рядом · ${nearbyCheeses.length}` : 'Сырная география'}</div>
         {focus ? <><h2>{focus.title}{focus.nameOriginal && <span className="ml-2 text-sm font-normal italic text-[#738078]">{focus.nameOriginal}</span>}</h2><p>{focus.region || focus.country}</p><Image src={focus.photo} alt={focus.title} className="ed-aside-photo" /><p>{focus.description || 'Описание не предоставлено.'}</p><Link href={`/web/cheeses/${focus.id}`} className="ed-primary-link">Открыть статью <ArrowRight size={15} /></Link></> :
-          clusterIds.length ? <div className="ed-pin-list">{map.data?.items.filter(item => clusterIds.includes(item.id)).map(item => <Link key={item.id} href={`/web/cheeses/${item.id}`} className="ed-pin-list-item"><Image src={item.photo} alt="" className="ed-pin-list-photo" /><span><strong>{item.title}</strong>{item.nameOriginal && <small>{item.nameOriginal}</small>}<small>{item.region || item.country}</small></span></Link>)}</div> :
+          nearbyCheeses.length ? <div className="ed-pin-list">{nearbyCheeses.map(item => <Link key={item.id} href={`/web/cheeses/${item.id}`} className="ed-pin-list-item"><Image src={item.photo} alt="" className="ed-pin-list-photo" /><span><strong>{item.title}</strong>{item.nameOriginal && <small>{item.nameOriginal}</small>}<small>{item.region || item.country}</small></span></Link>)}</div> :
           <p>Выберите точку на карте или статью из списка. Если карта недоступна, список остаётся основным способом навигации.</p>}
         <div className="ed-note">Историческое происхождение не означает, что конкретный товар произведён в этом регионе.</div>
       </aside>
