@@ -23,7 +23,7 @@ const items = [
   cheese('tokachi', 'Сыр Токати', 42.92, 143.20, 'Япония'),
 ];
 
-test('atlas zooms to Italy and the selected country, keeping distinct places clickable on desktop and mobile', {
+test('atlas filters articles by country on mobile and desktop, with all pins on the world map', {
   skip: !build, timeout: 90000,
 }, async () => {
   const browser = await launchBrowser();
@@ -69,6 +69,9 @@ test('atlas zooms to Italy and the selected country, keeping distinct places cli
 
   const focused = '.ed-map-country-focus';
   const pin = id => `.ed-map-pin[aria-label^="${id}"]`;
+  const cards = '.ed-cheese-grid a[href^="/web/cheeses/"]';
+  const visibleCards = () => page.evaluate(`Array.from(document.querySelectorAll('${cards}'), a => a.pathname.split('/').pop())`);
+  const italianCards = ['castelmagno', 'nearby', 'gorgonzola', 'sicilia', 'sardegna'];
   const country = async value => page.evaluate(`(() => {
     const select=document.querySelector('.ed-filter-select select');
     select.value=${JSON.stringify(value)};
@@ -92,6 +95,8 @@ test('atlas zooms to Italy and the selected country, keeping distinct places cli
     await page.send('Page.navigate', { url: base + '/web/cheeses' });
     await page.wait(`document.querySelector('${focused}') && document.querySelectorAll('.ed-map-pin').length === 4`);
     assert.equal(await page.evaluate(`document.querySelector('.ed-map-canvas > svg').getAttribute('aria-label')`), 'Карта: Италия');
+    await page.wait(`document.querySelectorAll('${cards}').length === 5`);
+    assert.deepEqual(await visibleCards(), italianCards);
     const desktop = await fit();
     assert.equal(await page.evaluate(`document.querySelector('${pin('Горгонзола')}').getBoundingClientRect().width`), 28);
     await page.click(pin('Горгонзола'));
@@ -100,7 +105,11 @@ test('atlas zooms to Italy and the selected country, keeping distinct places cli
     await page.wait(`document.querySelectorAll('.ed-pin-list-item').length === 2`);
 
     await page.setViewport({ width: 390, height: 850, mobile: true });
-    await page.wait(`Number(document.querySelector('.ed-map-canvas > svg').getAttribute('viewBox').split(' ')[2]) < 390`);
+    await page.send('Page.reload', { ignoreCache: true });
+    await page.wait(`Number(document.querySelector('.ed-map-canvas > svg')?.getAttribute('viewBox').split(' ')[2]) < 390`);
+    await page.wait(`document.querySelector('${focused}') && document.querySelectorAll('${cards}').length === 5 && document.querySelectorAll('.ed-map-pin').length === 4`);
+    assert.equal(await page.evaluate(`document.querySelector('.ed-filter-select select').value`), 'Италия');
+    assert.deepEqual(await visibleCards(), italianCards);
     assert.ok((await fit()).width < desktop.width);
     assert.equal(await page.evaluate(`document.querySelectorAll('.ed-map-pin').length`), 4);
     await page.tap(pin('Пекорино'));
@@ -108,6 +117,8 @@ test('atlas zooms to Italy and the selected country, keeping distinct places cli
 
     await country('Франция');
     await page.wait(`!!document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Франция"]') && document.querySelectorAll('.ed-map-pin').length === 1 && !!document.querySelector('${pin('Камамбер')}')`);
+    await page.wait(`!!document.querySelector('${cards}[href="/web/cheeses/camembert"]')`);
+    assert.deepEqual(await visibleCards(), ['camembert']);
     assert.equal(await page.evaluate(`document.querySelector('.ed-map-controls button').getAttribute('aria-pressed')`), 'true');
     const searchInput = 'input[aria-label="Поиск сырных статей"]';
     await page.fill(searchInput, 'Камамбер');
@@ -126,6 +137,8 @@ test('atlas zooms to Italy and the selected country, keeping distinct places cli
     await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Германия"]') && document.querySelector('.ed-map-box [role="status"]')?.textContent.includes('нет опубликованных')`);
     await country('Россия');
     await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Россия"]') && !!document.querySelector('${pin('Вологодский сыр')}')`);
+    await page.wait(`!!document.querySelector('${cards}[href="/web/cheeses/vologda"]')`);
+    assert.deepEqual(await visibleCards(), ['vologda']);
     await fit();
     assert.equal(await page.evaluate(`Boolean(document.querySelector('${pin('Сулугуни')}'))`), false);
     await page.tap(pin('Вологодский сыр'));
@@ -134,7 +147,11 @@ test('atlas zooms to Italy and the selected country, keeping distinct places cli
     await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Грузия"]') && !!document.querySelector('${pin('Сулугуни')}')`);
     await fit();
     await country('');
-    await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Италия"]') && document.querySelectorAll('.ed-map-pin').length === 4`);
+    await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта мира"]') && document.querySelectorAll('${cards}').length === ${items.length}`);
+    assert.deepEqual(await visibleCards(), items.map(item => item.id));
+    await page.tap('.ed-map-controls button:first-child');
+    await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта: Италия"]') && document.querySelectorAll('${cards}').length === 5`);
+    assert.deepEqual(await visibleCards(), italianCards);
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

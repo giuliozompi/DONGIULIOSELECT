@@ -15,6 +15,7 @@ import './cheese-price-submissions.css';
 import './editorial.css';
 
 const PAGE_SIZE = 12;
+const DEFAULT_ATLAS_COUNTRY = 'Италия';
 const categoryLabels: Record<string, string> = {
   recipe: 'Рецепты', interview: 'Интервью', review: 'Обзоры', places: 'Места',
 };
@@ -127,7 +128,7 @@ export function VideoDetailPage() {
 
 export function CheeseAtlasPage() {
   const [search, setSearch] = useState('');
-  const [country, setCountry] = useState('');
+  const [country, setCountry] = useState(DEFAULT_ATLAS_COUNTRY);
   const [page, setPage] = useState(1);
   const [view, setView] = useState<'country' | 'world'>('country');
   const [selected, setSelected] = useState<string | null>(null);
@@ -139,6 +140,8 @@ export function CheeseAtlasPage() {
   const list = useQuery({
     queryKey: ['/web-api/editorial/cheeses', search, country, page],
     queryFn: () => editorialPublicApi.cheeses({ search: search.trim() || undefined, country: country || undefined, page, limit: PAGE_SIZE }),
+    // Preserve the country options while fetching the new page, not its old cards.
+    placeholderData: previous => previous,
   });
   const mapSearch = view === 'world' ? undefined : search.trim() || undefined;
   const mapCountry = view === 'world' ? undefined : country || undefined;
@@ -165,8 +168,8 @@ export function CheeseAtlasPage() {
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const countryName = country || 'Италия';
-  const countryFeature = useMemo(() => view === 'country' ? matchCountryFeature(features, country || 'IT') : null, [features, country, view]);
+  const countryName = country || DEFAULT_ATLAS_COUNTRY;
+  const countryFeature = useMemo(() => view === 'country' ? matchCountryFeature(features, countryName) : null, [features, countryName, view]);
   const bounds = useMemo(() => countryFeature && getCountryBounds(countryFeature, true), [countryFeature]);
   const frame = useMemo(() => fitAtlasMap(size.width, size.height, bounds), [size, bounds]);
   const shapes = useMemo(() => size.width && size.height ? features.map((feature, index) => ({
@@ -176,12 +179,19 @@ export function CheeseAtlasPage() {
   const selectedGroup = groups.find(group => group.items.some(item => item.id === selected));
   const focus = selectedGroup?.items.length === 1 ? selectedGroup.items[0] : null;
   const nearbyCheeses = selectedGroup && selectedGroup.items.length > 1 ? selectedGroup.items : [];
-  const countries = list.data?.countries || [];
+  const availableCountries = list.data?.countries ?? [];
+  const countries = country && !availableCountries.includes(country) ? [country, ...availableCountries] : availableCountries;
   const cheesePage = list.data;
+  function changeCountry(value: string) {
+    setCountry(value);
+    setView(value ? 'country' : 'world');
+    setPage(1);
+    setSelected(null);
+  }
   return <div className="ed-page">
     <Intro eyebrow="ATLANTE DEI FORMAGGI · СЫРНЫЙ АТЛАС" title="У каждого вкуса есть адрес." text="Энциклопедия сырной географии: статьи о традициях и регионах. Географическое происхождение не подтверждает место производства конкретного продукта." />
-    <div className="ed-map-controls"><button className={view === 'country' ? 'active' : ''} aria-pressed={view === 'country'} onClick={() => setView('country')}><MapPin size={16} /> {countryName}</button><button className={view === 'world' ? 'active' : ''} aria-pressed={view === 'world'} onClick={() => setView('world')}><Globe2 size={16} /> Весь мир</button></div>
-    <div className="ed-filter-row"><label className="ed-search"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); setSelected(null); }} placeholder="Название, страна или регион" aria-label="Поиск сырных статей" /></label><label className="ed-filter-select">Страна <select value={country} onChange={e => { setCountry(e.target.value); setView('country'); setPage(1); setSelected(null); }}><option value="">Все страны</option>{countries.map(value => <option key={value} value={value}>{value}</option>)}</select></label></div>
+    <div className="ed-map-controls"><button className={view === 'country' ? 'active' : ''} aria-pressed={view === 'country'} onClick={() => country ? setView('country') : changeCountry(DEFAULT_ATLAS_COUNTRY)}><MapPin size={16} /> {countryName}</button><button className={view === 'world' ? 'active' : ''} aria-pressed={view === 'world'} onClick={() => setView('world')}><Globe2 size={16} /> Весь мир</button></div>
+    <div className="ed-filter-row"><label className="ed-search"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); setSelected(null); }} placeholder="Название, страна или регион" aria-label="Поиск сырных статей" /></label><label className="ed-filter-select">Страна <select value={country} onChange={e => changeCountry(e.target.value)}><option value="">Все страны</option>{countries.map(value => <option key={value} value={value}>{value}</option>)}</select></label></div>
     {map.isError && <ErrorBox error={map.error} retry={() => map.refetch()} />}
     {map.data?.truncated && <div className="ed-note">Показаны первые 1000 статей на карте. Используйте поиск или список, чтобы найти другие.</div>}
     <div className="ed-map-layout">
@@ -210,8 +220,8 @@ export function CheeseAtlasPage() {
         <div className="ed-note">Историческое происхождение не означает, что конкретный товар произведён в этом регионе.</div>
       </aside>
     </div>
-    <section className="ed-section"><div className="ed-section-heading"><div><div className="ed-kicker">Энциклопедия</div><h2>Статьи о сырах</h2></div></div>
-      {list.isLoading ? <div className="ed-loading">Загружаем статьи…</div> : list.isError ? <ErrorBox error={list.error} retry={() => list.refetch()} /> : cheesePage && cheesePage.items.length ? <><div className="ed-cheese-grid">{cheesePage.items.map(item => <CheeseCard item={item} key={item.id} />)}</div><Pager page={cheesePage.page} total={cheesePage.total} limit={cheesePage.limit} onPage={setPage} /></> : <Empty>{search || country ? 'По заданным фильтрам статьи не найдены.' : 'Опубликованных статей пока нет.'}</Empty>}
+    <section className="ed-section"><div className="ed-section-heading"><div><div className="ed-kicker">Энциклопедия · {country || 'Все страны'}</div><h2>Статьи о сырах</h2></div></div>
+      {list.isLoading || list.isPlaceholderData ? <div className="ed-loading" role="status">Загружаем статьи…</div> : list.isError ? <ErrorBox error={list.error} retry={() => list.refetch()} /> : cheesePage && cheesePage.items.length ? <><div className="ed-cheese-grid">{cheesePage.items.map(item => <CheeseCard item={item} key={item.id} />)}</div><Pager page={cheesePage.page} total={cheesePage.total} limit={cheesePage.limit} onPage={setPage} /></> : <Empty>{search || country ? 'По заданным фильтрам статьи не найдены.' : 'Опубликованных статей пока нет.'}</Empty>}
     </section>
   </div>;
 }
