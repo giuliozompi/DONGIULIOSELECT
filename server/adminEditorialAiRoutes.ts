@@ -6,7 +6,7 @@ import { reserveAiRun, executeAiRun, getAiRun, aiHistory, defaultAiDependencies,
 import { rankAiCatalog, importAiCatalog, applyAiDraft, importAiPhotos } from './services/editorial-ai-changes';
 import { suggestEditorialSources } from './services/editorial-ai-suggestions';
 import { researchRequestSchema } from '../shared/editorial-ai';
-import { lookupEditorialOrigin, applyEditorialOrigin } from './services/editorial-origin';
+import { lookupEditorialOrigin, applyEditorialOrigin, lookupMapPlace } from './services/editorial-origin';
 
 export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHandler[],
   actor: (req: Request) => string | undefined, database = pool, deps: AiDependencies = defaultAiDependencies) {
@@ -42,6 +42,9 @@ export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHand
   }));
   app.post(`${base}/origin-geocoding`, ...guards, handle(async (req, res, operator) => {
     res.json(await lookupEditorialOrigin(req.body, operator, database));
+  }));
+  app.post(`${base}/map-place`, ...guards, handle(async (req, res, operator) => {
+    res.json(await lookupMapPlace(req.body, operator, database));
   }));
   app.post(`${base}/origin-geocoding/apply`, ...guards, handle(async (req, res, operator) => {
     res.json(await applyEditorialOrigin(req.body, operator, database));

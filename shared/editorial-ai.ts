@@ -68,6 +68,11 @@ export const originLookupSchema = z.object({
   attribution: z.literal('© OpenStreetMap contributors'),
 });
 export type OriginLookup = z.infer<typeof originLookupSchema>;
+export const mapPlaceRequestSchema = z.object({ place: text(200).min(2) }).strict();
+export const mapPlaceLookupSchema = originLookupSchema.pick({
+  query: true, candidates: true, retrievedAt: true, cached: true, attribution: true,
+});
+export type MapPlaceLookup = z.infer<typeof mapPlaceLookupSchema>;
 export const sourceSuggestionsRequestSchema = z.object({
   entryId: z.string().uuid(), revision: z.number().int().positive(),
 }).strict();

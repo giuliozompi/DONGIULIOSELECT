@@ -24,6 +24,7 @@ const rowSchema = z.object({
   lat: z.union([z.number(), z.string().trim().min(1)]).pipe(z.coerce.number().min(-90).max(90)),
   lon: z.union([z.number(), z.string().trim().min(1)]).pipe(z.coerce.number().min(-180).max(180)),
   type: z.string().max(100).optional(),
+  addresstype: z.string().max(100).optional(),
   address: z.object({ country_code: z.string() }).optional(),
 });
 export async function fetchOriginCandidates(
@@ -52,7 +53,7 @@ export async function fetchOriginCandidates(
       const item = parsed.data;
       if (countryCode && item.address?.country_code?.toLowerCase() !== countryCode) return [];
       return [originCandidateSchema.parse({
-        id: `${item.osm_type}/${item.osm_id}`, label: item.display_name, type: item.type || '',
+        id: `${item.osm_type}/${item.osm_id}`, label: item.display_name, type: item.addresstype || item.type || '',
         latitude: item.lat, longitude: item.lon,
         url: `https://www.openstreetmap.org/${item.osm_type}/${item.osm_id}`,
       })];

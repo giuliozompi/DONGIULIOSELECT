@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
-import { MapPin, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { LocateFixed, MapPin, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { CheeseData } from '@shared/editorial';
+import CheeseMapSearch, { localityZoom, type MapPlace } from './CheeseMapSearch';
 import {
   fitCountryBounds,
   getCountryBounds,
@@ -61,6 +62,7 @@ export default function CheeseGeoEditor({
     return savedPoint ? { ...savedPoint, zoom: 1 } : { latitude: 20, longitude: 0, zoom: 1 };
   });
   const [selected, setSelected] = useState<Marker>({ kind: 'origin' });
+  const [focusedPlace, setFocusedPlace] = useState<MapPlace | null>(null);
   const [mapSize, setMapSize] = useState({ width: 320, height: 224 });
   const [countryBounds, setCountryBounds] = useState<CountryBounds | null>(null);
   const [focusState, setFocusState] = useState<CountryFocusState>('idle');
@@ -102,6 +104,7 @@ export default function CheeseGeoEditor({
     const requestId = ++requestSequence.current;
     const interactionAtStart = interactionSequence.current;
     setCountryBounds(null);
+    setFocusedPlace(null);
     if (!normalizedCountry) {
       setFocusState('idle');
       fitMode.current = 'manual';
@@ -152,6 +155,7 @@ export default function CheeseGeoEditor({
     ? tilePoint(value.latitude, value.longitude, view.zoom)
     : null;
   const markerPoints = points.map(point => ({ point, projected: tilePoint(point.latitude, point.longitude, view.zoom) }));
+  const searchPoint = focusedPlace && tilePoint(focusedPlace.latitude, focusedPlace.longitude, view.zoom);
 
   function markManualInteraction() {
     interactionSequence.current += 1;
@@ -215,17 +219,28 @@ export default function CheeseGeoEditor({
   function focusCountry() {
     if (!countryBounds) return;
     markManualInteraction();
+    setFocusedPlace(null);
     fitMode.current = 'country';
     setView(fitCountryBounds(countryBounds, mapSize.width, mapSize.height));
   }
 
   function focusMarker(marker: Marker) {
     markManualInteraction();
+    setFocusedPlace(null);
     setSelected(marker);
     const point = marker.kind === 'origin'
       ? value.latitude != null && value.longitude != null ? { latitude: value.latitude, longitude: value.longitude } : null
       : points.find(item => item.id === marker.id) || null;
     if (point) setView(current => ({ ...current, latitude: point.latitude, longitude: point.longitude }));
+  }
+
+  function focusPlace(place: MapPlace) {
+    if (disabled) return;
+    markManualInteraction();
+    setFocusedPlace(place);
+    setView({ latitude: clamp(place.latitude, -MAX_MERCATOR_LATITUDE, MAX_MERCATOR_LATITUDE),
+      longitude: place.longitude, zoom: localityZoom(place.type) });
+    mapRef.current?.scrollIntoView({ block: 'nearest' });
   }
 
   const diagnosticCountry = normalizedCountry || '';
@@ -265,6 +280,7 @@ export default function CheeseGeoEditor({
       <span>{statusMessage}</span>
       {focusState === 'error' && <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={() => setRetryCount(count => count + 1)}>Повторить</Button>}
     </div>}
+    <CheeseMapSearch disabled={disabled} focusedId={focusedPlace?.id} onFocus={focusPlace} />
     <div ref={mapRef} role="application" aria-label="Карта координат. Перетаскивайте для просмотра. Нажмите, чтобы переместить выбранную точку. Alt и стрелки перемещают карту." aria-disabled={disabled} tabIndex={disabled ? -1 : 0}
       onPointerDown={startPan} onPointerMove={pan} onPointerUp={event => endPan(event)}
       onPointerCancel={event => endPan(event, true)} onLostPointerCapture={event => endPan(event, true)}
@@ -304,6 +320,10 @@ export default function CheeseGeoEditor({
         })}
       </div>
       <div className="absolute inset-0">
+        {searchPoint && <span aria-hidden="true" data-testid="cheese-map-located-place" className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/90 p-1 text-[#395b87] shadow" style={{
+          left: `calc(50% + ${wrappedTileDelta(searchPoint.x, center.x, view.zoom) * 256}px)`,
+          top: `calc(50% + ${(searchPoint.y - center.y) * 256}px)`,
+        }}><LocateFixed className="h-4 w-4" /></span>}
         {origin && <button type="button" disabled={disabled} title="Точка происхождения" aria-label="Выбрать точку происхождения" onClick={event => { event.stopPropagation(); focusMarker({ kind: 'origin' }); }} className="absolute z-10 -translate-x-1/2 -translate-y-full text-[#315647]" style={{ left: `calc(50% + ${wrappedTileDelta(origin.x, center.x, view.zoom) * 256}px)`, top: `calc(50% + ${(origin.y - center.y) * 256}px)` }}><MapPin className="h-7 w-7 fill-[#f7f4e9] drop-shadow" /></button>}
         {markerPoints.map(({ point, projected }, index) => <button key={point.id} type="button" disabled={disabled} title={point.label} aria-label={`Выбрать точку производства ${point.label}`} onClick={event => { event.stopPropagation(); focusMarker({ kind: 'production', id: point.id }); }} className="absolute z-10 -translate-x-1/2 -translate-y-full text-[#a05d41]" style={{ left: `calc(50% + ${wrappedTileDelta(projected.x, center.x, view.zoom) * 256}px)`, top: `calc(50% + ${(projected.y - center.y) * 256}px)` }}><MapPin className="h-7 w-7 fill-[#fbfaf6] drop-shadow" /><span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] font-bold text-[#a05d41]">{index + 1}</span></button>)}
       </div>

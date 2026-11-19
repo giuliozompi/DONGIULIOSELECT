@@ -1,6 +1,6 @@
 import { webApi } from '../../lib/webApi';
 import type { CheeseData, EditorialEntry } from '@shared/editorial';
-import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField, SourceSuggestions, ResearchRequest, OriginLookup } from '@shared/editorial-ai';
+import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiField, SourceSuggestions, ResearchRequest, OriginLookup, MapPlaceLookup } from '@shared/editorial-ai';
 export type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, CatalogResult, DraftResult, CatalogItem, AiField } from '@shared/editorial-ai';
 const base = '/admin/editorial-ai';
 export const editorialAiApi = {
@@ -9,6 +9,7 @@ export const editorialAiApi = {
   research: (body: ResearchRequest) => webApi.post<EditorialAiRun>(`${base}/research`, body),
   originLookup: (entry: EditorialEntry, place: string) =>
     webApi.post<OriginLookup>(`${base}/origin-geocoding`, { entryId: entry.id, revision: entry.revision, place }),
+  mapPlace: (place: string) => webApi.post<MapPlaceLookup>(`${base}/map-place`, { place }),
   originApply: (entry: EditorialEntry, lookupId: string, candidateId: string) =>
     webApi.post<EditorialEntry>(`${base}/origin-geocoding/apply`, { entryId: entry.id, revision: entry.revision, lookupId, candidateId }),
   suggestSources: (entry: EditorialEntry) =>

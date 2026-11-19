@@ -1,13 +1,61 @@
 import { randomUUID, createHash } from 'node:crypto';
+import type pg from 'pg';
 import { pool } from '../db';
 import { cheeseDataSchema, type CheeseData } from '../../shared/editorial';
 import {
-  originLookupRequestSchema, originApplyRequestSchema, originLookupSchema, type OriginLookup,
+  originLookupRequestSchema, originApplyRequestSchema, originLookupSchema,
+  mapPlaceRequestSchema, mapPlaceLookupSchema, type MapPlaceLookup, type OriginLookup,
 } from '../../shared/editorial-ai';
 import { transaction, audit, entry, EditorialError, type Row } from './editorial';
 import { originProviderSettings, originCountryCode, fetchOriginCandidates } from './editorial-origin-provider';
 
 const attribution = '© OpenStreetMap contributors' as const;
+
+async function reservePlaceLookup(client: pg.PoolClient, actor: string, endpoint: URL,
+  query: string, code: string | undefined, lookupId: string, entryId?: string, revision?: number) {
+  const cacheKey = createHash('sha256').update(JSON.stringify([endpoint.href, query.toLocaleLowerCase(), code])).digest('hex');
+  const cached = (await client.query(`SELECT action_data->'newData'->'result' AS result
+    FROM admin_action_logs WHERE action_type IN ('origin_lookup_ready','map_place_lookup_ready') AND entity_type='editorial'
+    AND action_data->'newData'->>'cacheKey'=$1
+    AND (action_data->'newData'->>'fetchedAt')::numeric >
+      extract(epoch FROM clock_timestamp())*1000-2592000000
+    ORDER BY (action_data->'newData'->>'fetchedAt')::numeric DESC LIMIT 1`, [cacheKey])).rows[0];
+  const parsed = mapPlaceLookupSchema.safeParse(cached?.result);
+  if (parsed.success) return { cacheKey, cached: { ...parsed.data, cached: true } };
+  // One persisted quota across replicas and both flows. Reserve BEFORE
+  // calling the provider, including failed or abandoned requests.
+  if ((await client.query(`SELECT id FROM admin_action_logs
+    WHERE action_type='origin_lookup_requested' AND entity_type='editorial'
+    AND (action_data->'newData'->>'requestedAt')::numeric >
+      extract(epoch FROM clock_timestamp())*1000-15000 LIMIT 1`)).rowCount)
+    throw new EditorialError(429, 'Новый географический поиск доступен через 15 секунд после предыдущего. Сохранённые результаты доступны без нового запроса.');
+  await audit(client, actor, 'origin_lookup_requested', entryId ?? lookupId, null,
+    { lookupId, cacheKey, ...(entryId ? { query, revision } : { scope: 'map' }), requestedAt: Date.now() });
+  return { cacheKey };
+}
+
+export async function lookupMapPlace(input: unknown, actor: string, database = pool,
+  provider: typeof fetchOriginCandidates = fetchOriginCandidates, env = process.env): Promise<MapPlaceLookup> {
+  if (!actor) throw new EditorialError(401, 'Требуется авторизация');
+  const { place } = mapPlaceRequestSchema.parse(input);
+  const query = place.replace(/\s+/g, ' ');
+  const endpoint = originProviderSettings(env);
+  const lookupId = randomUUID();
+  const { cached, cacheKey } = await transaction(database, client =>
+    reservePlaceLookup(client, actor, endpoint, query, undefined, lookupId));
+  if (cached) return cached;
+  try {
+    const candidates = await provider(query, undefined, endpoint);
+    const result = mapPlaceLookupSchema.parse({ query, candidates, retrievedAt: new Date().toISOString(), cached: false, attribution });
+    await transaction(database, client => audit(client, actor, 'map_place_lookup_ready', lookupId, null,
+      { cacheKey, fetchedAt: Date.parse(result.retrievedAt), result }));
+    return result;
+  } catch (error) {
+    if (error instanceof EditorialError) throw error;
+    throw new EditorialError(503, 'Не удалось выполнить поиск места. Точки статьи не изменены.');
+  }
+}
+
 // Called within the caller's existing transaction and article revision lock.
 export async function savedOriginCandidate(client: any, body: {
   entryId: string; revision: number; lookupId: string; candidateId: string;
@@ -36,30 +84,13 @@ export async function lookupEditorialOrigin(input: unknown, actor: string, datab
     const country = cheeseDataSchema.parse(cheese.data).country;
     const code = originCountryCode(country);
     const query = `${body.place.replace(/\s+/g, ' ').trim()}, ${country}`.slice(0, 400);
-    const cacheKey = createHash('sha256').update(JSON.stringify([endpoint.href, query.toLocaleLowerCase(), code])).digest('hex');
-    const cached = (await client.query(`SELECT action_data->'newData'->'result' AS result
-      FROM admin_action_logs WHERE action_type='origin_lookup_ready' AND entity_type='editorial'
-      AND action_data->'newData'->>'cacheKey'=$1
-      AND (action_data->'newData'->>'fetchedAt')::numeric >
-        extract(epoch FROM clock_timestamp())*1000-2592000000
-      ORDER BY (action_data->'newData'->>'fetchedAt')::numeric DESC LIMIT 1`, [cacheKey])).rows[0];
-    const parsed = originLookupSchema.safeParse(cached?.result);
-    if (parsed.success) {
-      const result: OriginLookup = { ...parsed.data, lookupId, entryId: body.entryId, revision: body.revision, cached: true };
+    const { cacheKey, cached } = await reservePlaceLookup(client, actor, endpoint, query, code, lookupId, body.entryId, body.revision);
+    if (cached) {
+      const result: OriginLookup = { ...cached, lookupId, entryId: body.entryId, revision: body.revision };
       await audit(client, actor, 'origin_lookup_ready', body.entryId, null,
         { lookupId, cacheKey, fetchedAt: Date.parse(result.retrievedAt), result });
       return { cached: result, query, code, cacheKey };
     }
-    // The existing editorial transaction lock serializes these reservations
-    // across replicas. Persist BEFORE calling the provider, including failures.
-    // 15 seconds between fresh requests is deliberately stricter than 1/sec.
-    if ((await client.query(`SELECT id FROM admin_action_logs
-      WHERE action_type='origin_lookup_requested' AND entity_type='editorial'
-      AND (action_data->'newData'->>'requestedAt')::numeric >
-        extract(epoch FROM clock_timestamp())*1000-15000 LIMIT 1`)).rowCount)
-      throw new EditorialError(429, 'Новый географический поиск доступен через 15 секунд после предыдущего. Сохранённые результаты доступны без нового запроса.');
-    await audit(client, actor, 'origin_lookup_requested', body.entryId, null,
-      { lookupId, cacheKey, query, revision: body.revision, requestedAt: Date.now() });
     return { query, code, cacheKey };
   });
   if (reservation.cached) return reservation.cached;

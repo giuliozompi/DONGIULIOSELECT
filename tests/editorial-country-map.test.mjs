@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 const build = process.env.EDITORIAL_MAP_BUILD_DIR;
 const base = build ? 'https://editorial-map.example.test' : process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '';
-test('editorial map focuses, pans by mouse/touch/keyboard and separates navigation from marker edits', {
+test('editorial map focuses by country and place, pans by mouse/touch/keyboard and preserves the draft during navigation', {
   skip: !base, timeout: 90000,
 }, async () => {
   const browser = await launchBrowser();
@@ -23,7 +23,11 @@ test('editorial map focuses, pans by mouse/touch/keyboard and separates navigati
     },
   };
   const geometry = (await readFile('client/public/editorial/world.geojson')).toString('base64');
-  const mutations = [], errors = [];
+  const mutations = [], errors = [], placeRequests = [];
+  const candidates = [
+    { id: 'relation/123', label: 'Bergamo, Lombardia, Italia', latitude: 45.695, longitude: 9.670, type: 'city', url: 'https://www.openstreetmap.org/relation/123' },
+    { id: 'node/456', label: 'Bergamo, altro luogo', latitude: 42.001, longitude: 10.23, type: 'village', url: 'https://www.openstreetmap.org/node/456' },
+  ];
   await page.send('Network.enable');
   await page.send('Network.setBypassServiceWorker', { bypass: true });
   await page.send('Page.addScriptToEvaluateOnNewDocument', {
@@ -60,20 +64,33 @@ test('editorial map focuses, pans by mouse/touch/keyboard and separates navigati
       return;
     }
     let body = [];
-    if (path === '/web-api/auth/refresh')
+    let status = 200;
+    if (path === '/web-api/admin/editorial-ai/map-place') {
+      const data = JSON.parse(event.request.postData);
+      placeRequests.push(data);
+      if (data.place === 'Errore') {
+        status = 429;
+        body = { error: 'Новый географический поиск доступен через 15 секунд.' };
+      } else body = { query: data.place, candidates: data.place === 'Non trovato' ? [] : candidates,
+        retrievedAt: new Date().toISOString(), cached: false, attribution: '© OpenStreetMap contributors' };
+    } else if (path === '/web-api/auth/refresh')
       body = { accessToken: 'country-map-fixture', user: { id: 'country-map-operator', firstName: 'Fixture' } };
     else if (path === '/web-api/admin/check') body = { ok: true, isMasterAdmin: true };
     else if (path === '/web-api/admin/editorial')
       body = url.searchParams.get('kind') === 'cheese' ? { items: [entry], total: 1 } : { items: [], total: 0 };
     else if (path === '/web-api/admin/editorial-ai/history') body = { items: [], total: 0 };
-    if (event.request.method !== 'GET' && path !== '/web-api/auth/refresh') mutations.push(path);
+    if (event.request.method !== 'GET' && !['/web-api/auth/refresh', '/web-api/admin/editorial-ai/map-place'].includes(path)) mutations.push(path);
     await page.send('Fetch.fulfillRequest', {
-      requestId: event.requestId, responseCode: 200,
+      requestId: event.requestId, responseCode: status,
       responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
       body: Buffer.from(JSON.stringify(body)).toString('base64'),
     });
   });
   const map = '[data-testid="cheese-geo-editor"] [role="application"]';
+  const search = '[data-testid="cheese-map-search"]';
+  const input = `${search} input`;
+  const result = index => `${search} li:nth-child(${index}) button`;
+  const returnToCountry = () => page.evaluate(`[...document.querySelectorAll('[data-testid="cheese-geo-editor"] button')].find(b=>b.textContent.includes('Вернуться к стране')).click()`);
   const readView = () => page.evaluate(`(() => {
     const e=document.querySelector('${map}');
     return {country:e.dataset.country,lat:Number(e.dataset.centerLatitude),lon:Number(e.dataset.centerLongitude),zoom:Number(e.dataset.zoom)};
@@ -81,8 +98,8 @@ test('editorial map focuses, pans by mouse/touch/keyboard and separates navigati
   const storedPoints = () => page.evaluate(`({
     lat:document.querySelector('[aria-label="Происхождение: широта"]').value,
     lon:document.querySelector('[aria-label="Происхождение: долгота"]').value,
-    factoryLat:document.querySelector('[aria-label="Производство: широта"]').value,
-    factoryLon:document.querySelector('[aria-label="Производство: долгота"]').value
+    factoryLat:document.querySelector('[aria-label="Производство: широта"]')?.value,
+    factoryLon:document.querySelector('[aria-label="Производство: долгота"]')?.value
   })`);
   const focusCountry = async (name, code) => {
     await page.fill('#ed-country', name);
@@ -107,6 +124,22 @@ test('editorial map focuses, pans by mouse/touch/keyboard and separates navigati
     const original = await storedPoints(), italy = await readView();
     assert.ok(italy.lat > 35 && italy.lat < 48 && italy.lon > 5 && italy.lon < 20);
     assert.deepEqual(original, { lat: '51.5', lon: '-0.12', factoryLat: '43', factoryLon: '5' });
+    await page.fill(input, '  Bergamo  ');
+    assert.deepEqual(placeRequests, [], 'typing does not contact the geocoder');
+    await page.evaluate(`document.querySelector('${input}').focus()`);
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13 });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await page.wait(`document.querySelectorAll('${search} li').length === 2`);
+    assert.deepEqual(placeRequests, [{ place: 'Bergamo' }], 'only the place name is requested');
+    assert.deepEqual(await readView(), italy, 'ambiguous results do not move the view until selected');
+    await page.click(result(1));
+    await page.wait(`Number(document.querySelector('${map}').dataset.zoom)===12`);
+    assert.deepEqual(await readView(), { country: 'Италия', lat: 45.695, lon: 9.670, zoom: 12 });
+    assert.deepEqual(await storedPoints(), original);
+    assert.equal(await page.evaluate(`!!document.querySelector('[data-testid="cheese-map-located-place"]')`), true);
+    await returnToCountry();
+    await page.wait(`Number(document.querySelector('${map}').dataset.zoom)===${italy.zoom}`);
+    assert.equal(await page.evaluate(`!!document.querySelector('[data-testid="cheese-map-located-place"]')`), false);
     await mouseDrag(100, 40);
     const panned = await readView();
     assert.ok(panned.lon < italy.lon && panned.lat > italy.lat);
@@ -184,6 +217,29 @@ test('editorial map focuses, pans by mouse/touch/keyboard and separates navigati
     await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 });
     await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 });
     assert.ok(Number((await storedPoints()).lat) > Number(afterClick.lat), 'existing marker keyboard adjustment remains available');
+    const mobileView = await readView(), mobilePoints = await storedPoints();
+    await page.fill(input, 'Non trovato');
+    await page.click(`${search} button[type="submit"]`);
+    await page.wait(`document.querySelector('${search} [role="status"]').textContent.includes('не найдено')`);
+    assert.deepEqual(await readView(), mobileView);
+    await page.fill(input, 'Errore');
+    await page.click(`${search} button[type="submit"]`);
+    await page.wait(`document.querySelector('${search} [role="alert"]')?.textContent.includes('15 секунд')`);
+    assert.deepEqual(await storedPoints(), mobilePoints);
+    await page.evaluate(`[...document.querySelectorAll('[data-testid="editorial-entry-editor"] button')].find(b=>b.textContent==='Отмена').click()`);
+    await page.wait(`!document.querySelector('${search}')`);
+    await page.evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Новая запись').click()`);
+    await page.wait(`!!document.querySelector('${input}')`);
+    assert.equal(await page.evaluate(`document.querySelector('${input}').value`), '');
+    await page.fill(input, 'Bergamo');
+    await page.click(`${search} button[type="submit"]`);
+    await page.wait(`document.querySelectorAll('${search} li').length === 2`);
+    await page.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    await page.tap(result(2));
+    await page.wait(`Number(document.querySelector('${map}').dataset.zoom)===14`);
+    assert.equal((await readView()).lon, 10.23);
+    assert.deepEqual(await storedPoints(), { lat: '', lon: '' }, 'unsaved draft coordinates remain empty after search');
+    assert.deepEqual(placeRequests, ['Bergamo', 'Non trovato', 'Errore', 'Bergamo'].map(place => ({ place })));
     assert.deepEqual(mutations, []);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }

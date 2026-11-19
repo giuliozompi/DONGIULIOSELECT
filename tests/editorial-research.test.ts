@@ -16,7 +16,7 @@ import { researchEditorialSources, searchEditorialWeb, editorialSourceMatchesChe
 import { structuredResearchPlan, researchCoverage, editorialSourcePassages } from '../server/services/editorial-research-topics';
 import { sourcePageImages, researchPhotos } from '../server/services/editorial-research-photos';
 import { fetchOriginCandidates, originProviderSettings } from '../server/services/editorial-origin-provider';
-import { lookupEditorialOrigin, applyEditorialOrigin } from '../server/services/editorial-origin';
+import { lookupEditorialOrigin, applyEditorialOrigin, lookupMapPlace } from '../server/services/editorial-origin';
 import { EditorialError, saveEditorial, listEditorial } from '../server/services/editorial';
 import { changePublication } from '../server/services/editorial-publication';
 import { EditorialModelError } from '../server/services/editorial-ai-config';
@@ -961,6 +961,47 @@ test('parallel geocoding reservations allow only one new external call across op
   await assert.rejects(lookupEditorialOrigin({ ...body, place: 'Other' }, 'operator-2', db, provider, {}), fails(429));
   release(); await first; assert.equal(calls, 1);
 });
+test('map search works without an article, reuses results and shares the origin quota without editing records', async () => {
+  const c = await cheese(true);
+  const snapshot = async () => (await db.query(`SELECT e.revision,e.data,p.published_revision,p.data AS published
+    FROM editorial_entries e JOIN editorial_publications p ON p.entry_id=e.id WHERE e.id=$1`, [c.id])).rows[0];
+  const before = await snapshot();
+  let calls = 0;
+  const provider = async (query: string, code?: string) => {
+    calls++;
+    assert.equal(query, 'Castelmagno, Italy'); assert.equal(code, undefined, 'search is not restricted to origins');
+    return [candidate];
+  };
+  await assert.rejects(lookupMapPlace({ place: 'Castelmagno, Italy' }, '', db, provider, {}), fails(401));
+  await assert.rejects(lookupMapPlace({ place: 'Castelmagno, Italy', endpoint: 'https://example.org' }, 'operator', db, provider, {}));
+  const first = await lookupMapPlace({ place: '  Castelmagno,   Italy  ' }, 'operator', db, provider, {});
+  assert.equal(first.cached, false);
+  assert.deepEqual(first.candidates, [candidate]);
+  const cached = await lookupMapPlace({ place: 'castelmagno, italy' }, 'second', db, provider, {});
+  assert.deepEqual(cached, { ...first, cached: true });
+  const originRequest = { entryId: c.id, revision: c.revision, place: 'Castelmagno' };
+  await assert.rejects(lookupEditorialOrigin(originRequest, 'second', db, provider, {}), fails(429));
+  assert.equal(calls, 1);
+  const mapLog = (await db.query(`SELECT entity_id FROM admin_action_logs WHERE action_type='map_place_lookup_ready'`)).rows[0];
+  await assert.rejects(applyEditorialOrigin({ entryId: c.id, revision: c.revision, lookupId: mapLog.entity_id, candidateId: candidate.id },
+    'operator', db), fails(409), 'map results are not saved origin proposals');
+  await db.query(`DELETE FROM admin_action_logs WHERE action_type='origin_lookup_requested'`);
+  await lookupEditorialOrigin(originRequest, 'operator', db, async () => [candidate], {});
+  await assert.rejects(lookupMapPlace({ place: 'Bergamo' }, 'second', db, provider, {}), fails(429));
+  assert.deepEqual(await snapshot(), before);
+  assert.equal(calls, 1);
+});
+test('map search failure is sanitized and does not retry or bypass the existing geocoder switch', async () => {
+  let calls = 0;
+  const provider = async () => { calls++; throw new Error(sensitive); };
+  const body = { place: 'Bergamo' };
+  await assert.rejects(lookupMapPlace(body, 'operator', db, provider, { EDITORIAL_GEOCODER_DISABLED: 'true' }), fails(503));
+  assert.equal(calls, 0);
+  await assert.rejects(lookupMapPlace(body, 'operator', db, provider, {}), error =>
+    fails(503)(error) && !String(error).includes(sensitive));
+  await assert.rejects(lookupMapPlace(body, 'operator', db, provider, {}), fails(429));
+  assert.equal(calls, 1);
+});
 test('late geographic responses and cross-entry selections cannot overwrite an edited article', async () => {
   const entry = await cheese();
   const body = { entryId: entry.id, revision: entry.revision, place: 'Castelmagno' };
@@ -997,7 +1038,7 @@ test('geographic cache expiry uses original retrieval time, not the most recent 
   assert.equal(renewed.cached, false); assert.equal(calls, 2);
 });
 test('research and origin endpoints reject guests, customers and forged request data before external requests', async () => {
-  for (const path of ['/research', '/origin-geocoding', '/origin-geocoding/apply']) {
+  for (const path of ['/research', '/origin-geocoding', '/origin-geocoding/apply', '/map-place']) {
     for (const [auth, status] of [[undefined, 401], ['customer', 403], ['admin', 400]] as const) {
       const response = await fetch(base + path, { method: 'POST', headers: {
         'Content-Type': 'application/json', ...(auth ? { Authorization: auth } : {}),
