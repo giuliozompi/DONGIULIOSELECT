@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { storage } from './storage';
 import { changeOrderPaymentMethod, OrderPaymentMethodError } from './services/order-payment-method';
 import { renderOrderPrintDocument } from './services/order-print-document';
+import { changeDeliveryFee } from './services/order-delivery-fee';
+import { CheckoutError } from '../shared/checkout';
 
 type Operator = (req: Request) => string | undefined;
 
@@ -10,6 +12,20 @@ export function registerAdminOrderOperatorRoutes(
   app: Express, prefix: '/api' | '/web-api', guards: RequestHandler[], operator: Operator,
 ) {
   const path = `${prefix}/admin/orders/:id`;
+  if (prefix === '/web-api') app.patch(`${path}/delivery-fee`, ...guards, async (req, res) => {
+    const actor = operator(req);
+    if (!actor) return res.status(401).json({ error: 'Требуется авторизация оператора.' });
+    const input = z.object({ fee: z.string().regex(/^\d{1,8}(?:[.,]\d{1,2})?$/) }).strict().safeParse(req.body);
+    if (!input.success) return res.status(400).json({ error: 'Введите сумму доставки от 0 с точностью до копеек.' });
+    res.set('Cache-Control', 'no-store');
+    try {
+      return res.json(await changeDeliveryFee(req.params.id, input.data.fee, actor));
+    } catch (err) {
+      if (err instanceof CheckoutError) return res.status(err.status).json({ error: err.message });
+      console.error('[OrderDeliveryFee] Failed to save delivery fee');
+      return res.status(500).json({ error: 'Не удалось сохранить стоимость доставки.' });
+    }
+  });
   app.patch(`${path}/payment-method`, ...guards, async (req: Request, res: Response) => {
     try {
       const actor = operator(req);

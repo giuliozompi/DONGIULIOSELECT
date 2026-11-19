@@ -121,6 +121,20 @@ export async function checkTimeweb({
       error('Timeweb: indice univoco dei preferiti mancante, non valido o incompatibile. Push bloccato; nessuna modifica eseguita.');
       return false;
     }
+    const checkout = await client.query(`
+      SELECT a.attname AS name, pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
+        a.attnotnull AS not_null, a.atthasdef AS has_default
+      FROM pg_catalog.pg_attribute a
+      WHERE a.attrelid = to_regclass('public.orders') AND a.attnum > 0 AND NOT a.attisdropped
+        AND a.attname IN ('desired_delivery_date', 'delivery_fee_in_order')
+    `);
+    const orderColumns = { desired_delivery_date: 'date', delivery_fee_in_order: 'numeric(10,2)' };
+    if (!Object.entries(orderColumns).every(([name, type]) => checkout.rows.some(column =>
+      column.name === name && column.type === type && !column.not_null && !column.has_default))) {
+      error('Timeweb: colonne di consegna ordini mancanti o incompatibili. Push bloccato; nessuna modifica eseguita.');
+      return false;
+    }
+    await client.query('SELECT desired_delivery_date, delivery_fee_in_order FROM public.orders LIMIT 0');
     if (timedOut) throw new Error('deadline');
     log('Timeweb: prerequisiti della release verificati in sola lettura.');
     return true;

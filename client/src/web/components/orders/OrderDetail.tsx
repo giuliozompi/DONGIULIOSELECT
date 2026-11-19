@@ -10,6 +10,7 @@ import {
 } from './order-view';
 import type { CustomerOrder } from './order-view';
 import { RepeatOrderButton } from './RepeatOrderButton';
+import { formatDesiredDate } from '@shared/web-delivery';
 
 export function OrderDetail({ order }: { order: CustomerOrder }) {
   const discount = Number(order.discount ?? 0);
@@ -49,6 +50,10 @@ export function OrderDetail({ order }: { order: CustomerOrder }) {
                 <span>Скидка</span><span className="tabular-nums">−{formatOrderMoney(discount)}</span>
               </div>
             )}
+            {order.deliveryFeeInOrder != null && <div className="mb-2 flex justify-between gap-4 text-sm text-[#766e5e]">
+              <span>{order.deliveryMethod === 'web_pickup' ? 'Самовывоз' : 'Доставка'}</span>
+              <span className="tabular-nums">{formatOrderMoney(order.deliveryFeeInOrder)}</span>
+            </div>}
             <div className="flex items-baseline justify-between gap-4">
               <span className="font-semibold text-[#302b24]">Итого</span>
               <span className="text-xl font-semibold tabular-nums tracking-tight text-[#302b24]">{formatOrderMoney(order.amount)}</span>
@@ -78,6 +83,9 @@ export function OrderDetail({ order }: { order: CustomerOrder }) {
               <p className="min-w-0 break-words font-medium leading-relaxed text-[#302b24]">{order.deliveryAddress}</p>
             </div>
             <DeliveryMethodLabel method={order.deliveryMethod} />
+            {order.desiredDeliveryDate && <p className="mt-1 text-sm text-[#766e5e]">
+              Желаемая дата получения: {formatDesiredDate(order.desiredDeliveryDate)}
+            </p>}
             {order.deliveryNotes && <p className="mt-3 border-l-2 border-[#d9ccb4] pl-3 text-sm leading-relaxed text-[#766e5e]">{order.deliveryNotes}</p>}
           </section>
           <section className="border-t border-[#e8e1d5] pt-5">

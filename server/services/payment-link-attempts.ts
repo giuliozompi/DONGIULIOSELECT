@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { orderNotificationLogs, orders } from '../../shared/schema';
+import { orderNotificationLogs, orders, type Order } from '../../shared/schema';
+import { lockOrderPayment } from './order-delivery-fee';
 import { buildPaymentLinkState, type PaymentAttemptDetails, type PaymentAttemptEvent, type PaymentLinkOrder, type PaymentLinkState } from '../../shared/payment-link-attempts';
 import type { PaymentDeliverySummary, paymentLinkOrderUpdate } from '../../shared/payment-link-delivery';
 import { getTelegramRetryAt } from './telegram-rate-limits';
@@ -52,11 +53,23 @@ export async function getPaymentLinkStates(orders: PaymentLinkOrder[], database 
   ]));
 }
 
-export async function reservePaymentLinkAttempt(order: PaymentLinkOrder, database = db): Promise<string> {
+export async function reservePaymentLinkAttempt(order: PaymentLinkOrder, database = db,
+  expected?: Pick<Order, 'amount'> & Partial<Pick<Order, 'items'>>): Promise<string> {
   return database.transaction(async tx => {
     await tx.execute(sql`SET LOCAL lock_timeout = '3s'`);
     await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-link:${order.id}`}, 0))`);
+    await lockOrderPayment(tx, order.id);
+    if (expected) {
+      const [latest] = await tx.select().from(orders).where(eq(orders.id, order.id));
+      if (!latest || latest.amount !== expected.amount || latest.paymentMethod !== 'yookassa' ||
+        !['ОФОРМЛЕН', 'СОБРАН', 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ'].includes(latest.status) ||
+        (expected.items && JSON.stringify(expected.items) !== JSON.stringify(latest.items))) {
+        throw new PaymentLinkPreparationError('Заказ изменился. Обновите заказ и повторите отправку.');
+      }
+      if (latest.deliveryMethod === 'web_unconfirmed' && latest.deliveryFeeInOrder == null) {
+        throw new PaymentLinkPreparationError('Уточните адрес и сохраните стоимость доставки перед отправкой ссылки. Если доплаты нет, укажите 0 ₽.');
+      }
+    }
     const events = await eventsFor(tx, [order.id]);
     // This guard is shared with initial generation/conversion flows. Each
     // caller checks eligibility; here only the durable sending limits apply.

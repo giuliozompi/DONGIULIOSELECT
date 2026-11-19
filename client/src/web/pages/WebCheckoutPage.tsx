@@ -5,21 +5,20 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  ChevronRight, Loader2, Tag, X, CreditCard, Banknote, MapPin, User, Phone, Mail, MessageSquare,
+  ChevronRight, Loader2, Tag, X, CreditCard, MapPin, User, Phone, Mail, MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useWebCart } from '../hooks/useWebCart';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { webApi, WebApiError } from '../lib/webApi';
 import type { CheckoutQuote } from '@shared/checkout';
+import { desiredDeliveryDateSchema, desiredDateError, moscowDeliveryDates, MOSCOW_DELIVERY_RUB, WEB_PICKUP, type WebDeliveryQuote } from '@shared/web-delivery';
 import CheckoutAuthGate from '../components/CheckoutAuthGate';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { savedDeliveryAddress, type SavedAddress } from '../lib/savedAddresses';
@@ -28,9 +27,13 @@ const checkoutSchema = z.object({
   customerName: z.string().min(2, 'Введите имя и фамилию'),
   customerPhone: z.string().min(10, 'Введите корректный номер телефона'),
   customerEmail: z.string().email('Некорректный email').optional().or(z.literal('')),
-  deliveryAddress: z.string().min(10, 'Введите полный адрес доставки'),
-  deliveryNotes: z.string().optional(),
-  paymentMethod: z.enum(['yookassa', 'cash_on_delivery']),
+  deliveryChoice: z.enum(['courier', 'pickup']),
+  deliveryAddress: z.string().trim().max(500),
+  deliveryNotes: z.string().trim().max(2000).optional(),
+  desiredDeliveryDate: desiredDeliveryDateSchema,
+  paymentMethod: z.literal('yookassa'),
+}).refine(data => data.deliveryChoice === 'pickup' || data.deliveryAddress.length >= 10, {
+  path: ['deliveryAddress'], message: 'Введите полный адрес доставки',
 });
 
 type CheckoutForm = z.infer<typeof checkoutSchema>;
@@ -54,6 +57,7 @@ export default function WebCheckoutPage() {
   const [revision, setRevision] = useState<{ quote: CheckoutQuote; key: string } | null>(null);
   const [checkoutError, setCheckoutError] = useState('');
   const [addressSelection, setAddressSelection] = useState<{ userId: string; id: string } | null>(null);
+  const [debouncedDeliveryAddress, setDebouncedDeliveryAddress] = useState('');
   const {
     data: addresses = [], isLoading: addressesLoading, isError: addressesError, refetch: refetchAddresses,
   } = useQuery({
@@ -69,10 +73,27 @@ export default function WebCheckoutPage() {
       customerName: user ? `${user.firstName}${user.lastName ? ' ' + user.lastName : ''}` : '',
       customerPhone: user?.phone || '',
       customerEmail: user?.email || '',
+      deliveryChoice: 'courier',
       deliveryAddress: '',
       deliveryNotes: '',
+      desiredDeliveryDate: '',
       paymentMethod: 'yookassa',
     },
+  });
+  const choice = form.watch('deliveryChoice');
+  const address = form.watch('deliveryAddress').trim();
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedDeliveryAddress(address), 350);
+    return () => window.clearTimeout(timer);
+  }, [address]);
+  const canCheckDelivery = isAuthenticated && !!user && choice === 'courier' && address.length >= 10;
+  const deliveryQuery = useQuery({
+    queryKey: ['/web-api/orders/delivery-quote', user?.id, debouncedDeliveryAddress],
+    queryFn: () => webApi.post<WebDeliveryQuote>('/orders/delivery-quote', { address: debouncedDeliveryAddress }),
+    enabled: canCheckDelivery && address === debouncedDeliveryAddress,
+    retry: false,
+    staleTime: 60_000,
+    gcTime: 60_000,
   });
 
   const selectSavedAddress = (id: string) => {
@@ -106,18 +127,24 @@ export default function WebCheckoutPage() {
     }
   }, [user, form]);
 
-  const revisionKey = JSON.stringify([items, user?.id, promoResult]);
+  const revisionKey = JSON.stringify([items, user?.id, promoResult, choice, choice === 'courier' ? address : '']);
   const quote = revision?.key === revisionKey ? revision.quote : null;
+  const delivery = quote?.delivery ?? (choice === 'pickup' ? { method: 'web_pickup', fee: '0.00' } as const :
+    address === debouncedDeliveryAddress && !deliveryQuery.isError ? deliveryQuery.data : undefined);
+  const checkingDelivery = !quote?.delivery && canCheckDelivery &&
+    (address !== debouncedDeliveryAddress || deliveryQuery.isFetching);
+  const deliveryFee = Number(delivery?.fee ?? 0);
+  const { today, nextDay, beforeCutoff } = moscowDeliveryDates();
   const summaryItems = quote?.items ?? items;
   const summarySubtotal = quote ? Number(quote.subtotal) :
     items.reduce((sum, item) => sum + Math.round(Number(item.price) * 100 * item.quantity), 0) / 100;
   const discountAmount = quote ? Number(quote.discount) : promoResult?.valid && promoResult.discountPercent
     ? Math.round(summarySubtotal * 100 * promoResult.discountPercent / 100) / 100
     : 0;
-  const finalAmount = quote ? Number(quote.amount) : summarySubtotal - discountAmount;
+  const finalAmount = quote ? Number(quote.amount) : summarySubtotal - discountAmount + deliveryFee;
 
   const createOrderMutation = useMutation({
-    mutationFn: (data: CheckoutForm) =>
+    mutationFn: ({ data }: { data: CheckoutForm; key: string }) =>
       webApi.post<{ id: string; status: string }>('/orders', {
         ...data,
         items: summaryItems.map(i => ({
@@ -136,11 +163,11 @@ export default function WebCheckoutPage() {
       clearCart();
       setLocation(`/web/order-success/${order.id}`);
     },
-    onError: (err) => {
+    onError: (err, submitted) => {
       if (err instanceof WebApiError && err.status === 409) {
         const data = err.data as { code?: string; quote?: CheckoutQuote };
         if (data.code === 'CHECKOUT_CHANGED' && data.quote) {
-          setRevision({ quote: data.quote, key: revisionKey });
+          setRevision({ quote: data.quote, key: submitted.key });
           setCheckoutError('');
           return;
         }
@@ -190,7 +217,15 @@ export default function WebCheckoutPage() {
       <h1 className="text-2xl font-bold text-neutral-900 mb-6">Оформление заказа</h1>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(d => createOrderMutation.mutate(d))}>
+        <form noValidate onSubmit={form.handleSubmit(d => {
+          if (checkingDelivery || createOrderMutation.isPending) return;
+          const error = desiredDateError(d.desiredDeliveryDate, delivery?.method ?? 'web_unconfirmed');
+          if (error) {
+            form.setError('desiredDeliveryDate', { message: error }, { shouldFocus: true });
+            return;
+          }
+          createOrderMutation.mutate({ data: d, key: revisionKey });
+        })}>
           <div className="flex flex-col lg:flex-row gap-6">
             {/* Left — form */}
             <div className="flex-1 space-y-5">
@@ -244,8 +279,22 @@ export default function WebCheckoutPage() {
               {/* Delivery address */}
               <div className="bg-white rounded-xl border border-neutral-200 p-5">
                 <h2 className="font-semibold text-neutral-900 mb-4 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-neutral-400" /> Адрес доставки
+                  <MapPin className="w-4 h-4 text-neutral-400" /> Получение заказа
                 </h2>
+                <FormField control={form.control} name="deliveryChoice" render={({ field }) => (
+                  <FormItem className="mb-4">
+                    <FormLabel>Способ получения</FormLabel>
+                    <FormControl>
+                      <select {...field} data-testid="select-checkout-delivery" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                        <option value="courier">Курьерская доставка</option>
+                        <option value="pickup">Самовывоз</option>
+                      </select>
+                    </FormControl>
+                  </FormItem>
+                )} />
+                {choice === 'pickup' ? (
+                  <p className="text-sm text-neutral-700">{WEB_PICKUP.label} — {WEB_PICKUP.address}</p>
+                ) : <>
                 {addressesLoading ? (
                   <p role="status" className="text-sm text-neutral-500 mb-4">Загружаем сохранённые адреса...</p>
                 ) : addressesError ? (
@@ -297,8 +346,23 @@ export default function WebCheckoutPage() {
                     </FormControl>
                     <p className="text-xs text-neutral-500">
                       Выберите подсказку DaData для нормализации адреса. Если подсказок нет,
-                      введите полный адрес вручную. Укажите квартиру, подъезд и этаж.
+                      введите полный адрес вручную. Квартиру, подъезд и этаж можно указать в комментарии.
                     </p>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <p className="mt-2 text-sm text-neutral-600">
+                  По Москве — {MOSCOW_DELIVERY_RUB.toLocaleString('ru-RU')} ₽. Заказы, оформленные до 16:00 по московскому времени,
+                  можно получить в день заказа или в другой удобный день. За пределами Москвы стоимость согласуем по тарифу курьерской службы.
+                </p>
+                </>}
+                <FormField control={form.control} name="desiredDeliveryDate" render={({ field }) => (
+                  <FormItem className="mt-4">
+                    <FormLabel>Желаемая дата получения</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-checkout-date" type="date" min={delivery?.method === 'web_moscow' && !beforeCutoff ? nextDay : today} />
+                    </FormControl>
+                    <p className="text-xs text-neutral-500">Дата необязательна. Подтвердим её при согласовании заказа.</p>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -321,6 +385,7 @@ export default function WebCheckoutPage() {
                           data-testid="input-checkout-notes"
                         />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )} />
                 </div>
@@ -331,36 +396,10 @@ export default function WebCheckoutPage() {
                 <h2 className="font-semibold text-neutral-900 mb-4 flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-neutral-400" /> Способ оплаты
                 </h2>
-                <FormField control={form.control} name="paymentMethod" render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <RadioGroup value={field.value} onValueChange={field.onChange} className="space-y-3">
-                        <div className={`flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${field.value === 'yookassa' ? 'border-amber-500 bg-amber-50' : 'border-neutral-200 hover:border-neutral-300'}`}
-                          onClick={() => field.onChange('yookassa')}>
-                          <RadioGroupItem value="yookassa" id="pay-yookassa" className="mt-0.5" />
-                          <Label htmlFor="pay-yookassa" className="cursor-pointer flex-1">
-                            <div className="flex items-center gap-2">
-                              <CreditCard className="w-4 h-4 text-amber-700" />
-                              <span className="font-medium">Онлайн-оплата (ЮKassa)</span>
-                            </div>
-                            <p className="text-xs text-neutral-500 mt-1">Карта, СБП, ЮMoney — ссылка на оплату придёт после подтверждения заказа</p>
-                          </Label>
-                        </div>
-                        <div className={`flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${field.value === 'cash_on_delivery' ? 'border-amber-500 bg-amber-50' : 'border-neutral-200 hover:border-neutral-300'}`}
-                          onClick={() => field.onChange('cash_on_delivery')}>
-                          <RadioGroupItem value="cash_on_delivery" id="pay-cash" className="mt-0.5" />
-                          <Label htmlFor="pay-cash" className="cursor-pointer flex-1">
-                            <div className="flex items-center gap-2">
-                              <Banknote className="w-4 h-4 text-green-700" />
-                              <span className="font-medium">Наличными при получении</span>
-                            </div>
-                            <p className="text-xs text-neutral-500 mt-1">Оплата курьеру наличными или картой</p>
-                          </Label>
-                        </div>
-                      </RadioGroup>
-                    </FormControl>
-                  </FormItem>
-                )} />
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm">
+                  <p className="font-medium">Онлайн-оплата (ЮKassa)</p>
+                  <p className="mt-1 text-xs text-neutral-600">Ссылка на оплату придёт после подтверждения заказа.</p>
+                </div>
               </div>
             </div>
 
@@ -449,7 +488,11 @@ export default function WebCheckoutPage() {
                   )}
                   <div className="flex justify-between text-neutral-500">
                     <span>Доставка</span>
-                    <span>уточняется</span>
+                    <span data-testid="checkout-delivery-fee" aria-live="polite">
+                      {checkingDelivery ? 'Проверяем адрес…' : choice === 'pickup' ? 'Самовывоз бесплатно' :
+                        delivery?.fee != null ? `${deliveryFee.toLocaleString('ru-RU')} ₽` :
+                        address.length < 10 ? 'Введите адрес' : 'Уточняется, не включена'}
+                    </span>
                   </div>
                 </div>
 
@@ -463,7 +506,7 @@ export default function WebCheckoutPage() {
                 <Button
                   type="submit"
                   className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-                  disabled={createOrderMutation.isPending || promoLoading}
+                  disabled={createOrderMutation.isPending || promoLoading || checkingDelivery}
                   data-testid="button-place-order"
                 >
                   {createOrderMutation.isPending

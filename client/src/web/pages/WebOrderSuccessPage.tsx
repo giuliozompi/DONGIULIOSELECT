@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle, Package, Phone, ArrowRight, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { webApi } from '../lib/webApi';
+import { deliveryMethodLabel, formatDesiredDate } from '@shared/web-delivery';
+import { formatOrderMoney } from '../components/orders/order-view';
 
 interface Order {
   id: string;
@@ -13,6 +14,9 @@ interface Order {
   customerName: string;
   customerPhone: string;
   deliveryAddress: string;
+  deliveryMethod?: string | null;
+  desiredDeliveryDate?: string | null;
+  deliveryFeeInOrder?: string | null;
   createdAt: string;
   items: Array<{ productId: string; productName: string; quantity: number; price: string; unit: string }>;
 }
@@ -51,8 +55,12 @@ export default function WebOrderSuccessPage() {
           </div>
 
           <div>
-            <p className="text-xs text-neutral-400 uppercase tracking-wide mb-1">Адрес доставки</p>
+            <p className="text-xs text-neutral-400 uppercase tracking-wide mb-1">Способ получения</p>
+            <p className="text-sm font-medium">{deliveryMethodLabel(order.deliveryMethod)}</p>
             <p className="text-sm text-neutral-700">{order.deliveryAddress}</p>
+            {order.desiredDeliveryDate && <p className="text-sm text-neutral-700">
+              Желаемая дата: {formatDesiredDate(order.desiredDeliveryDate)}
+            </p>}
           </div>
 
           <div>
@@ -72,9 +80,13 @@ export default function WebOrderSuccessPage() {
             </div>
           </div>
 
+          {order.deliveryFeeInOrder != null && <div className="flex justify-between text-sm text-neutral-600">
+            <span>{order.deliveryMethod === 'web_pickup' ? 'Самовывоз' : 'Доставка'}</span>
+            <span>{formatOrderMoney(order.deliveryFeeInOrder)}</span>
+          </div>}
           <div className="flex justify-between font-semibold text-neutral-900 pt-2 border-t border-neutral-100">
             <span>Итого</span>
-            <span>{parseFloat(order.amount).toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽</span>
+            <span>{formatOrderMoney(order.amount)}</span>
           </div>
 
           {order.paymentMethod === 'yookassa' && (

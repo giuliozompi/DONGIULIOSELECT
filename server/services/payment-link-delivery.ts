@@ -7,6 +7,7 @@ interface PaymentOrder {
   customerName: string;
   customerPhone: string;
   customerEmail?: string | null;
+  items?: import('../../shared/schema').Order['items'];
 }
 interface SendResult { sent: boolean; error?: string; retryAt?: string; deferred?: boolean }
 interface Dependencies {
@@ -59,7 +60,7 @@ export async function sendOrderPaymentLink(order: PaymentOrder, url: string | ((
     throw new PaymentLinkPreparationError('Нельзя отправлять ссылку для оплаченного или завершённого заказа.');
   }
   // Durable, fail-closed reservation: all web and Telegram callers share this limit.
-  const attemptId = await reservePaymentLinkAttempt(current);
+  const attemptId = await reservePaymentLinkAttempt(current, undefined, order);
   let sending = false;
   try {
     const resolvedUrl = typeof url === 'function' ? await url() : url;

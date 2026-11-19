@@ -28,6 +28,7 @@ async function openPage(context, {
   holdSuggestions = false,
   orderResponses = [],
   promoValidation = { valid: true, discountPercent: 10 },
+  rateAddress = () => ({ method: 'web_unconfirmed', fee: null }),
 } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
@@ -134,6 +135,8 @@ async function openPage(context, {
       body = { accessToken: 'test-token', user: currentUser };
     } else if (path === '/web-api/promo/validate') {
       body = promoValidation;
+    } else if (path === '/web-api/orders/delivery-quote') {
+      body = rateAddress(JSON.parse(event.request.postData).address);
     } else if (path === '/web-api/orders' && event.request.method === 'POST') {
       if (!allowOrder) throw new Error('This test must not submit an order');
       // Fulfilled entirely in the browser: never create real orders or payments.
@@ -186,12 +189,46 @@ async function fillCheckout(page) {
   await page.fill(selector('input-checkout-phone'), '+79999999999');
   await page.fill(selector('input-checkout-address'), 'Test delivery address, building 1');
 }
+async function placeOrder(page) {
+  await page.wait(`document.querySelector(${JSON.stringify(selector('button-place-order'))})?.disabled === false`);
+  await page.click(selector('button-place-order'));
+}
+test('website checkout removes cash, previews Moscow only, and submits pickup with the selected date and comment', async context => {
+  const { page, requests } = await openPage(context, {
+    authenticated: true, allowOrder: true,
+    rateAddress: address => address.startsWith('Москва,')
+      ? { method: 'web_moscow', fee: '1000.00' }
+      : { method: 'web_regional', fee: null },
+  });
+  await fillCheckout(page);
+  assert.equal(await page.evaluate('document.body.textContent.includes("Наличными при получении")'), false);
+  await page.fill(selector('input-checkout-address'), 'Москва, ул. Покровка, 27');
+  await page.wait(`document.querySelector('[data-testid="checkout-delivery-fee"]')?.textContent.replace(/\\s/g,"").includes("1000₽")`);
+  await page.fill(selector('input-checkout-address'), 'Московская обл., Балашиха, 2');
+  await page.wait(`document.querySelector('[data-testid="checkout-delivery-fee"]')?.textContent.includes('Уточняется, не включена')`);
+  await page.evaluate(`(() => { const s = document.querySelector('[data-testid="select-checkout-delivery"]');
+    s.value='pickup'; s.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await page.wait(`!document.querySelector('[data-testid="input-checkout-address"]')`);
+  assert.match(await page.evaluate('document.body.textContent'), /Магазин Don Giulio — г\. Москва, ул\. Покровка, 27, стр\. 1/);
+  await page.evaluate(`(() => { const date = document.querySelector('[data-testid="input-checkout-date"]');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(date, '2099-01-01');
+    date.dispatchEvent(new Event('input',{bubbles:true})); date.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await page.fill(selector('input-checkout-notes'), 'Тестовый комментарий');
+  await placeOrder(page);
+  await page.wait(`location.pathname === '/web/order-success/test-order'`);
+  const request = requests.find(r => r.path === '/web-api/orders' && r.method === 'POST');
+  assert.equal(request.body.paymentMethod, 'yookassa');
+  assert.equal(request.body.deliveryChoice, 'pickup');
+  assert.equal(request.body.desiredDeliveryDate, '2099-01-01');
+  assert.equal(request.body.deliveryNotes, 'Тестовый комментарий');
+  assert.equal(request.body.amount, '1470.00');
+});
 test('checkout pricing requires a second explicit confirmation and retains cart and draft', async context => {
   const { page, requests } = await openPage(context, {
     authenticated: true, allowOrder: true, orderResponses: [changedResponse(revisedQuote)],
   });
   await fillCheckout(page);
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(exists('checkout-revised'));
   assert.equal(requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST').length, 1);
   assert.equal(await page.evaluate('location.pathname'), '/web/checkout');
@@ -199,7 +236,7 @@ test('checkout pricing requires a second explicit confirmation and retains cart 
   assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(selector('input-checkout-address'))}).value`), 'Test delivery address, building 1');
   assert.match(await page.evaluate('document.body.textContent'), /Current cheese/);
   assert.match(await page.evaluate(`document.querySelector(${JSON.stringify(selector('button-place-order'))}).textContent`), /Подтвердить обновлённый заказ/);
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(`location.pathname === '/web/order-success/test-order'`);
   const posts = requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST');
   assert.equal(posts.length, 2);
@@ -219,11 +256,11 @@ test('checkout pricing handles a second price change and invalid promo feedback 
   await page.fill(selector('input-promo-code'), 'BENVENUTO-TEST');
   await page.click(selector('button-apply-promo'));
   await page.wait(`document.body.textContent.includes('BENVENUTO-TEST (-10%)')`);
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(exists('checkout-revised'));
   assert.match(await page.evaluate('document.body.textContent'), /Скидка удалена/);
   assert.equal(await page.evaluate(`document.body.textContent.includes('BENVENUTO-TEST (-10%)')`), false);
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(`document.querySelector('[data-testid="checkout-revised"]')?.textContent.includes('Цены или итог обновлены')`);
   const posts = requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST');
   assert.equal(posts.length, 2);
@@ -239,7 +276,7 @@ test('checkout pricing shows unavailable products persistently and preserves the
     ],
   });
   await fillCheckout(page);
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(exists('checkout-error'));
   assert.match(await page.evaluate(`document.querySelector('[data-testid="checkout-error"]').textContent`), /недоступен/);
   assert.equal(requests.filter(r => r.path === '/web-api/orders' && r.method === 'POST').length, 1);
@@ -537,7 +574,7 @@ test('checkout uses the Telegram DaData endpoint and submits the selected normal
   assert.equal(await page.evaluate(exists('address-suggestions-list')), false);
   assert.equal(requests.filter(request => request.path === '/api/address/suggest').length, 1);
   await page.fill(selector('input-checkout-phone'), '+79990000000');
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(`location.pathname === '/web/order-success/test-order'`);
   const order = requests.find(request => request.path === '/web-api/orders' && request.method === 'POST');
   assert.equal(order.body.deliveryAddress, normalizedAddress.fullAddress);
@@ -593,7 +630,7 @@ test('unavailable suggestions preserve manual address entry and do not block che
   assert.equal(await page.evaluate(exists('address-suggestions-list')), false);
   assert.equal(requests.filter(request => request.path === '/api/address/suggest').length, 1);
   await page.fill(selector('input-checkout-phone'), '+79990000000');
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(`location.pathname === '/web/order-success/test-order'`);
   const order = requests.find(request => request.path === '/web-api/orders' && request.method === 'POST');
   assert.equal(order.body.deliveryAddress, manualAddress);
@@ -1130,7 +1167,7 @@ test('saved address choice preserves apartment and courier notes in the order pa
   assert.equal(await page.evaluate(checkoutValue('input-checkout-address')), expected);
   assert.equal(await page.evaluate(checkoutValue('input-checkout-notes')), homeAddress.notes);
   await page.fill(selector('input-checkout-phone'), '+79990000000');
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(`location.pathname === '/web/order-success/test-order'`);
   const order = requests.find(r => r.path === '/web-api/orders' && r.method === 'POST');
   assert.equal(order.body.deliveryAddress, expected);
@@ -1153,7 +1190,7 @@ test('switching saved addresses avoids duplicated apartments and clears obsolete
   await page.fill(selector('input-checkout-address'), 'Москва, новый адрес, д 9, кв 3');
   await page.fill(selector('input-checkout-notes'), 'Позвонить за час');
   await page.fill(selector('input-checkout-phone'), '+79990000000');
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(`location.pathname === '/web/order-success/test-order'`);
   const order = requests.find(r => r.path === '/web-api/orders' && r.method === 'POST');
   assert.equal(order.body.deliveryAddress, 'Москва, новый адрес, д 9, кв 3');
@@ -1217,7 +1254,7 @@ test('address book failure is visible and does not block manual checkout', async
   await page.wait(`document.body?.textContent.includes('Не удалось загрузить адреса')`);
   await page.fill(selector('input-checkout-address'), 'Москва, ручной адрес, дом 11');
   await page.fill(selector('input-checkout-phone'), '+79990000000');
-  await page.click(selector('button-place-order'));
+  await placeOrder(page);
   await page.wait(`location.pathname === '/web/order-success/test-order'`);
   assert.equal(requests.find(r => r.path === '/web-api/orders' && r.method === 'POST').body.deliveryAddress,
     'Москва, ручной адрес, дом 11');

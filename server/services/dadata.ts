@@ -6,6 +6,7 @@ interface DaDataSuggestion {
     country: string;
     region: string | null;
     region_type: string | null;
+    region_kladr_id?: string | null;
     city: string | null;
     city_type: string | null;
     settlement: string | null;
@@ -33,6 +34,7 @@ interface AddressSuggestion {
   fiasId: string;
   geoLat: string | null;
   geoLon: string | null;
+  inMoscow: boolean | null;
 }
 
 export class DaDataService {
@@ -48,6 +50,7 @@ export class DaDataService {
     try {
       const response = await fetch(this.geolocateUrl, {
         method: 'POST',
+        signal: AbortSignal.timeout(3500),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -87,6 +90,7 @@ export class DaDataService {
     try {
       const response = await fetch(this.apiUrl, {
         method: 'POST',
+        signal: AbortSignal.timeout(3500),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -121,6 +125,9 @@ export class DaDataService {
           fiasId: s.data.fias_id,
           geoLat: s.data.geo_lat,
           geoLon: s.data.geo_lon,
+          // Federal subject, not city text, postal prefix or distance from MKAD.
+          inMoscow: s.data.region_kladr_id ? s.data.region_kladr_id === '7700000000000' :
+            s.data.region ? s.data.region === 'Москва' && s.data.region_type === 'г' : null,
         };
       });
     } catch (error) {

@@ -16,6 +16,9 @@ import { isValidOrderQuantity } from '../shared/order-quantity';
 import { registerWebAddressUpdate, registerWebAddressDelete } from './webAddressRoutes';
 import { registerWebReorder } from './webReorderRoutes';
 import { registerWebCheckout } from './webCheckoutRoutes';
+import { saveOrderPricing } from './services/order-delivery-fee';
+import { CheckoutError } from '../shared/checkout';
+import { WEB_PICKUP } from '../shared/web-delivery';
 import { registerAdminPaymentLinks } from './adminPaymentLinkRoutes';
 import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
 import { registerAdminEditorialRoutes } from './adminEditorialRoutes';
@@ -626,10 +629,10 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
   // ═══════════════════════════════════════════════════════════
 
   function calcOrderTotal(items: any[], discountType?: string | null, discountValue?: string | null) {
-    const subtotal = items.reduce((s: number, i: any) => s + parseFloat(i.price) * i.quantity, 0);
+    const subtotal = items.reduce((s: number, i: any) => s + Math.round(parseFloat(i.price) * 100 * i.quantity), 0) / 100;
     if (!discountType || !discountValue) return { subtotal, discountAmount: 0, total: subtotal };
     const pct = discountType === 'percentage';
-    const discountAmount = pct ? (subtotal * parseFloat(discountValue)) / 100 : parseFloat(discountValue);
+    const discountAmount = Math.min(subtotal, pct ? Math.round(subtotal * parseFloat(discountValue)) / 100 : parseFloat(discountValue));
     return { subtotal, discountAmount, total: Math.max(0, subtotal - discountAmount) };
   }
 
@@ -1033,9 +1036,9 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       const newItems = [...order.items];
       newItems[idx] = { ...newItems[idx], quantity: newQuantity };
       const totals = calcOrderTotal(newItems, order.discountType, order.discountValue);
-      const updated = await storage.updateOrder(req.params.id, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
+      const updated = await saveOrderPricing(order, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
       res.json(updated);
-    } catch(e) { res.status(400).json({ error: String(e) }); }
+    } catch(e) { res.status(e instanceof CheckoutError ? e.status : 400).json({ error: e instanceof Error ? e.message : String(e) }); }
   });
 
   app.post('/web-api/admin/orders/:id/add-product', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
@@ -1050,9 +1053,9 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       }
       const newItems = [...order.items, { productId: product.id, productName: product.name, quantity: qty, price: product.price, unit: product.unit }];
       const totals = calcOrderTotal(newItems, order.discountType, order.discountValue);
-      const updated = await storage.updateOrder(req.params.id, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
+      const updated = await saveOrderPricing(order, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
       res.json(updated);
-    } catch(e) { res.status(400).json({ error: String(e) }); }
+    } catch(e) { res.status(e instanceof CheckoutError ? e.status : 400).json({ error: e instanceof Error ? e.message : String(e) }); }
   });
 
   app.post('/web-api/admin/orders/:id/remove-product', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
@@ -1061,21 +1064,26 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
       const order = await storage.getOrderById(req.params.id);
       if (!order) return res.status(404).json({ error: 'Order not found' });
       const newItems = order.items.filter((i: any) => i.productId !== productId);
+      if (!newItems.length) return res.status(400).json({ error: 'В заказе должен остаться хотя бы один товар.' });
       const totals = calcOrderTotal(newItems, order.discountType, order.discountValue);
-      const updated = await storage.updateOrder(req.params.id, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
+      const updated = await saveOrderPricing(order, { items: newItems, amount: totals.total.toFixed(2), discount: totals.discountAmount.toFixed(2) });
       res.json(updated);
-    } catch(e) { res.status(400).json({ error: String(e) }); }
+    } catch(e) { res.status(e instanceof CheckoutError ? e.status : 400).json({ error: e instanceof Error ? e.message : String(e) }); }
   });
 
   app.post('/web-api/admin/orders/:id/apply-discount', requireWebAuth, requireWebAdmin, async (req: Request, res: Response) => {
     try {
       const { discountType, discountValue } = z.object({ discountType: z.enum(['percentage','fixed']), discountValue: z.string() }).parse(req.body);
+      if (!/^\d{1,8}(?:\.\d{1,2})?%?$/.test(discountValue) ||
+          (discountType === 'percentage' ? parseFloat(discountValue) > 100 : discountValue.endsWith('%'))) {
+        return res.status(400).json({ error: 'Некорректная скидка.' });
+      }
       const order = await storage.getOrderById(req.params.id);
       if (!order) return res.status(404).json({ error: 'Order not found' });
       const totals = calcOrderTotal(order.items, discountType, discountValue);
-      const updated = await storage.updateOrder(req.params.id, { discount: totals.discountAmount.toFixed(2), discountType, discountValue, amount: totals.total.toFixed(2) });
+      const updated = await saveOrderPricing(order, { discount: totals.discountAmount.toFixed(2), discountType, discountValue, amount: totals.total.toFixed(2) });
       res.json(updated);
-    } catch(e) { res.status(400).json({ error: String(e) }); }
+    } catch(e) { res.status(e instanceof CheckoutError ? e.status : 400).json({ error: e instanceof Error ? e.message : String(e) }); }
   });
 
   app.delete('/web-api/admin/orders/:id', requireWebAuth, requireWebAdmin, requireWebMasterAdmin, async (req: Request, res: Response) => {
@@ -1140,12 +1148,9 @@ Sitemap: https://dongiulioselect.ru/sitemap.xml
 
   // ── PICKUP ADDRESSES ───────────────────────────────────────
 
-  // Public endpoint — used on the delivery page
-  app.get('/web-api/pickup-addresses', async (_req: Request, res: Response) => {
-    try {
-      const rows = await db.select({ id: pickupAddresses.id, label: pickupAddresses.label, fullAddress: pickupAddresses.fullAddress, city: pickupAddresses.city, contactName: pickupAddresses.contactName, contactPhone: pickupAddresses.contactPhone, isDefault: pickupAddresses.isDefault }).from(pickupAddresses).orderBy(desc(pickupAddresses.isDefault), asc(pickupAddresses.createdAt));
-      res.json(rows);
-    } catch(e) { res.status(500).json({ error: 'Server error' }); }
+  // Only the storefront pickup location is public, never private contact data.
+  app.get('/web-api/pickup-addresses', (_req: Request, res: Response) => {
+    res.json([{ id: 'pokrovka', label: WEB_PICKUP.label, fullAddress: WEB_PICKUP.address, city: 'Москва', isDefault: true }]);
   });
 
   app.get('/web-api/admin/pickup-addresses', requireWebAuth, requireWebAdmin, async (_req: Request, res: Response) => {

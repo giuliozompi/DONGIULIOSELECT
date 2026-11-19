@@ -42,6 +42,8 @@ beforeEach(async () => {
   await pool.query(`
     DROP TABLE IF EXISTS public.web_wishlists CASCADE;
     DROP TABLE IF EXISTS public.other_wishlists CASCADE;
+    DROP TABLE IF EXISTS public.orders;
+    CREATE TABLE public.orders (id varchar PRIMARY KEY);
     CREATE TABLE public.web_wishlists (
       id varchar PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id varchar NOT NULL, product_id varchar NOT NULL,
@@ -49,6 +51,7 @@ beforeEach(async () => {
     );
     CREATE UNIQUE INDEX ${indexName} ON public.web_wishlists (user_id, product_id);
   `);
+  await pool.query(await readFile(new URL('../migrations/web-order-delivery.sql', import.meta.url), 'utf8'));
 });
 async function check(options = {}) {
   const output = [];
@@ -76,6 +79,15 @@ test('ready schema passes; session is read-only, bounded and pinned to the expli
     await assert.rejects(client.query('CREATE TABLE public.forbidden_write (id int)'),
       error => error.code === '25006');
   } finally { await client.end(); }
+});
+
+test('missing or incompatible order delivery columns block release without applying the migration', async () => {
+  await pool.query('ALTER TABLE public.orders DROP COLUMN desired_delivery_date');
+  const missing = await check();
+  assert.equal(missing.ok, false);
+  assert.match(missing.output, /colonne di consegna/);
+  await pool.query('ALTER TABLE public.orders ADD COLUMN desired_delivery_date text');
+  assert.equal((await check()).ok, false);
 });
 
 test('missing table or required column fails closed instead of treating database as fresh', async () => {

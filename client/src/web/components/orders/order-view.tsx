@@ -1,6 +1,7 @@
 import { AlertCircle, Check, Clock3, Package, Truck } from 'lucide-react';
 import { DELIVERY_METHOD_LABELS, PAYMENT_METHOD_LABELS } from '@shared/schema';
 import { formatOrderQuantity } from '@shared/order-quantity';
+import { WEB_DELIVERY_LABELS, type WebDeliveryMethod } from '@shared/web-delivery';
 
 export interface OrderItem {
   productId: string;
@@ -22,6 +23,8 @@ export interface CustomerOrder {
   deliveryAddress: string;
   deliveryNotes?: string | null;
   deliveryMethod?: string | null;
+  deliveryFeeInOrder?: string | null;
+  desiredDeliveryDate?: string | null;
   createdAt: string;
   items: OrderItem[];
 }
@@ -137,7 +140,7 @@ export function DeliveryMethodLabel({ method }: { method?: string | null }) {
   if (!method) return null;
   return (
     <p className="mt-1.5 font-medium leading-relaxed text-[#302b24]">
-      {DELIVERY_METHOD_LABELS[method as keyof typeof DELIVERY_METHOD_LABELS] ?? method}
+      {WEB_DELIVERY_LABELS[method as WebDeliveryMethod] ?? DELIVERY_METHOD_LABELS[method as keyof typeof DELIVERY_METHOD_LABELS] ?? method}
     </p>
   );
 }

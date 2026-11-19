@@ -9,15 +9,28 @@ import express from 'express';
 import pg from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { getTableConfig } from 'drizzle-orm/pg-core';
-import { products, orders, webUsers, welcomeNotifications, abandonedCartNotifications } from '../shared/schema';
+import { products, orders, webUsers, welcomeNotifications, abandonedCartNotifications, orderChangeLogs,
+  paymentIntents, orderNotificationLogs } from '../shared/schema';
 import { registerWebCheckout } from '../server/webCheckoutRoutes';
 import { buildReorderPreview } from '../shared/reorder';
 import { quoteItems, applyQuoteDiscount, createOrderSchema } from '../shared/checkout';
+import { quoteWebDelivery } from '../server/services/web-delivery-quote';
+import { changeDeliveryFee, saveOrderPricing } from '../server/services/order-delivery-fee';
+import { reservePaymentLinkAttempt } from '../server/services/payment-link-attempts';
+
+const moscow = 'г Москва, ул Покровка, д 27';
+const region = 'Московская обл, г Балашиха, ул Советская, д 2';
+const findAddress = async (address: string) => [
+  { fullAddress: moscow, building: '27', inMoscow: true },
+  { fullAddress: region, building: '2', inMoscow: false },
+].filter(suggestion => suggestion.fullAddress === address);
 
 // Disposable PostgreSQL only: never reads DATABASE_URL or writes customer data.
 const exec = promisify(execFile);
 let directory: string;
 let pool: pg.Pool;
+let database: ReturnType<typeof drizzle>;
+let clock = new Date();
 let base: string;
 let server: ReturnType<ReturnType<typeof express>['listen']>;
 let started = false;
@@ -28,18 +41,20 @@ before(async () => {
     '-o', `-F -k ${directory} -h ''`, '-w', 'start']);
   started = true;
   pool = new pg.Pool({ host: directory, port: 5432, user: 'checkout_test', database: 'postgres', max: 10 });
-  for (const table of [products, orders, webUsers, welcomeNotifications, abandonedCartNotifications]) {
+  for (const table of [products, orders, webUsers, welcomeNotifications, abandonedCartNotifications, orderChangeLogs,
+    paymentIntents, orderNotificationLogs]) {
     const config = getTableConfig(table);
-    const columns = config.columns.map(c => `"${c.name}" ${c.getSQLType()}${c.primary ? ' PRIMARY KEY' : ''}`);
+    const columns = config.columns.map(c => `"${c.name}" ${c.getSQLType()}${c.primary ? ' PRIMARY KEY DEFAULT gen_random_uuid()' : ''}`);
     await pool.query(`CREATE TABLE "${config.name}" (${columns.join(',')})`);
   }
   const app = express();
   app.use(express.json());
-  registerWebCheckout(app, drizzle(pool), (req, res, next) => {
+  database = drizzle(pool);
+  registerWebCheckout(app, database, (req, res, next) => {
     if (!['a', 'b'].includes(req.headers.authorization ?? '')) return res.sendStatus(401);
     (req as any).webUser = { sub: req.headers.authorization };
     next();
-  });
+  }, { deliveryQuote: (choice, address) => quoteWebDelivery(choice, address, findAddress), now: () => clock });
   server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}/web-api`;
@@ -51,15 +66,17 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 beforeEach(async () => {
+  clock = new Date();
   await pool.query(`
-    TRUNCATE products, orders, web_users, welcome_notifications, abandoned_cart_notifications;
+    TRUNCATE products, orders, web_users, welcome_notifications, abandoned_cart_notifications, order_change_logs,
+      payment_intents, order_notification_logs;
     INSERT INTO products (id,name,price,unit,is_visible,in_stock)
       VALUES ('cheese','Current cheese',2400,'кг',true,true);
     INSERT INTO web_users (id,telegram_user_id) VALUES ('a','tg-a'),('b','tg-b');
   `);
 });
 const item = { productId: 'cheese', productName: 'Old cheese', price: '2400.00', quantity: 0.735, unit: 'кг' };
-const input = { customerName: 'Test Customer', customerPhone: '1234567890', deliveryAddress: 'Test address',
+const input = { customerName: 'Test Customer', customerPhone: '1234567890', deliveryAddress: 'Test address', deliveryChoice: 'courier',
   paymentMethod: 'yookassa', items: [item], amount: '1764.00' };
 async function post(body: unknown = input, user = 'a', path = '/orders') {
   return fetch(`${base}${path}`, { method: 'POST', headers: {
@@ -67,6 +84,92 @@ async function post(body: unknown = input, user = 'a', path = '/orders') {
   }, body: JSON.stringify(body) });
 }
 const count = async () => Number((await pool.query('SELECT count(*) AS n FROM orders')).rows[0].n);
+
+test('Moscow fee is quoted and stored on top of discounted goods, with comment and requested date', async () => {
+  clock = new Date('2026-11-19T12:59:59Z');
+  const delivery = await post({ address: moscow }, 'a', '/orders/delivery-quote');
+  assert.deepEqual(await delivery.json(), { method: 'web_moscow', fee: '1000.00' });
+  await promo();
+  const body = { ...input, deliveryAddress: moscow, desiredDeliveryDate: '2026-11-19',
+    deliveryNotes: 'Квартира 3\nПозвонить', promoCode: 'BENVENUTO-TEST', discountPercent: 10,
+    discount: '176.40', amount: '1587.60', deliveryFeeInOrder: '0.00', deliveryMethod: 'web_pickup' };
+  const revised = await post(body);
+  assert.equal(revised.status, 409);
+  assert.equal((await revised.json()).quote.amount, '2587.60');
+  assert.equal(await count(), 0);
+  const saved = await post({ ...body, amount: '2587.60' });
+  assert.equal(saved.status, 201);
+  const order = await saved.json();
+  assert.equal(order.deliveryNotes, 'Квартира 3\nПозвонить');
+  assert.equal(order.desiredDeliveryDate, '2026-11-19');
+  assert.equal(order.deliveryMethod, 'web_moscow');
+  assert.equal(order.deliveryFeeInOrder, '1000.00');
+  assert.equal(order.customerPaysShipping, false);
+  assert.equal(order.amount, '2587.60');
+});
+
+test('regional delivery and pickup add nothing automatically; pickup uses the shop address, not the draft', async () => {
+  const regional = await post({ ...input, deliveryAddress: region });
+  assert.equal(regional.status, 201);
+  const regionalOrder = await regional.json();
+  assert.equal(regionalOrder.deliveryMethod, 'web_regional');
+  assert.equal(regionalOrder.deliveryFeeInOrder, null);
+  assert.equal(regionalOrder.amount, input.amount);
+  const pickup = await post({ ...input, deliveryChoice: 'pickup', deliveryAddress: moscow });
+  assert.equal(pickup.status, 201);
+  const pickupOrder = await pickup.json();
+  assert.equal(pickupOrder.deliveryMethod, 'web_pickup');
+  assert.equal(pickupOrder.deliveryAddress, 'г. Москва, ул. Покровка, 27, стр. 1');
+  assert.equal(pickupOrder.deliveryFeeInOrder, '0.00');
+  assert.equal(pickupOrder.amount, input.amount);
+  await assert.rejects(changeDeliveryFee(pickupOrder.id, '1000', 'operator', database), /только для курьерского/);
+});
+
+test('checkout rejects cash, invalid/past dates and same-day Moscow delivery at 16:00 Moscow time', async () => {
+  clock = new Date('2026-11-19T13:00:00Z');
+  for (const deliveryDate of ['2026-11-19', '2026-11-18', '2026-02-31']) {
+    const invalid = await post({ ...input, deliveryAddress: moscow, desiredDeliveryDate: deliveryDate, amount: '2764.00' });
+    assert.ok([400, 422].includes(invalid.status));
+  }
+  const cash = await post({ ...input, paymentMethod: 'cash_on_delivery' });
+  assert.equal(cash.status, 400);
+  assert.equal(await count(), 0);
+  await promo();
+  const tomorrow = await post({ ...input, deliveryAddress: moscow, desiredDeliveryDate: '2026-11-20', amount: '2764.00' });
+  assert.equal(tomorrow.status, 201);
+});
+
+test('admin replaces the fee without doubling it and weighing preserves it; payment locks further edits', async () => {
+  const saved = await (await post({ ...input, deliveryAddress: region })).json();
+  assert.equal((await changeDeliveryFee(saved.id, '450,50', 'operator', database)).amount, '2214.50');
+  assert.equal((await changeDeliveryFee(saved.id, '500', 'operator', database)).amount, '2264.00');
+  let [stored] = await database.select().from(orders);
+  stored = await saveOrderPricing(stored, { items: [{ ...stored.items[0], quantity: 0.737 }], amount: '1768.80' }, database);
+  assert.equal(stored.amount, '2268.80');
+  assert.equal(stored.deliveryFeeInOrder, '500.00');
+  const logs = await database.select().from(orderChangeLogs);
+  assert.equal(logs.length, 2);
+  assert.equal(logs[0].adminUserId, 'operator');
+  assert.equal(logs[1].changeData.newFee, '500.00');
+  await assert.rejects(reservePaymentLinkAttempt(stored, database, { amount: '2264.00' }), /Заказ изменился/);
+  const reserved = await reservePaymentLinkAttempt(stored, database, stored);
+  assert.ok(reserved);
+  await assert.rejects(changeDeliveryFee(saved.id, '0', 'operator', database), /Сумму нельзя изменить/);
+  await assert.rejects(saveOrderPricing(stored, { amount: '25.00' }, database), /Сумму нельзя изменить/);
+  await pool.query("UPDATE order_notification_logs SET status='failed'");
+  await pool.query("UPDATE orders SET payment_id='created-payment'");
+  await assert.rejects(changeDeliveryFee(saved.id, '100', 'operator', database), /Сумму нельзя изменить/);
+});
+
+test('unconfirmed manual address is saved without a fee but needs review before a payment can be made', async () => {
+  const saved = await (await post()).json();
+  assert.equal(saved.deliveryMethod, 'web_unconfirmed');
+  assert.equal(saved.deliveryFeeInOrder, null);
+  await assert.rejects(reservePaymentLinkAttempt(saved, database, saved), /Уточните адрес/);
+  const confirmed = await changeDeliveryFee(saved.id, '0', 'operator', database);
+  assert.ok(await reservePaymentLinkAttempt(confirmed, database, confirmed));
+});
+
 async function promo(overrides: Record<string, unknown> = {}, table = 'welcome_notifications') {
   const row = { id: 'promo', user_id: 'tg-a', discount_code: 'BENVENUTO-TEST', status: 'sent',
     expires_at: new Date(Date.now() + 3600000), discount_percent: 10, ...overrides };

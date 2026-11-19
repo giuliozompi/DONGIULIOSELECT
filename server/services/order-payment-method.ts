@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { adminActionLogs, orderChangeLogs, orders, paymentIntents } from '../../shared/schema';
+import { isWebsiteDelivery } from '../../shared/web-delivery';
+import { lockOrderPayment } from './order-delivery-fee';
 
 export type OrderPaymentMethod = 'yookassa' | 'cash_on_delivery';
 
@@ -25,6 +27,7 @@ export async function changeOrderPaymentMethod(
   return database.transaction(async tx => {
     await tx.execute(`SET LOCAL lock_timeout = '3s'`);
     await tx.execute(`SET LOCAL statement_timeout = '5s'`);
+    await lockOrderPayment(tx, orderId);
     const [order] = await tx.select({
       id: orders.id,
       status: orders.status,
@@ -34,9 +37,14 @@ export async function changeOrderPaymentMethod(
       receiptId: orders.receiptId,
       refundId: orders.refundId,
       refundStatus: orders.refundStatus,
+      deliveryMethod: orders.deliveryMethod,
+      deliveryFeeInOrder: orders.deliveryFeeInOrder,
     }).from(orders).where(eq(orders.id, orderId)).for('update');
     if (!order) throw new OrderPaymentMethodError('Заказ не найден.', 404);
     if (order.paymentMethod === nextMethod) return { changed: false, previous: order.paymentMethod };
+    if (nextMethod !== 'yookassa' && (isWebsiteDelivery(order.deliveryMethod) || order.deliveryFeeInOrder != null)) {
+      throw new OrderPaymentMethodError('Для этого заказа доступна только онлайн-оплата.');
+    }
 
     if (CLOSED_STATUSES.has(order.status) || order.refundId || order.refundStatus || order.receiptId) {
       throw new OrderPaymentMethodError('Способ оплаты нельзя изменить у оплаченного, завершённого или отменённого заказа.');

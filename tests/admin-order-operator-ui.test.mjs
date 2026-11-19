@@ -10,7 +10,7 @@ let browser;
 before(async () => { browser = await launchBrowser(); });
 after(async () => { await browser?.close(); });
 
-async function fixture(context, { paid = false, rejected = false, historyFailure = false, telegram = false } = {}) {
+async function fixture(context, { paid = false, rejected = false, historyFailure = false, telegram = false, website = false } = {}) {
   const page = await browser.newPage();
   context.after(() => page.close());
   if (telegram) await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `
@@ -26,7 +26,9 @@ async function fixture(context, { paid = false, rejected = false, historyFailure
   const live = {
     order: { id: A, createdAt: '2026-10-22T10:00:00.000Z', status: paid ? 'ОПЛАЧЕН' : 'СОБРАН',
       paymentMethod: 'yookassa', customerName: 'Тестовый клиент', customerPhone: 'fixture-phone',
-      amount: '100.00', items: [], deliveryAddress: 'Тестовый адрес' },
+      amount: '100.00', items: [], deliveryAddress: 'Тестовый адрес',
+      ...(website ? { userId: 'web:fixture-client', deliveryMethod: 'web_regional', desiredDeliveryDate: '2026-11-21',
+        deliveryNotes: 'Позвонить заранее', deliveryFeeInOrder: null } : {}) },
     logs: [], patches: 0, prints: [], requests: [], rejected, historyFailure,
     printFailure: null, releasePrint: null,
   };
@@ -54,6 +56,11 @@ async function fixture(context, { paid = false, rejected = false, historyFailure
         live.order = { ...live.order, paymentMethod: method };
         result = live.order;
       }
+    } else if (website && path === `/web-api/admin/orders/${A}/delivery-fee` && event.request.method === 'PATCH') {
+      live.deliveryFee = JSON.parse(event.request.postData).fee;
+      live.order.deliveryFeeInOrder = Number(live.deliveryFee.replace(',', '.')).toFixed(2);
+      live.order.amount = (100 + Number(live.order.deliveryFeeInOrder)).toFixed(2);
+      result = live.order;
     } else if (event.request.method !== 'GET') {
       await page.send('Fetch.failRequest', { requestId: event.requestId, errorReason: 'BlockedByClient' });
       throw new Error(`Unexpected mutation blocked: ${path}`);
@@ -94,6 +101,20 @@ async function openDetail(page) {
     throw error;
   }
 }
+
+test('website order exposes delivery method, date, comment and recalculated total after the fee is saved', async context => {
+  const { page, live } = await fixture(context, { website: true });
+  await openDetail(page);
+  assert.match(await page.evaluate(text), /Курьерская доставка по Московской области и регионам/);
+  assert.match(await page.evaluate(text), /21\.11\.2026/);
+  assert.match(await page.evaluate(text), /Позвонить заранее/);
+  await page.fill('#order-delivery-fee', '550,50');
+  await page.click('form:has(#order-delivery-fee) button[type=submit]');
+  await page.wait(`${text}.includes('Стоимость доставки сохранена')`);
+  assert.equal(live.deliveryFee, '550,50');
+  assert.match(await page.evaluate(text), /650,5\s*₽/);
+  assert.equal(await page.evaluate('document.querySelector("#order-payment-method").disabled'), true);
+});
 
 test('operator confirms method change; refreshed details preserve the method and log with actor', async context => {
   const { page, live } = await fixture(context);

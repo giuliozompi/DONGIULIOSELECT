@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import { isKilogramUnit } from '../../shared/order-quantity';
 import type { Order } from '../../shared/schema';
+import { deliveryMethodLabel, formatDesiredDate } from '../../shared/web-delivery';
 
 export type OrderPrintFormat = 'packing-list' | 'label' | 'order-summary';
 
@@ -40,14 +41,16 @@ function financialDetails(order: Order) {
   // The persisted amount is authoritative and includes all applied discounts,
   // coupons and bonuses. Never replace it with current catalogue prices.
   const total = cents(order.amount);
-  const difference = subtotal - total;
+  const includedShipping = order.deliveryFeeInOrder == null ? 0 : cents(order.deliveryFeeInOrder);
+  const difference = subtotal + includedShipping - total;
   const row = (label: string, value: string, strong = false) =>
     `<div class="total-row${strong ? ' grand-total' : ''}"><span>${label}</span><strong>${value}</strong></div>`;
   let totals = row('Стоимость товаров до скидок', money(subtotal));
   if (difference > 0) totals += row('Скидки, бонусы и корректировки', `−${money(difference)}`);
   if (difference < 0) totals += row('Корректировка суммы заказа', `+${money(-difference)}`);
+  if (includedShipping > 0) totals += row('Доставка (включена в заказ)', money(includedShipping));
   totals += row('Итого по заказу', money(total), true);
-  if (order.customerPaysShipping) {
+  if (order.customerPaysShipping && order.deliveryFeeInOrder == null) {
     if (order.deliveryCost != null) {
       const shipping = cents(order.deliveryCost);
       if (!Number.isSafeInteger(total + shipping)) throw new Error('Денежная сумма заказа слишком велика.');
@@ -91,7 +94,8 @@ export async function renderOrderPrintDocument(order: Order, format: OrderPrintF
   const fullId = escapeHtml(order.id);
   const customer = escapeHtml(order.customerName);
   const address = escapeHtml(order.deliveryAddress);
-  const delivery = escapeHtml(order.deliveryMethod || '—');
+  const delivery = escapeHtml(deliveryMethodLabel(order.deliveryMethod));
+  const requestedDate = order.desiredDeliveryDate ? `<p>Желаемая дата получения: ${escapeHtml(formatDesiredDate(order.desiredDeliveryDate))}</p>` : '';
   const notes = order.deliveryNotes ? `<p class="notes"><strong>Примечание:</strong> ${escapeHtml(order.deliveryNotes)}</p>` : '';
   const heading = format === 'packing-list' ? 'Лист сборки заказа'
     : format === 'order-summary' ? 'Заказ с ценами' : 'Этикетка заказа';
@@ -110,7 +114,7 @@ export async function renderOrderPrintDocument(order: Order, format: OrderPrintF
         <div class="qr-wrap">${qr}</div><div class="reference">№ ${reference}</div>
         <div class="full-id">${fullId}</div>`
     : `<header><div><strong>DON GIULIO SELECT</strong><h1>${heading}</h1><p>Заказ № ${reference}</p>
-          <p>Клиент: <strong>${customer}</strong></p>${financial?.metadata || ''}<p>Адрес: ${address}</p><p>Доставка: ${delivery}</p>${notes}</div>
+          <p>Клиент: <strong>${customer}</strong></p>${financial?.metadata || ''}<p>Адрес: ${address}</p><p>Доставка: ${delivery}</p>${requestedDate}${notes}</div>
           <div class="qr-wrap">${qr}<div class="full-id">${fullId}</div></div></header>${list}`;
   const pageSize = format === 'label' ? '100mm 150mm' : 'A4';
 

@@ -3,15 +3,30 @@ import { randomUUID } from 'crypto';
 import { eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { products, orders, webUsers, welcomeNotifications, abandonedCartNotifications } from '../shared/schema';
-import { createOrderSchema, quoteItems, promoError, applyQuoteDiscount, quoteChanged, CheckoutError } from '../shared/checkout';
+import { createOrderSchema, quoteItems, promoError, applyQuoteDiscount, includeDelivery, quoteChanged, CheckoutError } from '../shared/checkout';
+import { WEB_PICKUP, desiredDateError } from '../shared/web-delivery';
+import { quoteWebDelivery } from './services/web-delivery-quote';
 import type { db } from './db';
 
-export function registerWebCheckout(app: Express, database: typeof db, requireAuth: RequestHandler) {
+export function registerWebCheckout(app: Express, database: typeof db, requireAuth: RequestHandler, {
+  deliveryQuote = quoteWebDelivery, now = () => new Date(),
+} = {}) {
+  app.post('/web-api/orders/delivery-quote', requireAuth, async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const input = z.object({ address: z.string().trim().min(10).max(500) }).safeParse(req.body);
+    if (!input.success) return res.status(400).json({ error: 'Введите полный адрес доставки.' });
+    try {
+      return res.json(await deliveryQuote('courier', input.data.address));
+    } catch {
+      return res.status(503).json({ error: 'Не удалось проверить адрес доставки.' });
+    }
+  });
   app.post('/web-api/orders', requireAuth, async (req, res) => {
     res.set('Cache-Control', 'no-store');
     try {
       const body = createOrderSchema.parse(req.body);
       const sub = (req as any).webUser.sub as string;
+      const delivery = await deliveryQuote(body.deliveryChoice, body.deliveryAddress);
       const result = await database.transaction(async tx => {
         // Hold catalogue prices/availability stable through insertion; lock promos
         // exclusively so concurrent checkouts cannot spend the same code twice.
@@ -25,13 +40,16 @@ export function registerWebCheckout(app: Express, database: typeof db, requireAu
           const [user] = await tx.select().from(webUsers).where(eq(webUsers.id, sub));
           const owners = [`web:${sub}`, ...(user?.telegramUserId ? [user.telegramUserId] : [])];
           const [promo] = await tx.select().from(table).where(eq(table.discountCode, code)).for('update');
-          const error = promoError(promo, owners, Number(quote.subtotal));
+          const error = promoError(promo, owners, Number(quote.subtotal), now());
           if (error) quote.message = `${error}. Скидка удалена; проверьте итог и подтвердите заказ ещё раз.`;
           else {
             quote = applyQuoteDiscount(quote, promo.discountPercent, code);
             promoId = promo.id;
           }
         }
+        const dateError = desiredDateError(body.desiredDeliveryDate, delivery.method, now());
+        if (dateError) throw new CheckoutError(dateError);
+        quote = includeDelivery(quote, delivery);
         if (quoteChanged(body, quote)) return { status: 409, data: {
           code: 'CHECKOUT_CHANGED', error: 'Условия заказа изменились. Проверьте обновлённый итог.',
           quote,
@@ -42,7 +60,12 @@ export function registerWebCheckout(app: Express, database: typeof db, requireAu
           discountType: quote.discountPercent ? 'percentage' : null,
           discountValue: quote.discountPercent ? `${quote.discountPercent}%` : null,
           customerName: body.customerName, customerPhone: body.customerPhone,
-          customerEmail: body.customerEmail || null, deliveryAddress: body.deliveryAddress,
+          customerEmail: body.customerEmail || null,
+          deliveryAddress: delivery.method === 'web_pickup' ? WEB_PICKUP.address : body.deliveryAddress,
+          deliveryMethod: delivery.method,
+          desiredDeliveryDate: body.desiredDeliveryDate || null,
+          deliveryFeeInOrder: delivery.fee,
+          customerPaysShipping: false,
           deliveryNotes: body.deliveryNotes || null, paymentMethod: body.paymentMethod,
           status: 'ОФОРМЛЕН', spinTokensAwarded: false,
         }).returning();

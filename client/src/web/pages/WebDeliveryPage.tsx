@@ -1,22 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
-  Truck, MapPin, Package, CreditCard, Banknote, Clock,
-  CheckCircle, Shield, Receipt, Phone, ChevronRight, Store,
+  Truck, MapPin, Package, CreditCard, CheckCircle, Shield, Receipt, ChevronRight, Store,
 } from 'lucide-react';
-import { webApi } from '../lib/webApi';
 import { useWebMeta } from '../hooks/useWebMeta';
 import { Button } from '@/components/ui/button';
-
-interface PickupAddress {
-  id: string;
-  label: string;
-  fullAddress: string;
-  city: string;
-  contactName: string;
-  contactPhone: string;
-  isDefault: boolean;
-}
+import { MOSCOW_DELIVERY_RUB, WEB_PICKUP } from '@shared/web-delivery';
 
 function SectionTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle?: string }) {
   return (
@@ -55,12 +43,7 @@ export default function WebDeliveryPage() {
 
   useWebMeta({
     title: 'Доставка и оплата — Don Giulio Select',
-    description: 'Условия доставки деликатесов Don Giulio Select: курьер Яндекс, СДЭК по всей России, самовывоз. Оплата картой онлайн или наличными.',
-  });
-
-  const { data: pickupAddresses = [] } = useQuery<PickupAddress[]>({
-    queryKey: ['/web-api/pickup-addresses'],
-    queryFn: () => webApi.get<PickupAddress[]>('/pickup-addresses'),
+    description: 'Доставка по Москве — 1 000 ₽, по Московской области и регионам — по тарифам курьерской службы. Бесплатный самовывоз на Покровке и оплата онлайн.',
   });
 
   return (
@@ -84,7 +67,6 @@ export default function WebDeliveryPage() {
           <div className="flex flex-wrap gap-4 mt-8">
             {[
               { icon: CheckCircle, text: 'Бережная упаковка' },
-              { icon: Clock, text: 'Экспресс за 1–2 часа' },
               { icon: Shield, text: 'Гарантия качества' },
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-center gap-2 text-sm text-neutral-200">
@@ -106,77 +88,15 @@ export default function WebDeliveryPage() {
             subtitle="Выберите удобный вариант — мы позаботимся об остальном"
           />
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
-            {/* Yandex Express */}
-            <div className="bg-white rounded-xl border p-5 space-y-3 hover:border-amber-300 transition-colors">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
-                  <Truck className="w-4 h-4 text-amber-600" />
-                </div>
-                <span className="font-semibold text-neutral-900 text-sm">Яндекс Экспресс</span>
-              </div>
-              <p className="text-xs text-neutral-500 leading-relaxed">
-                Курьерская доставка по Москве и ближайшему Подмосковью. Продукты приедут в термосумке прямо к вашей двери.
-              </p>
-              <div className="space-y-1.5">
-                <Row label="Срок" value="1–2 часа" />
-                <Row label="Зона" value="Москва и МО" />
-                <Row label="Стоимость" value="Рассчитывается автоматически" />
-              </div>
-              <div className="pt-1">
-                <span className="inline-block bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                  Самый быстрый вариант
-                </span>
-              </div>
-            </div>
-
-            {/* Yandex Go */}
-            <div className="bg-white rounded-xl border p-5 space-y-3 hover:border-amber-300 transition-colors">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <Package className="w-4 h-4 text-blue-600" />
-                </div>
-                <span className="font-semibold text-neutral-900 text-sm">Яндекс Go</span>
-              </div>
-              <p className="text-xs text-neutral-500 leading-relaxed">
-                Грузовая доставка для крупных заказов по Москве. Подходит для больших объёмов — партийные закупки, корпоративные заказы.
-              </p>
-              <div className="space-y-1.5">
-                <Row label="Срок" value="2–4 часа" />
-                <Row label="Зона" value="Москва и МО" />
-                <Row label="Стоимость" value="Рассчитывается автоматически" />
-              </div>
-              <div className="pt-1">
-                <span className="inline-block bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                  Для крупных заказов
-                </span>
-              </div>
-            </div>
-
-            {/* CDEK */}
-            <div className="bg-white rounded-xl border p-5 space-y-3 hover:border-amber-300 transition-colors">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
-                  <MapPin className="w-4 h-4 text-purple-600" />
-                </div>
-                <span className="font-semibold text-neutral-900 text-sm">СДЭК</span>
-              </div>
-              <p className="text-xs text-neutral-500 leading-relaxed">
-                Доставка в пункты выдачи (ПВЗ) по всей России. Выберите удобный пункт рядом с домом или работой.
-              </p>
-              <div className="space-y-1.5">
-                <Row label="Срок" value="2–7 дней" />
-                <Row label="Зона" value="По всей России" />
-                <Row label="Стоимость" value="Рассчитывается по тарифу" />
-              </div>
-              <div className="pt-1">
-                <span className="inline-block bg-purple-50 text-purple-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                  Доставка по всей России
-                </span>
-              </div>
-            </div>
-
+          <div className="grid sm:grid-cols-2 gap-4">
+            <InfoCard title="Доставка по Москве">
+              <p className="text-sm text-neutral-600">Заказ, оформленный до 16:00 по московскому времени, можно получить в тот же день или в другой удобный день.</p>
+              <Row label="Стоимость" value={`${MOSCOW_DELIVERY_RUB.toLocaleString('ru-RU')} ₽`} />
+            </InfoCard>
+            <InfoCard title="Доставка по Московской области и регионам">
+              <p className="text-sm text-neutral-600">Стоимость зависит от тарифов курьерской службы. При оформлении она не начисляется автоматически: менеджер согласует сумму до оплаты.</p>
+              <Row label="Стоимость" value="По тарифам курьерской службы" />
+            </InfoCard>
           </div>
 
           {/* Packaging note */}
@@ -189,48 +109,21 @@ export default function WebDeliveryPage() {
         </section>
 
         {/* PICKUP */}
-        {pickupAddresses.length > 0 && (
-          <section>
-            <SectionTitle
-              icon={Store}
-              title="Самовывоз"
-              subtitle="Бесплатно — заберите заказ сами в удобное время"
-            />
-            <div className="grid sm:grid-cols-2 gap-4">
-              {pickupAddresses.map(addr => (
-                <div key={addr.id} className="bg-white rounded-xl border p-5 space-y-2 hover:border-amber-300 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-neutral-900 text-sm">{addr.label}</p>
-                    {addr.isDefault && (
-                      <span className="inline-block bg-amber-50 text-amber-700 text-xs font-medium px-2 py-0.5 rounded-full shrink-0">
-                        Основной
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-start gap-2 text-sm text-neutral-600">
-                    <MapPin className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
-                    <span>{addr.fullAddress}</span>
-                  </div>
-                  {addr.contactPhone && (
-                    <div className="flex items-center gap-2 text-sm text-neutral-600">
-                      <Phone className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <a href={`tel:${addr.contactPhone}`} className="hover:text-amber-700 transition-colors">
-                        {addr.contactPhone}
-                      </a>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <section>
+          <SectionTitle icon={Store} title="Самовывоз" subtitle="Бесплатно — заберите заказ сами в удобное время" />
+          <InfoCard title={WEB_PICKUP.label}>
+            <p className="flex items-center gap-2 text-sm text-neutral-600">
+              <MapPin className="w-4 h-4 text-neutral-400 shrink-0" /> {WEB_PICKUP.address}
+            </p>
+          </InfoCard>
+        </section>
 
         {/* PAYMENT */}
         <section>
           <SectionTitle
             icon={CreditCard}
             title="Способы оплаты"
-            subtitle="Выберите наиболее удобный для вас способ оплаты"
+            subtitle="Заказы оплачиваются только онлайн"
           />
 
           <div className="grid sm:grid-cols-2 gap-4">
@@ -258,41 +151,6 @@ export default function WebDeliveryPage() {
                   </li>
                 ))}
               </ul>
-              <div className="pt-1">
-                <span className="inline-block bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                  Рекомендуется
-                </span>
-              </div>
-            </div>
-
-            {/* Cash */}
-            <div className="bg-white rounded-xl border p-5 space-y-3 hover:border-amber-300 transition-colors">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center">
-                  <Banknote className="w-4 h-4 text-neutral-600" />
-                </div>
-                <span className="font-semibold text-neutral-900 text-sm">Наличными при получении</span>
-              </div>
-              <p className="text-xs text-neutral-500 leading-relaxed">
-                Оплата наличными или картой курьеру в момент получения заказа. Удобно, если вы хотите проверить товар перед оплатой.
-              </p>
-              <ul className="space-y-1.5">
-                {[
-                  'Наличные рублями',
-                  'Банковская карта курьеру',
-                  'Оплата после проверки заказа',
-                ].map(item => (
-                  <li key={item} className="flex items-center gap-2 text-xs text-neutral-600">
-                    <CheckCircle className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <div className="pt-1">
-                <span className="inline-block bg-neutral-100 text-neutral-600 text-xs font-medium px-2 py-0.5 rounded-full">
-                  Только для Москвы
-                </span>
-              </div>
             </div>
 
           </div>
@@ -356,7 +214,7 @@ export default function WebDeliveryPage() {
             {[
               {
                 q: 'Как узнать, доставляете ли вы в мой район?',
-                a: 'Зоны доставки и стоимость рассчитываются автоматически при оформлении заказа — введите адрес, и система покажет доступные варианты и стоимость.',
+                a: 'Введите полный адрес при оформлении. Для подтверждённого адреса в Москве сайт добавит доставку к заказу; за пределами Москвы стоимость и сроки уточнит менеджер.',
               },
               {
                 q: 'Как отследить заказ?',

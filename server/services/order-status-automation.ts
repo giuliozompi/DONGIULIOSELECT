@@ -20,6 +20,7 @@ import { canNotify } from './notification-settings';
 import { logOrderNotification } from './notification-logger';
 import { sendOrderPaymentLink } from './payment-link-delivery';
 import { paymentLinkOrderUpdate, type PaymentDeliverySummary } from '../../shared/payment-link-delivery';
+import { isWebsiteDelivery } from '../../shared/web-delivery';
 
 export interface StatusChangeResult {
   order: any;
@@ -42,6 +43,10 @@ export async function processOrderStatusChange(
   const shouldSendPaymentLink = requestsPaymentLink && !['cash_on_delivery', 'cash'].includes(order.paymentMethod);
   if (shouldSendPaymentLink && ['ОПЛАЧЕН', 'ВЫЗВАН КУРЬЕР', 'ПОЛУЧЕН', 'ВОЗВРАТ', 'УДАЛЕНО'].includes(order.status)) {
     throw new Error('Нельзя отправлять ссылку на оплату для оплаченного или завершённого заказа.');
+  }
+  if (shouldSendPaymentLink && order.deliveryMethod === 'web_unconfirmed' && order.deliveryFeeInOrder == null) {
+    const warning = 'Уточните адрес и сохраните стоимость доставки перед отправкой ссылки. Если доплаты нет, укажите 0 ₽.';
+    return { order, status: order.status, paymentLinkSent: false, warning, error: warning };
   }
   if (newStatus === 'ОТПРАВЛЕНА ССЫЛКА НА ОПЛАТУ' && !shouldSendPaymentLink) {
     throw new Error('Ссылка на онлайн-оплату недоступна для оплаты наличными.');
@@ -120,9 +125,10 @@ export async function processOrderStatusChange(
         );
         const totalToPay = parseFloat(order.amount);
         const calculatedDiscount = itemsSubtotal - totalToPay;
+        const exactReceipt = isWebsiteDelivery(order.deliveryMethod) || order.deliveryFeeInOrder != null;
 
         let enrichedItems: any[];
-        if (calculatedDiscount > 0.01) {
+        if (!exactReceipt && calculatedDiscount > 0.01) {
           const ratio = 1 - calculatedDiscount / itemsSubtotal;
           enrichedItems = order.items.map((item: any) => ({
             ...item,
@@ -142,7 +148,8 @@ export async function processOrderStatusChange(
           order.customerPhone,
           markingCodesMap,
           1, // УСН доход
-          1  // без НДС
+          1, // без НДС
+          exactReceipt ? { total: order.amount, deliveryFee: order.deliveryFeeInOrder } : undefined,
         );
 
         const yookassaPayment = await createYooKassaPayment({

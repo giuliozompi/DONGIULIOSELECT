@@ -1,13 +1,16 @@
 import { z } from 'zod';
 import { isKilogramUnit, isValidOrderQuantity } from './order-quantity';
+import { desiredDeliveryDateSchema, type WebDeliveryQuote } from './web-delivery';
 
 export const createOrderSchema = z.object({
   customerName: z.string().min(1),
   customerPhone: z.string().min(1),
   customerEmail: z.string().email().optional().or(z.literal('')),
-  deliveryAddress: z.string().min(1),
-  deliveryNotes: z.string().optional(),
-  paymentMethod: z.enum(['yookassa', 'cash_on_delivery']),
+  deliveryChoice: z.enum(['courier', 'pickup']),
+  deliveryAddress: z.string().trim().max(500),
+  deliveryNotes: z.string().trim().max(2000).optional(),
+  desiredDeliveryDate: desiredDeliveryDateSchema,
+  paymentMethod: z.literal('yookassa', { errorMap: () => ({ message: 'Для заказов на сайте доступна только онлайн-оплата.' }) }),
   items: z.array(z.object({
     productId: z.string().min(1), productName: z.string(),
     quantity: z.number().finite().positive().max(100000),
@@ -17,6 +20,8 @@ export const createOrderSchema = z.object({
   promoCode: z.string().trim().max(100).optional(),
   discountPercent: z.number().finite().optional(),
   discount: z.string().optional(),
+}).refine(data => data.deliveryChoice === 'pickup' || data.deliveryAddress.length >= 10, {
+  path: ['deliveryAddress'], message: 'Введите полный адрес доставки.',
 });
 export type CheckoutInput = z.infer<typeof createOrderSchema>;
 export interface CheckoutQuote {
@@ -27,6 +32,7 @@ export interface CheckoutQuote {
   discountPercent: number;
   promoCode?: string;
   message?: string;
+  delivery?: WebDeliveryQuote;
 }
 export class CheckoutError extends Error {
   constructor(message: string, public status = 422) { super(message); }
@@ -82,6 +88,12 @@ export function applyQuoteDiscount(quote: CheckoutQuote, percent: number, code: 
   const discount = Math.round(cents * percent / 100);
   return { ...quote, discountPercent: percent, promoCode: code,
     discount: (discount / 100).toFixed(2), amount: ((cents - discount) / 100).toFixed(2) };
+}
+export function includeDelivery(quote: CheckoutQuote, delivery: WebDeliveryQuote): CheckoutQuote {
+  const cents = moneyCents(quote.amount) + (delivery.fee == null ? 0 : moneyCents(delivery.fee));
+  const amount = (cents / 100).toFixed(2);
+  moneyCents(amount);
+  return { ...quote, amount, delivery };
 }
 export function quoteChanged(input: CheckoutInput, quote: CheckoutQuote) {
   return input.items.some((item, i) => Number(item.price) !== Number(quote.items[i].price)) ||

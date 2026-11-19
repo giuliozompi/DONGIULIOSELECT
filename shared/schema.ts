@@ -313,6 +313,9 @@ export const orders = pgTable("orders", {
   dadataFiasId: text("dadata_fias_id"), // FIAS ID per riferimento ufficiale
   
   deliveryNotes: text("delivery_notes"),
+  desiredDeliveryDate: date("desired_delivery_date", { mode: 'string' }),
+  // The fee included in amount and the fiscal receipt, not a carrier's separate charge.
+  deliveryFeeInOrder: decimal("delivery_fee_in_order", { precision: 10, scale: 2 }),
   
   // Modalità di consegna
   deliveryMethod: text("delivery_method"), // 'yandex_go' | 'cdek' | 'don_giulio_courier' | 'pickup'
@@ -637,6 +640,8 @@ export const orderChangeLogs = pgTable("order_change_logs", {
   
   // Dati della modifica in formato strutturato
   changeData: jsonb("change_data").$type<{
+    oldFee?: string | null;
+    newFee?: string;
     // Per quantity_changed
     productId?: string;
     productName?: string;

@@ -4,6 +4,9 @@ import { sendOrderPaymentLink } from './services/payment-link-delivery';
 import { paymentLinkOrderUpdate } from '../shared/payment-link-delivery';
 import { registerAdminOrderOperatorRoutes } from './adminOrderOperatorRoutes';
 import { changeOrderPaymentMethod, OrderPaymentMethodError } from './services/order-payment-method';
+import { saveOrderPricing } from './services/order-delivery-fee';
+import { CheckoutError } from '../shared/checkout';
+import { isWebsiteDelivery } from '../shared/web-delivery';
 import type { Express } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
@@ -1885,7 +1888,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             orderItemsWithMarking,
             order.customerEmail,
             order.customerPhone,
-            markingCodes
+            markingCodes, 1, 1,
+            isWebsiteDelivery(order.deliveryMethod) || order.deliveryFeeInOrder != null
+              ? { total: order.amount, deliveryFee: order.deliveryFeeInOrder } : undefined,
           );
           
           // Crea receipt tramite API YooKassa
@@ -2810,6 +2815,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await changeOrderPaymentMethod(orderId, 'yookassa', userId);
       console.log(`✅ [Order ${orderId}] Payment method converted to yookassa`);
+      if (order.userId.startsWith('web:') || isWebsiteDelivery(order.deliveryMethod)) {
+        const { processOrderStatusChange } = await import('./services/order-status-automation');
+        const result = await processOrderStatusChange(orderId, 'СОБРАН');
+        return res.json({ success: !result.error, paymentMethod: 'yookassa',
+          paymentLink: result.paymentUrl, paymentLinkSent: result.paymentLinkSent,
+          paymentDelivery: result.paymentDelivery, warning: result.warning, error: result.error });
+      }
       
       // Verifica se esiste già un payment intent per questo ordine
       let paymentIntent = await storage.getPaymentIntentByOrderId(orderId);
@@ -2988,6 +3000,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log(`📋 [Order ${orderId}] Order details: ${order.amount}₽, method: ${order.paymentMethod}, status: ${order.status}`);
+      if (order.userId.startsWith('web:') || isWebsiteDelivery(order.deliveryMethod) || order.deliveryFeeInOrder != null) {
+        const { processOrderStatusChange } = await import('./services/order-status-automation');
+        const result = await processOrderStatusChange(orderId, 'СОБРАН');
+        return res.json({ ...result.order, paymentUrl: result.paymentUrl, paymentLinkSent: result.paymentLinkSent,
+          paymentDelivery: result.paymentDelivery, warning: result.warning, error: result.error });
+      }
       
       // Verifica se esiste già un payment intent per questo ordine
       console.log(`🔍 [Order ${orderId}] Step 1/8: Checking for existing payment intent...`);
@@ -3272,7 +3290,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             orderItemsWithMarking,
             order.customerEmail,
             order.customerPhone,
-            markingCodes
+            markingCodes, 1, 1,
+            isWebsiteDelivery(order.deliveryMethod) || order.deliveryFeeInOrder != null
+              ? { total: order.amount, deliveryFee: order.deliveryFeeInOrder } : undefined,
           );
           
           // Crea receipt tramite API YooKassa
@@ -3859,7 +3879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Aggiorna ordine
-      const updatedOrder = await storage.updateOrder(orderId, {
+      const updatedOrder = await saveOrderPricing(order, {
         items: newItems,
         amount: totals.total.toFixed(2),
         discount: totals.discountAmount.toFixed(2),
@@ -3884,6 +3904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
+      if (error instanceof CheckoutError) return res.status(error.status).json({ error: error.message });
       console.error('Error updating quantity:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -3940,7 +3961,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Aggiorna ordine
-      const updatedOrder = await storage.updateOrder(orderId, {
+      const updatedOrder = await saveOrderPricing(order, {
         items: newItems,
         amount: totals.total.toFixed(2),
         discount: totals.discountAmount.toFixed(2),
@@ -3965,6 +3986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
+      if (error instanceof CheckoutError) return res.status(error.status).json({ error: error.message });
       console.error('Error adding product:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -4010,7 +4032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       // Aggiorna ordine
-      const updatedOrder = await storage.updateOrder(orderId, {
+      const updatedOrder = await saveOrderPricing(order, {
         items: newItems,
         amount: totals.total.toFixed(2),
         discount: totals.discountAmount.toFixed(2),
@@ -4033,6 +4055,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
+      if (error instanceof CheckoutError) return res.status(error.status).json({ error: error.message });
       console.error('Error removing product:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -4067,7 +4090,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const oldAmount = parseFloat(order.amount);
       
       // Aggiorna ordine
-      const updatedOrder = await storage.updateOrder(orderId, {
+      const updatedOrder = await saveOrderPricing(order, {
         discount: totals.discountAmount.toFixed(2),
         discountType: data.discountType,
         discountValue: data.discountValue,
@@ -4083,7 +4106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           discountType: data.discountType,
           discountValue: data.discountValue,
           oldAmount: oldAmount.toFixed(2),
-          newAmount: totals.total.toFixed(2),
+          newAmount: updatedOrder.amount,
           notes: data.notes,
         },
       });
@@ -4093,6 +4116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Invalid request data', details: error.errors });
       }
+      if (error instanceof CheckoutError) return res.status(error.status).json({ error: error.message });
       console.error('Error applying discount:', error);
       res.status(500).json({ error: 'Internal server error' });
     }

@@ -31,7 +31,8 @@ before(async () => {
   await pool.query(`CREATE TABLE orders (
     id varchar PRIMARY KEY, status text NOT NULL DEFAULT 'ОФОРМЛЕН',
     payment_method text NOT NULL DEFAULT 'yookassa', payment_id varchar,
-    payment_link_sent_at timestamp, receipt_id varchar, refund_id varchar, refund_status text
+    payment_link_sent_at timestamp, receipt_id varchar, refund_id varchar, refund_status text,
+    delivery_method text, delivery_fee_in_order numeric(10,2)
   )`);
   await pool.query(`CREATE TABLE payment_intents (
     id varchar PRIMARY KEY DEFAULT gen_random_uuid(), order_id varchar NOT NULL REFERENCES orders(id),

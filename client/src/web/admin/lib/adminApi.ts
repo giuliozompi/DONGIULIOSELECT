@@ -71,6 +71,8 @@ export const adminApi = {
   getOrder: (id: string) => webApi.get<any>(`${A}/orders/${id}`),
   updatePaymentMethod: (id: string, paymentMethod: 'yookassa' | 'cash_on_delivery') =>
     webApi.patch<any>(`${A}/orders/${encodeURIComponent(id)}/payment-method`, { paymentMethod }),
+  updateDeliveryFee: (id: string, fee: string) =>
+    webApi.patch<any>(`${A}/orders/${encodeURIComponent(id)}/delivery-fee`, { fee }),
   getOrderLogs: (id: string) =>
     webApi.get<any[]>(`${A}/orders/${encodeURIComponent(id)}/logs`),
   getOrderPrint: (id: string, format: AdminPrintFormat) =>

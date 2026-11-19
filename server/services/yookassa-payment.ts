@@ -8,6 +8,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { fiscalOrderLines } from './fiscal-order-lines';
 
 const YOOKASSA_API_URL = 'https://api.yookassa.ru/v3';
 const SHOP_ID = process.env.YOOKASSA_SHOP_ID;
@@ -551,7 +552,8 @@ export function createReceipt(
   customerPhone?: string | null,
   markingCodes?: Map<string, string[]>, // productId -> array di codici маркировка
   taxSystemCode: number = 1, // 1 = УСН доход
-  vatCode: number = 1 // 1 = без НДС (senza IVA per УСН)
+  vatCode: number = 1, // 1 = без НДС (senza IVA per УСН)
+  settled?: { total: string; deliveryFee?: string | null },
 ): YooKassaReceipt {
   // Almeno uno tra email e telefono è richiesto
   const customer: { email?: string; phone?: string } = {};
@@ -634,7 +636,7 @@ export function createReceipt(
   
   return {
     customer,
-    items,
+    items: settled ? fiscalOrderLines(items, settled.total, settled.deliveryFee, vatCode) : items,
     tax_system_code: taxSystemCode,
   };
 }

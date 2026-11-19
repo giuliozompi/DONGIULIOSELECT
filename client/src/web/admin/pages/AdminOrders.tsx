@@ -18,6 +18,7 @@ import { PaymentLinkNotice } from '@/components/admin/PaymentLinkNotice';
 import type { PaymentNotificationFields } from '@shared/payment-link-delivery';
 import type { PaymentLinkState } from '@shared/payment-link-attempts';
 import { printAdminOrder, type AdminPrintFormat } from '@/lib/printAdminOrder';
+import { deliveryMethodLabel, formatDesiredDate, isWebsiteDelivery } from '@shared/web-delivery';
 
 const STATUSES = [
   { value: 'all', label: 'Все' },
@@ -43,7 +44,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function fmt(n: string | number) {
-  return `₽${parseFloat(String(n)).toFixed(0)}`;
+  return `${parseFloat(String(n)).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
 }
 
 function fmtDate(d: string) {
@@ -64,6 +65,7 @@ export default function AdminOrders() {
   const [addProdId, setAddProdId] = useState('');
   const [addProdQty, setAddProdQty] = useState('1');
   const [paymentNotices, setPaymentNotices] = useState<Record<string, PaymentNotificationFields>>({});
+  const [deliveryDraft, setDeliveryDraft] = useState<{ id: string; fee: string } | null>(null);
 
   const { data: orders = [], isLoading, isError: ordersError, error: ordersQueryError, refetch: refetchOrders } = useQuery({
     queryKey: ['/web-api/admin/orders', statusFilter, search],
@@ -183,6 +185,20 @@ export default function AdminOrders() {
     },
   });
 
+  const deliveryFeeMut = useMutation({
+    mutationFn: ({ id, fee }: { id: string; fee: string }) => adminApi.updateDeliveryFee(id, fee.trim()),
+    onSuccess: (updated) => {
+      preservePaymentState(updated.id, updated);
+      setDeliveryDraft(current => current?.id === updated.id ? null : current);
+      inv();
+      toast({ title: 'Стоимость доставки сохранена' });
+    },
+    onError: (e: Error, { id }) => {
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/orders', id] });
+      toast({ title: 'Не удалось сохранить стоимость доставки', description: e.message, variant: 'destructive' });
+    },
+  });
+
   const startPrint = (format: AdminPrintFormat) => {
     void printAdminOrder(format, () => adminApi.getOrderPrint(selectedId!, format)).catch((e: any) => {
       toast({ title: 'Ошибка печати', description: e.message || 'Не удалось получить документ.', variant: 'destructive' });
@@ -204,6 +220,11 @@ export default function AdminOrders() {
 
   if (selectedId) {
     const o = order;
+    const websiteOrder = o && (isWebsiteDelivery(o.deliveryMethod) || o.userId?.startsWith('web:'));
+    const pickup = ['pickup', 'web_pickup'].includes(o?.deliveryMethod);
+    const onlineOnly = o && (isWebsiteDelivery(o.deliveryMethod) || o.deliveryFeeInOrder != null);
+    const pricingBlocked = o && onlineOnly && paymentChangeBlocked(o);
+    const deliveryDraftValue = o && deliveryDraft && deliveryDraft.id === o.id ? deliveryDraft.fee : (o?.deliveryFeeInOrder ?? '');
     return (
       <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-4">
         <div className="flex items-center gap-3">
@@ -254,8 +275,10 @@ export default function AdminOrders() {
                   <div><p className="text-muted-foreground text-xs">Оплата</p><p className="font-medium">
                     {o.paymentMethod === 'yookassa' ? 'Онлайн (ЮKassa)' : ['cash', 'cash_on_delivery'].includes(o.paymentMethod) ? 'Наличными при получении' : o.paymentMethod || '—'}
                   </p></div>
-                  <div><p className="text-muted-foreground text-xs">Доставка</p><p className="font-medium capitalize">{o.deliveryType || '—'}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Способ получения</p><p className="font-medium">{deliveryMethodLabel(o.deliveryMethod || o.deliveryType)}</p></div>
                   {o.deliveryAddress && <div className="col-span-2"><p className="text-muted-foreground text-xs">Адрес</p><p className="font-medium">{o.deliveryAddress}</p></div>}
+                  {o.desiredDeliveryDate && <div className="col-span-2"><p className="text-muted-foreground text-xs">Желаемая дата получения</p><p className="font-medium">{formatDesiredDate(o.desiredDeliveryDate)}</p></div>}
+                  {o.deliveryNotes && <div className="col-span-2"><p className="text-muted-foreground text-xs">Комментарий к заказу</p><p className="font-medium whitespace-pre-wrap break-words">{o.deliveryNotes}</p></div>}
                 </div>
                 <Separator />
                 <div className="space-y-2">
@@ -269,16 +292,40 @@ export default function AdminOrders() {
                         paymentMethodMut.mutate(next);
                       }
                     }}
-                    disabled={paymentChangeBlocked(o) || paymentMethodMut.isPending}
+                    disabled={onlineOnly || paymentChangeBlocked(o) || paymentMethodMut.isPending}
                   >
                     <SelectTrigger id="order-payment-method"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="yookassa">Онлайн (ЮKassa)</SelectItem>
-                      <SelectItem value="cash_on_delivery">Наличными при получении</SelectItem>
+                      {!onlineOnly && <SelectItem value="cash_on_delivery">Наличными при получении</SelectItem>}
                     </SelectContent>
                   </Select>
                   {paymentChangeBlocked(o) && <p className="text-xs text-muted-foreground">Способ оплаты нельзя менять для оплаченного, ожидающего оплаты (ссылка уже отправлена), возвращённого или завершённого заказа.</p>}
                 </div>
+                {websiteOrder && !pickup && o.paymentMethod === 'yookassa' && (
+                  <form className="space-y-2 border-t pt-3" onSubmit={event => {
+                    event.preventDefault();
+                    if (!paymentChangeBlocked(o) && !deliveryFeeMut.isPending && deliveryDraftValue.trim()) {
+                      deliveryFeeMut.mutate({ id: o.id, fee: deliveryDraftValue });
+                    }
+                  }}>
+                    <Label htmlFor="order-delivery-fee">Стоимость доставки в заказе, ₽</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Input id="order-delivery-fee" className="w-40" inputMode="decimal" autoComplete="off"
+                        placeholder="Не рассчитана" value={deliveryDraftValue}
+                        onChange={event => setDeliveryDraft({ id: o.id, fee: event.target.value })}
+                        disabled={paymentChangeBlocked(o) || deliveryFeeMut.isPending} />
+                      <Button type="submit" size="sm" variant="outline"
+                        disabled={paymentChangeBlocked(o) || deliveryFeeMut.isPending || !deliveryDraftValue.trim() || deliveryDraftValue === o.deliveryFeeInOrder}>
+                        Сохранить доставку
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {paymentChangeBlocked(o) ? 'Сумму доставки нельзя менять после создания платежа или завершения заказа.' :
+                        'Сумма войдёт в оплату и чек. Укажите 0 ₽, если доплаты нет.'}
+                    </p>
+                  </form>
+                )}
               </CardContent>
             </Card>
 
@@ -319,7 +366,7 @@ export default function AdminOrders() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Товары</CardTitle>
-                  <Button size="sm" variant="outline" onClick={() => setAddProdDialog(true)}><Plus className="h-3.5 w-3.5 mr-1" />Добавить</Button>
+                  <Button size="sm" variant="outline" disabled={pricingBlocked} onClick={() => setAddProdDialog(true)}><Plus className="h-3.5 w-3.5 mr-1" />Добавить</Button>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -332,15 +379,15 @@ export default function AdminOrders() {
                       </div>
                       {isKilogramUnit(item.unit) ? (
                         <OrderWeightEditor key={`${o.id}-${item.productId}`} quantity={Number(item.quantity)}
-                          productName={item.productName} disabled={qtyMut.isPending}
+                          productName={item.productName} disabled={pricingBlocked || qtyMut.isPending}
                           onSave={newQuantity => qtyMut.mutateAsync({ productId: item.productId, newQuantity })} />
                       ) : <div className="flex items-center gap-1 shrink-0">
-                        <Button size="icon" variant="outline" onClick={() => stepQty(item, -1)} disabled={qtyMut.isPending}><Minus className="h-3 w-3" /></Button>
+                        <Button size="icon" variant="outline" onClick={() => stepQty(item, -1)} disabled={pricingBlocked || qtyMut.isPending}><Minus className="h-3 w-3" /></Button>
                         <span className="w-12 text-center text-sm font-mono">{item.quantity} {item.unit}</span>
-                        <Button size="icon" variant="outline" onClick={() => stepQty(item, 1)} disabled={qtyMut.isPending}><Plus className="h-3 w-3" /></Button>
+                        <Button size="icon" variant="outline" onClick={() => stepQty(item, 1)} disabled={pricingBlocked || qtyMut.isPending}><Plus className="h-3 w-3" /></Button>
                       </div>}
                       <p className="font-medium text-sm shrink-0 w-20 text-right">{fmt(parseFloat(item.price) * item.quantity)}</p>
-                      <Button size="icon" variant="ghost" className="text-destructive shrink-0" onClick={() => { if (confirm('Удалить товар из заказа?')) removeProdMut.mutate(item.productId); }}><X className="h-3.5 w-3.5" /></Button>
+                      <Button size="icon" variant="ghost" disabled={pricingBlocked || removeProdMut.isPending} className="text-destructive shrink-0" onClick={() => { if (confirm('Удалить товар из заказа?')) removeProdMut.mutate(item.productId); }}><X className="h-3.5 w-3.5" /></Button>
                     </div>
                   ))}
                 </div>
@@ -359,12 +406,16 @@ export default function AdminOrders() {
                     <span>− {fmt(o.discount)}</span>
                   </div>
                 )}
+                {o.deliveryFeeInOrder != null && <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{pickup ? 'Самовывоз' : 'Доставка включена'}</span>
+                  <span>{fmt(o.deliveryFeeInOrder)}</span>
+                </div>}
                 <Separator />
                 <div className="flex justify-between font-bold">
                   <span>Итого</span>
                   <span>{fmt(o.amount)}</span>
                 </div>
-                <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => { setDiscType('percentage'); setDiscValue(''); setDiscountDialog(true); }}>
+                <Button variant="outline" size="sm" disabled={pricingBlocked} className="w-full mt-2" onClick={() => { setDiscType('percentage'); setDiscValue(''); setDiscountDialog(true); }}>
                   <Percent className="h-3.5 w-3.5 mr-1" />Применить скидку
                 </Button>
               </CardContent>
