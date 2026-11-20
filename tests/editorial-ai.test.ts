@@ -22,6 +22,7 @@ import { cheeseDataSchema, editorialRegionMaxLength } from '../shared/editorial'
 import type { CatalogResult, DraftResult } from '../shared/editorial-ai';
 import { suggestEditorialSources, validateSourceSuggestions } from '../server/services/editorial-ai-suggestions';
 import type { ResearchDependencies } from '../server/services/editorial-ai-research';
+import { getDraftBatchOverview, processDraftBatch } from '../server/services/editorial-ai-batch';
 
 const exec = promisify(execFile);
 let dir: string, db: pg.Pool, server: Server, base: string;
@@ -58,7 +59,7 @@ before(async () => {
   await db.query(`CREATE TABLE products(id varchar PRIMARY KEY);
     CREATE TABLE admin_action_logs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),admin_user_id varchar NOT NULL,
       action_type text NOT NULL,entity_type text NOT NULL,entity_id varchar,action_data jsonb NOT NULL);`);
-  for (const file of ['editorial-admin.sql', 'editorial-publication.sql', 'editorial-ai.sql'])
+  for (const file of ['editorial-admin.sql', 'editorial-publication.sql', 'editorial-ai.sql', 'editorial-ai-batch.sql'])
     await db.query(await readFile(`migrations/${file}`, 'utf8'));
   const app = express(); app.use(express.json());
   registerAdminEditorialAiRoutes(app, [
@@ -83,7 +84,7 @@ after(async () => {
   if (dir) { await exec('pg_ctl', ['-D', join(dir, 'data'), '-m', 'immediate', '-w', 'stop']).catch(() => {}); await rm(dir, { recursive: true, force: true }); }
 });
 beforeEach(async () => {
-  await db.query('TRUNCATE editorial_ai_imports,editorial_ai_runs,editorial_publications,editorial_entries,admin_action_logs');
+  await db.query('TRUNCATE editorial_ai_batch_items,editorial_ai_batches,editorial_ai_imports,editorial_ai_runs,editorial_publications,editorial_entries,admin_action_logs');
   apiModelCalls = 0;
   photoSearchFixture = undefined;
 });
@@ -108,6 +109,97 @@ async function readyDraft(c: Awaited<ReturnType<typeof cheese>>, custom = deps) 
   await executeAiRun(run.id, db, custom);
   return getAiRun(run.id, db);
 }
+const batches = (path = '', body?: unknown, token: string | null = 'admin') => fetch(`${base}/batches${path}`, {
+  method: body === undefined ? 'GET' : 'POST',
+  headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: token } : {}) },
+  body: body === undefined ? undefined : JSON.stringify(body),
+});
+const batchDeps: AiDependencies = { ...deps, search: async () => [], pause: async () => {} };
+const makeBatchCheese = (title: string, data: Record<string, unknown> = {}) => saveEditorial('cheese', {
+  title, nameOriginal: 'Parmigiano Reggiano', country: 'Италия', region: 'Эмилия-Романья',
+  sources: [evidence.url], ...data,
+}, 'operator', undefined, db);
+
+test('batch counts eligible revisions, requires confirmation, processes once and opens the proposal without applying it', async () => {
+  const first = await makeBatchCheese('А · Пармезан');
+  const next = await makeBatchCheese('Б · Пармезан', { status: 'pending_review' });
+  const withDraft = await makeBatchCheese('В · Пармезан');
+  const approved = await cheese();
+  await saveEditorial('cheese', { ...approved.data, status: 'ready' }, 'operator', approved, db);
+  await cheese(true);
+  const prepared = await reserveAiRun('draft', { requestId: randomUUID(), entryId: withDraft.id,
+    revision: withDraft.revision, sources: [evidence.url], research: true, fullDraft: true }, 'manual', db);
+  await executeAiRun(prepared.run.id, db, batchDeps);
+  assert.equal((await getAiRun(prepared.run.id, db)).status, 'ready');
+  assert.equal((await batches('', undefined, null)).status, 401);
+  assert.equal((await batches('', undefined, 'customer')).status, 403);
+  const preview = await getDraftBatchOverview(1, db);
+  assert.equal(preview.eligibleCount, 2);
+  assert.equal(preview.latest, null);
+  const body = { requestId: randomUUID(), eligibleCount: 2, confirmed: true };
+  assert.equal((await batches('', { ...body, confirmed: false })).status, 400);
+  assert.equal((await batches('', { ...body, eligibleCount: 3 })).status, 409);
+  assert.equal((await batches('', body)).status, 202);
+  assert.equal((await batches('', body)).status, 202);
+  assert.equal((await batches('', { ...body, requestId: randomUUID() })).status, 409);
+  await saveEditorial('cheese', { ...next.data, history: 'Правка редактора после запуска' }, 'editor', next, db);
+  let started!: () => void, unblock!: () => void;
+  const startedPromise = new Promise<void>(resolve => { started = resolve; });
+  const gate = new Promise<void>(resolve => { unblock = resolve; });
+  let modelCalls = 0;
+  const doing = processDraftBatch(db, { ...batchDeps, model: async () => {
+    modelCalls++;
+    started();
+    await gate;
+    return draft();
+  } });
+  try {
+    await Promise.race([startedPromise, doing.then(() => { throw new Error('Worker did not start the model'); })]);
+    const busy = await getDraftBatchOverview(1, db);
+    assert.equal(busy.latest?.counts.running, 1);
+    await processDraftBatch(db, batchDeps);
+    await assert.rejects(reserveAiRun('catalog', catalogParams(), 'manual', db), fails(409));
+  } finally { unblock(); }
+  await doing;
+  // Advance only the fixture timestamp past the research cooldown.
+  await db.query("UPDATE editorial_ai_runs SET created_at=now()-interval '61 seconds' WHERE created_by='operator'");
+  await processDraftBatch(db, batchDeps);
+  const finished = await getDraftBatchOverview(1, db);
+  assert.equal(finished.active, false);
+  assert.equal(finished.latest?.counts.ready, 1);
+  assert.equal(finished.latest?.counts.skipped, 1);
+  assert.equal(modelCalls, 1);
+  const response = await batches(`/${body.requestId}/review/${first.id}`);
+  assert.equal(response.status, 200);
+  const proposal = await response.json();
+  assert.equal(proposal.run.result.fields.history, draft().fields.history);
+  assert.equal(proposal.entry.revision, first.revision);
+  assert.deepEqual(proposal.entry.data, first.data);
+  await saveEditorial('cheese', { ...first.data, history: 'Новая правка' }, 'editor', first, db);
+  assert.equal((await batches(`/${body.requestId}/review/${first.id}`)).status, 409);
+});
+test('batch stop cancels queued articles and a crashed running attempt is not regenerated', async () => {
+  const first = await makeBatchCheese('А · Пармезан');
+  await makeBatchCheese('Б · Пармезан');
+  const body = { requestId: randomUUID(), eligibleCount: 2, confirmed: true };
+  assert.equal((await batches('', body)).status, 202);
+  // Persist what the worker would have reserved before a crash, with an expired lease.
+  const { run } = await reserveAiRun('draft', { requestId: randomUUID(), entryId: first.id,
+    revision: first.revision, sources: [evidence.url], research: true, fullDraft: true }, 'operator', db);
+  await db.query(`UPDATE editorial_ai_batch_items SET status='running',run_id=$1
+    WHERE batch_id=$2 AND entry_id=$3`, [run.id, body.requestId, first.id]);
+  await db.query("UPDATE editorial_ai_runs SET lease_until=now()-interval '1 second' WHERE id=$1", [run.id]);
+  assert.equal((await batches(`/${body.requestId}/stop`, {})).status, 204);
+  const before = await getDraftBatchOverview(1, db);
+  assert.equal(before.latest?.counts.running, 1);
+  assert.equal(before.latest?.counts.cancelled, 1);
+  await processDraftBatch(db, { ...batchDeps, model: async () => assert.fail('Do not retry a started attempt') });
+  const after = await getDraftBatchOverview(1, db);
+  assert.equal(after.active, false);
+  assert.equal(after.latest?.counts.failed, 1);
+  assert.equal(after.latest?.counts.cancelled, 1);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM editorial_ai_runs')).rows[0].n, 1);
+});
 test('photo search is admin-only, bounded and excludes existing and previously suggested images without changing the article', async () => {
   const saved = await cheese(true);
   const run = await readyDraft(saved);

@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import pg from 'pg';
 import { checkTimeweb, connectionConfig } from '../scripts/check-timeweb-compatibility.mjs';
+import { editorialRequirements } from '../scripts/editorial-schema-requirements.mjs';
 
 const exec = promisify(execFile);
 let directory, pool, url, started;
@@ -31,6 +32,7 @@ before(async () => {
   started = true;
   url = `postgresql://preflight_test:fixture-password@127.0.0.1:${port}/postgres?sslmode=disable`;
   pool = new pg.Pool({ ...connectionConfig(url), options: '', max: 2 });
+  await pool.query('CREATE TABLE public.web_users(id varchar PRIMARY KEY)');
 });
 after(async () => {
   await pool?.end();
@@ -52,7 +54,14 @@ beforeEach(async () => {
     CREATE UNIQUE INDEX ${indexName} ON public.web_wishlists (user_id, product_id);
   `);
   await pool.query(await readFile(new URL('../migrations/web-order-delivery.sql', import.meta.url), 'utf8'));
+  await resetEditorial();
 });
+async function resetEditorial() {
+  await pool.query(`DROP TABLE IF EXISTS ${editorialRequirements.map(r => `public.${r.table}`).join(', ')} CASCADE`);
+  for (const name of ['admin', 'publication', 'price-submissions', 'ai', 'ai-batch', 'market']) {
+    await pool.query(await readFile(new URL(`../migrations/editorial-${name}.sql`, import.meta.url), 'utf8'));
+  }
+}
 async function check(options = {}) {
   const output = [];
   const ok = await checkTimeweb({
@@ -81,6 +90,15 @@ test('ready schema passes; session is read-only, bounded and pinned to the expli
   } finally { await client.end(); }
 });
 
+test('wishlist-only schema cannot authorize an editorial release', async () => {
+  await pool.query(`DROP TABLE ${editorialRequirements.map(r => `public.${r.table}`).join(', ')} CASCADE`);
+  const result = await check();
+  assert.equal(result.ok, false);
+  assert.match(result.output, /Push bloccato/);
+  assert.doesNotMatch(result.output, /fixture-password|postgresql:\/\//);
+  assert.equal((await pool.query("SELECT to_regclass('public.editorial_entries') AS table_name")).rows[0].table_name, null);
+});
+
 test('missing or incompatible order delivery columns block release without applying the migration', async () => {
   await pool.query('ALTER TABLE public.orders DROP COLUMN desired_delivery_date');
   const missing = await check();
@@ -88,6 +106,171 @@ test('missing or incompatible order delivery columns block release without apply
   assert.match(missing.output, /colonne di consegna/);
   await pool.query('ALTER TABLE public.orders ADD COLUMN desired_delivery_date text');
   assert.equal((await check()).ok, false);
+});
+
+for (const { table } of editorialRequirements) {
+  test(`missing ${table} blocks release without recreating it`, async () => {
+    await pool.query(`DROP TABLE public.${table} CASCADE`);
+    assert.equal((await check()).ok, false);
+    assert.equal((await pool.query('SELECT to_regclass($1) AS table_name', [`public.${table}`])).rows[0].table_name, null);
+  });
+}
+
+test('missing editorial columns on every table block release', async () => {
+  for (const { table, columns } of editorialRequirements) {
+    await pool.query(`ALTER TABLE public.${table} DROP COLUMN ${columns.at(-1)[0]} CASCADE`);
+    assert.equal((await check()).ok, false, table);
+    await resetEditorial();
+  }
+});
+
+test('editorial types, nullability, defaults and bounded varchar lengths must match', async () => {
+  for (const mutation of [
+    'ALTER TABLE editorial_publications ALTER COLUMN data TYPE text',
+    'ALTER TABLE editorial_publications ALTER COLUMN published_by DROP NOT NULL',
+    'ALTER TABLE editorial_entries ALTER COLUMN moderation SET NOT NULL',
+    'ALTER TABLE editorial_entries ALTER COLUMN id DROP DEFAULT',
+    'ALTER TABLE editorial_entries ALTER COLUMN revision SET DEFAULT 2',
+    "ALTER TABLE editorial_entries ALTER COLUMN moderation_note SET DEFAULT 'private-default-marker'",
+    'ALTER TABLE editorial_fx_rates ALTER COLUMN fetched_at DROP DEFAULT',
+    'ALTER TABLE editorial_ai_imports ALTER COLUMN country_code TYPE varchar(3)',
+    'ALTER TABLE editorial_price_submissions ALTER COLUMN fingerprint TYPE varchar(80)',
+    'ALTER TABLE editorial_ai_runs ADD COLUMN unexpected text NOT NULL',
+  ]) {
+    await pool.query(mutation);
+    const result = await check();
+    assert.equal(result.ok, false, mutation);
+    assert.doesNotMatch(result.output, /private-default-marker|fixture-password/);
+    await resetEditorial();
+  }
+});
+
+test('editorial checks must exist, be validated, and enforce the approved values', async () => {
+  for (const mutation of [
+    'ALTER TABLE editorial_entries DROP CONSTRAINT editorial_entries_revision_check',
+    `ALTER TABLE editorial_entries DROP CONSTRAINT editorial_entries_kind_check;
+      ALTER TABLE editorial_entries ADD CHECK(kind IN ('video','cheese','price','unreviewed'))`,
+    `ALTER TABLE editorial_entries DROP CONSTRAINT editorial_entries_moderation_check;
+      ALTER TABLE editorial_entries ADD CHECK(moderation IN ('pending','approved','rejected')) NOT VALID`,
+    'ALTER TABLE editorial_entries DROP CONSTRAINT editorial_entries_check',
+    'ALTER TABLE editorial_publications DROP CONSTRAINT editorial_publications_published_revision_check',
+    'ALTER TABLE editorial_price_submissions DROP CONSTRAINT editorial_price_submissions_payload_check',
+    'ALTER TABLE editorial_price_submissions DROP CONSTRAINT editorial_price_submissions_fingerprint_check',
+    'ALTER TABLE editorial_ai_runs DROP CONSTRAINT editorial_ai_runs_status_check',
+    'ALTER TABLE editorial_price_checks DROP CONSTRAINT editorial_price_checks_trigger_check',
+    "ALTER TABLE editorial_fx_rates ADD CHECK(rates = '{}'::jsonb)",
+  ]) {
+    await pool.query(mutation);
+    assert.equal((await check()).ok, false, mutation);
+    await resetEditorial();
+  }
+});
+
+test('editorial foreign keys require the right target, delete action and validation', async () => {
+  for (const mutation of [
+    'ALTER TABLE editorial_publications DROP CONSTRAINT editorial_publications_entry_id_fkey',
+    `ALTER TABLE editorial_publications DROP CONSTRAINT editorial_publications_entry_id_fkey;
+      ALTER TABLE editorial_publications ADD FOREIGN KEY(entry_id) REFERENCES editorial_entries(id) ON DELETE CASCADE`,
+    `ALTER TABLE editorial_price_submissions DROP CONSTRAINT editorial_price_submissions_user_id_fkey;
+      ALTER TABLE editorial_price_submissions ADD FOREIGN KEY(user_id) REFERENCES web_users(id) ON DELETE CASCADE NOT VALID`,
+    `ALTER TABLE editorial_price_checks DROP CONSTRAINT editorial_price_checks_watch_id_fkey;
+      ALTER TABLE editorial_price_checks ADD FOREIGN KEY(watch_id) REFERENCES editorial_entries(id) ON DELETE CASCADE`,
+    `ALTER TABLE editorial_ai_imports DROP CONSTRAINT editorial_ai_imports_run_id_fkey;
+      ALTER TABLE editorial_ai_imports ADD FOREIGN KEY(run_id) REFERENCES editorial_ai_runs(id) DEFERRABLE`,
+  ]) {
+    await pool.query(mutation);
+    assert.equal((await check()).ok, false, mutation);
+    await resetEditorial();
+  }
+});
+
+test('editorial primary keys and idempotency uniqueness cannot be absent or deferrable', async () => {
+  for (const mutation of [
+    'ALTER TABLE editorial_publications DROP CONSTRAINT editorial_publications_pkey',
+    'ALTER TABLE editorial_ai_imports DROP CONSTRAINT editorial_ai_imports_pkey',
+    'ALTER TABLE editorial_ai_runs DROP CONSTRAINT editorial_ai_runs_created_by_request_id_key',
+    `ALTER TABLE editorial_ai_runs DROP CONSTRAINT editorial_ai_runs_created_by_request_id_key;
+      ALTER TABLE editorial_ai_runs ADD UNIQUE(created_by,request_id) DEFERRABLE`,
+    'ALTER TABLE editorial_price_submissions DROP CONSTRAINT editorial_price_submissions_entry_id_key',
+    'ALTER TABLE editorial_price_checks DROP CONSTRAINT editorial_price_checks_requested_by_request_id_key',
+    'CREATE UNIQUE INDEX unexpected_unique ON editorial_publications(kind)',
+  ]) {
+    await pool.query(mutation);
+    assert.equal((await check()).ok, false, mutation);
+    await resetEditorial();
+  }
+});
+
+test('editorial index names cannot conceal wrong keys, order, uniqueness or predicates', async () => {
+  for (const definition of [
+    '',
+    'CREATE INDEX editorial_price_checks_running ON editorial_price_checks(watch_id)',
+    "CREATE UNIQUE INDEX editorial_price_checks_running ON editorial_price_checks(watch_id) WHERE status='ready'",
+    "CREATE UNIQUE INDEX editorial_price_checks_running ON editorial_price_checks(request_id) WHERE status='running'",
+    "CREATE UNIQUE INDEX editorial_price_checks_running ON editorial_price_checks(watch_id) INCLUDE(id) WHERE status='running'",
+  ]) {
+    await pool.query('DROP INDEX editorial_price_checks_running');
+    if (definition) await pool.query(definition);
+    assert.equal((await check()).ok, false, definition || 'missing running index');
+    await resetEditorial();
+  }
+  for (const mutation of [
+    'DROP INDEX editorial_entries_kind_updated',
+    `DROP INDEX editorial_price_checks_history;
+      CREATE INDEX editorial_price_checks_history ON editorial_price_checks(watch_id,started_at ASC)`,
+    `DROP INDEX editorial_price_watches_due;
+      CREATE INDEX editorial_price_watches_due ON editorial_price_watches(next_check_at)`,
+    `DROP INDEX editorial_submissions_user_cheese;
+      CREATE INDEX editorial_submissions_user_cheese ON editorial_price_submissions(cheese_id,user_id,created_at)`,
+  ]) {
+    await pool.query(mutation);
+    assert.equal((await check()).ok, false, mutation);
+    await resetEditorial();
+  }
+});
+
+test('invalid editorial index is rejected even with the expected definition', async () => {
+  await pool.query('ALTER TABLE editorial_ai_runs DROP CONSTRAINT editorial_ai_runs_created_by_request_id_key');
+  await pool.query(`INSERT INTO editorial_ai_runs(id,kind,status,request_id,params,model,created_by,lease_until)
+    SELECT gen_random_uuid(),'catalog','ready','11111111-1111-4111-8111-111111111111',
+      '{}'::jsonb,'test-model','private-operator-marker',now() FROM generate_series(1,2)`);
+  await assert.rejects(pool.query(`CREATE UNIQUE INDEX CONCURRENTLY editorial_ai_runs_created_by_request_id_key
+    ON editorial_ai_runs(created_by,request_id)`));
+  const result = await check();
+  assert.equal(result.ok, false);
+  assert.doesNotMatch(result.output, /private-operator-marker/);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM editorial_ai_runs')).rows[0].n, 2);
+});
+
+test('editorial names are not required, but structure is; ordinary extra indexes are allowed', async () => {
+  await pool.query(`ALTER INDEX editorial_publications_kind RENAME TO renamed_publications_kind;
+    ALTER TABLE editorial_entries RENAME CONSTRAINT editorial_entries_revision_check TO renamed_revision_check;
+    CREATE INDEX extra_editorial_index ON editorial_entries(updated_at)`);
+  assert.equal((await check()).ok, true);
+});
+
+test('row security, replacement views and missing editorial read permissions fail closed', async () => {
+  await pool.query('ALTER TABLE editorial_publications ENABLE ROW LEVEL SECURITY');
+  assert.equal((await check()).ok, false);
+  await resetEditorial();
+  await pool.query(`ALTER TABLE editorial_publications RENAME TO hidden_publications;
+    CREATE VIEW editorial_publications AS SELECT * FROM hidden_publications`);
+  try { assert.equal((await check()).ok, false); }
+  finally {
+    await pool.query('DROP VIEW editorial_publications; DROP TABLE hidden_publications');
+  }
+  await resetEditorial();
+  await pool.query(`CREATE ROLE editorial_reader LOGIN PASSWORD 'fixture-only-reader';
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO editorial_reader;
+    REVOKE SELECT ON editorial_publications FROM editorial_reader`);
+  try {
+    const result = await check({ env: { TIMEWEB_DATABASE_URL: url.replace(
+      'preflight_test:fixture-password', 'editorial_reader:fixture-only-reader') } });
+    assert.equal(result.ok, false);
+    assert.doesNotMatch(result.output, /fixture-only-reader|permission denied/);
+  } finally {
+    await pool.query('DROP OWNED BY editorial_reader; DROP ROLE editorial_reader');
+  }
 });
 
 test('missing table or required column fails closed instead of treating database as fresh', async () => {

@@ -9,6 +9,7 @@ import { researchRequestSchema } from '../shared/editorial-ai';
 import { lookupEditorialOrigin, applyEditorialOrigin, lookupMapPlace } from './services/editorial-origin';
 import { searchEditorialPhotos } from './services/editorial-photo-search';
 import { searchEditorialWeb } from './services/editorial-ai-research';
+import { getDraftBatchOverview, getDraftBatchReview, startDraftBatch, stopDraftBatch } from './services/editorial-ai-batch';
 
 export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHandler[],
   actor: (req: Request) => string | undefined, database = pool, deps: AiDependencies = defaultAiDependencies) {
@@ -60,6 +61,20 @@ export function registerAdminEditorialAiRoutes(app: Express, guards: RequestHand
     res.json(await aiHistory(query.kind, query.page, database, query.entryId));
   }));
   const id = (req: Request) => z.string().uuid().parse(req.params.id);
+  app.get(`${base}/batches`, ...guards, handle(async (req, res) => {
+    const query = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), batchId: z.string().uuid().optional() }).strict().parse(req.query);
+    res.json(await getDraftBatchOverview(query.page, database, query.batchId));
+  }));
+  app.post(`${base}/batches`, ...guards, handle(async (req, res, operator) => {
+    res.status(202).json(await startDraftBatch(req.body, operator, database, deps === defaultAiDependencies));
+  }));
+  app.post(`${base}/batches/:id/stop`, ...guards, handle(async (req, res, operator) => {
+    await stopDraftBatch(id(req), operator, database);
+    res.sendStatus(204);
+  }));
+  app.get(`${base}/batches/:id/review/:entryId`, ...guards, handle(async (req, res) => {
+    res.json(await getDraftBatchReview(id(req), z.string().uuid().parse(req.params.entryId), database));
+  }));
   app.get(`${base}/runs/:id`, ...guards, handle(async (req, res) => { res.json(await getAiRun(id(req), database)); }));
   app.patch(`${base}/runs/:id/ranking`, ...guards, handle(async (req, res, operator) => { res.json(await rankAiCatalog(id(req), req.body, operator, database)); }));
   app.post(`${base}/runs/:id/import`, ...guards, handle(async (req, res, operator) => { res.json(await importAiCatalog(id(req), req.body, operator, database)); }));

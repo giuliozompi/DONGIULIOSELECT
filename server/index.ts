@@ -11,6 +11,7 @@ import { startAnalyticsCron } from "./services/analytics-cron";
 import { startReengagementCron } from "./services/reengagement-cron";
 import { startWelcomeCron } from "./services/welcome-cron";
 import { startPriceWatchScheduler } from "./services/editorial-market";
+import { startDraftBatchWorker } from "./services/editorial-ai-batch";
 import { getIntegrationsSummary } from "./integrations-status";
 import { runMigrations } from "./services/db-migrations";
 import { registerReleaseHealth, startup, buildId } from "./release-health";
@@ -146,6 +147,7 @@ app.use((req, res, next) => {
     startReengagementCron(24);
     startWelcomeCron(24);
     startPriceWatchScheduler();
+    startDraftBatchWorker();
   });
 })().catch((fatalErr) => {
   // Last-resort catch: if the async IIFE itself throws unexpectedly, log it.

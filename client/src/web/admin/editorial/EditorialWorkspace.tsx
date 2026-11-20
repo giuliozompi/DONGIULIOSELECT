@@ -13,6 +13,7 @@ import { editorialApi } from '../lib/editorialApi';
 import { editorialAiApi } from '../lib/editorialAiApi';
 import { adminApi } from '../lib/adminApi';
 import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
+import DraftBatchPanel from './ai/DraftBatchPanel';
 import EditorialPhotoUpload from './EditorialPhotoUpload';
 import EditorialPhotoSearch from './EditorialPhotoSearch';
 import CheeseGeoEditor from './CheeseGeoEditor';
@@ -323,14 +324,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setDialog(true);
   }
   function openAiProposal(entry: EditorialEntry, run: EditorialAiRun, draft: DraftResult) {
-    if (!workspaceMounted.current || currentKindRef.current !== 'cheese' || editorDialogRef.current) return;
+    if (!workspaceMounted.current || currentKindRef.current !== 'cheese' || editorDialogRef.current) return false;
     setPublishOnSave(false);
     const latestItems = qc.getQueriesData({ queryKey: ['/web-api/admin/editorial'] })
       .flatMap(([, data]: any) => Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []);
     const latest = latestItems.filter((item: EditorialEntry) => item.id === entry.id)
       .sort((left: EditorialEntry, right: EditorialEntry) => right.revision - left.revision)[0] as EditorialEntry | undefined;
-    if (latest && latest.revision !== entry.revision) return;
-    const base = JSON.parse(JSON.stringify(latest || entry)) as EditorialEntry;
+    if (latest && latest.revision > entry.revision) return false;
+    const base = JSON.parse(JSON.stringify(latest?.revision === entry.revision ? latest : entry)) as EditorialEntry;
     const data = base.data as CheeseData;
     const fields: Partial<Record<AiField, keyof CheeseData>> = {
       title: 'title', description: 'description', country: 'country', region: 'region',
@@ -352,6 +353,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     editorDialogRef.current = true;
     setDialog(true);
     toast({ title: 'Черновик готов к редакторской проверке', description: 'Предложение открыто без автоматической публикации. Проверьте факты и сохраните изменения.' });
+    return true;
   }
   function handleAiProposalUpdated(saved?: EditorialEntry, options?: { openEditor: true }) {
     if (!saved || !options?.openEditor || !editorDialogRef.current || editing?.id !== saved.id || dirty) return;
@@ -657,6 +659,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
         </div>
 
         {kind === 'cheese' && cheeseStage === 'drafts' && <EditorialAiCatalog onImported={() => { selectCheeseStage('drafts'); void invalidateEditorial(); }} />}
+        {kind === 'cheese' && cheeseStage === 'drafts' && <DraftBatchPanel onReview={({ entry, run }) => openAiProposal(entry, run, run.result)} />}
 
         {kind === 'price' && <div className="mb-6 rounded-md border-l-4 border-[#b66b48] bg-[#f0e6d9] px-4 py-3 text-sm text-[#684b3d]">Рыночные наблюдения никогда не изменяют цену или доступность товара в каталоге. Новая и отредактированная запись цены всегда возвращается в очередь проверки.</div>}
 

@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { pathToFileURL } from 'node:url';
+import { checkEditorialSchema } from './check-editorial-schema.mjs';
 
 // Release prerequisite manifest: extend this check whenever a release needs
 // additional schema. This is deliberately separate from the development
@@ -119,6 +120,10 @@ export async function checkTimeweb({
     }
     if (!ready || duplicates) {
       error('Timeweb: indice univoco dei preferiti mancante, non valido o incompatibile. Push bloccato; nessuna modifica eseguita.');
+      return false;
+    }
+    if (!await checkEditorialSchema(client)) {
+      error('Timeweb: schema editoriale mancante o incompatibile. Push bloccato; nessuna modifica eseguita.');
       return false;
     }
     const checkout = await client.query(`
