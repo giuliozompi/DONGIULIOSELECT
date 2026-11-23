@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
-import { LocateFixed, MapPin, Plus, RotateCcw, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { LocateFixed, MapPin, Minus, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { CheeseData } from '@shared/editorial';
@@ -162,6 +162,11 @@ export default function CheeseGeoEditor({
     fitMode.current = 'manual';
   }
 
+  function adjustZoom(step: 1 | -1) {
+    markManualInteraction();
+    setView(current => ({ ...current, zoom: clamp(current.zoom + step, 0, 19) }));
+  }
+
   function moveMarker(marker: Marker, latitude: number, longitude: number) {
     markManualInteraction();
     if (marker.kind === 'origin') onChange({ ...value, latitude, longitude });
@@ -254,10 +259,8 @@ export default function CheeseGeoEditor({
 
   return <section className="min-w-0 max-w-full space-y-3 overflow-hidden rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3" data-testid="cheese-geo-editor">
     <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
-      <div className="min-w-0"><h3 className="font-serif text-lg">География сыра</h3><p className="text-xs leading-5 text-[#718075]">Перетаскивайте карту мышью или пальцем для поиска места — координаты при этом не меняются. Чтобы перенести точку, выберите её и нажмите на карту или введите координаты. Alt + стрелки перемещают карту.</p></div>
+      <div className="min-w-0"><h3 className="font-serif text-lg">География сыра</h3><p className="text-xs leading-5 text-[#718075]">Перетаскивайте карту и меняйте масштаб кнопками + и −: координаты точек не изменятся. Чтобы перенести точку, выберите её и нажмите на карту или введите координаты. Alt + стрелки перемещают карту.</p></div>
       <div className="flex shrink-0 flex-wrap justify-start gap-2 sm:justify-end">
-        <Button type="button" size="icon" variant="outline" aria-label="Уменьшить масштаб карты" title="Уменьшить масштаб" disabled={disabled || view.zoom <= 0} onClick={() => { markManualInteraction(); setView(current => ({ ...current, zoom: Math.max(0, current.zoom - 1) })); }}><ZoomOut className="h-4 w-4" /></Button>
-        <Button type="button" size="icon" variant="outline" aria-label="Увеличить масштаб карты" title="Увеличить масштаб" disabled={disabled || view.zoom >= 19} onClick={() => { markManualInteraction(); setView(current => ({ ...current, zoom: Math.min(19, current.zoom + 1) })); }}><ZoomIn className="h-4 w-4" /></Button>
         <Button type="button" size="sm" variant="outline" disabled={disabled || points.length >= 20} onClick={() => {
           const point = {
             id: crypto.randomUUID(),
@@ -302,7 +305,7 @@ export default function CheeseGeoEditor({
       if (!active) return;
       const delta = { ArrowUp: [step, 0], ArrowDown: [-step, 0], ArrowLeft: [0, -step], ArrowRight: [0, step] }[event.key];
       if (delta) { event.preventDefault(); moveMarker(selected, clamp(active.latitude + delta[0], -90, 90), clamp(active.longitude + delta[1], -180, 180)); }
-    }} className={`relative h-56 select-none overflow-hidden rounded border border-[#c9cbbf] bg-[#e6e7d9] outline-none focus-visible:ring-2 focus-visible:ring-[#315647] ${disabled ? 'cursor-not-allowed opacity-60' : panning ? 'cursor-grabbing' : 'cursor-grab'}`}
+    }} className={`relative isolate h-56 select-none overflow-hidden rounded border border-[#c9cbbf] bg-[#e6e7d9] outline-none focus-visible:ring-2 focus-visible:ring-[#315647] ${disabled ? 'cursor-not-allowed opacity-60' : panning ? 'cursor-grabbing' : 'cursor-grab'}`}
       data-testid="cheese-map-country-focus"
       data-country={diagnosticCountry}
       data-center-latitude={view.latitude}
@@ -326,6 +329,20 @@ export default function CheeseGeoEditor({
         }}><LocateFixed className="h-4 w-4" /></span>}
         {origin && <button type="button" disabled={disabled} title="Точка происхождения" aria-label="Выбрать точку происхождения" onClick={event => { event.stopPropagation(); focusMarker({ kind: 'origin' }); }} className="absolute z-10 -translate-x-1/2 -translate-y-full text-[#315647]" style={{ left: `calc(50% + ${wrappedTileDelta(origin.x, center.x, view.zoom) * 256}px)`, top: `calc(50% + ${(origin.y - center.y) * 256}px)` }}><MapPin className="h-7 w-7 fill-[#f7f4e9] drop-shadow" /></button>}
         {markerPoints.map(({ point, projected }, index) => <button key={point.id} type="button" disabled={disabled} title={point.label} aria-label={`Выбрать точку производства ${point.label}`} onClick={event => { event.stopPropagation(); focusMarker({ kind: 'production', id: point.id }); }} className="absolute z-10 -translate-x-1/2 -translate-y-full text-[#a05d41]" style={{ left: `calc(50% + ${wrappedTileDelta(projected.x, center.x, view.zoom) * 256}px)`, top: `calc(50% + ${(projected.y - center.y) * 256}px)` }}><MapPin className="h-7 w-7 fill-[#fbfaf6] drop-shadow" /><span className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] font-bold text-[#a05d41]">{index + 1}</span></button>)}
+      </div>
+      <div role="group" aria-label="Масштаб карты" data-testid="cheese-map-zoom"
+        className="absolute left-2 top-2 z-20 flex cursor-default flex-col rounded-md border border-[#c9cbbf] bg-white text-[#315647] shadow-sm"
+        onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
+        <button type="button" aria-label="Увеличить масштаб карты" title="Увеличить масштаб карты"
+          disabled={disabled || view.zoom >= 19} onClick={() => adjustZoom(1)}
+          className="grid h-11 w-11 touch-manipulation place-items-center rounded-t-md hover:bg-[#eef2ec] focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#315647] disabled:opacity-40">
+          <Plus className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" aria-label="Уменьшить масштаб карты" title="Уменьшить масштаб карты"
+          disabled={disabled || view.zoom <= 0} onClick={() => adjustZoom(-1)}
+          className="grid h-11 w-11 touch-manipulation place-items-center rounded-b-md border-t border-[#d9d7ca] hover:bg-[#eef2ec] focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#315647] disabled:opacity-40">
+          <Minus className="h-5 w-5" aria-hidden="true" />
+        </button>
       </div>
       <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-[#fbfaf6]/90 px-1.5 py-1 text-[10px] text-[#53645a]"><a className="pointer-events-auto underline underline-offset-2" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}>© OpenStreetMap contributors</a> · перетаскивайте карту для просмотра; нажмите для переноса точки</span>
     </div>

@@ -258,6 +258,31 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     await setInput('[aria-label="Происхождение: долгота"]', originalOrigin.longitude);
 
     const zoomBefore = await page.evaluate(`Number(document.querySelector('[data-testid="cheese-map-country-focus"]').dataset.zoom)`);
+    await page.setViewport({ width: 390, height: 844, mobile: true });
+    await page.wait(`innerWidth === 390`);
+    const mapZoomControls = await page.evaluate(`(() => {
+      const map = document.querySelector('[data-testid="cheese-map-country-focus"]');
+      const buttons = Array.from(map.querySelectorAll('[data-testid="cheese-map-zoom"] button'));
+      const bounds = map.getBoundingClientRect();
+      return { count: buttons.length, fit: buttons.every(button => {
+        const rect = button.getBoundingClientRect();
+        return rect.width >= 44 && rect.height >= 44 && rect.left >= bounds.left && rect.top >= bounds.top &&
+          rect.right <= bounds.right && rect.bottom <= bounds.bottom;
+      }) };
+    })()`);
+    assert.deepEqual(mapZoomControls, { count: 2, fit: true }, 'both touch controls are inside the map');
+    const mapCoordinates = () => page.evaluate(`(() => {
+      const map = document.querySelector('[data-testid="cheese-map-country-focus"]');
+      return { center: [map.dataset.centerLatitude, map.dataset.centerLongitude],
+        pins: Array.from(document.querySelectorAll('[aria-label$=": широта"], [aria-label$=": долгота"]'), input => input.value) };
+    })()`);
+    const coordinatesBeforeZoom = await mapCoordinates();
+    await page.tap('[aria-label="Увеличить масштаб карты"]');
+    await page.wait(`Number(document.querySelector('[data-testid="cheese-map-country-focus"]').dataset.zoom) === ${zoomBefore + 1}`);
+    await page.tap('[aria-label="Уменьшить масштаб карты"]');
+    await page.wait(`Number(document.querySelector('[data-testid="cheese-map-country-focus"]').dataset.zoom) === ${zoomBefore}`);
+    assert.deepEqual(await mapCoordinates(), coordinatesBeforeZoom, 'zoom buttons preserve the map center and all pin coordinates');
+    await page.setViewport({ width: 1280, height: 1000 });
     await page.evaluate(`document.querySelector('[aria-label="Увеличить масштаб карты"]').click()`);
     assert.equal(await page.evaluate(`Number(document.querySelector('[data-testid="cheese-map-country-focus"]').dataset.zoom)`), zoomBefore + 1, 'zoom controls select a new tile zoom');
     await page.evaluate(`Array.from(document.querySelectorAll('[data-testid="cheese-geo-editor"] button')).find(button => button.textContent.trim() === 'Происхождение').click()`);
