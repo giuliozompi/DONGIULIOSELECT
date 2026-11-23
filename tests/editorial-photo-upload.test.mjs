@@ -110,6 +110,20 @@ test('editorial images support paste, drop, file choice, validation and explicit
   try {
     await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses?entry=${id}` });
     await page.wait(`!!document.querySelector('${zone}')`);
+    const shortcut = '[data-testid="editorial-photo-shortcut"]';
+    const search = '[data-testid="search-alternative-photos"]';
+    for (const width of [390, 1280]) {
+      await page.send('Emulation.setDeviceMetricsOverride', { width, height: 780, deviceScaleFactor: 1, mobile: width < 500 });
+      await page.evaluate(`document.querySelector('${dialog}').scrollTop = 0`);
+      await page.click(shortcut);
+      await page.wait(`(() => {
+        const editor = document.querySelector('${dialog}').getBoundingClientRect();
+        const button = document.querySelector('${search}').getBoundingClientRect();
+        return document.activeElement?.id === 'editorial-cheese-photos' &&
+          button.top >= editor.top && button.bottom <= editor.bottom;
+      })()`);
+    }
+    assert.equal(searched.length, 0, 'the shortcut does not start an external search');
     await sendFiles('paste', [{ name: 'clipboard.png' }]);
     await page.wait(`document.querySelector('#ed-photos').value.includes('/objects/upload-1.png')`);
     assert.deepEqual(await photos(), ['/objects/existing.png', '/objects/upload-1.png']);
@@ -149,7 +163,6 @@ test('editorial images support paste, drop, file choice, validation and explicit
       document.querySelector('#ed-photos').dispatchEvent(e);return e.defaultPrevented;
     })()`), false);
     // A separate search returns proposals; nothing is added before operator selection and rights confirmation.
-    const search = '[data-testid="search-alternative-photos"]';
     await clickPhotoControl(search);
     await page.wait(`!!document.querySelector('[data-testid="alternative-photo-results"], [data-testid="editorial-photo-search"] [role="alert"]')`, 10000).catch(async failure => {
       console.error({ searched: searched.length, searchPanel: await page.evaluate(`document.querySelector('[data-testid="editorial-photo-search"]')?.innerText`) });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, ArrowRight, Check, CircleHelp, FilePlus2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Check, CircleHelp, FilePlus2, Image, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -122,6 +122,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const currentKindRef = useRef(kind);
   const editorDialogRef = useRef(false);
   const editorSessionRef = useRef(0);
+  const photoEditorRef = useRef<HTMLElement>(null);
   const formRef = useRef(form);
   formRef.current = form;
   currentKindRef.current = kind;
@@ -742,7 +743,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
             {kind === 'cheese' && <div className="space-y-3 border-b border-[#d7d8cc] pb-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground">{publishOnSave ? 'При сохранении статья будет одобрена и опубликована для читателей.' : 'Сохранить изменения можно здесь или внизу статьи.'}</p>
-                {saveButton('top')}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" data-testid="editorial-photo-shortcut" aria-controls="editorial-cheese-photos"
+                    onClick={() => {
+                      photoEditorRef.current?.focus({ preventScroll: true });
+                      photoEditorRef.current?.scrollIntoView({ block: 'start' });
+                    }}><Image className="mr-1.5 h-4 w-4" aria-hidden="true" />К поиску фотографий</Button>
+                  {saveButton('top')}
+                </div>
               </div>
               {validation.length > 0 && <div role="alert" className="text-sm text-[#8b4535]">{validation.join(' · ')}</div>}
               {(createMutation.error || updateMutation.error) && <div role="alert" className="text-sm text-[#8b4535]">{errorText(createMutation.error || updateMutation.error)}</div>}
@@ -804,9 +812,10 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                     <span>Я сверил(а) предложенные сведения и подтверждаю их перенос в статью для редакционной проверки.</span>
                   </label>
                 </section>}
-                <section data-testid="cheese-photo-editor" className="space-y-2 rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3">
+                <section ref={photoEditorRef} id="editorial-cheese-photos" tabIndex={-1} aria-labelledby="editorial-cheese-photos-label"
+                  data-testid="cheese-photo-editor" className="space-y-2 rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <Label htmlFor="ed-photos">Фотографии · обязательны для статуса «Одобрена»</Label>
+                    <Label id="editorial-cheese-photos-label" htmlFor="ed-photos">Фотографии · обязательны для статуса «Одобрена»</Label>
                     <span className="text-xs text-[#718075]">{cheesePhotos.length} из 12</span>
                   </div>
                   {cheesePhotos.length === 0
