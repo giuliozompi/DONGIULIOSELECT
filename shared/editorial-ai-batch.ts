@@ -27,6 +27,7 @@ export type DraftBatchOverview = {
     counts: Record<DraftBatchItemStatus, number>;
     items: DraftBatchItem[];
     total: number;
+    visibleTotal: number;
     page: number;
     limit: number;
   } | null;

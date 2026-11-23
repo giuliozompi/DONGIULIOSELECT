@@ -4,6 +4,7 @@ import type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, AiFiel
 import type { DraftBatchOverview, DraftBatchReview } from '@shared/editorial-ai-batch';
 export type { CatalogRequest, DraftRequest, EditorialAiRun, ImportResult, CatalogResult, DraftResult, CatalogItem, AiField } from '@shared/editorial-ai';
 const base = '/admin/editorial-ai';
+export const draftBatchQueryKey = ['/web-api/admin/editorial-ai/batches'] as const;
 export const editorialAiApi = {
   catalog: (body: CatalogRequest) => webApi.post<EditorialAiRun>(`${base}/catalog`, body),
   draft: (body: DraftRequest) => webApi.post<EditorialAiRun>(`${base}/draft`, body),

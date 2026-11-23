@@ -12,6 +12,10 @@ oppure con una bozza completa pronta per la loro revisione corrente,
 non vengono accodate. Se una scheda cambia dopo l'avvio, la coda non riusa
 la vecchia revisione. Le proposte non cambiano la scheda né la sua
 pubblicazione; vanno aperte, controllate e salvate dall'editor.
+Dopo il salvataggio, la proposta non compare più nell'elenco del lotto.
+La scheda resta nell'enciclopedia, in attesa di conferma. Aprire o chiudere una
+proposta senza salvarla non la rimuove. Lo storico conserva l'avanzamento
+originale della coda e gli esiti che richiedono attenzione.
 
 Il processo del server prenota una generazione per volta e condivide il
 vincolo con le ricerche singole. La coda sopravvive alla chiusura del browser

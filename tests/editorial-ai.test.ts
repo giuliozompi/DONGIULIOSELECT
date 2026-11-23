@@ -177,6 +177,46 @@ test('batch counts eligible revisions, requires confirmation, processes once and
   assert.deepEqual(proposal.entry.data, first.data);
   await saveEditorial('cheese', { ...first.data, history: 'Новая правка' }, 'editor', first, db);
   assert.equal((await batches(`/${body.requestId}/review/${first.id}`)).status, 409);
+  const edited = await getDraftBatchOverview(1, db);
+  assert.equal(edited.latest?.counts.ready, 0);
+  assert.deepEqual(edited.latest?.items.map(item => item.entryId), [next.id]);
+});
+test('batch hides a draft only after successful save, counts visible pages and preserves queue history', async () => {
+  const cheese = await makeBatchCheese('Я · Пармезан');
+  const batch = { requestId: randomUUID(), eligibleCount: 1, confirmed: true };
+  assert.equal((await batches('', batch)).status, 202);
+  await processDraftBatch(db, batchDeps);
+  await processDraftBatch(db, batchDeps);
+  await db.query(`INSERT INTO editorial_ai_batch_items(batch_id,entry_id,entry_revision,title,status)
+    SELECT $1,gen_random_uuid(),1,'Fixture item ' || n,'skipped' FROM generate_series(1,20) n`, [batch.requestId]);
+  const reviewPath = `/${batch.requestId}/review/${cheese.id}`;
+  const proposal = await (await batches(reviewPath)).json();
+  const params = { entryId: cheese.id, revision: cheese.revision, fields: ['history'],
+    editorialData: { ...cheese.data, history: 'Проверено редактором' } };
+  const apply = (body: unknown) => fetch(`${base}/runs/${proposal.run.id}/apply`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'admin' }, body: JSON.stringify(body),
+  });
+  assert.equal((await apply({ ...params, fields: ['description'] })).status, 400);
+  const before = (await getDraftBatchOverview(2, db, batch.requestId)).latest;
+  assert.equal(before?.total, 21);
+  assert.equal(before?.visibleTotal, 21);
+  assert.deepEqual(before?.items.map(item => item.entryId), [cheese.id]);
+  assert.equal(before?.counts.ready, 1);
+  const saved = await apply(params);
+  assert.equal(saved.status, 200);
+  const entry = await saved.json();
+  assert.equal(entry.data.status, 'pending_review');
+  assert.equal(entry.data.history, 'Проверено редактором');
+  assert.equal(entry.publication, null);
+  assert.equal((await batches(reviewPath)).status, 409);
+  const after = (await getDraftBatchOverview(1, db, batch.requestId)).latest;
+  assert.equal(after?.total, 21, 'the original queue progress is retained');
+  assert.equal(after?.visibleTotal, 20);
+  assert.equal(after?.counts.ready, 0);
+  assert.equal(after?.counts.skipped, 20);
+  assert.equal(after?.items.length, 20);
+  assert.deepEqual((await getDraftBatchOverview(2, db)).latest?.items, []);
+  assert.equal((await getAiRun(proposal.run.id, db)).appliedTo?.entryId, cheese.id);
 });
 test('batch stop cancels queued articles and a crashed running attempt is not regenerated', async () => {
   const first = await makeBatchCheese('А · Пармезан');

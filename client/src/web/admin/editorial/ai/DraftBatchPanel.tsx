@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ListChecks, LoaderCircle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { DraftBatchItemStatus, DraftBatchReview } from '@shared/editorial-ai-batch';
-import { editorialAiApi } from '../../lib/editorialAiApi';
+import { draftBatchQueryKey, editorialAiApi } from '../../lib/editorialAiApi';
 
 const labels: Record<DraftBatchItemStatus, string> = {
   queued: 'В очереди', running: 'Готовится', ready: 'Готов к проверке',
@@ -21,13 +21,17 @@ export default function DraftBatchPanel({ onReview }: { onReview: (result: Draft
   const [actionError, setActionError] = useState('');
   const lock = useRef(false);
   const query = useQuery({
-    queryKey: ['/web-api/admin/editorial-ai/batches', page, batchId],
+    queryKey: [...draftBatchQueryKey, page, batchId],
     queryFn: () => editorialAiApi.draftBatches(page, batchId || undefined),
     enabled: open, refetchInterval: query => query.state.data?.active ? 4000 : false, retry: false,
   });
   const current = query.data?.latest;
   const count = query.data?.eligibleCount ?? 0;
   const complete = current ? current.total - current.counts.queued - current.counts.running : 0;
+  const lastPage = current ? Math.max(1, Math.ceil(current.visibleTotal / current.limit)) : undefined;
+  useEffect(() => {
+    if (lastPage !== undefined && page > lastPage) setPage(lastPage);
+  }, [lastPage, page]);
 
   async function act(work: () => Promise<void>) {
     if (lock.current) return;
@@ -71,6 +75,7 @@ export default function DraftBatchPanel({ onReview }: { onReview: (result: Draft
         </div>
         <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#68746b]">{Object.entries(current.counts)
           .map(([status, n]) => <li key={status}>{labels[status as DraftBatchItemStatus]}: {n}</li>)}</ul>
+        {current.visibleTotal === 0 && <p className="text-sm text-[#68746b]">В этом запуске не осталось черновиков для проверки.</p>}
         <ul className="divide-y divide-[#e0dfd4]">{current.items.map(item => <li key={item.entryId} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm">
           <div className="min-w-0 break-words"><span className="font-medium">{item.title}</span> · {labels[item.status]}
             {item.detail && <p className="max-w-3xl text-xs text-[#78553d]">{item.detail}</p>}</div>
@@ -80,10 +85,10 @@ export default function DraftBatchPanel({ onReview }: { onReview: (result: Draft
               if (!onReview(result)) throw new Error('Не удалось открыть черновик. Закройте другие окна и обновите список.');
             }); }}>Открыть черновик</Button>}
         </li>)}</ul>
-        {current.total > current.limit && <div className="flex items-center gap-2 text-xs">
+        {lastPage !== undefined && lastPage > 1 && <div className="flex items-center gap-2 text-xs">
           <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>Назад</Button>
           <span>Страница {page}</span>
-          <Button size="sm" variant="outline" disabled={page * current.limit >= current.total} onClick={() => setPage(page + 1)}>Далее</Button>
+          <Button size="sm" variant="outline" disabled={page >= lastPage} onClick={() => setPage(page + 1)}>Далее</Button>
         </div>}
       </div>}
     </div>}

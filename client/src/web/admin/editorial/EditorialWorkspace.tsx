@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { editorialApi } from '../lib/editorialApi';
-import { editorialAiApi } from '../lib/editorialAiApi';
+import { draftBatchQueryKey, editorialAiApi } from '../lib/editorialAiApi';
 import { adminApi } from '../lib/adminApi';
 import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
 import DraftBatchPanel from './ai/DraftBatchPanel';
@@ -174,7 +174,10 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   });
 
   const invalidateEditorial = async () => {
-    await qc.invalidateQueries({ queryKey: ['/web-api/admin/editorial'] });
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['/web-api/admin/editorial'] }),
+      ...(kind === 'cheese' ? [qc.invalidateQueries({ queryKey: draftBatchQueryKey })] : []),
+    ]);
   };
   function handleAiEntryApplied(saved?: EditorialEntry, options?: { openEditor: true }) {
     if (!workspaceMounted.current || currentKindRef.current !== 'cheese') return;
