@@ -12,6 +12,7 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
   const runId = '34343434-3434-4434-8434-343434343434';
   const deepRunId = '56565656-5656-4565-8565-565656565656';
   const sourceUrl = 'https://example.org/pecorino-romano';
+  const additionSource = 'https://example.org/pecorino-addition';
   const photoUrl = 'https://photo-fixture.example.test/pecorino.jpg';
   const originalOrigin = { latitude: 41.8933203, longitude: 12.4829321 };
   const lookup = {
@@ -60,9 +61,11 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
   };
   const deepReady = {
     ...deepRunning, status: 'ready', finishedAt: '2026-01-01T12:15:00.000Z',
-    result: { fields: { history: 'Дополнительная история, ещё не сохранённая.' }, sources: [source], citations: [], warnings: [] },
+    result: { fields: { history: 'Дополнительная история, ещё не сохранённая.' },
+      sources: [{ ...source, url: additionSource, finalUrl: additionSource }],
+      citations: [{ field: 'history', sourceIndex: 0, quote: 'Фрагмент проверяемого источника.' }], warnings: [] },
   };
-  const requests = [], applies = [], identityUpdates = [], otherMutations = [], exceptions = [], requestOrder = [];
+  const requests = [], applies = [], identityUpdates = [], editorSaves = [], otherMutations = [], exceptions = [], requestOrder = [];
   let deepRunReleased = false;
   page.on('Runtime.exceptionThrown', event => exceptions.push(event.exceptionDetails.text));
   await page.send('Network.enable');
@@ -96,11 +99,15 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     else if (path === '/web-api/admin/editorial-ai/history') body = { items: [full], total: 1, page: 1, limit: 10 };
     else if (path === `/web-api/admin/editorial/${id}` && event.request.method === 'PATCH') {
       const update = JSON.parse(event.request.postData);
-      requestOrder.push('identity-save');
-      identityUpdates.push(update);
-      assert.equal(update.revision, 1);
-      assert.equal(update.data.title, 'Пекорино Романо редакция');
-      entry = { ...entry, revision: 2, data: update.data, updatedAt: '2026-01-01T12:05:00.000Z' };
+      if (update.revision === 1) {
+        requestOrder.push('identity-save');
+        identityUpdates.push(update);
+        assert.equal(update.data.title, 'Пекорино Романо редакция');
+      } else {
+        assert.equal(update.revision, 3);
+        editorSaves.push(update);
+      }
+      entry = { ...entry, revision: update.revision + 1, data: update.data, updatedAt: '2026-01-01T12:20:00.000Z' };
       body = entry;
     }
     else if (path === '/web-api/admin/editorial-ai/research') {
@@ -136,17 +143,7 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
             runId, searchedAt: report.searchedAt, transferredAt: '2026-01-01T12:10:00.000Z',
           } },
         };
-      } else {
-        assert.equal(request.revision, 3);
-        assert.deepEqual(request.fields, ['history']);
-        assert.equal(request.editorialData, undefined);
-        assert.equal(request.photoRightsConfirmed, undefined);
-        assert.equal(request.origin, undefined);
-        entry = {
-          ...entry, revision: 4, updatedAt: '2026-01-01T12:20:00.000Z',
-          data: { ...entry.data, history: deepReady.result.fields.history },
-        };
-      }
+      } else assert.fail('An addition must not apply a replacement via the AI endpoint');
       body = entry;
     } else if (event.request.method !== 'GET') {
       otherMutations.push({ method: event.request.method, path, body: event.request.postData });
@@ -291,43 +288,63 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     await page.evaluate(`Array.from(document.querySelectorAll('#entry-${id} button')).find(b => b.textContent.includes('Изменить')).click()`);
     await page.wait(`!!document.querySelector('[data-testid="editorial-entry-editor"][data-state="open"]')`);
     await page.wait(`!!document.querySelector('[data-testid="ai-research-toggle-${id}"]')`);
-    await setInput('#ed-history', 'Несохранённое ручное изменение');
+    const localHistory = 'История, сверенная редактором. Несохранённая правка.';
+    await setInput('#ed-history', localHistory);
+    await setInput('#ed-characteristics', 'Отдельная правка характеристик.');
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-toggle-${id}"]').disabled`), true,
-      'editor AI actions are disabled while the form is dirty');
-    await setInput('#ed-history', 'История, сверенная редактором.');
-    await click(`ai-research-toggle-${id}`);
-    await page.wait(`!!document.querySelector('[data-testid="ai-section-research-controls"]')`);
-    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-deepen-history"]').disabled`), false,
-      'deepening controls are available inside the saved editorial sheet without opening history');
-    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-alternative-history"]').disabled`), true,
-      'alternative search waits for a prior run while field deepening remains available');
+      'the older whole-article research still uses the saved revision');
+    for (const field of ['description', 'history', 'characteristics', 'culinaryUses', 'region'])
+      assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-deepen-${field}"]').disabled`), false);
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-deepen-history"]').parentElement.nextElementSibling.id`), 'ed-history');
     await click('ai-deepen-history');
-    await page.wait(`document.querySelector('#ed-history').matches(':disabled')`);
+    await page.wait(`!!document.querySelector('[data-testid="editorial-section-research"]')`);
+    assert.equal(requests.length, 1, 'opening the modal alone does not call the providers');
+    await setInput('#section-research-notes-history', 'Уточнить даты');
+    await click('section-research-start');
+    await page.wait(`document.querySelector('[data-testid="editorial-section-research"]')?.textContent.includes('Ищем источники')`);
+    await page.wait(`document.querySelector('[data-testid="section-research-start"]').disabled`);
     assert.equal(requests.length, 2);
     assert.equal(requests[1].revision, 3);
     assert.equal(requests[1].intent.mode, 'deepen');
     assert.equal(requests[1].intent.field, 'history');
-    assert.equal(requests[1].intent.previousRunId, undefined, 'field deepening needs no opened history item');
+    assert.equal(requests[1].intent.instructions, 'Уточнить даты');
+    assert.equal(requests[1].intent.addition.existingText, localHistory);
     assert.equal(applies.length, 1);
-    assert.equal(await page.evaluate(`Array.from(document.querySelectorAll('[data-testid="editorial-entry-editor"] button')).find(b => b.textContent.trim() === 'Отмена').disabled`), true,
-      'editor close is locked while a section run is active');
     deepRunReleased = true;
-    await page.wait(`!document.querySelector('#ed-history').matches(':disabled')`, 8000);
-    assert.equal(await page.evaluate(`document.querySelector('#ed-history').value`), 'История, сверенная редактором.',
-      'a completed deep-research proposal does not overwrite the saved or currently edited article');
+    await page.wait(`document.querySelector('[data-testid="section-research-addition"]')?.value === ${JSON.stringify(deepReady.result.fields.history)}`, 8000);
+    await page.setViewport({ width: 390, height: 844, mobile: true });
+    await page.wait(`innerWidth === 390`);
+    const dimensions = await page.evaluate(`(() => {
+      const dialog = document.querySelector('[data-testid="editorial-section-research"]');
+      const bounds = dialog.getBoundingClientRect();
+      return { left: bounds.left, right: bounds.right, viewport: innerWidth, scroll: dialog.scrollWidth, client: dialog.clientWidth };
+    })()`);
+    assert.ok(dimensions.left >= 0 && dimensions.right <= dimensions.viewport && dimensions.scroll <= dimensions.client + 2,
+      `the addition dialog fits on mobile: ${JSON.stringify(dimensions)}`);
+    await page.setViewport({ width: 1280, height: 1000 });
+    assert.equal(await page.evaluate(`document.querySelector('#ed-history').value`), localHistory);
+    assert.equal(entry.data.history, 'История, сверенная редактором.', 'generation does not save anything');
+    await page.evaluate(`Array.from(document.querySelectorAll('[data-testid="editorial-section-research"] button')).find(b => b.textContent.trim() === 'Закрыть').click()`);
+    await page.wait(`!document.querySelector('[data-testid="editorial-section-research"]')`);
+    await click('ai-deepen-history');
+    await page.wait(`!!document.querySelector('[data-testid="section-research-addition"]')`);
+    assert.equal(requests.length, 2, 'reopening a finished proposal does not generate it again');
+    assert.equal(await page.evaluate(`document.querySelector('[data-testid="editorial-section-research"] a')?.href`), additionSource);
+    const addition = 'Дополнение, проверенное редактором.';
+    const merged = `${localHistory}\n\n${addition}`;
+    await setInput('#section-research-addition-history', addition);
+    await click('section-research-integrate');
+    await page.wait(`!document.querySelector('[data-testid="editorial-section-research"]')`);
+    assert.equal(await page.evaluate(`document.querySelector('#ed-history').value`), merged);
+    assert.equal(editorSaves.length, 0, 'integrating only modifies the open editor');
     assert.equal(applies.length, 1);
-    assert.equal(entry.data.history, 'История, сверенная редактором.');
-    assert.equal(entry.data.productionPoints[0].latitude, 43.1);
-    assert.equal(entry.data.latitude, originalOrigin.latitude);
-    assert.equal(entry.publication, null);
-    await click('ai-draft-select-all');
-    await click('ai-draft-apply');
-    await page.wait(`!!document.querySelector('[data-testid="ai-transfer-confirm"]')`);
-    await click('ai-transfer-confirm');
-    await page.wait(`document.querySelector('#ed-history').value === 'Дополнительная история, ещё не сохранённая.'`);
-    assert.equal(applies.length, 2);
+    await click('button-editorial-save-top');
+    await page.wait(`!document.querySelector('[data-testid="editorial-entry-editor"]')`);
+    assert.equal(editorSaves.length, 1);
     assert.equal(entry.revision, 4);
-    assert.equal(entry.data.history, 'Дополнительная история, ещё не сохранённая.');
+    assert.equal(entry.data.history, merged);
+    assert.equal(entry.data.characteristics, 'Отдельная правка характеристик.');
+    assert.ok(entry.data.sources.includes(additionSource));
     assert.equal(entry.data.photos[0], photoUrl, 'deep apply preserves photos from the full editorial draft');
     assert.equal(entry.data.productionPoints[0].label, 'Caseificio Roma', 'deep apply preserves production-point edits');
     assert.equal(entry.data.productionPoints[0].latitude, 43.1);

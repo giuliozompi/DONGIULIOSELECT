@@ -102,8 +102,11 @@ export async function researchEditorialSources(
     const topic = options.intent.field === 'country' || options.intent.field === 'region' ? 'origin'
       : options.intent.field === 'description' ? undefined : options.intent.field;
     if (topic) plan = plan.filter(item => item.topic === topic);
-    // Overview deepening still uses the bounded original topic plan.
-    plan = plan.map(item => ({ ...item, query: `${item.query} documenti dettagli approfondimento`.slice(0, 400) }));
+    // Use the existing localized topic terms, even for cheeses researched in Russian.
+    if (options.intent.addition)
+      plan = plan.filter(item => item.topic !== 'photos')
+        .map(item => ({ ...item, query: item.query.replace(/ Wikipedia$/, '') }));
+    else plan = plan.map(item => ({ ...item, query: `${item.query} documenti dettagli approfondimento`.slice(0, 400) }));
   }
   if (options.intent?.mode === 'alternative') {
     const previous = new Set(options.previousQueries || []);
@@ -209,10 +212,12 @@ export async function researchEditorialSources(
   if (sources.some(source => isWikipediaArticle(source.finalUrl)))
     report.warnings.push('Wikipedia используется как дополнительный энциклопедический источник, а не официальный. Сверьте сведения с первичными источниками; наличие статьи не подтверждает права на фотографии.');
   report.coverage = researchCoverage(sources);
-  report.photos = researchPhotos(sources);
+  if (!options.intent?.addition) {
+    report.photos = researchPhotos(sources);
+    if (!report.photos.length) report.warnings.push('Подходящих ссылок на фотографии в прочитанных страницах не найдено. Изображения не выдумываются.');
+    else report.warnings.push('Фотографии взяты из ссылок на прочитанных страницах. Проверьте изображённый сыр и права использования; ссылка на лицензию сама по себе не подтверждает разрешение.');
+  }
   report.warnings.push('Покрытие тем определено по ключевым словам и фрагментам, а не проверкой фактов. Наличие фрагмента не гарантирует полноту или достоверность сведений.');
-  if (!report.photos.length) report.warnings.push('Подходящих ссылок на фотографии в прочитанных страницах не найдено. Изображения не выдумываются.');
-  else report.warnings.push('Фотографии взяты из ссылок на прочитанных страницах. Проверьте изображённый сыр и права использования; ссылка на лицензию сама по себе не подтверждает разрешение.');
   if (report.failures.length) report.warnings.push('Часть страниц не прочитана. Заготовка использует только доступные источники.');
   if (!sources.length) report.warnings.push('Нет читаемых источников с подтверждённой связью с выбранным сыром. Добавьте другую публичную страницу; текст не создаётся из догадок.');
   return { sources, report };

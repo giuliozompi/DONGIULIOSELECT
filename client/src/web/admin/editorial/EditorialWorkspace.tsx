@@ -13,6 +13,7 @@ import { editorialApi } from '../lib/editorialApi';
 import { draftBatchQueryKey, editorialAiApi } from '../lib/editorialAiApi';
 import { adminApi } from '../lib/adminApi';
 import { CheeseAiDraft, EditorialAiCatalog } from './ai/EditorialAiTools';
+import CheeseSectionResearch from './ai/CheeseSectionResearch';
 import DraftBatchPanel from './ai/DraftBatchPanel';
 import EditorialPhotoUpload from './EditorialPhotoUpload';
 import EditorialPhotoSearch from './EditorialPhotoSearch';
@@ -25,7 +26,7 @@ import {
   cheeseDataSchema, cheeseEditorialBatchLimit, editorialSchemas, pricePerKg,
   type CheeseData, type CheeseEditorialBatchAction, type EditorialEntry, type EditorialKind, type PriceData, type VideoData,
 } from '@shared/editorial';
-import type { AiField, DraftResult, EditorialAiRun, ResearchPhoto } from '@shared/editorial-ai';
+import type { AiField, DraftResult, EditorialAiRun, EditorialSectionField, ResearchPhoto } from '@shared/editorial-ai';
 
 const PAGE_SIZE = cheeseEditorialBatchLimit;
 type FormData = any;
@@ -567,6 +568,21 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     setRawLines(current => ({ ...current, [key]: value }));
     set(key, value);
   };
+  const sourceLines = (value: unknown): string[] =>
+    (Array.isArray(value) ? value : String(value ?? '').split(/\r?\n/)).map(line => String(line).trim()).filter(Boolean);
+  function integrateSection(field: EditorialSectionField, base: string, merged: string, cited: string[], sessionKey: number) {
+    if (!editorDialogRef.current || editorSessionRef.current !== sessionKey || requestLock.current || photoUploadLock.current || editorAiBusyRef.current)
+      return 'Дождитесь завершения текущего действия.';
+    if (String(formRef.current[field] ?? '') !== base)
+      return 'Текст раздела изменился. Запустите поиск заново.';
+    const sources = Array.from(new Set([...sourceLines(formRef.current.sources), ...cited]));
+    if (sources.length > 30) return 'В статье может быть не более 30 источников. Проверьте список источников.';
+    const next = { ...formRef.current, [field]: merged, sources };
+    formRef.current = next;
+    setForm(next);
+    setRawLines(current => ({ ...current, sources: sources.join('\n') }));
+    toast({ title: 'Дополнение добавлено', description: 'Проверьте текст и сохраните статью.' });
+  }
   function setDraftPhotos(nextPhotos: string[], sessionKey: number) {
     if (!editorDialogRef.current || editorSessionRef.current !== sessionKey) return;
     const next = { ...formRef.current, photos: nextPhotos };
@@ -620,8 +636,22 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
       <Input id={`ed-${String(name)}`} type={opts?.type || 'text'} value={value} min={opts?.min} max={opts?.max} placeholder={opts?.placeholder} onChange={e => set(name, (opts?.type === 'number' ? Number(e.target.value) : e.target.value) as FormData[keyof FormData])} />
     </div>
   );
-  const textarea = (label: string, name: string, value = String(form[name] ?? ''), helper?: string) => (
-    <div className="space-y-1.5" key={name}><Label htmlFor={`ed-${name}`}>{label}</Label><Textarea id={`ed-${name}`} value={value} rows={4} onChange={e => set(name, e.target.value)} />{helper && <p className="text-xs text-muted-foreground">{helper}</p>}</div>
+  const sectionResearch = (field: EditorialSectionField, label: string) => {
+    if (kind !== 'cheese' || !editing) return null;
+    const session = editorSessionRef.current;
+    return <CheeseSectionResearch key={`${session}:${editing.revision}:${field}`} entry={editing} field={field} label={label}
+      text={String(form[field] ?? '')} sources={sourceLines(form.sources)} disabled={saving}
+      onIntegrate={(base, merged, cited) => integrateSection(field, base, merged, cited, session)} />;
+  };
+  const textarea = (label: string, name: string, value = String(form[name] ?? ''), helper?: string, researchField?: EditorialSectionField) => (
+    <div className="space-y-1.5" key={name}>
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <Label htmlFor={`ed-${name}`}>{label}</Label>
+        {researchField && sectionResearch(researchField, label)}
+      </div>
+      <Textarea id={`ed-${name}`} value={value} rows={4} onChange={e => set(name, e.target.value)} />
+      {helper && <p className="text-xs text-muted-foreground">{helper}</p>}
+    </div>
   );
   const relations = (label: string, key: 'cheeseIds' | 'videoIds' | 'productIds', options: { id: string; label: string }[]) => (
     <fieldset className="space-y-2" key={key}><legend className="text-sm font-medium">{label}</legend>
@@ -774,7 +804,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                   {field('Название по-русски', 'title', cheeseForm.title, { required: true })}
                   {field('Оригинальное название', 'nameOriginal', cheeseForm.nameOriginal, { placeholder: 'Например, Parmigiano Reggiano' })}
                 </div> : field('Заголовок', 'title', (form as VideoData).title, { required: true })}
-                {textarea('Описание', 'description', (form as VideoData | CheeseData).description)}
+                {textarea('Описание', 'description', (form as VideoData | CheeseData).description, undefined, 'description')}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5"><Label htmlFor="ed-status">{kind === 'cheese' ? 'Состояние статьи' : 'Внутренний статус'}</Label><select id="ed-status" className={nativeSelectClass} disabled={Boolean(aiProposal)} value={kind === 'cheese' && publishOnSave ? 'publish' : (form as VideoData | CheeseData).status} onChange={e => { const publish = kind === 'cheese' && e.target.value === 'publish'; setPublishOnSave(publish); set('status', publish ? 'ready' : e.target.value); }}>{kind === 'cheese' ? <><option value="draft">В редакции</option><option value="pending_review">Ожидает подтверждения</option><option value="ready">Одобрена</option><option value="publish">Одобрить и опубликовать</option></> : <><option value="draft">Черновик</option><option value="ready">Готово к редакционному этапу</option></>}</select>{kind === 'cheese' && <p className="text-xs text-muted-foreground">{aiProposal ? 'Предложение сохраняется как ожидающее проверки. Одобрение и публикация — отдельные действия.' : publishOnSave ? 'Сохранение одобрит и опубликует эту версию. Все обязательные поля должны быть заполнены.' : 'Статус «Одобрена» сам по себе не публикует статью. Для публикации при сохранении выберите «Одобрить и опубликовать».'}</p>}</div>
                   {field('Порядок', 'sortOrder', (form as VideoData | CheeseData).sortOrder, { type: 'number', min: '0' })}
@@ -787,7 +817,13 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 {relations('Связанные сырные статьи', 'cheeseIds', cheeses.map(entry => ({ id: entry.id, label: entryName(entry) })))}
               </>}
               {kind === 'cheese' && <>
-                <div className="grid gap-4 sm:grid-cols-2">{field('Страна происхождения', 'country', cheeseForm.country, { required: true })}{field('Регион', 'region', cheeseForm.region)}</div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {field('Страна происхождения', 'country', cheeseForm.country, { required: true })}
+                  <div className="space-y-1.5">
+                    {field('Регион', 'region', cheeseForm.region)}
+                    {sectionResearch('region', 'Регион')}
+                  </div>
+                </div>
                 <CheeseGeoEditor disabled={saving} value={{ ...cheeseForm, productionPoints: (cheeseForm as CheeseData & { productionPoints?: { id: string; label: string; latitude: number; longitude: number }[] }).productionPoints || [] }} onChange={next => setForm((current: CheeseData) => ({ ...current, ...next }))} />
                 <div className="space-y-1.5">
                   <Label htmlFor="ed-productionCountry">Фактическая страна производства</Label>
@@ -799,7 +835,9 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                     onBlur={event => { if (!event.target.value.trim()) setProductionCountryEdited(false); }} />
                   <p id="ed-productionCountry-hint" className="text-xs text-muted-foreground">По умолчанию — страна происхождения. Если сыр производят в другой стране, укажите её.</p>
                 </div>
-                {textarea('История', 'history')}{textarea('Характеристики', 'characteristics')}{textarea('Кулинарное использование', 'culinaryUses')}
+                {textarea('История', 'history', undefined, undefined, 'history')}
+                {textarea('Характеристики', 'characteristics', undefined, undefined, 'characteristics')}
+                {textarea('Кулинарное использование', 'culinaryUses', undefined, undefined, 'culinaryUses')}
                 {aiProposal && <section data-testid="ai-proposal-review" className="space-y-3 rounded-md border border-[#cbd4c8] bg-[#edf1e9] p-3">
                   <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a654e]">Предложение · ожидает проверки</p><h3 className="mt-1 font-serif text-lg">Сверьте текст и географию</h3><p className="text-xs leading-5 text-[#607066]">Результат исследования не считается подтверждённым. Сохранение перенесёт выбранные данные в статус ожидания; публикации не будет.</p></div>
                   {!!aiProposal.draft.warnings.length && <div className="rounded border border-[#dfc9b5] bg-[#f5ece2] p-2 text-xs text-[#75533e]"><strong>Замечания поиска</strong><ul className="mt-1 list-inside list-disc">{aiProposal.draft.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div>}
@@ -906,8 +944,8 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
               {editing && dirty && <p className="text-xs text-muted-foreground">Есть несохранённые изменения.</p>}
               </fieldset>
               {editing && <section className="rounded-md border border-[#d9d7ca] bg-[#f5f3eb] p-3">
-                <h3 className="mb-2 text-sm font-semibold text-[#43574a]">Исследование и точечная доработка · AI</h3>
-                {(dirty || aiProposal) && <p className="mb-2 rounded border border-[#dfc9b5] bg-[#f5ece2] p-2.5 text-xs leading-5 text-[#684b3d]">Сначала сохраните или отмените изменения статьи. AI-предложения используют сохранённую ревизию и не должны перезаписывать несохранённую форму.</p>}
+                <h3 className="mb-2 text-sm font-semibold text-[#43574a]">История поиска и альтернативные источники · ИИ</h3>
+                {(dirty || aiProposal) && <p className="mb-2 rounded border border-[#dfc9b5] bg-[#f5ece2] p-2.5 text-xs leading-5 text-[#684b3d]">Альтернативный поиск использует сохранённую версию. Чтобы дополнить текущий текст без сохранения, используйте кнопку рядом с нужным разделом.</p>}
                  <CheeseAiDraft mode="editor" entry={editing} onApplied={handleAiProposalUpdated} actionsDisabled={dirty || Boolean(aiProposal) || uploading || photoUploadLock.current} onBusyChange={onEditorAiBusyChange} />
               </section>}
             </div>

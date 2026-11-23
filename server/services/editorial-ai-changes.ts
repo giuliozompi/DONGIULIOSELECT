@@ -95,6 +95,8 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
   return transaction(database, async client => {
     const run = await lockedRun(client, id, 'draft');
     const params = run.params as DraftRequest;
+    if (params.intent?.addition)
+      throw new EditorialError(409, 'Это дополнение, а не замена текста. Добавьте его через раздел в редакторе статьи.');
     if (params.entryId !== body.entryId) throw new EditorialError(400, 'Заготовка относится к другой статье');
     const old: Row | undefined = (await client.query(`SELECT e.*,p.published_at,p.published_revision FROM editorial_entries e
       LEFT JOIN editorial_publications p ON p.entry_id=e.id WHERE e.id=$1 FOR UPDATE OF e`, [body.entryId])).rows[0];

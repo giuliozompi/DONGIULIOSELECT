@@ -180,6 +180,48 @@ test('targeted deepening only proposes the selected section, sends its saved tex
     assert.deepEqual((saved.data as any)[field], (c.data as any)[field]);
   assert.deepEqual((await db.query('SELECT data FROM editorial_publications WHERE entry_id=$1', [c.id])).rows[0].data, c.data);
 });
+test('section additions keep local editorial text as context, use the localized topic and cannot replace saved fields', async () => {
+  const c = await saveEditorial('cheese', { title: 'Вологодский сыр', country: 'Россия', region: 'Вологодская область',
+    history: 'Ранее сохранённый текст.', description: sensitive }, 'operator', undefined, db);
+  const existingText = 'Отредактированный текст ещё не был сохранён в статье.';
+  const queries: string[] = [];
+  const evidence = 'Вологодский сыр — продукт сыроделия Вологодской области. История этого продукта отражена в местных источниках.';
+  const appendix = 'Местные источники описывают вологодскую традицию сыроделия.';
+  for (const output of [appendix, existingText]) {
+    const run = (await reserveAiRun('draft', { ...parameters(c), intent: {
+      mode: 'deepen', field: 'history', addition: { existingText },
+    } }, 'operator', db)).run;
+    await executeAiRun(run.id, db, {
+      source: async url => ({ ...await source(url), text: evidence }),
+      pause: async () => {},
+      search: async query => {
+        queries.push(query);
+        return [{ ...hit(1), title: 'Вологодский сыр — история' }];
+      },
+      model: async (system, input: any) => {
+        assert.match(system, /ONLY the new, supported text, not a replacement/);
+        assert.equal(input.editorialTask.existingText, existingText);
+        assert.ok(!JSON.stringify(input).includes(sensitive));
+        return { fields: { history: output, description: 'Не запрошено' },
+          citations: [{ field: 'history', sourceIndex: 0, passageId: 0 }], warnings: [] };
+      },
+    });
+    const ready = await getAiRun(run.id, db);
+    assert.equal(ready.status, 'ready', ready.error || JSON.stringify(ready.result));
+    const result = ready.result as DraftResult;
+    assert.deepEqual(result.fields, output === appendix ? { history: appendix } : {});
+    if (output === existingText) assert.ok(result.warnings.some(warning => warning.includes('повторил текущий текст')));
+    assert.equal(result.research?.photos, undefined);
+    await assert.rejects(applyAiDraft(run.id, { entryId: c.id, revision: c.revision, fields: ['history'] }, 'operator', db), fails(409));
+    await db.query("UPDATE editorial_ai_runs SET created_at=clock_timestamp()-interval '2 minutes' WHERE id=$1", [run.id]);
+  }
+  assert.equal(queries.length, 2);
+  for (const query of queries) {
+    assert.match(query, /Вологодский сыр.*история/);
+    assert.doesNotMatch(query, /documenti|Wikipedia/);
+  }
+  assert.deepEqual((await db.query('SELECT data,revision FROM editorial_entries WHERE id=$1', [c.id])).rows[0], { data: c.data, revision: c.revision });
+});
 test('alternative research changes queries, prefers novel pages and flags identical generated text', async () => {
   const c = await cheese();
   const first = (await reserveAiRun('draft', parameters(c), 'operator', db)).run;

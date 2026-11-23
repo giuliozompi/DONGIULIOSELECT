@@ -480,10 +480,11 @@ export function CheeseAiDraft({
   }, [current?.id, current?.status]);
   const draft = current?.status === 'ready' ? current.result as DraftResult | null : null;
   const runParams = current?.kind === 'draft' ? current.params as { entryId?: string; revision?: number } : undefined;
+  const sectionAddition = current?.kind === 'draft' && (current.params as ResearchRequest).intent?.addition;
   const runStale = Boolean(current && (current.appliedTo
     ? current.appliedTo.entryId !== activeEntry.id || current.appliedTo.revision !== activeEntry.revision
     : runParams?.entryId !== activeEntry.id || runParams?.revision !== activeEntry.revision));
-  const readyTextPendingApply = Boolean(draft && !current?.appliedTo
+  const readyTextPendingApply = Boolean(draft && !sectionAddition && !current?.appliedTo
     && Object.values(draft.fields).some(value => typeof value === 'string' && value.trim().length > 0));
   const entryData = activeEntry.data as CheeseData;
   const researchMarker = entryData.aiResearch || serverTransfer;
@@ -952,12 +953,12 @@ export function CheeseAiDraft({
         onInstructionsChange={setDeepInstructions}
         disabled={actionsDisabled || busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current}
         hasPreviousRun={Boolean(previousSearchRunId)}
-        onResearch={(field, mode, instructions) => {
+        onResearch={(field, instructions) => {
           const boundedInstructions = instructions.trim().slice(0, 500);
           void researchDraft({
-            ...(mode === 'alternative' ? { fullDraft: true } : {}),
+            fullDraft: true,
             intent: {
-              mode,
+              mode: 'alternative',
               field,
               ...(previousSearchRunId ? { previousRunId: previousSearchRunId } : {}),
               ...(boundedInstructions ? { instructions: boundedInstructions } : {}),
@@ -984,7 +985,11 @@ export function CheeseAiDraft({
          setError('');
        }} />}
         <OriginCoordinates entry={entry} disabled={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} readyTextPendingApply={readyTextPendingApply} isGlobalBusy={() => generationClaimed} tryClaim={tryClaimSuggestion} releaseClaim={releaseSuggestionClaim} onBusyChange={setSuggestionBusy} onApplied={saved => onApplied(saved)} />
-        {draft && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} selectedPhotoIds={selectedPhotoIds} photoRightsConfirmed={photoRightsConfirmed} selectedOriginId={selectedOriginId} onOriginChange={setSelectedOriginId} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onSelectAll={selectAllDraftFields} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} />}
+        {draft && sectionAddition && <div className="mt-3 rounded border border-[#d8d9cc] p-3 text-sm">
+          <p className="font-medium">Дополнение к разделу · без замены текста</p>
+          <p className="mt-2 whitespace-pre-wrap">{Object.values(draft.fields)[0] || 'Новых сведений не найдено.'}</p>
+        </div>}
+        {draft && !sectionAddition && <DraftPreview draft={draft} entryData={entryData} edits={edits} selectedFields={selectedFields} selectedPhotoIds={selectedPhotoIds} photoRightsConfirmed={photoRightsConfirmed} selectedOriginId={selectedOriginId} onOriginChange={setSelectedOriginId} applied={Boolean(current?.appliedTo)} stale={revisionConflict || runStale} onToggle={toggleField} onSelectAll={selectAllDraftFields} onEdit={updateProposal} onApply={() => { void applySelected(); }} busy={busy || suggestionBusy || globalAiBusy || Boolean(activeId) || applyLock.current} />}
       {historyOpen && <div className="mt-3 space-y-2">
         {history.isLoading && <div className="h-12 animate-pulse rounded bg-[#e7e6dc]" />}
         {history.isError && <div role="alert" className="flex justify-between rounded border border-[#d79c89] bg-[#faeee9] p-3 text-sm text-[#8b4535]">{errorMessage(history.error)}<Button size="sm" variant="outline" disabled={busy || suggestionBusy || globalAiBusy} onClick={() => { void history.refetch(); }}>Повторить</Button></div>}
@@ -1086,21 +1091,20 @@ function SectionResearchControls({
   onInstructionsChange: (next: Partial<Record<AiField, string>>) => void;
   disabled: boolean;
   hasPreviousRun: boolean;
-  onResearch: (field: DeepResearchField, mode: 'deepen' | 'alternative', instructions: string) => void;
+  onResearch: (field: DeepResearchField, instructions: string) => void;
 }) {
   return <section data-testid="ai-section-research-controls" className="mt-4 rounded border border-[#d8d9cc] bg-[#f1f0e8] p-3">
     <div>
-      <p className="text-sm font-semibold text-[#43574a]">Точечно доработать раздел</p>
-      <p className="mt-1 text-xs leading-5 text-[#78837a]">Доступно для пустого и заполненного текста, в том числе после переноса предыдущего предложения. Новый запуск учитывает текущую ревизию статьи; текущий сохранённый текст не меняется.</p>
+      <p className="text-sm font-semibold text-[#43574a]">Альтернативные источники по разделам</p>
+      <p className="mt-1 text-xs leading-5 text-[#78837a]">Поиск выполняется по сохранённой версии статьи. Для дополнения текущего текста используйте кнопку рядом с разделом.</p>
     </div>
     <div className="mt-3 grid gap-2 md:grid-cols-2">
       {DEEP_RESEARCH_FIELDS.map(field => <details key={field.key} className="rounded border border-[#dedfd5] bg-[#fbfaf5] p-2.5">
-        <summary className="cursor-pointer text-xs font-semibold text-[#51665a]">{field.label} · углубить или искать иначе</summary>
+        <summary className="cursor-pointer text-xs font-semibold text-[#51665a]">{field.label} · искать иначе</summary>
         <label className="mt-2 block text-xs text-[#66736a]" htmlFor={`ai-deepen-instructions-${field.key}`}>Необязательное уточнение · до 500 знаков</label>
         <textarea id={`ai-deepen-instructions-${field.key}`} data-testid={`ai-deepen-instructions-${field.key}`} className="mt-1 min-h-16 w-full rounded border border-[#d8d9cc] bg-[#fbfaf5] p-2 text-xs" maxLength={500} value={instructions[field.key] || ''} onChange={event => onInstructionsChange({ ...instructions, [field.key]: event.target.value })} disabled={disabled} placeholder="Контекст или тип источника для поиска" />
         <div className="mt-2 flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" data-testid={`ai-deepen-${field.key}`} disabled={disabled} onClick={() => onResearch(field.key, 'deepen', instructions[field.key] || '')}><FileSearch className="mr-1.5 h-3.5 w-3.5" />Углубить и дополнить с ИИ</Button>
-          <Button type="button" size="sm" variant="outline" data-testid={`ai-alternative-${field.key}`} title={!hasPreviousRun ? 'Для альтернативного поиска сначала выполните исследование' : undefined} disabled={disabled || !hasPreviousRun} onClick={() => onResearch(field.key, 'alternative', instructions[field.key] || '')}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Искать альтернативные источники</Button>
+          <Button type="button" size="sm" variant="outline" data-testid={`ai-alternative-${field.key}`} title={!hasPreviousRun ? 'Для альтернативного поиска сначала выполните исследование' : undefined} disabled={disabled || !hasPreviousRun} onClick={() => onResearch(field.key, instructions[field.key] || '')}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Искать альтернативные источники</Button>
         </div>
         <p className="mt-2 text-[11px] leading-4 text-[#78837a]">До 5 запросов Brave и 1 генерация. Для альтернативного поиска сервер получает ссылку на предыдущий запуск; новые источники не гарантированы.</p>
       </details>)}

@@ -20,16 +20,24 @@ export const catalogRequestSchema = z.object({
   countries: z.array(countryCode).min(1).max(3).refine(values => new Set(values).size === values.length),
   limit: z.number().int().min(1).max(30).default(12),
 }).strict().refine(value => value.limit >= value.countries.length, 'Число сыров должно быть не меньше числа стран');
+const sectionFields = ['description', 'history', 'characteristics', 'culinaryUses', 'region'] as const;
+export type EditorialSectionField = typeof sectionFields[number];
+export const editorialSectionLimits: Record<EditorialSectionField, number> = {
+  description: 10000, history: 20000, characteristics: 20000, culinaryUses: 20000, region: editorialRegionMaxLength,
+};
 export const researchIntentSchema = z.object({
   mode: z.enum(['deepen', 'alternative']),
   field: z.enum(['description', 'country', 'region', 'history', 'characteristics', 'culinaryUses']).optional(),
   instructions: text(1000).optional(),
   previousRunId: z.string().uuid().optional(),
+  addition: z.object({ existingText: text(6000) }).strict().optional(),
 }).strict().superRefine((value, ctx) => {
   if (value.mode === 'deepen' && !value.field)
     ctx.addIssue({ code: 'custom', path: ['field'], message: 'Выберите раздел для углубления' });
   if (value.mode === 'alternative' && !value.previousRunId)
     ctx.addIssue({ code: 'custom', path: ['previousRunId'], message: 'Укажите предыдущий поиск' });
+  if (value.addition && (value.mode !== 'deepen' || !sectionFields.some(field => field === value.field)))
+    ctx.addIssue({ code: 'custom', path: ['addition'], message: 'Дополнение доступно только для текстового раздела' });
 });
 export const draftRequestSchema = z.object({
   requestId: z.string().uuid(), entryId: z.string().uuid(), revision: z.number().int().positive(),
@@ -42,13 +50,17 @@ export const draftRequestSchema = z.object({
     ctx.addIssue({ code: 'custom', message: 'Укажите хотя бы один источник', path: ['sources'] });
   if ((value.intent || value.fullDraft) && !value.research)
     ctx.addIssue({ code: 'custom', message: 'Режим доступен при явном поиске', path: ['research'] });
+  if (value.fullDraft && value.intent?.addition)
+    ctx.addIssue({ code: 'custom', path: ['fullDraft'], message: 'Дополнение не является полным черновиком' });
 });
 export const researchRequestSchema = z.object({
   requestId: z.string().uuid(), entryId: z.string().uuid(), revision: z.number().int().positive(),
   sources: z.array(editorialSourceUrl).max(3).refine(values => new Set(values).size === values.length).default([]),
   fullDraft: z.boolean().optional(),
   intent: researchIntentSchema.optional(),
-}).strict();
+}).strict().refine(value => !value.fullDraft || !value.intent?.addition, {
+  path: ['fullDraft'], message: 'Дополнение не является полным черновиком',
+});
 export type ResearchRequest = z.infer<typeof researchRequestSchema>;
 export const originLookupRequestSchema = z.object({
   entryId: z.string().uuid(), revision: z.number().int().positive(),
