@@ -121,6 +121,7 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
         assert.equal(request.photoRightsConfirmed, true);
         assert.equal(request.editorialData.status, 'pending_review');
         assert.equal(request.editorialData.history, 'История, сверенная редактором.');
+        assert.equal(request.editorialData.productionCountry, 'Россия', 'the operator can override the origin default before transferring a draft');
         assert.equal(request.editorialData.latitude, originalOrigin.latitude);
         assert.equal(request.editorialData.longitude, originalOrigin.longitude);
         assert.equal(request.editorialData.productionPoints.length, 1);
@@ -185,7 +186,10 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
   })()`);
   try {
     await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses` });
-    await page.wait(`!!document.querySelector('[data-testid="ai-draft-entry-${id}"]')`);
+    await page.wait(`!!document.querySelector('[data-testid="ai-draft-entry-${id}"]')`).catch(async error => {
+      console.error({ page: await page.evaluate('document.body?.innerText.slice(0, 1400)'), exceptions });
+      throw error;
+    });
     assert.equal(await page.evaluate(`document.querySelectorAll('[data-testid="ai-draft-entry-${id}"] input').length`), 4);
     await captureResponsiveScreenshot('cheese-research-start-desktop', 1280, 950);
     await captureResponsiveScreenshot('cheese-research-start-mobile', 390, 844);
@@ -209,6 +213,8 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     assert.equal(applies.length, 0, 'ready research opens an unsaved review sheet without inserting data');
     assert.equal(await page.evaluate(`document.querySelector('#ed-history').value`), fields.history);
     assert.equal(await page.evaluate(`document.querySelector('#ed-status').value`), 'pending_review');
+    assert.equal(await page.evaluate(`document.querySelector('#ed-productionCountry').value`), fields.country);
+    await setInput('#ed-productionCountry', 'Россия');
 
     const mapCheck = await page.evaluate(`(() => {
       const map = document.querySelector('[data-testid="cheese-geo-editor"] [role="application"]');

@@ -105,6 +105,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const [dialog, setDialog] = useState(false);
   const [editing, setEditing] = useState<EditorialEntry | null>(null);
   const [form, setForm] = useState<FormData>(() => fresh(kind));
+  const [productionCountryEdited, setProductionCountryEdited] = useState(false);
   const [publishOnSave, setPublishOnSave] = useState(false);
   const [moderationTarget, setModerationTarget] = useState<EditorialEntry | null>(null);
   const [decision, setDecision] = useState<'approved' | 'rejected'>('approved');
@@ -301,6 +302,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     deleteMutation.reset();
     setEditing(null);
     setForm(fresh(kind));
+    setProductionCountryEdited(false);
     setPublishOnSave(false);
     setRawLines({});
     setValidation([]);
@@ -316,6 +318,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     deleteMutation.reset();
     setEditing(entry);
     setForm(JSON.parse(JSON.stringify(entry.data)) as FormData);
+    setProductionCountryEdited(false);
     setPublishOnSave(false);
     setRawLines({});
     setValidation([]);
@@ -347,6 +350,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     });
     setEditing(base);
     setForm(proposed);
+    setProductionCountryEdited(false);
     setRawLines({});
     setValidation([]);
     setAiProposal({ run, draft, selectedOriginId: '', selectedPhotoIds: [], photoRightsConfirmed: false, operatorConfirmed: false });
@@ -360,6 +364,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     if (!saved || !options?.openEditor || !editorDialogRef.current || editing?.id !== saved.id || dirty) return;
     setEditing(saved);
     setForm(JSON.parse(JSON.stringify(saved.data)) as FormData);
+    setProductionCountryEdited(false);
     setPublishOnSave(false);
     setAiProposal(null);
     void invalidateEditorial();
@@ -414,6 +419,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     if (requestLock.current || photoUploadLock.current || editorAiBusyRef.current) return;
     const schema = editorialSchemas[kind];
     const candidate = { ...form };
+    if (kind === 'cheese') candidate.productionCountry = productionCountry.trim() || candidate.country;
     for (const key of ['photos', 'sources', 'externalVideoUrls'] as const) {
       if (typeof candidate[key] === 'string') candidate[key] = candidate[key].split('\n').map((line: string) => line.trim()).filter(Boolean);
     }
@@ -628,6 +634,9 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
   const videoForm = form as VideoData;
   const cheeseForm = form as CheeseData;
+  const productionCountry = productionCountryEdited || cheeseForm.productionCountry?.trim()
+    ? cheeseForm.productionCountry ?? ''
+    : cheeseForm.country ?? '';
   const priceForm = form as PriceData;
   const cheesePhotos = (Array.isArray(cheeseForm.photos) ? cheeseForm.photos : String(cheeseForm.photos ?? '').split(/\r?\n/)).filter(value => value.trim());
   const aiPhotos = aiProposal?.draft.research?.photos || [];
@@ -777,7 +786,16 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
               {kind === 'cheese' && <>
                 <div className="grid gap-4 sm:grid-cols-2">{field('Страна происхождения', 'country', cheeseForm.country, { required: true })}{field('Регион', 'region', cheeseForm.region)}</div>
                 <CheeseGeoEditor disabled={saving} value={{ ...cheeseForm, productionPoints: (cheeseForm as CheeseData & { productionPoints?: { id: string; label: string; latitude: number; longitude: number }[] }).productionPoints || [] }} onChange={next => setForm((current: CheeseData) => ({ ...current, ...next }))} />
-                <div className="space-y-1.5"><Label htmlFor="ed-productionCountry">Фактическая страна производства</Label><Input id="ed-productionCountry" value={cheeseForm.productionCountry} onChange={e => set('productionCountry', e.target.value)} /><p className="text-xs text-muted-foreground">Не подменяет географию происхождения сыра.</p></div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ed-productionCountry">Фактическая страна производства</Label>
+                  <Input id="ed-productionCountry" value={productionCountry} maxLength={100} aria-describedby="ed-productionCountry-hint"
+                    onChange={event => {
+                      setProductionCountryEdited(true);
+                      set('productionCountry', event.target.value);
+                    }}
+                    onBlur={event => { if (!event.target.value.trim()) setProductionCountryEdited(false); }} />
+                  <p id="ed-productionCountry-hint" className="text-xs text-muted-foreground">По умолчанию — страна происхождения. Если сыр производят в другой стране, укажите её.</p>
+                </div>
                 {textarea('История', 'history')}{textarea('Характеристики', 'characteristics')}{textarea('Кулинарное использование', 'culinaryUses')}
                 {aiProposal && <section data-testid="ai-proposal-review" className="space-y-3 rounded-md border border-[#cbd4c8] bg-[#edf1e9] p-3">
                   <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a654e]">Предложение · ожидает проверки</p><h3 className="mt-1 font-serif text-lg">Сверьте текст и географию</h3><p className="text-xs leading-5 text-[#607066]">Результат исследования не считается подтверждённым. Сохранение перенесёт выбранные данные в статус ожидания; публикации не будет.</p></div>

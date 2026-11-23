@@ -25,7 +25,7 @@ test('editorial images support paste, drop, file choice, validation and explicit
   const searched = [];
   const imageUrl = 'https://media.example.org/objects/alternative.png';
   const sourceUrl = 'https://media.example.org/castelmagno';
-  const saves = [], unexpected = [], errors = [], requests = [];
+  const creates = [], saves = [], unexpected = [], errors = [], requests = [];
   await page.send('Network.enable');
   await page.send('Network.setBypassServiceWorker', { bypass: true });
   await page.send('Page.addScriptToEvaluateOnNewDocument', {
@@ -51,7 +51,11 @@ test('editorial images support paste, drop, file choice, validation and explicit
     if (path === '/web-api/auth/refresh')
       body = { accessToken: 'photo-fixture', user: { id: 'photo-operator', firstName: 'Fixture' } };
     else if (path === '/web-api/admin/check') body = { ok: true, isMasterAdmin: true };
-    else if (path === '/web-api/admin/editorial')
+    else if (path === '/web-api/admin/editorial' && event.request.method === 'POST') {
+      const request = JSON.parse(event.request.postData);
+      creates.push(request);
+      body = { ...entry, id: '99999999-9999-4999-8999-999999999998', revision: 1, data: request.data };
+    } else if (path === '/web-api/admin/editorial')
       body = url.searchParams.get('kind') === 'cheese' ? { items: [entry], total: 1 } : { items: [], total: 0 };
     else if (path === '/web-api/admin/editorial-ai/history') body = { items: [], total: 0 };
     else if (path === '/web-api/admin/editorial-ai/photo-search') {
@@ -110,6 +114,11 @@ test('editorial images support paste, drop, file choice, validation and explicit
   try {
     await page.send('Page.navigate', { url: `https://${process.env.REPLIT_DEV_DOMAIN}/web/admin/cheeses?entry=${id}` });
     await page.wait(`!!document.querySelector('${zone}')`);
+    const productionCountry = () => page.evaluate(`document.querySelector('#ed-productionCountry').value`);
+    assert.equal(await productionCountry(), 'Италия', 'blank legacy values default to the origin on open');
+    await page.fill('#ed-country', 'Франция');
+    assert.equal(await productionCountry(), 'Франция', 'a default follows origin until specified');
+    await page.fill('#ed-country', 'Италия');
     const shortcut = '[data-testid="editorial-photo-shortcut"]';
     const search = '[data-testid="search-alternative-photos"]';
     for (const width of [390, 1280]) {
@@ -210,6 +219,29 @@ test('editorial images support paste, drop, file choice, validation and explicit
     assert.deepEqual(saves[0].data.photos, beforeCapacityTest);
     assert.deepEqual(saves[0].data.sources, [sourceUrl]);
     assert.equal(saves[0].data.status, 'draft');
+    assert.equal(saves[0].data.productionCountry, 'Италия', 'saving stores the displayed default');
+
+    await page.evaluate(`document.querySelector('#entry-${id} button:has(.lucide-pencil)').click()`);
+    await page.wait(`!!document.querySelector('${dialog}[data-state="open"]')`);
+    await page.fill('#ed-country', 'Франция');
+    assert.equal(await productionCountry(), 'Италия', 'a saved value is never overwritten by the origin');
+    await page.fill('#ed-productionCountry', 'Россия');
+    await page.fill('#ed-country', 'Швейцария');
+    assert.equal(await productionCountry(), 'Россия');
+    await button('Сохранить изменения');
+    await page.wait(`!document.querySelector('${dialog}')`);
+    assert.equal(saves[1].data.productionCountry, 'Россия');
+    assert.equal(saves[1].data.country, 'Швейцария');
+
+    await page.evaluate(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'Новая запись').click()`);
+    await page.wait(`!!document.querySelector('${dialog}[data-state="open"]')`);
+    assert.equal(await productionCountry(), '', 'new entries do not inherit another article’s edit');
+    await page.fill('#ed-title', 'Тестовый сыр');
+    await page.fill('#ed-country', 'Австрия');
+    assert.equal(await productionCountry(), 'Австрия');
+    await button('Создать запись');
+    await page.wait(`!document.querySelector('${dialog}')`);
+    assert.equal(creates[0].data.productionCountry, 'Австрия');
     assert.deepEqual(unexpected, []);
     assert.deepEqual(errors, []);
   } finally { heldUpload?.(); await browser.close(); }
