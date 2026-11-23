@@ -1,10 +1,11 @@
 import type { VideoData, CheeseData, PriceData } from './editorial';
+import type { CheeseMilkResult } from './editorial-cheese-milk';
 
 export interface PublicVideo extends Pick<VideoData, 'title' | 'description' | 'url' | 'cover' | 'category'> {
   id: string; publishedAt: string;
 }
 export interface PublicCheeseSummary extends Pick<CheeseData, 'title' | 'nameOriginal' | 'description' | 'country' | 'region' | 'latitude' | 'longitude'> {
-  id: string; photo: string; publishedAt: string; atlasCountry?: string;
+  id: string; photo: string; publishedAt: string; atlasCountry?: string; milk?: CheeseMilkResult;
 }
 export interface EditorialProduct {
   id: string; name: string; slug: string; images: string[]; price: string;

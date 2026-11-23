@@ -147,6 +147,9 @@ Writing targets in characters: title 120, description 400, country 80, region 30
 history 1000, characteristics 1000, culinaryUses 800. Cover all supported topics before adding detail.
 Summarize supported facts accurately in complete sentences; omit secondary details rather than cutting sentences,
 place names or citations. Do not repeat the same facts in description, history and characteristics.
+Exception: when sources explicitly identify the milk of this cheese, give the species in a plain sentence in description
+and distinguish a fixed blend from optional additives or variants. Do not infer species from the name, rennet, or whey.
+If a species is not supported, do not add one to description or characteristics.
 Return compact JSON without indentation, with the complete JSON preferably under 7000 characters.
 Use only the necessary passage references (preferably at most 20), deduplicate identical field/sourceIndex/passageId
 references, and keep warnings concise (preferably at most 8, 180 characters each). Never copy source passages,

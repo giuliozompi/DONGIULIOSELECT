@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, ExternalLink, Globe2, MapPin, Play, Search, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, Globe2, MapPin, Milk, Play, Search, ShoppingCart } from 'lucide-react';
 import { editorialPublicApi, type PublicCheese, type PublicCheeseSummary, type PublicMarketPrice, type PublicVideo } from './editorialPublicApi';
 import { webApi } from '../lib/webApi';
 import { useWebCart } from '../hooks/useWebCart';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { getCartQuantityRules } from '@shared/order-quantity';
+import { cheeseMilkText } from '@shared/editorial-cheese-milk';
 import { getCountryBounds, loadWorldCountryFeatures, matchCountryFeature, type CountryFeature } from '../admin/editorial/cheeseCountryMap';
 import { ATLAS_MARKER_SIZE, atlasCountryPath, atlasMarkerGroups, fitAtlasMap } from './atlasMap';
 import CheesePriceSubmissions from './CheesePriceSubmissions';
@@ -76,8 +77,14 @@ function CheeseCard({ item }: { item: PublicCheeseSummary }) {
   const originalName = item.nameOriginal;
   return <Link href={`/web/cheeses/${item.id}`} className="ed-card ed-cheese-card">
     <Image src={item.photo} alt={item.title} className="ed-cheese-photo" />
-    <div className="ed-card-body"><span className="ed-kicker">{item.country}{item.region ? ` · ${item.region}` : ''}</span><h2>{item.title}{originalName && <span className="ml-2 text-sm font-normal italic text-[#738078]">{originalName}</span>}</h2><p>{item.description || 'Описание не предоставлено.'}</p><span className="ed-read">Читать статью <ArrowRight size={15} /></span></div>
+    <div className="ed-card-body"><span className="ed-kicker">{item.country}{item.region ? ` · ${item.region}` : ''}</span><h2>{item.title}{originalName && <span className="ml-2 text-sm font-normal italic text-[#738078]">{originalName}</span>}</h2><CheeseMilkBadge milk={item.milk} /><p>{item.description || 'Описание не предоставлено.'}</p><span className="ed-read">Читать статью <ArrowRight size={15} /></span></div>
   </Link>;
+}
+
+function CheeseMilkBadge({ milk }: { milk: PublicCheeseSummary['milk'] }) {
+  return <span className="ed-milk-badge" data-testid="cheese-milk-badge">
+    <Milk size={15} aria-hidden="true" /><span>Вид молока: {cheeseMilkText(milk)}</span>
+  </span>;
 }
 
 export function VideosPage() {
@@ -214,8 +221,8 @@ export function CheeseAtlasPage() {
       </section>
       <aside className="ed-map-aside">
         <div className="ed-kicker">{focus ? `Регион происхождения · ${focus.country}` : nearbyCheeses.length ? `Сыры рядом · ${nearbyCheeses.length}` : 'Сырная география'}</div>
-        {focus ? <><h2>{focus.title}{focus.nameOriginal && <span className="ml-2 text-sm font-normal italic text-[#738078]">{focus.nameOriginal}</span>}</h2><p>{focus.region || focus.country}</p>{focus.atlasCountry && focus.atlasCountry !== focus.country && <p>На современной карте: {focus.atlasCountry}</p>}<Image src={focus.photo} alt={focus.title} className="ed-aside-photo" /><p>{focus.description || 'Описание не предоставлено.'}</p><Link href={`/web/cheeses/${focus.id}`} className="ed-primary-link">Открыть статью <ArrowRight size={15} /></Link></> :
-          nearbyCheeses.length ? <div className="ed-pin-list">{nearbyCheeses.map(item => <Link key={item.id} href={`/web/cheeses/${item.id}`} className="ed-pin-list-item"><Image src={item.photo} alt="" className="ed-pin-list-photo" /><span><strong>{item.title}</strong>{item.nameOriginal && <small>{item.nameOriginal}</small>}<small>{item.region || item.country}</small></span></Link>)}</div> :
+        {focus ? <><h2>{focus.title}{focus.nameOriginal && <span className="ml-2 text-sm font-normal italic text-[#738078]">{focus.nameOriginal}</span>}</h2><CheeseMilkBadge milk={focus.milk} /><p>{focus.region || focus.country}</p>{focus.atlasCountry && focus.atlasCountry !== focus.country && <p>На современной карте: {focus.atlasCountry}</p>}<Image src={focus.photo} alt={focus.title} className="ed-aside-photo" /><p>{focus.description || 'Описание не предоставлено.'}</p><Link href={`/web/cheeses/${focus.id}`} className="ed-primary-link">Открыть статью <ArrowRight size={15} /></Link></> :
+          nearbyCheeses.length ? <div className="ed-pin-list">{nearbyCheeses.map(item => <Link key={item.id} href={`/web/cheeses/${item.id}`} className="ed-pin-list-item"><Image src={item.photo} alt="" className="ed-pin-list-photo" /><span><strong>{item.title}</strong>{item.nameOriginal && <small>{item.nameOriginal}</small>}<small>{item.region || item.country}</small><CheeseMilkBadge milk={item.milk} /></span></Link>)}</div> :
           <p>Выберите точку на карте или статью из списка. Если карта недоступна, список остаётся основным способом навигации.</p>}
         <div className="ed-note">Историческое происхождение не означает, что конкретный товар произведён в этом регионе.</div>
       </aside>
@@ -296,7 +303,7 @@ export function CheeseDetailPage() {
     <Link className="ed-back" href="/web/cheeses"><ArrowLeft size={16} /> Назад к атласу</Link>
     {cheeseQuery.isLoading ? <div className="ed-loading">Загружаем статью…</div> : cheeseQuery.isError ? <ErrorBox error={cheeseQuery.error} retry={() => cheeseQuery.refetch()} /> : !cheese ? <Empty>Статья не найдена.</Empty> :
       <article className="ed-article">
-        <header className="ed-article-head"><div className="ed-eyebrow">История сыра · {cheese.country}{cheese.region ? ` · ${cheese.region}` : ''}</div><h1>{cheese.title}{cheese.nameOriginal && <span className="ml-3 text-lg font-normal italic text-[#738078]">{cheese.nameOriginal}</span>}</h1><p>{cheese.description || 'Описание не предоставлено.'}</p></header>
+        <header className="ed-article-head"><div className="ed-eyebrow">История сыра · {cheese.country}{cheese.region ? ` · ${cheese.region}` : ''}</div><h1>{cheese.title}{cheese.nameOriginal && <span className="ml-3 text-lg font-normal italic text-[#738078]">{cheese.nameOriginal}</span>}</h1><CheeseMilkBadge milk={cheese.milk} /><p>{cheese.description || 'Описание не предоставлено.'}</p></header>
         <div className="ed-story-hero"><div><Image src={cheese.photos?.[0] || cheese.photo} alt={cheese.title} className="ed-story-photo" /><div className="ed-note">Материалы об истории и происхождении не удостоверяют место производства товара в российском каталоге.</div></div><div className="ed-story-content">
           <section><div className="ed-kicker">История</div><p>{cheese.history || 'Исторический материал не предоставлен.'}</p></section>
           <section><div className="ed-kicker">Характеристики</div><p>{cheese.characteristics || 'Характеристики не предоставлены.'}</p></section>

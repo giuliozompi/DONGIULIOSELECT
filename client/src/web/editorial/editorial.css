@@ -52,6 +52,9 @@
 .ed-card:hover { transform: translateY(-2px); box-shadow: 0 7px 20px #24352e12; }
 .ed-video-cover { width: 100%; height: 190px; object-fit: cover; }
 .ed-cheese-photo { width: 100%; height: 220px; object-fit: cover; }
+.ed-milk-badge { display: inline-flex; max-width: 100%; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 8px; background: #edf1e9; color: #365344; font-size: .78rem; font-weight: 600; line-height: 1.35; }
+.ed-milk-badge svg { flex: none; }
+.ed-card-body > .ed-milk-badge { margin-bottom: 8px; }
 .ed-card-body { display: flex; flex: 1; flex-direction: column; align-items: flex-start; padding: 16px; }
 .ed-card-body h2 { margin: 7px 0; font-size: 22px; line-height: 1.2; }
 .ed-card-body p { margin: 0 0 14px; color: var(--ed-muted); font-size: 12px; line-height: 1.65; }

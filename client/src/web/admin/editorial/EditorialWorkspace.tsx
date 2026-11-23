@@ -22,6 +22,7 @@ import CheeseGeoEditor from './CheeseGeoEditor';
 import CheeseEditorialMenu from './CheeseEditorialMenu';
 import CheeseBatchAction, { type CheeseBatchSelection } from './CheeseBatchAction';
 import { cheeseEditorialStage, type CheeseEditorialStage } from '@shared/editorial-stages';
+import { cheeseMilkText, detectCheeseMilk } from '@shared/editorial-cheese-milk';
 import MarketMonitor from './market/MarketMonitor';
 import {
   cheeseDataSchema, cheeseEditorialBatchLimit, editorialSchemas, pricePerKg,
@@ -665,6 +666,9 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
 
   const videoForm = form as VideoData;
   const cheeseForm = form as CheeseData;
+  const draftMilk = useMemo(() => detectCheeseMilk({
+    description: cheeseForm.description, characteristics: cheeseForm.characteristics,
+  }), [cheeseForm.description, cheeseForm.characteristics]);
   const productionCountry = productionCountryEdited || cheeseForm.productionCountry?.trim()
     ? cheeseForm.productionCountry ?? ''
     : cheeseForm.country ?? '';
@@ -748,6 +752,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                         <div className="mb-1 flex flex-wrap items-center gap-2"><h2 className="font-serif text-lg">{rowTitle}</h2>
                           {entry.kind === 'cheese' && cheeseNameOriginal(entry) && <span className="text-sm italic text-[#778278]">{cheeseNameOriginal(entry)}</span>}
                           <Badge variant="outline" className="border-[#c7cec3] bg-[#eef1eb] text-[#486252]">{statusLabel(entry)}</Badge>
+                          {entry.kind === 'cheese' && <Badge variant="outline">Вид молока: {cheeseMilkText(detectCheeseMilk(entry.data as CheeseData))}</Badge>}
                           {price && <Badge variant="outline" className="border-[#dfc9b5] bg-[#f5ece2] text-[#84563e]">{price.sourceType === 'user' ? 'Сообщение пользователя' : 'Источник в интернете'}</Badge>}
                         </div>
                         <p className="text-sm text-[#6e776f]">{price ? `${price.country} · ${price.store} · ${price.price} ${price.currency} за ${price.packageQuantity} ${price.packageUnit}` : data.description || 'Без описания'}</p>
@@ -815,6 +820,14 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                 {relations('Связанные сырные статьи', 'cheeseIds', cheeses.map(entry => ({ id: entry.id, label: entryName(entry) })))}
               </>}
               {kind === 'cheese' && <>
+                <div className="rounded-md border border-[#cbd4c8] bg-[#edf1e9] px-3 py-2 text-sm text-[#486252]" data-testid="editorial-milk-summary">
+                  <strong>Вид молока: {cheeseMilkText(draftMilk)}</strong>
+                  <p className="mt-1 text-xs">
+                    {draftMilk.status === 'review' ? 'В тексте указаны варианты или противоречивые сведения. Уточните состав в описании или характеристиках по источникам.' :
+                      draftMilk.status === 'unknown' ? 'В описании и характеристиках нет однозначного указания. Если источник подтверждает состав, укажите его прямо, например: «Сыр делают из козьего молока».' :
+                        'Определено по описанию и характеристикам. На сайте используется только опубликованный текст статьи.'}
+                  </p>
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {field('Страна происхождения', 'country', cheeseForm.country, { required: true })}
                   <div className="space-y-1.5">

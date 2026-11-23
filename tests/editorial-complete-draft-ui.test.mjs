@@ -202,6 +202,7 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     await click('ai-full-draft-research');
     await page.wait(`!!document.querySelector('[data-testid="editorial-entry-editor"][data-state="open"]')`);
     assert.equal(identityUpdates.length, 1);
+    await page.wait(`document.querySelector('[data-testid="editorial-milk-summary"]')?.textContent.includes('Вид молока: овечье')`);
     assert.equal(entry.revision, 2);
     assert.deepEqual(requestOrder.slice(0, 2), ['identity-save', 'research'], 'the identity CRUD save completes before the AI request');
     assert.equal(requests.length, 1);
@@ -343,6 +344,7 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     const localHistory = 'История, сверенная редактором. Несохранённая правка.';
     await setInput('#ed-history', localHistory);
     await setInput('#ed-characteristics', 'Отдельная правка характеристик.');
+    await page.wait(`document.querySelector('[data-testid="editorial-milk-summary"]')?.textContent.includes('Вид молока: не уточнён')`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-toggle-${id}"]').disabled`), true,
       'the older whole-article research still uses the saved revision');
     for (const field of ['description', 'history', 'characteristics', 'culinaryUses', 'region'])

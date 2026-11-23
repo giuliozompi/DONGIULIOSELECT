@@ -1,5 +1,6 @@
 import { pool } from '../db';
 import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg } from '../../shared/editorial';
+import { detectCheeseMilk } from '../../shared/editorial-cheese-milk';
 import type { PublicVideo, PublicCheeseSummary, PublicCheese, PublicMarketPrice, EditorialPage } from '../../shared/public-editorial';
 import { EditorialError } from './editorial';
 import { atlasCountryScope } from './editorial-atlas-country';
@@ -14,7 +15,7 @@ function cheeseSummary(row: Publication, atlasCountry?: string): PublicCheeseSum
   const c = cheeseDataSchema.parse(row.data);
   return { id: row.entry_id, title: c.title, nameOriginal: c.nameOriginal, description: c.description, country: c.country,
     region: c.region, latitude: c.latitude, longitude: c.longitude, photo: c.photos.find(Boolean) || '',
-    publishedAt: row.published_at.toISOString(), ...(atlasCountry ? { atlasCountry } : {}) };
+    milk: detectCheeseMilk(c), publishedAt: row.published_at.toISOString(), ...(atlasCountry ? { atlasCountry } : {}) };
 }
 export interface PublicFilters { search: string; category?: string; country?: string; page: number; limit: number }
 const filterSql = `kind=$1 AND ($2='' OR strpos(lower(concat_ws(' ',data->>'title',data->>'nameOriginal',data->>'description',data->>'country',data->>'region')),lower($2))>0)

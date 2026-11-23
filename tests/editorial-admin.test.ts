@@ -508,6 +508,21 @@ test('only explicitly published snapshots are public; edits stay private until r
   assert.equal((await publicEditorialList('cheese', publicFilters, database)).total, 0);
   await assert.rejects(publicCheesePrices(c.id, 1, 20, database), expectStatus(404));
 });
+test('milk badges are computed from already published descriptions and characteristics, not newer drafts', async () => {
+  let c = await saveEditorial('cheese', { ...readyCheese(), description: 'Традиционный сыр.',
+    characteristics: 'Его делают из смеси коровьего и козьего молока.' }, 'editor', undefined, database);
+  c = await changePublication(c.id, c.revision, true, 'editor', database);
+  const snapshot = { status: 'known', types: ['cow', 'goat'] };
+  const detail = () => publicCheeseDetail(c.id, database);
+  const cards = () => publicEditorialList('cheese', publicFilters, database).then(page => page.items);
+  assert.deepEqual((await detail()).milk, snapshot);
+  assert.deepEqual(await cards().then(items => items.map(item => 'milk' in item ? item.milk : undefined)), [snapshot]);
+  assert.equal('milk' in c.data, false, 'legacy entries need no stored milk field');
+  c = await saveEditorial('cheese', { ...c.data, characteristics: 'Сыр из овечьего молока.' }, 'editor', c, database);
+  assert.deepEqual((await detail()).milk, snapshot);
+  c = await changePublication(c.id, c.revision, true, 'editor', database);
+  assert.deepEqual((await detail()).milk, { status: 'known', types: ['sheep'] });
+});
 test('public relationships use both published directions and exclude unpublished related content', async () => {
   let c = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database);
   let v = await saveEditorial('video', { ...video(), status: 'ready', cheeseIds: [c.id] }, 'operator', undefined, database);
