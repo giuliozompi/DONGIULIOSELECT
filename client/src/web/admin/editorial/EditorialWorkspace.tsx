@@ -17,6 +17,7 @@ import CheeseSectionResearch from './ai/CheeseSectionResearch';
 import DraftBatchPanel from './ai/DraftBatchPanel';
 import EditorialPhotoUpload from './EditorialPhotoUpload';
 import EditorialPhotoSearch from './EditorialPhotoSearch';
+import EditorialProductLinks from './EditorialProductLinks';
 import CheeseGeoEditor from './CheeseGeoEditor';
 import CheeseEditorialMenu from './CheeseEditorialMenu';
 import CheeseBatchAction, { type CheeseBatchSelection } from './CheeseBatchAction';
@@ -77,9 +78,6 @@ function entryName(entry: EditorialEntry) {
 }
 function cheeseNameOriginal(entry: EditorialEntry) {
   return entry.kind === 'cheese' ? (entry.data as CheeseData).nameOriginal : '';
-}
-function productName(product: any) {
-  return product.name || product.title || product.slug || 'Товар без названия';
 }
 function missingCheeseReadyRequirements(data: CheeseData) {
   const missing: string[] = [];
@@ -912,7 +910,10 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                   <p className="text-xs text-[#718075]">До 12 URL или путей изображений. Пустые строки игнорируются. Внешние URL не загружаются автоматически; добавленные файлы сохраняются в черновике после обычного нажатия «Сохранить изменения».</p>
                 </section>
                 {lineTextarea('Источники — по одному http(s) URL на строку · обязательны для «Одобрена»', 'sources', cheeseForm.sources, 'До 30 источников.')}
-                {relations('Связанные товары каталога', 'productIds', products.filter((product: any) => product.id != null).map((product: any) => ({ id: String(product.id), label: productName(product) })))}
+                <EditorialProductLinks products={products} selected={cheeseForm.productIds ?? []}
+                  loading={productsQuery.isLoading} unavailable={productsQuery.isError && !productsQuery.data}
+                  disabled={saving} onRetry={() => { void productsQuery.refetch(); }}
+                  onToggle={id => toggleId('productIds', id)} />
                 {relations('Связанные видео — необязательно', 'videoIds', videos.map(entry => ({ id: entry.id, label: entryName(entry) })))}
                 {lineTextarea('Внешние видео-ссылки — необязательно', 'externalVideoUrls', cheeseForm.externalVideoUrls, 'Не обязательны для статуса «Одобрена». Ссылки YouTube или публичные посты Telegram.')}
                 {editing && <div data-testid="cheese-saved-status" className="rounded-md border border-[#d9d7ca] bg-[#f2f0e7] px-3 py-2 text-sm text-[#53645a]">Сохранённое состояние: <strong>{statusLabel(editing)}</strong>{editing.publication && <span className="ml-1">· опубликованная версия {editing.publication.publishedRevision}</span>}</div>}

@@ -30,7 +30,7 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
       region: 'Лацио', status: 'draft', description: '', history: '',
       characteristics: '', culinaryUses: '', sources: [], photos: [],
       latitude: null, longitude: null, productionCountry: '', productionPoints: [],
-      productIds: [], videoIds: [], externalVideoUrls: [], sortOrder: 0,
+      productIds: ['catalog-parmesan'], videoIds: [], externalVideoUrls: [], sortOrder: 0,
     },
   };
   const source = { url: sourceUrl, finalUrl: sourceUrl, title: 'Consorzio Pecorino Romano',
@@ -95,6 +95,11 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     if (path === '/web-api/auth/refresh')
       body = { accessToken: 'isolated-token', user: { id: 'fixture-operator', firstName: 'Fixture', email: 'fixture@example.invalid' } };
     else if (path === '/web-api/admin/check') body = { ok: true, isMasterAdmin: true };
+    else if (path === '/web-api/admin/products') body = [
+      { id: 'catalog-parmesan', name: 'Пармезан', slug: 'parmigiano' },
+      { id: 'catalog-pecorino', name: 'Пекорино Романо', slug: 'pecorino-romano' },
+      { id: 'catalog-truffle', name: 'Пекорино с трюфелем', slug: 'pecorino-tartufo' },
+    ];
     else if (path === '/web-api/admin/editorial') body = { items: [entry], total: 1 };
     else if (path === '/web-api/admin/editorial-ai/history') body = { items: [full], total: 1, page: 1, limit: 10 };
     else if (path === `/web-api/admin/editorial/${id}` && event.request.method === 'PATCH') {
@@ -313,6 +318,28 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     await page.evaluate(`Array.from(document.querySelectorAll('#entry-${id} button')).find(b => b.textContent.includes('Изменить')).click()`);
     await page.wait(`!!document.querySelector('[data-testid="editorial-entry-editor"][data-state="open"]')`);
     await page.wait(`!!document.querySelector('[data-testid="ai-research-toggle-${id}"]')`);
+    const productSearch = '[data-testid="editorial-product-search"]';
+    const productRows = '[data-testid="editorial-product-results"] input';
+    const readProductRows = () => page.evaluate(`Array.from(document.querySelectorAll('${productRows}'), item => [item.value, item.checked])`);
+    await page.wait(`!document.querySelector('${productSearch}').disabled && document.querySelectorAll('${productRows}').length === 3`);
+    await page.evaluate(`document.querySelector('${productSearch}').focus()`);
+    await page.send('Input.insertText', { text: 'РОМАНО пек' });
+    await page.wait(`document.querySelectorAll('${productRows}').length === 1`);
+    assert.deepEqual(await readProductRows(), [['catalog-pecorino', false]], 'typing filters by parts of the product name without linking it');
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', text: '\r', windowsVirtualKeyCode: 13 });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    assert.equal(await page.evaluate('document.activeElement.value'), 'catalog-pecorino', 'Enter focuses the matching checkbox instead of saving the sheet');
+    assert.equal(editorSaves.length, 0);
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: ' ', code: 'Space', text: ' ', windowsVirtualKeyCode: 32 });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ' ', code: 'Space', windowsVirtualKeyCode: 32 });
+    assert.deepEqual(await readProductRows(), [['catalog-pecorino', true]]);
+    await setInput(productSearch, 'pecorino-tartufo');
+    assert.deepEqual(await readProductRows(), [['catalog-truffle', false]], 'the original name can match the catalogue slug');
+    await setInput(productSearch, 'неизвестный товар');
+    await page.wait(`document.querySelector('[data-testid="editorial-product-links"]').textContent.includes('товары не найдены')`);
+    await page.evaluate(`document.querySelector('[aria-label="Очистить поиск товаров"]').click()`);
+    assert.deepEqual(await readProductRows(), [['catalog-parmesan', true], ['catalog-pecorino', true], ['catalog-truffle', false]],
+      'clearing the filter restores the list and retains links not shown in search results');
     const localHistory = 'История, сверенная редактором. Несохранённая правка.';
     await setInput('#ed-history', localHistory);
     await setInput('#ed-characteristics', 'Отдельная правка характеристик.');
@@ -369,6 +396,7 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     assert.equal(entry.revision, 4);
     assert.equal(entry.data.history, merged);
     assert.equal(entry.data.characteristics, 'Отдельная правка характеристик.');
+    assert.deepEqual(entry.data.productIds, ['catalog-parmesan', 'catalog-pecorino'], 'old and new product links persist on the regular editorial save');
     assert.ok(entry.data.sources.includes(additionSource));
     assert.equal(entry.data.photos[0], photoUrl, 'deep apply preserves photos from the full editorial draft');
     assert.equal(entry.data.productionPoints[0].label, 'Caseificio Roma', 'deep apply preserves production-point edits');
