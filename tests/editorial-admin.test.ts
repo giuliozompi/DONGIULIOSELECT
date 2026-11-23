@@ -16,7 +16,7 @@ import { registerPriceSubmissionRoutes } from '../server/priceSubmissionRoutes';
 import { submitPrice, ownPriceSubmissions, PriceSubmissionLimitError } from '../server/services/price-submissions';
 import { priceSubmissionSchema } from '../shared/price-submissions';
 import { changePublication, publishApprovedCheeses } from '../server/services/editorial-publication';
-import { publicEditorialList, publicCheeseDetail, publicCheesePrices, publicVideoDetail } from '../server/services/public-editorial';
+import { publicEditorialList, publicCheeseMap, publicCheeseDetail, publicCheesePrices, publicVideoDetail } from '../server/services/public-editorial';
 import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg, type CheeseData, type PriceData } from '../shared/editorial';
 import { cheeseEditorialStage } from '../shared/editorial-stages';
 
@@ -522,6 +522,22 @@ test('milk badges are computed from already published descriptions and character
   assert.deepEqual((await detail()).milk, snapshot);
   c = await changePublication(c.id, c.revision, true, 'editor', database);
   assert.deepEqual((await detail()).milk, { status: 'known', types: ['sheep'] });
+});
+test('manual milk composition is stored in the draft, replaces text only after publishing, and can be cleared', async () => {
+  let c = await saveEditorial('cheese', { ...readyCheese(), characteristics: 'Сыр из овечьего молока.' }, 'editor', undefined, database, true);
+  const auto = { status: 'known', types: ['sheep'] };
+  const composition = [{ type: 'cow', percentage: 80.25 }, { type: 'goat' }];
+  const manual = { status: 'known', types: ['cow', 'goat'], composition };
+  const detail = () => publicCheeseDetail(c.id, database);
+  c = await saveEditorial('cheese', { ...c.data, milkComposition: composition }, 'editor', c, database);
+  assert.deepEqual((c.data as CheeseData).milkComposition, composition);
+  assert.deepEqual((await detail()).milk, auto);
+  c = await changePublication(c.id, c.revision, true, 'editor', database);
+  assert.deepEqual((await detail()).milk, manual);
+  assert.deepEqual((await publicCheeseMap(publicFilters, database)).items.map(item => 'milk' in item && item.milk), [manual]);
+  await assert.rejects(saveEditorial('cheese', { ...c.data, milkComposition: [{ type: 'cow', percentage: 105 }] }, 'editor', c, database), /Доля молока/);
+  c = await saveEditorial('cheese', { ...c.data, milkComposition: undefined }, 'editor', c, database, true);
+  assert.deepEqual((await detail()).milk, auto);
 });
 test('public relationships use both published directions and exclude unpublished related content', async () => {
   let c = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database);

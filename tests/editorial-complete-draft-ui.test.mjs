@@ -345,6 +345,15 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     await setInput('#ed-history', localHistory);
     await setInput('#ed-characteristics', 'Отдельная правка характеристик.');
     await page.wait(`document.querySelector('[data-testid="editorial-milk-summary"]')?.textContent.includes('Вид молока: не уточнён')`);
+    await click('ed-milk-cow');
+    await click('ed-milk-goat');
+    const cowShare = '[data-testid="ed-milk-percentage-cow"]';
+    const goatShare = '[data-testid="ed-milk-percentage-goat"]';
+    await setInput(cowShare, '80,25');
+    await setInput(goatShare, '25');
+    await page.wait(`document.querySelector('[data-testid="editorial-milk-summary"]').textContent.includes('не может превышать 100%')`);
+    await setInput(goatShare, '');
+    await page.wait(`document.querySelector('[data-testid="editorial-milk-summary"]').textContent.includes('смесь (коровье 80,25%, козье)')`);
     assert.equal(await page.evaluate(`document.querySelector('[data-testid="ai-research-toggle-${id}"]').disabled`), true,
       'the older whole-article research still uses the saved revision');
     for (const field of ['description', 'history', 'characteristics', 'culinaryUses', 'region'])
@@ -398,6 +407,7 @@ test('full draft opens the editorial sheet, previews unsaved work, and saves one
     assert.equal(entry.revision, 4);
     assert.equal(entry.data.history, merged);
     assert.equal(entry.data.characteristics, 'Отдельная правка характеристик.');
+    assert.deepEqual(entry.data.milkComposition, [{ type: 'cow', percentage: 80.25 }, { type: 'goat' }]);
     assert.deepEqual(entry.data.productIds, ['catalog-parmesan', 'catalog-pecorino'], 'old and new product links persist on the regular editorial save');
     assert.ok(entry.data.sources.includes(additionSource));
     assert.equal(entry.data.photos[0], photoUrl, 'deep apply preserves photos from the full editorial draft');

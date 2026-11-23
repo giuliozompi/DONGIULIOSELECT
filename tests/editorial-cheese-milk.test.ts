@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cheeseMilkText, detectCheeseMilk } from '../shared/editorial-cheese-milk';
+import { cheeseMilkText, detectCheeseMilk, resolveCheeseMilk } from '../shared/editorial-cheese-milk';
+import { cheeseMilkCompositionSchema } from '../shared/editorial';
 
 test('recognizes explicitly described milk species in Russian and legacy language text', () => {
   for (const [description, type] of [
@@ -63,4 +64,26 @@ test('uses characteristics for older descriptions and ignores an explicitly hist
     characteristics: 'Традиционный сыр из козьего молока (исторически также использовалось коровье или овечье молоко).',
   }), { status: 'known', types: ['goat'] });
   assert.equal(cheeseMilkText({ status: 'review', types: [] }), 'не уточнён');
+});
+
+test('manual milk types override text and omit unknown shares from the displayed label', () => {
+  const composition = cheeseMilkCompositionSchema.parse([{ type: 'mare', percentage: 80.25 }, { type: 'donkey' }]);
+  const cheese = { description: 'Сыр из овечьего молока.', milkComposition: composition };
+  assert.deepEqual(resolveCheeseMilk(cheese), { status: 'known', types: ['mare', 'donkey'], composition });
+  assert.equal(cheeseMilkText(resolveCheeseMilk(cheese)), 'смесь (кобылье 80,25%, ослиное)');
+  assert.equal(cheeseMilkText(resolveCheeseMilk({ ...cheese, milkComposition: undefined })), 'овечье');
+  assert.equal(cheeseMilkText(resolveCheeseMilk({ milkComposition: [{ type: 'cow', percentage: 100 }] })), 'коровье 100%');
+});
+
+test('milk percentages reject impossible totals, invalid shares and repeated types', () => {
+  for (const percentages of [[80, 21], [80, 19.99], [100, undefined], [0, undefined], [101, undefined], [-2, undefined], [80.255, undefined]]) {
+    const result = cheeseMilkCompositionSchema.safeParse([
+      { type: 'cow', percentage: percentages[0] }, { type: 'goat', percentage: percentages[1] },
+    ]);
+    assert.equal(result.success, false, JSON.stringify(percentages));
+  }
+  assert.equal(cheeseMilkCompositionSchema.safeParse([{ type: 'cow' }, { type: 'cow' }]).success, false);
+  assert.equal(cheeseMilkCompositionSchema.safeParse([{ type: 'other' }]).success, false);
+  assert.equal(cheeseMilkCompositionSchema.safeParse([{ type: 'cow', percentage: 54.58 }, { type: 'goat', percentage: 45.42 }]).success, true);
+  assert.equal(cheeseMilkCompositionSchema.safeParse([{ type: 'cow' }, { type: 'goat' }]).success, true);
 });

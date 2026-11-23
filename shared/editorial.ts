@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cheeseMilkTypes } from './editorial-cheese-milk';
 
 // Stored editorial data is plain text, never trusted HTML or embed code.
 const text = (max = 4000) => z.string().trim().max(max);
@@ -49,6 +50,23 @@ export const videoDataSchema = z.object({
   category: z.enum(['recipe', 'interview', 'review', 'places']),
   cheeseIds: ids.default([]),
 }).strict();
+const validMilkShare = 'Доля молока должна быть больше 0 и не больше 100%, с точностью до двух знаков.';
+export const cheeseMilkCompositionSchema = z.array(z.object({
+  type: z.enum(cheeseMilkTypes),
+  percentage: z.number({ invalid_type_error: validMilkShare }).finite(validMilkShare).gt(0, validMilkShare).max(100, validMilkShare)
+    .refine(value => Math.round(value * 100) / 100 === value, validMilkShare).optional(),
+}).strict()).min(1).max(cheeseMilkTypes.length).superRefine((items, ctx) => {
+  if (new Set(items.map(item => item.type)).size !== items.length)
+    ctx.addIssue({ code: 'custom', message: 'Виды молока не должны повторяться.' });
+  // Integer hundredths avoid rounding errors when adding decimal shares.
+  const total = items.reduce((sum, item) => sum + Math.round((item.percentage ?? 0) * 100), 0);
+  const complete = items.every(item => item.percentage !== undefined);
+  if (total > 10000) ctx.addIssue({ code: 'custom', message: 'Сумма долей не может превышать 100%.' });
+  else if (complete && total !== 10000)
+    ctx.addIssue({ code: 'custom', message: 'Если указаны все доли, их сумма должна быть 100%.' });
+  else if (!complete && total === 10000)
+    ctx.addIssue({ code: 'custom', message: 'Оставьте часть от 100% для видов молока с неизвестной долей.' });
+});
 export const cheeseDataSchema = z.object({
   ...base,
   status: z.enum(['draft', 'pending_review', 'ready']).default('draft'),
@@ -71,6 +89,7 @@ export const cheeseDataSchema = z.object({
   }).strict()).max(20).refine(points => new Set(points.map(point => point.id)).size === points.length,
     'Повторяющиеся точки производства').optional(),
   history: text(20000).default(''), characteristics: text(20000).default(''),
+  milkComposition: cheeseMilkCompositionSchema.optional(),
   culinaryUses: text(20000).default(''), productionCountry: text(100).default(''),
   sources: z.array(httpUrl).max(30).default([]),
   productIds: z.array(required(100)).max(100).default([]),

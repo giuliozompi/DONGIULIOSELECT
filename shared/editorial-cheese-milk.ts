@@ -1,9 +1,11 @@
-export const cheeseMilkLabels = {
+export const cheeseMilkTypes = ['cow', 'goat', 'sheep', 'donkey', 'mare', 'buffalo'] as const;
+export type CheeseMilk = typeof cheeseMilkTypes[number];
+export const cheeseMilkLabels: Record<CheeseMilk, string> = {
   cow: 'коровье', goat: 'козье', sheep: 'овечье', donkey: 'ослиное', mare: 'кобылье', buffalo: 'буйволиное',
-} as const;
-export type CheeseMilk = keyof typeof cheeseMilkLabels;
+};
+export type CheeseMilkComponent = { type: CheeseMilk; percentage?: number };
 export type CheeseMilkResult =
-  | { status: 'known'; types: CheeseMilk[] }
+  | { status: 'known'; types: CheeseMilk[]; composition?: CheeseMilkComponent[] }
   | { status: 'unknown' | 'review'; types: [] };
 
 const animals: Record<CheeseMilk, string> = {
@@ -76,8 +78,20 @@ export function detectCheeseMilk(data: { description?: string; characteristics?:
   return { status: 'known', types: main };
 }
 
+export function resolveCheeseMilk(data: Parameters<typeof detectCheeseMilk>[0] & { milkComposition?: CheeseMilkComponent[] }): CheeseMilkResult {
+  if (data.milkComposition?.length) {
+    return { status: 'known', types: data.milkComposition.map(item => item.type), composition: data.milkComposition };
+  }
+  return detectCheeseMilk(data);
+}
+
+const percentageFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
+
 export function cheeseMilkText(milkResult: CheeseMilkResult | undefined) {
   if (milkResult?.status !== 'known') return 'не уточнён';
-  const labels = milkResult.types.map(type => cheeseMilkLabels[type]).join(', ');
+  const components: CheeseMilkComponent[] = milkResult.composition ?? milkResult.types.map(type => ({ type }));
+  const labels = components
+    .map(({ type, percentage }) => `${cheeseMilkLabels[type]}${percentage === undefined ? '' : ` ${percentageFormat.format(percentage)}%`}`)
+    .join(', ');
   return milkResult.types.length > 1 ? `смесь (${labels})` : labels;
 }

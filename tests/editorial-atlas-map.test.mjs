@@ -14,7 +14,8 @@ const items = [
   cheese('castelmagno', 'Кастельманьо', 44.4, 7.21),
   cheese('nearby', 'Сыр из той же местности', 44.4, 7.21),
   cheese('gorgonzola', 'Горгонзола', 45.53, 9.4),
-  { ...cheese('sicilia', 'Пекорино', 37.56, 14.27), milk: { status: 'known', types: ['sheep'] } },
+  { ...cheese('sicilia', 'Пекорино', 37.56, 14.27), milk: { status: 'known', types: ['sheep', 'cow'],
+    composition: [{ type: 'sheep', percentage: 80.25 }, { type: 'cow' }] } },
   cheese('sardegna', 'Фьоре Сардо', 40.5, 8.3),
   cheese('camembert', 'Камамбер', 48.89, 0.18, 'Франция'),
   { ...cheese('vologda', 'Вологодский сыр', 59.22, 39.89, 'СССР'), atlasCountry: 'Россия' },
@@ -119,10 +120,10 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     assert.deepEqual(await visibleCards(), italianCards);
     assert.ok((await fit()).width < desktop.width);
     assert.equal(await page.evaluate(`document.querySelectorAll('.ed-map-pin').length`), 4);
-    assert.match(await page.evaluate(`document.querySelector('${cards}[href="/web/cheeses/sicilia"] [data-testid="cheese-milk-badge"]').textContent`), /Вид молока: овечье/);
+    assert.match(await page.evaluate(`document.querySelector('${cards}[href="/web/cheeses/sicilia"] [data-testid="cheese-milk-badge"]').textContent`), /Вид молока: смесь \(овечье 80,25%, коровье\)/);
     assert.match(await page.evaluate(`document.querySelector('${cards}[href="/web/cheeses/sardegna"] [data-testid="cheese-milk-badge"]').textContent`), /Вид молока: не уточнён/);
     await page.tap(pin('Пекорино'));
-    assert.match(await page.evaluate(`document.querySelector('.ed-map-aside [data-testid="cheese-milk-badge"]').textContent`), /Вид молока: овечье/);
+    assert.match(await page.evaluate(`document.querySelector('.ed-map-aside [data-testid="cheese-milk-badge"]').textContent`), /овечье 80,25%, коровье/);
     await page.wait(`!!document.querySelector('.ed-map-aside a[href="/web/cheeses/sicilia"]')`);
 
     await country('Франция');
@@ -181,7 +182,7 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     await captureScroll(previewLink);
     await page.tap(previewLink);
     await expectArticleStart('Пекорино');
-    assert.match(await page.evaluate(`document.querySelector('.ed-article-head [data-testid="cheese-milk-badge"]').textContent`), /Вид молока: овечье/);
+    assert.match(await page.evaluate(`document.querySelector('.ed-article-head [data-testid="cheese-milk-badge"]').textContent`), /овечье 80,25%, коровье/);
 
     await page.setViewport({ width: 1280, height: 800 });
     await page.click('.ed-back');
