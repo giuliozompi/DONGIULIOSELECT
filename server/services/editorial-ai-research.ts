@@ -3,9 +3,9 @@ import type { ResearchReport, DraftRequest } from '../../shared/editorial-ai';
 import { EditorialModelError } from './editorial-ai-config';
 import { retrieveEditorialSource, validateSourceUrl, EditorialSourceError, type SourceEvidence } from './editorial-ai-sources';
 import { researchJson } from './editorial-research-http';
-import { structuredResearchPlan, researchCoverage, sourceTopics } from './editorial-research-topics';
+import { structuredResearchPlan, researchCoverage, sourceTopics, isDutchResearchCountry } from './editorial-research-topics';
 import { researchPhotos } from './editorial-research-photos';
-import { cheeseIdentityContexts } from './editorial-cheese-identity';
+import { cheeseIdentityContexts, normalizedIdentityText } from './editorial-cheese-identity';
 
 export type ResearchIdentity = { title: string; nameOriginal?: string; country: string; region: string };
 export type ResearchHit = { url: string; title: string; description: string };
@@ -64,8 +64,14 @@ function mentionsIdentity(text: string, cheese: ResearchIdentity) {
 export function editorialSourceCheeseMatch(source: SourceEvidence, cheese: ResearchIdentity): 'exact' | 'transcription' | undefined {
   // Match the actual article body, not a domain, search snippet or redirected URL.
   // This is a conservative topic check, not verification of facts or official status.
-  const contexts = cheeseIdentityContexts(source.text, cheese).filter(context =>
-    new RegExp('(?:^| )(?:cheese\\p{L}*|formagg\\p{L}*|fromag\\p{L}*|сыр\\p{L}*|kase\\p{L}*|queso\\p{L}*|queijo\\p{L}*)(?: |$)', 'u').test(context.text));
+  const contexts = cheeseIdentityContexts(source.text, cheese).filter(context => {
+    if (new RegExp('(?:^| )(?:cheese\\p{L}*|formagg\\p{L}*|fromag\\p{L}*|сыр\\p{L}*|kase\\p{L}*|queso\\p{L}*|queijo\\p{L}*)(?: |$)', 'u').test(context.text)) return true;
+    // Dutch names often end in -kaas. The name itself must not supply its own
+    // cheese context: require a separate word such as kaas or kruidnagelkaas.
+    const dutchContext = [cheese.title, cheese.nameOriginal || ''].reduce((text, name) =>
+      name.trim() ? text.split(` ${normalizedIdentityText(name)} `).join(' ') : text, ` ${context.text} `);
+    return /(?:^| )(?:kaas\p{L}*|\p{L}*kaas)(?: |$)/u.test(dutchContext);
+  });
   return contexts.some(context => !context.transliterated) ? 'exact' : contexts.length ? 'transcription' : undefined;
 }
 export function editorialSourceMatchesCheese(source: SourceEvidence, cheese: ResearchIdentity) {
@@ -106,12 +112,15 @@ export async function researchEditorialSources(
     if (options.intent.addition)
       plan = plan.filter(item => item.topic !== 'photos')
         .map(item => ({ ...item, query: item.query.replace(/ Wikipedia$/, '') }));
-    else plan = plan.map(item => ({ ...item, query: `${item.query} documenti dettagli approfondimento`.slice(0, 400) }));
+    else plan = plan.map(item => ({ ...item, query: `${item.query} ${isDutchResearchCountry(cheese.country) ? 'documentatie uitgebreide informatie' : 'documenti dettagli approfondimento'}`.slice(0, 400) }));
   }
   if (options.intent?.mode === 'alternative') {
     const previous = new Set(options.previousQueries || []);
-    const variants = ['documentazione bibliografia approfondimento', 'consorzio archivio scheda tecnica',
-      'tradizioni disciplinare patrimonio gastronomico', 'encyclopedia detailed references'];
+    const variants = isDutchResearchCountry(cheese.country)
+      ? ['documentatie bibliografie achtergrond', 'kaasmakerij archief productinformatie',
+        'tradities streekproduct erfgoed', 'encyclopedie bronnen']
+      : ['documentazione bibliografia approfondimento', 'consorzio archivio scheda tecnica',
+        'tradizioni disciplinare patrimonio gastronomico', 'encyclopedia detailed references'];
     plan = plan.map(item => {
       let query = item.query;
       for (const variant of variants) {

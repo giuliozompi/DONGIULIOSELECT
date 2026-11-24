@@ -22,6 +22,17 @@ test('photo searches use country vocabulary and distinct bounded intents without
   assert.match(editorialPhotoQuery({ ...identity, nameOriginal: 'Вологодский', country: 'Россия' }, 1), /головка разрез/);
   assert.match(editorialPhotoQuery({ ...identity, nameOriginal: 'Comté', country: 'Франция' }, 2), /croûte pâte/);
   assert.match(editorialPhotoQuery({ ...identity, nameOriginal: 'Manchego', country: 'Испания' }, 0), /productor quesería/);
+  const dutchQueries = [0, 1, 2, 3].map(attempt => editorialPhotoQuery({
+    ...identity, nameOriginal: 'Overijsselse nagelkaas', country: 'Нидерланды',
+  }, attempt));
+  assert.equal(new Set(dutchQueries).size, 4);
+  for (const query of dutchQueries) {
+    assert.match(query, /^Overijsselse nagelkaas kaas Nederland/);
+    assert.doesNotMatch(query, /cheese|producer dairy|license|licentie|formaggio/);
+    assert.ok(query.length <= 400);
+  }
+  assert.match(dutchQueries[0], /producent kaasmakerij/);
+  assert.match(dutchQueries[1], /hele kaas aangesneden/);
 });
 
 test('named cheese photographs precede generic social images and recipe dishes across pages', () => {

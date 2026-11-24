@@ -318,6 +318,43 @@ test('Wikipedia is retained as supplementary evidence within existing research b
   assert.ok(found.sources.some(item => item.finalUrl === wiki));
   assert.match(found.report.warnings.join(' '), /Wikipedia.*не официальный/);
 });
+test('Dutch research localizes all topics and accepts named Dutch cheese sources and photos within existing limits', async () => {
+  const dutch = { title: 'Оверэйсселсе нагелкаас', nameOriginal: 'Overijsselse nagelkaas',
+    country: 'Нидерланды', region: 'Overijssel' };
+  for (const country of ['Нидерланды', 'Голландия', 'Nederland', 'Netherlands', 'NL', 'Olanda', 'Paesi Bassi']) {
+    const plan = structuredResearchPlan({ ...dutch, country });
+    assert.equal(plan.length, 5);
+    assert.ok(plan.every(item => item.query.startsWith('Overijsselse nagelkaas kaas Nederland ') && item.query.length <= 400));
+    assert.match(plan[0].query, /geschiedenis.*Wikipedia/);
+    assert.match(plan[1].query, /herkomst/);
+    assert.match(plan[2].query, /rijping/);
+    assert.match(plan[3].query, /recepten/);
+    assert.match(plan[4].query, /afbeeldingen/);
+  }
+  const body = 'Overijsselse nagelkaas is een kaas. Geschiedenis en traditie. Herkomst: streek en productiegebied. Koemelk, rijping en smaak. Gebruik in gerechten en recepten.';
+  const evidence = { ...await source('https://example.org/nagelkaas'), text: body, characters: body.length,
+    images: [{ url: 'https://example.org/nagelkaas.jpg', alt: 'Overijsselse nagelkaas' }] };
+  assert.equal(editorialSourceCheeseMatch(evidence, dutch), 'exact');
+  assert.equal(editorialSourceCheeseMatch({ ...evidence, text: 'Overijsselse nagelkaas is een kruidnagelkaas.' }, dutch), 'exact');
+  for (const text of ['Overijssel heeft een lange geschiedenis en traditie.', 'Andere kaas met kruidnagel.',
+    'Overijsselse nagelkaasachtige kaas.', 'Overijsselse nagelkaas is een straatnaam.']) {
+    assert.equal(editorialSourceMatchesCheese({ ...evidence, text }, dutch), false, text);
+  }
+  assert.ok(researchCoverage([evidence]).every(topic => topic.status === 'evidence'));
+  for (const intent of [undefined, { mode: 'deepen' as const, field: 'history' as const }, { mode: 'alternative' as const }]) {
+    const queries: string[] = [], reads: string[] = [];
+    const found = await researchEditorialSources(dutch, [], {
+      search: async query => { queries.push(query); return [{ url: evidence.url, title: dutch.nameOriginal, description: body }]; },
+      source: async url => { reads.push(url); return evidence; },
+    }, async () => {}, { intent });
+    assert.equal(queries.length, intent?.mode === 'deepen' ? 1 : 5);
+    assert.equal(reads.length, 1);
+    assert.equal(found.sources.length, 1);
+    assert.equal(found.report.photos?.length, 1);
+    assert.ok(queries.every(query => !/documenti|approfondimento|consorzio|cheese/.test(query)));
+    if (intent?.mode === 'alternative') assert.ok(queries.every(query => query.includes('documentatie')));
+  }
+});
 test('blocked Wikipedia pages do not become evidence and do not prevent other sources', async () => {
   const wiki = 'https://ru.wikipedia.org/wiki/Castelmagno';
   const found = await researchEditorialSources(identity, [], {

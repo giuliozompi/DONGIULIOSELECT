@@ -10,12 +10,13 @@ import { structuredResearchPlan } from './editorial-research-topics';
 // One localized Brave web query per click; no automatic extra searches.
 export function editorialPhotoQuery(identity: Parameters<typeof structuredResearchPlan>[0], attempt: number) {
   const base = structuredResearchPlan(identity).find(item => item.topic === 'photos')!.query
-    .replace(/\s(?:licenza|licence|лицензия|licencia|Lizenz|license)$/i, '');
+    .replace(/\s(?:licenza|licence|лицензия|licencia|Lizenz|license|licentie)$/i, '');
   const localized = /\bformaggio\b/.test(base) ? ['produttore consorzio', 'forma intera taglio', 'crosta pasta dettaglio', 'galleria caseificio']
     : /\bfromage\b/.test(base) ? ['producteur fromagerie', 'meule coupe', 'croûte pâte détail', 'galerie fromagerie']
     : /сыр/.test(base) ? ['производитель сыроварня', 'головка разрез', 'корка текстура крупный план', 'фотогалерея сыроварня']
     : /\bqueso\b/.test(base) ? ['productor quesería', 'rueda corte', 'corteza textura detalle', 'galería quesería']
     : /Käse/.test(base) ? ['Hersteller Käserei', 'Laib Anschnitt', 'Rinde Detail', 'Bildergalerie Käserei']
+    : /\bkaas\b/.test(base) ? ['producent kaasmakerij', 'hele kaas aangesneden', 'korst zuivel detail', 'kaasmakerij fotogalerij']
     : ['producer dairy', 'whole wheel cut', 'rind texture close up', 'dairy photo gallery'];
   return `${base} ${localized[attempt] || localized[0]}`.slice(0, 400);
 }
