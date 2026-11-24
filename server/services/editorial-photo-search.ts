@@ -5,14 +5,20 @@ import { editorialSourceMatchesCheese, defaultResearchDependencies, type Researc
 import { validateSourceUrl } from './editorial-ai-sources';
 import { EditorialModelError } from './editorial-ai-config';
 import { researchPhotos } from './editorial-research-photos';
+import { structuredResearchPlan } from './editorial-research-topics';
 
-// One Brave web query per click, with a different intent from the full draft.
-const variants = [
-  'formaggio fromage сыр foto produttore producer',
-  'cheese photographs Wikimedia Commons',
-  'cheese wheel cut rind photographs',
-  'fromage formaggio photo galerie consorzio',
-];
+// One localized Brave web query per click; no automatic extra searches.
+export function editorialPhotoQuery(identity: Parameters<typeof structuredResearchPlan>[0], attempt: number) {
+  const base = structuredResearchPlan(identity).find(item => item.topic === 'photos')!.query
+    .replace(/\s(?:licenza|licence|лицензия|licencia|Lizenz|license)$/i, '');
+  const localized = /\bformaggio\b/.test(base) ? ['produttore consorzio', 'forma intera taglio', 'crosta pasta dettaglio', 'galleria caseificio']
+    : /\bfromage\b/.test(base) ? ['producteur fromagerie', 'meule coupe', 'croûte pâte détail', 'galerie fromagerie']
+    : /сыр/.test(base) ? ['производитель сыроварня', 'головка разрез', 'корка текстура крупный план', 'фотогалерея сыроварня']
+    : /\bqueso\b/.test(base) ? ['productor quesería', 'rueda corte', 'corteza textura detalle', 'galería quesería']
+    : /Käse/.test(base) ? ['Hersteller Käserei', 'Laib Anschnitt', 'Rinde Detail', 'Bildergalerie Käserei']
+    : ['producer dairy', 'whole wheel cut', 'rind texture close up', 'dairy photo gallery'];
+  return `${base} ${localized[attempt] || localized[0]}`.slice(0, 400);
+}
 
 export async function searchEditorialPhotos(input: unknown, actor: string, database = pool,
   deps: ResearchDependencies = defaultResearchDependencies): Promise<PhotoSearchResult> {
@@ -45,8 +51,7 @@ export async function searchEditorialPhotos(input: unknown, actor: string, datab
     return excluded;
   });
   const identity = { title: body.title, nameOriginal: body.nameOriginal, country: body.country, region: body.region };
-  const name = (body.nameOriginal || body.title).replace(/\s+/g, ' ').slice(0, 160);
-  const query = [name, body.country, body.region.slice(0, 70), variants[body.attempt]].filter(Boolean).join(' ');
+  const query = editorialPhotoQuery(identity, body.attempt);
   let urls: string[];
   try {
     const hits = await deps.search(query);
@@ -65,7 +70,7 @@ export async function searchEditorialPhotos(input: unknown, actor: string, datab
     return editorialSourceMatchesCheese(source, identity) ? source : null;
   }));
   return {
-    photos: researchPhotos(results.flatMap(result => result.status === 'fulfilled' && result.value ? [result.value] : []), excludedUrls),
+    photos: researchPhotos(results.flatMap(result => result.status === 'fulfilled' && result.value ? [result.value] : []), excludedUrls, identity),
     unavailablePages: results.filter(result => result.status === 'rejected').length,
   };
 }

@@ -213,7 +213,7 @@ export async function researchEditorialSources(
     report.warnings.push('Wikipedia используется как дополнительный энциклопедический источник, а не официальный. Сверьте сведения с первичными источниками; наличие статьи не подтверждает права на фотографии.');
   report.coverage = researchCoverage(sources);
   if (!options.intent?.addition) {
-    report.photos = researchPhotos(sources);
+    report.photos = researchPhotos(sources, [], cheese);
     if (!report.photos.length) report.warnings.push('Подходящих ссылок на фотографии в прочитанных страницах не найдено. Изображения не выдумываются.');
     else report.warnings.push('Фотографии взяты из ссылок на прочитанных страницах. Проверьте изображённый сыр и права использования; ссылка на лицензию сама по себе не подтверждает разрешение.');
   }
