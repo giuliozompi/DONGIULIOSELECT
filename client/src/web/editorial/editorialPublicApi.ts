@@ -8,7 +8,7 @@ const query = (values: Record<string, string | number | undefined>) => {
   return result.toString();
 };
 type MapPage = { items: PublicCheeseSummary[]; total: number; truncated: boolean };
-const map = (options: { search?: string; country?: string; page?: number } = {}) =>
+const map = (options: { search?: string; country?: string; region?: string; page?: number } = {}) =>
   webApi.get<MapPage>(`${base}/map?${query(options)}`);
 
 async function worldMap(signal: AbortSignal): Promise<MapPage> {
@@ -27,7 +27,7 @@ export const editorialPublicApi = {
   videos: (options: { search?: string; category?: string; page?: number; limit?: number } = {}) =>
     webApi.get<EditorialPage<PublicVideo>>(`${base}/videos?${query(options)}`),
   video: (id: string) => webApi.get<PublicVideo & { relatedCheeses: PublicCheeseSummary[] }>(`${base}/videos/${id}`),
-  cheeses: (options: { search?: string; country?: string; page?: number; limit?: number } = {}) =>
+  cheeses: (options: { search?: string; country?: string; region?: string; page?: number; limit?: number } = {}) =>
     webApi.get<EditorialPage<PublicCheeseSummary> & { countries: string[] }>(`${base}/cheeses?${query(options)}`),
   map,
   worldMap,

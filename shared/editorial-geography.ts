@@ -108,6 +108,15 @@ export function createTodayCountryResolver(features: CountryFeature[]) {
   };
 }
 
+export function pointInGeoFeature(feature: CountryFeature, point: Point) {
+  const { latitude, longitude } = point;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)
+    || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return false;
+  const longitudes = Math.abs(longitude) === 180 ? [-180, 180] : [longitude];
+  return countryPolygons(feature).some(polygon => polygon[0]?.length > 2 && longitudes.some(lon =>
+    insideRing(polygon[0], lon, latitude) && !polygon.slice(1).some(hole => insideRing(hole, lon, latitude))));
+}
+
 function insideRing(ring: GeoPosition[], x: number, y: number) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {

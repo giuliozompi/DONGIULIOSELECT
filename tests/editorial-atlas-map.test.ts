@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { getCountryBounds, matchCountryFeature, type CountryFeature } from '../client/src/web/admin/editorial/cheeseCountryMap';
 import { ATLAS_MARKER_SIZE, atlasCountryPath, atlasMarkerGroups, fitAtlasMap } from '../client/src/web/editorial/atlasMap';
-import { createTodayCountryResolver } from '../shared/editorial-geography';
+import { createTodayCountryResolver, pointInGeoFeature } from '../shared/editorial-geography';
 import { atlasRegionCountries, atlasRegionCountry, type AtlasRegion } from '../client/src/web/editorial/atlasRegions';
 
 const features: CountryFeature[] = JSON.parse(readFileSync('client/public/editorial/world.geojson', 'utf8')).features;
@@ -16,6 +16,26 @@ const boundsFor = (country: string) => {
 };
 const cheese = (id: string, latitude: number | null, longitude: number | null) => ({
   id, title: id, nameOriginal: '', description: '', region: '', country: 'Италия', latitude, longitude, photo: '', publishedAt: '',
+});
+
+test('regional point matching respects polygon holes, borders, islands and invalid coordinates', () => {
+  const feature: CountryFeature = { type: 'Feature', properties: {}, geometry: {
+    type: 'MultiPolygon', coordinates: [
+      [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], [[3, 3], [7, 3], [7, 7], [3, 7], [3, 3]]],
+      [[[20, 20], [22, 20], [22, 22], [20, 22], [20, 20]]],
+    ],
+  } };
+  assert.ok(pointInGeoFeature(feature, { latitude: 1, longitude: 1 }));
+  assert.ok(pointInGeoFeature(feature, { latitude: 0, longitude: 0 }));
+  assert.ok(pointInGeoFeature(feature, { latitude: 21, longitude: 21 }));
+  assert.equal(pointInGeoFeature(feature, { latitude: 5, longitude: 5 }), false);
+  assert.equal(pointInGeoFeature(feature, { latitude: 15, longitude: 15 }), false);
+  assert.equal(pointInGeoFeature(feature, { latitude: NaN, longitude: 1 }), false);
+  assert.equal(pointInGeoFeature(feature, { latitude: 100, longitude: 1 }), false);
+  const italy: { features: AtlasRegion[] } = JSON.parse(readFileSync('client/public/editorial/regions-v1/IT.geojson', 'utf8'));
+  const piedmont = italy.features.find(feature => feature.properties.id === 'IT-21')!;
+  assert.ok(pointInGeoFeature(piedmont, { latitude: 44.4, longitude: 7.42 }));
+  assert.equal(pointInGeoFeature(piedmont, { latitude: 37.6, longitude: 14.1 }), false);
 });
 
 test('the selected country uses the largest uniform scale inside the centered padded frame', () => {

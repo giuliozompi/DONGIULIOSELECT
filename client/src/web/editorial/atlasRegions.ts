@@ -1,11 +1,6 @@
 import type { CountryFeature } from '@shared/editorial-geography';
-
-export const atlasRegionCountries = {
-  IT: 'Италия', FR: 'Франция', ES: 'Испания', NL: 'Нидерланды', CH: 'Швейцария',
-  DE: 'Германия', AT: 'Австрия', GR: 'Греция', PT: 'Португалия', GB: 'Великобритания',
-} as const;
-
-type AtlasRegionCountry = keyof typeof atlasRegionCountries;
+import { atlasRegionCountries, type AtlasRegionCountry } from '@shared/editorial-atlas-regions';
+export { atlasRegionCountries } from '@shared/editorial-atlas-regions';
 export type AtlasRegion = CountryFeature & { properties: { id: string; name: string } };
 const byCountryName = new Map<string, AtlasRegionCountry>(
   Object.entries(atlasRegionCountries).map(([code, name]) => [name, code as AtlasRegionCountry]),

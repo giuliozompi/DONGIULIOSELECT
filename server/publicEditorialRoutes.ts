@@ -8,6 +8,7 @@ const pagination = { page: z.coerce.number().int().min(1).max(100000).default(1)
   limit: z.coerce.number().int().min(1).max(48).default(12) };
 const filters = z.object({ search: z.string().trim().max(200).default(''),
   country: z.string().trim().max(100).optional(),
+  region: z.string().trim().min(1).max(80).optional(),
   category: z.enum(['recipe', 'interview', 'review', 'places']).optional(), ...pagination }).strict();
 const id = (req: Request) => z.string().uuid().parse(req.params.id);
 export function registerPublicEditorialRoutes(app: Express, database = pool) {

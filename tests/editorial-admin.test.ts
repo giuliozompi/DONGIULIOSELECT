@@ -830,6 +830,60 @@ test('atlas filters by the current country without rewriting the published origi
   assert.equal(detail.country, 'СССР');
   assert.equal(detail.productionCountry, 'Италия');
 });
+test('public region filters match map coordinates before pagination without relying on free-text region names', async () => {
+  const publish = async (title: string, latitude: number, longitude: number, country = 'Италия', region = 'Неунифицированное название') => {
+    const draft = await saveEditorial('cheese', { ...readyCheese(), title, country, region, latitude, longitude },
+      'operator', undefined, database);
+    return changePublication(draft.id, draft.revision, true, 'operator', database);
+  };
+  const local = [];
+  for (let i = 0; i < 14; i++) local.push(await publish(`Пьемонт ${i}`, 44.4, 7.42));
+  const historical = await publish('Исторический сыр', 44.4, 7.42, 'Королевство Италия', 'Piemonte');
+  const sicily = await publish('Сицилийский сыр', 37.6, 14.1, 'Италия', 'Пьемонт');
+  const france = await publish('Французский сыр', 48.85, 2.35, 'Франция', 'Пьемонт');
+  const missing = await publish('Старая карточка без координат', 44.4, 7.42);
+  // A schema-valid legacy snapshot can have no point; a ready snapshot cannot.
+  await database.query(`UPDATE editorial_publications SET data=data || '{"status":"draft","latitude":null,"longitude":null}'::jsonb WHERE entry_id=$1`, [missing.id]);
+  await saveEditorial('cheese', { ...readyCheese(), title: 'Не опубликован', latitude: 44.4, longitude: 7.42 },
+    'operator', undefined, database);
+  const publicBase = base.replace('/admin/editorial', '/editorial');
+  const get = async (path: string, params: Record<string, string>) => {
+    const response = await fetch(`${publicBase}${path}?${new URLSearchParams(params)}`);
+    assert.equal(response.status, 200, await response.clone().text());
+    return response.json();
+  };
+  const filter = { country: 'Италия', region: 'IT-21' };
+  const first = await get('/cheeses', { ...filter, page: '1', limit: '12' });
+  const second = await get('/cheeses', { ...filter, page: '2', limit: '12' });
+  const map = await get('/map', filter);
+  const expected = new Set([...local.map(item => item.id), historical.id]);
+  assert.equal(first.total, 15);
+  assert.equal(first.items.length, 12);
+  assert.equal(second.total, 15);
+  assert.equal(second.items.length, 3);
+  assert.deepEqual(new Set([...first.items, ...second.items].map((item: EditorialEntry) => item.id)), expected);
+  assert.deepEqual(new Set(map.items.map((item: EditorialEntry) => item.id)), expected);
+  assert.equal(map.truncated, false);
+  assert.deepEqual(first.countries, ['Италия', 'Франция']);
+  assert.equal((await get('/cheeses', { ...filter, search: 'Сицилийский' })).total, 0);
+  assert.equal((await get('/cheeses', { ...filter, search: 'Исторический' })).total, 1);
+  const whole = await get('/cheeses', { country: 'Италия', limit: '48' });
+  assert.equal(whole.total, 17);
+  assert.ok(whole.items.some((item: EditorialEntry) => item.id === sicily.id));
+  const world = await get('/map', {});
+  assert.equal(world.total, 18);
+  assert.ok(world.items.some((item: EditorialEntry) => item.id === france.id));
+  assert.equal((await get('/cheeses', { country: 'Италия', region: 'IT-23' })).total, 0);
+  for (const [path, params] of [
+    ['/cheeses', { region: 'IT-21' }],
+    ['/cheeses', { country: 'Франция', region: 'IT-21' }],
+    ['/map', { country: 'Россия', region: 'IT-21' }],
+    ['/cheeses', { country: 'Италия', region: '../IT.geojson' }],
+    ['/videos', { country: 'Италия', region: 'IT-21' }],
+  ] as [string, Record<string, string>][]) {
+    assert.equal((await fetch(`${publicBase}${path}?${new URLSearchParams(params)}`)).status, 400);
+  }
+});
 test('publication audit failure rolls back exposure; stale/concurrent publication cannot override newer decisions', async () => {
   let v = await saveEditorial('video', { ...video(), status: 'ready' }, 'operator', undefined, database);
   await database.query(`CREATE FUNCTION fail_publication_audit() RETURNS trigger LANGUAGE plpgsql AS $$

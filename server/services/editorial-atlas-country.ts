@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { createCountryIndex, createTodayCountryResolver, normalizeCountryName, type CountryFeature } from '../../shared/editorial-geography';
+import { createCountryIndex, createTodayCountryResolver, normalizeCountryName, pointInGeoFeature, type CountryFeature } from '../../shared/editorial-geography';
+import { atlasRegionFeature } from './editorial-atlas-region';
 import type { pool } from '../db';
 
 type CountryRow = { id: string; country: string; latitude: string | null; longitude: string | null };
@@ -22,7 +23,7 @@ function loadGeography() {
   return geography;
 }
 
-export async function atlasCountryScope(database: typeof pool, country: string, search: string) {
+export async function atlasCountryScope(database: typeof pool, country: string, search: string, region?: string) {
   const [{ resolve, match }, { rows }] = await Promise.all([
     loadGeography(),
     database.query<CountryRow>(`SELECT entry_id AS id, data->>'country' AS country,
@@ -30,6 +31,7 @@ export async function atlasCountryScope(database: typeof pool, country: string, 
       FROM editorial_publications WHERE kind='cheese'`),
   ]);
   const chosen = normalizeCountryName(resolve(country));
+  const boundary = region ? await atlasRegionFeature(match(resolve(country)), region) : undefined;
   const historicalFilter = Boolean(country && !match(country));
   const query = normalizeCountryName(search);
   const groupById = new Map<string, string>();
@@ -42,7 +44,9 @@ export async function atlasCountryScope(database: typeof pool, country: string, 
     // Current names group renamed countries; historical labels can still be
     // queried directly, and remain searchable even after a state was dissolved.
     const normalizedGroup = normalizeCountryName(group);
-    if (country && (normalizedGroup === chosen
+    const withinRegion = !boundary || (row.latitude !== null && row.longitude !== null &&
+      pointInGeoFeature(boundary, { latitude: Number(row.latitude), longitude: Number(row.longitude) }));
+    if (country && withinRegion && (normalizedGroup === chosen
       || (historicalFilter && normalizeCountryName(row.country) === chosen))) matchingCountryIds.push(row.id);
     if (query && normalizedGroup.includes(query)) matchingSearchIds.push(row.id);
   }

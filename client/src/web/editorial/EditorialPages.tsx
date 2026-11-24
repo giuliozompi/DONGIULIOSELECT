@@ -163,17 +163,18 @@ export function CheeseAtlasPage() {
   const mapBoxRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const list = useQuery({
-    queryKey: ['/web-api/editorial/cheeses', search, country, page],
-    queryFn: () => editorialPublicApi.cheeses({ search: search.trim() || undefined, country: country || undefined, page, limit: PAGE_SIZE }),
+    queryKey: ['/web-api/editorial/cheeses', search, country, regionId, page],
+    queryFn: () => editorialPublicApi.cheeses({ search: search.trim() || undefined, country: country || undefined, region: regionId || undefined, page, limit: PAGE_SIZE }),
     // Preserve the country options while fetching the new page, not its old cards.
     placeholderData: previous => previous,
   });
   const mapSearch = view === 'world' ? undefined : search.trim() || undefined;
   const mapCountry = view === 'world' ? undefined : country || undefined;
+  const mapRegion = view === 'world' ? undefined : regionId || undefined;
   const map = useQuery({
-    queryKey: ['/web-api/editorial/map', view, mapSearch, mapCountry],
+    queryKey: ['/web-api/editorial/map', view, mapSearch, mapCountry, mapRegion],
     queryFn: ({ signal }) => view === 'world' ? editorialPublicApi.worldMap(signal)
-      : editorialPublicApi.map({ search: mapSearch, country: mapCountry }),
+      : editorialPublicApi.map({ search: mapSearch, country: mapCountry, region: mapRegion }),
   });
   useEffect(() => {
     let active = true;
@@ -230,7 +231,7 @@ export function CheeseAtlasPage() {
   }
   return <div className="ed-page">
     <Intro eyebrow="ATLANTE DEI FORMAGGI · СЫРНЫЙ АТЛАС" title="У каждого вкуса есть адрес." text="Энциклопедия сырной географии: статьи о традициях и регионах. Географическое происхождение не подтверждает место производства конкретного продукта." />
-    <div className="ed-map-controls"><button className={view === 'country' && !regionBounds ? 'active' : ''} aria-pressed={view === 'country' && !regionBounds} onClick={() => { if (country) { setView('country'); setRegionId(''); } else changeCountry(DEFAULT_ATLAS_COUNTRY); }}><MapPin size={16} /> {countryName}</button><button className={view === 'world' ? 'active' : ''} aria-pressed={view === 'world'} onClick={() => { setView('world'); setRegionId(''); }}><Globe2 size={16} /> Весь мир</button></div>
+    <div className="ed-map-controls"><button className={view === 'country' && !regionBounds ? 'active' : ''} aria-pressed={view === 'country' && !regionBounds} onClick={() => { if (country) { setView('country'); setRegionId(''); setPage(1); } else changeCountry(DEFAULT_ATLAS_COUNTRY); }}><MapPin size={16} /> {countryName}</button><button className={view === 'world' ? 'active' : ''} aria-pressed={view === 'world'} onClick={() => { setView('world'); setRegionId(''); setPage(1); }}><Globe2 size={16} /> Весь мир</button></div>
     <div className="ed-filter-row"><label className="ed-search"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); setSelected(null); }} placeholder="Название, страна или регион" aria-label="Поиск сырных статей" /></label><label className="ed-filter-select">Страна <select value={country} onChange={e => changeCountry(e.target.value)}><option value="">Все страны</option>{countries.map(value => <option key={value} value={value}>{value}</option>)}</select></label></div>
     {map.isError && <ErrorBox error={map.error} retry={() => map.refetch()} />}
     {map.data?.truncated && <div className="ed-note">Показаны первые 1000 статей на карте. Используйте поиск или список, чтобы найти другие.</div>}
@@ -238,13 +239,13 @@ export function CheeseAtlasPage() {
       <section className="ed-map-box">
         {regionCountry && <div className="ed-map-region-controls">
           <label className="ed-filter-select">Регион на карте
-            <select value={region?.properties.id ?? ''} disabled={!regions.data?.length} onChange={e => setRegionId(e.target.value)}>
+            <select value={region?.properties.id ?? ''} disabled={!regions.data?.length} onChange={e => { setRegionId(e.target.value); setPage(1); }}>
               <option value="">{regions.isLoading ? 'Загружаем регионы…' : 'Вся страна'}</option>
               {regions.data?.map(item => <option key={item.properties.id} value={item.properties.id}>{item.properties.name}</option>)}
             </select>
           </label>
           {regions.isError ? <button type="button" onClick={() => void regions.refetch()}>Не удалось загрузить регионы. Повторить</button> :
-            <p>Выберите регион, чтобы приблизить карту.</p>}
+            <p>Выберите регион, чтобы приблизить карту и показать статьи с точкой происхождения в его границах.</p>}
         </div>}
         {geometryError && <div className="ed-map-warning" role="status">Контур карты не загрузился. Список статей ниже остаётся доступен.</div>}
         {features.length > 0 && view === 'country' && !bounds && <div className="ed-map-warning" role="status">Контур выбранной страны не найден. Показана карта мира.</div>}
@@ -272,7 +273,7 @@ export function CheeseAtlasPage() {
         <div className="ed-note">Историческое происхождение не означает, что конкретный товар произведён в этом регионе.</div>
       </aside>
     </div>
-    <section className="ed-section"><div className="ed-section-heading"><div><div className="ed-kicker">Энциклопедия · {country || 'Все страны'}</div><h2>Статьи о сырах</h2></div></div>
+    <section className="ed-section"><div className="ed-section-heading"><div><div className="ed-kicker">Энциклопедия · {country || 'Все страны'}{region ? ` · ${region.properties.name}` : ''}</div><h2>Статьи о сырах</h2></div></div>
       {list.isLoading || list.isPlaceholderData ? <div className="ed-loading" role="status">Загружаем статьи…</div> : list.isError ? <ErrorBox error={list.error} retry={() => list.refetch()} /> : cheesePage && cheesePage.items.length ? <><div className="ed-cheese-grid">{cheesePage.items.map(item => <CheeseCard item={item} key={item.id} />)}</div><Pager page={cheesePage.page} total={cheesePage.total} limit={cheesePage.limit} onPage={setPage} /></> : <Empty>{search || country ? 'По заданным фильтрам статьи не найдены.' : 'Опубликованных статей пока нет.'}</Empty>}
     </section>
   </div>;

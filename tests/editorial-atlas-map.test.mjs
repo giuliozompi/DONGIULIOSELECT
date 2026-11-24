@@ -59,7 +59,11 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     } else if (path === '/web-api/editorial/map' || path === '/web-api/editorial/cheeses') {
       const country = searchParams.get('country');
       const search = searchParams.get('search')?.toLowerCase();
-      const filtered = items.filter(item => (!country || (item.atlasCountry || item.country) === country) && (!search || item.title.toLowerCase().includes(search)));
+      const chosenRegion = searchParams.get('region');
+      const regionById = { castelmagno: 'IT-21', nearby: 'IT-21', gorgonzola: 'IT-25', sicilia: 'IT-82', sardegna: 'IT-88', camembert: 'FR-NOR' };
+      if (chosenRegion === 'IT-21') await new Promise(resolve => setTimeout(resolve, 200));
+      const filtered = items.filter(item => (!country || (item.atlasCountry || item.country) === country) &&
+        (!chosenRegion || regionById[item.id] === chosenRegion) && (!search || item.title.toLowerCase().includes(search)));
       const mapPage = searchParams.get('page');
       const worldBatch = path.endsWith('/map') && mapPage !== null && country === null && search === undefined;
       const batch = worldBatch ? (mapPage === '1' ? filtered.slice(0, -1) : filtered.slice(-1)) : filtered;
@@ -128,7 +132,8 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     await region('IT-21');
     await page.wait(`!!document.querySelector('${mapLabel('Италия — Пьемонт')} .ed-map-region-focus')`);
     await page.wait(`!!document.querySelector('${pin('Группа: 2')}') && !document.querySelector('${pin('Пекорино')}')`);
-    assert.deepEqual(await visibleCards(), italianCards, 'region zoom does not change the article list');
+    await page.wait(`document.querySelectorAll('${cards}').length === 2`);
+    assert.deepEqual(await visibleCards(), ['castelmagno', 'nearby'], 'region zoom filters the cards to its origin points');
     const regionFit = await page.evaluate(`(() => {
       const map=document.querySelector('.ed-map-canvas').getBoundingClientRect();
       const region=document.querySelector('.ed-map-region-focus').getBoundingClientRect();
@@ -138,6 +143,8 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     assert.ok(regionFit.some(padding => Math.abs(padding - 16) < .2), 'the region fills one map dimension');
     await page.click('.ed-map-controls button:first-child');
     await page.wait(`!!document.querySelector('${mapLabel('Италия')}') && !document.querySelector('.ed-map-region-focus')`);
+    await page.wait(`document.querySelectorAll('${cards}').length === 5`);
+    assert.deepEqual(await visibleCards(), italianCards, 'whole-country view restores country cards');
 
     await page.setViewport({ width: 390, height: 850, mobile: true });
     await page.send('Page.reload', { ignoreCache: true });
@@ -145,6 +152,13 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     await page.wait(`document.querySelector('${focused}') && document.querySelectorAll('${cards}').length === 5 && document.querySelectorAll('.ed-map-pin').length === 4`);
     assert.equal(await page.evaluate(`document.querySelector('.ed-filter-select select').value`), 'Италия');
     assert.deepEqual(await visibleCards(), italianCards);
+    await region('IT-21');
+    await page.wait(`document.querySelectorAll('${cards}').length === 2`);
+    assert.deepEqual(await visibleCards(), ['castelmagno', 'nearby'], 'mobile applies the same regional filter');
+    await region('IT-23');
+    await page.wait(`!document.querySelector('${cards}') && document.querySelector('.ed-section')?.textContent.includes('статьи не найдены')`);
+    await page.tap('.ed-map-controls button:first-child');
+    await page.wait(`document.querySelectorAll('${cards}').length === 5 && document.querySelectorAll('.ed-map-pin').length === 4`);
     assert.ok((await fit()).width < desktop.width);
     assert.equal(await page.evaluate(`document.querySelectorAll('.ed-map-pin').length`), 4);
     assert.match(await page.evaluate(`document.querySelector('${cards}[href="/web/cheeses/sicilia"] [data-testid="cheese-milk-badge"]').textContent`), /Вид молока: смесь \(овечье 80,25%, коровье\)/);

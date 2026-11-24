@@ -17,11 +17,13 @@ function cheeseSummary(row: Publication, atlasCountry?: string): PublicCheeseSum
     region: c.region, latitude: c.latitude, longitude: c.longitude, photo: c.photos.find(Boolean) || '',
     milk: resolveCheeseMilk(c), publishedAt: row.published_at.toISOString(), ...(atlasCountry ? { atlasCountry } : {}) };
 }
-export interface PublicFilters { search: string; category?: string; country?: string; page: number; limit: number }
+export interface PublicFilters { search: string; category?: string; country?: string; region?: string; page: number; limit: number }
 const filterSql = `kind=$1 AND ($2='' OR strpos(lower(concat_ws(' ',data->>'title',data->>'nameOriginal',data->>'description',data->>'country',data->>'region')),lower($2))>0)
   AND ($3='' OR data->>'category'=$3) AND ($4='' OR data->>'country'=$4)`;
 export async function publicEditorialList(kind: 'video' | 'cheese', filters: PublicFilters, database = pool) {
-  const atlas = kind === 'cheese' ? await atlasCountryScope(database, filters.country || '', filters.search) : undefined;
+  if (filters.region && (kind !== 'cheese' || !filters.country))
+    throw new EditorialError(400, 'Для регионального фильтра сырных статей выберите страну.');
+  const atlas = kind === 'cheese' ? await atlasCountryScope(database, filters.country || '', filters.search, filters.region) : undefined;
   const condition = atlas ? `kind='cheese'
     AND ($1='' OR strpos(lower(concat_ws(' ',data->>'title',data->>'nameOriginal',data->>'description',data->>'country',data->>'region')),lower($1))>0
       OR entry_id=ANY($4::uuid[]))
