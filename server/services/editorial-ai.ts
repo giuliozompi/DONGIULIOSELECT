@@ -15,6 +15,7 @@ import { editorialRegionMaxLength } from '../../shared/editorial';
 import { lookupEditorialOrigin } from './editorial-origin';
 import { originCountryCode } from './editorial-origin-provider';
 import { catalogExclusions, catalogMatches, normalizedCheeseName } from './editorial-ai-catalog';
+import { hasPendingBatchDraft, pendingBatchMessage } from './editorial-batch-pending';
 export { editorialSourcePassages } from './editorial-research-topics';
 
 export type RunRow = {
@@ -76,9 +77,11 @@ export async function reserveAiRunInTransaction(kind: 'catalog' | 'draft', input
       throw new EditorialError(409, 'Уже выполняется генерация. Дождитесь её завершения и обновите историю.');
     if (kind === 'draft') {
       const p = params as DraftRequest;
-      const cheese = (await client.query("SELECT revision FROM editorial_entries WHERE id=$1 AND kind='cheese'", [p.entryId])).rows[0];
+      const cheese = (await client.query("SELECT revision FROM editorial_entries WHERE id=$1 AND kind='cheese' FOR SHARE", [p.entryId])).rows[0];
       if (!cheese) throw new EditorialError(404, 'Сырная статья не найдена');
       if (cheese.revision !== p.revision) throw new EditorialError(409, 'Статья изменилась. Откройте свежую версию перед генерацией.');
+      if (await hasPendingBatchDraft(client, p.entryId))
+        throw new EditorialError(409, pendingBatchMessage);
       if (p.intent?.previousRunId) {
         const previous = (await client.query('SELECT kind,status,params FROM editorial_ai_runs WHERE id=$1',
           [p.intent.previousRunId])).rows[0];

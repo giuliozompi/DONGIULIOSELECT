@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { pool } from '../db';
 import { cheeseDataSchema, cheeseEditorialBatchSchema, editorialSchemas, type EditorialKind, type EditorialEntry, type CheeseData, type VideoData, type PriceData } from '../../shared/editorial';
 import type { CheeseEditorialStage } from '../../shared/editorial-stages';
+import { hasPendingBatchDraft, pendingBatchDraft, pendingBatchMessage, pendingBatchTablesAvailable } from './editorial-batch-pending';
 
 export class EditorialError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -25,12 +26,13 @@ export function entry(row: Row): EditorialEntry {
 export async function listEditorial(kind: EditorialKind, offset: number, limit: number, database = pool,
   stage?: CheeseEditorialStage) {
   if (stage && kind !== 'cheese') throw new EditorialError(400, 'Разделы доступны только для сырных статей');
+  const excludePrepared = kind === 'cheese' && await pendingBatchTablesAvailable(database);
   // One statement keeps count and page on the same snapshot.
   const { rows } = await database.query(`
     WITH eligible AS (
       SELECT e.*,p.published_at,p.published_revision FROM editorial_entries e
       LEFT JOIN editorial_publications p ON p.entry_id=e.id
-      WHERE e.kind=$1 AND ($4::text IS NULL
+      WHERE e.kind=$1 ${excludePrepared ? `AND NOT (${pendingBatchDraft})` : ''} AND ($4::text IS NULL
         OR ($4='published' AND p.entry_id IS NOT NULL)
         OR ($4='approved' AND p.entry_id IS NULL AND e.data->>'status'='ready')
         OR ($4='drafts' AND p.entry_id IS NULL AND (e.data->>'status') IS DISTINCT FROM 'ready'))
@@ -91,6 +93,8 @@ export async function saveEditorial(kind: EditorialKind, input: unknown, actor: 
       if (!previous) throw new EditorialError(404, 'Запись не найдена');
       if (previous.kind !== kind) throw new EditorialError(400, 'Нельзя менять тип записи');
       if (previous.revision !== edit.revision) throw new EditorialError(409, 'Запись изменена другим оператором. Откройте её заново.');
+      if (kind === 'cheese' && await hasPendingBatchDraft(client, edit.id))
+        throw new EditorialError(409, pendingBatchMessage);
     }
     if (kind === 'cheese') {
       // A checkbox or a crafted CRUD request cannot claim an AI transfer.
@@ -142,6 +146,8 @@ export async function approveDraftCheeses(input: unknown, actor: string, databas
         WHERE e.id=$1 FOR UPDATE OF e`, [id])).rows[0];
       if (!previous) throw new EditorialError(404, 'Статья не найдена. Ни одна статья не одобрена.');
       const cheese = previous.data as CheeseData;
+      if (previous.kind === 'cheese' && await hasPendingBatchDraft(client, id))
+        throw new EditorialError(409, pendingBatchMessage);
       if (previous.kind !== 'cheese' || previous.published_at || previous.revision !== revision ||
         (cheese.status !== 'draft' && cheese.status !== 'pending_review'))
         throw new EditorialError(409, 'Одна из выбранных статей изменилась или уже не находится в подготовке. Ни одна статья не одобрена.');

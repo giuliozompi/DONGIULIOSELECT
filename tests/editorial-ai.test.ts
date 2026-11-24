@@ -15,7 +15,7 @@ import { reserveAiRun, executeAiRun, getAiRun, aiHistory, parseDraftGeneration, 
 import { EditorialModelError, createEditorialModelRequester } from '../server/services/editorial-ai-model';
 import { importAiCatalog, rankAiCatalog, applyAiDraft } from '../server/services/editorial-ai-changes';
 import { isPublicSourceAddress, validateSourceUrl, sourcePlainText, retrieveEditorialSource } from '../server/services/editorial-ai-sources';
-import { EditorialError, saveEditorial } from '../server/services/editorial';
+import { EditorialError, saveEditorial, listEditorial, approveDraftCheeses } from '../server/services/editorial';
 import { changePublication } from '../server/services/editorial-publication';
 import { publicEditorialList } from '../server/services/public-editorial';
 import { cheeseDataSchema, editorialRegionMaxLength } from '../shared/editorial';
@@ -131,6 +131,8 @@ test('batch counts eligible revisions, requires confirmation, processes once and
     revision: withDraft.revision, sources: [evidence.url], research: true, fullDraft: true }, 'manual', db);
   await executeAiRun(prepared.run.id, db, batchDeps);
   assert.equal((await getAiRun(prepared.run.id, db)).status, 'ready');
+  assert.ok((await listEditorial('cheese', 0, 20, db, 'drafts')).items.some(item => item.id === withDraft.id),
+    'a manual proposal outside the background queue stays in standard editing');
   assert.equal((await batches('', undefined, null)).status, 401);
   assert.equal((await batches('', undefined, 'customer')).status, 403);
   const preview = await getDraftBatchOverview(1, db);
@@ -141,6 +143,8 @@ test('batch counts eligible revisions, requires confirmation, processes once and
   assert.equal((await batches('', { ...body, eligibleCount: 3 })).status, 409);
   assert.equal((await batches('', body)).status, 202);
   assert.equal((await batches('', body)).status, 202);
+  assert.ok((await listEditorial('cheese', 0, 20, db, 'drafts')).items.some(item => item.id === first.id),
+    'queued articles without a generated proposal remain available');
   assert.equal((await batches('', { ...body, requestId: randomUUID() })).status, 409);
   await saveEditorial('cheese', { ...next.data, history: 'Правка редактора после запуска' }, 'editor', next, db);
   let started!: () => void, unblock!: () => void;
@@ -175,7 +179,9 @@ test('batch counts eligible revisions, requires confirmation, processes once and
   assert.equal(proposal.run.result.fields.history, draft().fields.history);
   assert.equal(proposal.entry.revision, first.revision);
   assert.deepEqual(proposal.entry.data, first.data);
-  await saveEditorial('cheese', { ...first.data, history: 'Новая правка' }, 'editor', first, db);
+  await assert.rejects(saveEditorial('cheese', { ...first.data, history: 'Новая правка' }, 'editor', first, db), fails(409));
+  await applyAiDraft(proposal.run.id, { entryId: first.id, revision: first.revision,
+    fields: ['history'], editorialData: { ...first.data, history: 'Новая правка' } }, 'editor', db);
   assert.equal((await batches(`/${body.requestId}/review/${first.id}`)).status, 409);
   const edited = await getDraftBatchOverview(1, db);
   assert.equal(edited.latest?.counts.ready, 0);
@@ -191,23 +197,50 @@ test('batch hides a draft only after successful save, counts visible pages and p
     SELECT $1,gen_random_uuid(),1,'Fixture item ' || n,'skipped' FROM generate_series(1,20) n`, [batch.requestId]);
   const reviewPath = `/${batch.requestId}/review/${cheese.id}`;
   const proposal = await (await batches(reviewPath)).json();
+  await db.query("UPDATE editorial_ai_batch_items SET status='running' WHERE batch_id=$1 AND entry_id=$2", [batch.requestId, cheese.id]);
+  assert.equal((await listEditorial('cheese', 0, 20, db, 'drafts')).total, 0,
+    'a completed run is hidden even before the worker reconciles its queue status');
+  await db.query("UPDATE editorial_ai_batch_items SET status='ready' WHERE batch_id=$1 AND entry_id=$2", [batch.requestId, cheese.id]);
+  await db.query("UPDATE editorial_ai_runs SET status='failed' WHERE id=$1", [proposal.run.id]);
+  assert.equal((await listEditorial('cheese', 0, 20, db, 'drafts')).total, 1, 'failed attempts must not hide articles');
+  await db.query("UPDATE editorial_ai_runs SET status='ready' WHERE id=$1", [proposal.run.id]);
+  assert.equal((await listEditorial('cheese', 0, 20, db, 'drafts')).total, 0);
+  assert.equal((await listEditorial('cheese', 0, 20, db)).total, 0);
+  await assert.rejects(saveEditorial('cheese', { ...cheese.data, history: 'Из старого окна' },
+    'operator', { id: cheese.id, revision: cheese.revision }, db), fails(409));
+  await assert.rejects(approveDraftCheeses({ entries: [{ id: cheese.id, revision: cheese.revision }] }, 'operator', db), fails(409));
+  await assert.rejects(reserveAiRun('draft', {
+    requestId: randomUUID(), entryId: cheese.id, revision: cheese.revision, sources: [evidence.url],
+  }, 'another-operator', db), fails(409));
   const params = { entryId: cheese.id, revision: cheese.revision, fields: ['history'],
     editorialData: { ...cheese.data, history: 'Проверено редактором' } };
   const apply = (body: unknown) => fetch(`${base}/runs/${proposal.run.id}/apply`, {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'admin' }, body: JSON.stringify(body),
   });
   assert.equal((await apply({ ...params, fields: ['description'] })).status, 400);
+  assert.equal((await listEditorial('cheese', 0, 20, db, 'drafts')).total, 0, 'a failed transfer must not reveal the article');
   const before = (await getDraftBatchOverview(2, db, batch.requestId)).latest;
   assert.equal(before?.total, 21);
   assert.equal(before?.visibleTotal, 21);
   assert.deepEqual(before?.items.map(item => item.entryId), [cheese.id]);
   assert.equal(before?.counts.ready, 1);
+  await db.query(`INSERT INTO editorial_ai_batches(id,created_by,created_at,finished_at)
+    SELECT gen_random_uuid(),'operator',clock_timestamp()+n*interval '1 second',clock_timestamp()
+    FROM generate_series(1,21) n`);
+  assert.ok((await getDraftBatchOverview(1, db)).history.some(item => item.id === batch.requestId),
+    'unreviewed proposals remain accessible even outside the twenty most recent batches');
   const saved = await apply(params);
   assert.equal(saved.status, 200);
   const entry = await saved.json();
   assert.equal(entry.data.status, 'pending_review');
   assert.equal(entry.data.history, 'Проверено редактором');
   assert.equal(entry.publication, null);
+  const standard = await listEditorial('cheese', 0, 20, db, 'drafts');
+  assert.equal(standard.total, 1);
+  assert.equal(standard.items[0].id, cheese.id);
+  const edited = await saveEditorial('cheese', { ...entry.data, history: 'Правки после проверки' },
+    'operator', { id: cheese.id, revision: entry.revision }, db);
+  assert.equal((edited.data as any).history, 'Правки после проверки');
   assert.equal((await batches(reviewPath)).status, 409);
   const after = (await getDraftBatchOverview(1, db, batch.requestId)).latest;
   assert.equal(after?.total, 21, 'the original queue progress is retained');

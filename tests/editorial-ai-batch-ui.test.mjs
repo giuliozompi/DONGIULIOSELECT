@@ -43,7 +43,7 @@ test('admin queue keeps unsaved proposals and removes them after successful save
       else if (requestPath === '/web-api/admin/check') response = { ok: true, isMasterAdmin: true };
       else if (requestPath === '/web-api/admin/editorial') {
         const kind = new URL(event.request.url).searchParams.get('kind');
-        response = kind === 'cheese' ? { items: [entry], total: 1 } : { items: [], total: 0 };
+        response = kind === 'cheese' && stage !== 'ready' ? { items: [entry], total: 1 } : { items: [], total: 0 };
       } else if (requestPath === path && method === 'GET') {
         const active = stage === 'running';
         const saved = stage === 'saved';
@@ -99,6 +99,7 @@ test('admin queue keeps unsaved proposals and removes them after successful save
     await page.wait(`!window.batchPageBeforeReload && document.querySelector('${toggle}')?.getAttribute('aria-expanded') === 'false'`);
     await page.click(toggle);
     await page.wait(`document.querySelector('${progress}')?.textContent.includes('Очередь завершена · 2 / 2')`);
+    await page.wait(`!document.getElementById('entry-${id}')`);
     const editor = '[data-testid="editorial-entry-editor"]';
     const clickText = (scope, text) => page.evaluate(`Array.from(document.querySelectorAll('${scope} button')).find(item => item.textContent.trim() === ${JSON.stringify(text)}).click()`);
     const openDraft = async () => {
@@ -112,12 +113,14 @@ test('admin queue keeps unsaved proposals and removes them after successful save
     await clickText(editor, 'Отмена');
     await page.wait(`!document.querySelector('${editor}')`);
     assert.equal(applies.length, 0);
+    assert.equal(await page.evaluate(`!!document.getElementById('entry-${id}')`), false);
     await openDraft();
     await page.evaluate(`document.querySelector('[data-testid="ai-proposal-editorial-confirm"]').click()`);
     const save = () => page.evaluate(`document.querySelector('[data-testid="button-editorial-save-top"]').click()`);
     await save();
     await page.wait(`document.querySelector('${editor}')?.textContent.includes('Ошибка тестового сохранения')`);
     assert.equal(stage, 'ready');
+    assert.equal(await page.evaluate(`!!document.getElementById('entry-${id}')`), false);
     await save();
     await page.wait(`!document.querySelector('${editor}')`);
     await page.wait(`document.querySelector('${panel}')?.textContent.includes('Другая статья')`);

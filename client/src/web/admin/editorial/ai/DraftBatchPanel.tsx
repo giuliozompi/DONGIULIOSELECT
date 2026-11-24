@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, LoaderCircle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,6 +13,7 @@ const labels: Record<DraftBatchItemStatus, string> = {
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Не удалось выполнить действие.';
 
 export default function DraftBatchPanel({ onReview }: { onReview: (result: DraftBatchReview) => boolean }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [batchId, setBatchId] = useState('');
@@ -23,9 +24,13 @@ export default function DraftBatchPanel({ onReview }: { onReview: (result: Draft
   const query = useQuery({
     queryKey: [...draftBatchQueryKey, page, batchId],
     queryFn: () => editorialAiApi.draftBatches(page, batchId || undefined),
-    enabled: open, refetchInterval: query => query.state.data?.active ? 4000 : false, retry: false,
+    refetchInterval: query => query.state.data?.active ? 4000 : false, retry: false,
   });
   const current = query.data?.latest;
+  useEffect(() => {
+    if (query.dataUpdatedAt)
+      void queryClient.invalidateQueries({ queryKey: ['/web-api/admin/editorial', 'cheese'] });
+  }, [query.dataUpdatedAt, queryClient]);
   const count = query.data?.eligibleCount ?? 0;
   const complete = current ? current.total - current.counts.queued - current.counts.running : 0;
   const lastPage = current ? Math.max(1, Math.ceil(current.visibleTotal / current.limit)) : undefined;
@@ -47,6 +52,7 @@ export default function DraftBatchPanel({ onReview }: { onReview: (result: Draft
       onClick={() => setOpen(value => !value)}><ListChecks className="h-4 w-4" />Фоновая подготовка черновиков</button>
     {open && <div className="mt-3 space-y-3">
       <p className="text-sm text-[#68746b]">ИИ готовит статьи по очереди, даже если закрыть админку. Готовые предложения, одобренные и опубликованные статьи не обрабатываются. Тексты не переносятся в статью без редактора.</p>
+      <p className="text-sm text-[#68746b]">Статьи с готовым фоновым черновиком скрыты из обычного списка. Откройте черновик здесь, проверьте и сохраните его — после этого статья вернётся в обычную редакцию.</p>
       {query.isLoading && <p role="status" className="text-sm">Проверяем список статей…</p>}
       {query.isError && <div role="alert" className="space-x-2 text-sm text-[#8b4535]">
         {errorText(query.error)} <Button variant="outline" size="sm" onClick={() => { void query.refetch(); }}>Обновить</Button>

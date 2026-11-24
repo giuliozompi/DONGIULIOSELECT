@@ -10,6 +10,7 @@ import { runDto, type RunRow } from './editorial-ai';
 import { catalogMatches, normalizedCheeseName } from './editorial-ai-catalog';
 import { validateSourceUrl } from './editorial-ai-sources';
 import { savedOriginCandidate } from './editorial-origin';
+import { hasPendingBatchDraft, pendingBatchMessage } from './editorial-batch-pending';
 
 async function lockedRun(client: any, id: string, kind: 'catalog' | 'draft'): Promise<RunRow> {
   const row = (await client.query('SELECT * FROM editorial_ai_runs WHERE id=$1 FOR UPDATE', [id])).rows[0];
@@ -109,6 +110,8 @@ export async function applyAiDraft(id: string, input: unknown, actor: string, da
     }
     if (params.revision !== body.revision || old.revision !== body.revision)
       throw new EditorialError(409, 'Статья изменилась после генерации. Сначала сохраните свои изменения и подготовьте новую заготовку.');
+    if (await hasPendingBatchDraft(client, old.id, run.id))
+      throw new EditorialError(409, pendingBatchMessage);
     const proposal = run.result as DraftResult;
     const selectedPhotos = (body.photoIds || []).map(photoId => {
       const found = researchPhotoSchema.safeParse(proposal.research?.photos?.find(photo => photo.id === photoId));

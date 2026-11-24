@@ -37,7 +37,14 @@ export async function getDraftBatchOverview(page: number, database = pool, batch
       SELECT id,finished_at,stopped_at FROM editorial_ai_batches WHERE $3::uuid IS NULL OR id=$3
       ORDER BY (finished_at IS NULL) DESC,created_at DESC,id LIMIT 1
     ), recent AS (
-      SELECT id,created_at AS "createdAt" FROM editorial_ai_batches ORDER BY created_at DESC,id LIMIT 20
+      SELECT b.id,b.created_at AS "createdAt" FROM editorial_ai_batches b
+      WHERE b.id IN (SELECT id FROM editorial_ai_batches ORDER BY created_at DESC,id LIMIT 20)
+        OR EXISTS (
+          SELECT 1 FROM editorial_ai_batch_items i
+          JOIN editorial_entries e ON e.id=i.entry_id
+          JOIN editorial_ai_runs r ON r.id=i.run_id
+          WHERE i.batch_id=b.id AND i.status='ready' AND ${reviewable}
+        )
     ), batch_items AS (
       SELECT i.entry_id AS "entryId",i.title,i.status,i.detail,
         (i.status<>'ready' OR EXISTS (
