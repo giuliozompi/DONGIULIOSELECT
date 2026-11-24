@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { useWebMeta } from '../hooks/useWebMeta';
 import { Button } from '@/components/ui/button';
-import { MOSCOW_DELIVERY_RUB, WEB_PICKUP } from '@shared/web-delivery';
+import { MOSCOW_DELIVERY_RUB, WEB_PICKUP, WEB_MOSCOW_DELIVERY_TEXT, WEB_REGIONAL_DELIVERY_TEXT } from '@shared/web-delivery';
 
 function SectionTitle({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle?: string }) {
   return (
@@ -42,7 +42,7 @@ export default function WebDeliveryPage() {
   const [, setLocation] = useLocation();
 
   useWebMeta({
-    title: 'Доставка и оплата — Don Giulio Select',
+    title: 'Доставка и оплата',
     description: 'Доставка по Москве — 1 000 ₽, по Московской области и регионам — по тарифам курьерской службы. Бесплатный самовывоз на Покровке и оплата онлайн.',
   });
 
@@ -90,11 +90,11 @@ export default function WebDeliveryPage() {
 
           <div className="grid sm:grid-cols-2 gap-4">
             <InfoCard title="Доставка по Москве">
-              <p className="text-sm text-neutral-600">Заказ, оформленный до 16:00 по московскому времени, можно получить в тот же день или в другой удобный день.</p>
+              <p className="text-sm text-neutral-600">{WEB_MOSCOW_DELIVERY_TEXT}</p>
               <Row label="Стоимость" value={`${MOSCOW_DELIVERY_RUB.toLocaleString('ru-RU')} ₽`} />
             </InfoCard>
             <InfoCard title="Доставка по Московской области и регионам">
-              <p className="text-sm text-neutral-600">Стоимость зависит от тарифов курьерской службы. При оформлении она не начисляется автоматически: менеджер согласует сумму до оплаты.</p>
+              <p className="text-sm text-neutral-600">{WEB_REGIONAL_DELIVERY_TEXT}</p>
               <Row label="Стоимость" value="По тарифам курьерской службы" />
             </InfoCard>
           </div>

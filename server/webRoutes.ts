@@ -25,6 +25,7 @@ import { registerAdminEditorialRoutes } from './adminEditorialRoutes';
 import { registerAdminEditorialAiRoutes } from './adminEditorialAiRoutes';
 import { registerEditorialMarketRoutes } from './adminEditorialMarketRoutes';
 import { registerPublicEditorialRoutes } from './publicEditorialRoutes';
+import { sendDiscoverySitemap } from './services/web-discovery';
 import { registerPriceSubmissionRoutes } from './priceSubmissionRoutes';
 import { getPaymentLinkStates } from './services/payment-link-attempts';
 import { telegramLinkCodeHandler, saveWebTelegramLink, unlinkWebTelegram } from './services/web-telegram-link';
@@ -130,6 +131,7 @@ const addAddressSchema = z.object({
 // ─── Route Registration ────────────────────────────────────
 
 export function registerWebRoutes(app: Express) {
+  app.use('/web-api', (_req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
   registerPublicEditorialRoutes(app);
   registerPriceSubmissionRoutes(app, requireWebAuth, req => (req as any).webUser?.sub);
   app.use('/web-api', cookieParser());
@@ -565,58 +567,25 @@ export function registerWebRoutes(app: Express) {
   // ── SITEMAP ───────────────────────────────────────────────
 
   // GET /sitemap.xml
-  app.get('/sitemap.xml', async (_req: Request, res: Response) => {
-    try {
-      const BASE = 'https://dongiulioselect.ru';
-      const allProducts = await db.select({ slug: products.slug })
-        .from(products).where(eq(products.isVisible, true));
-      const allCats = await db.select({ slug: categories.slug })
-        .from(categories).where(eq(categories.isVisible, true));
-
-      const staticUrls = [
-        { loc: `${BASE}/web`, priority: '1.0', changefreq: 'daily' },
-        { loc: `${BASE}/web/catalog`, priority: '0.9', changefreq: 'daily' },
-      ];
-      const catUrls = allCats.map(c => ({
-        loc: `${BASE}/web/catalog?category=${c.slug}`, priority: '0.8', changefreq: 'weekly',
-      }));
-      const productUrls = allProducts.map(p => ({
-        loc: `${BASE}/web/product/${p.slug}`,
-        priority: '0.7',
-        changefreq: 'weekly',
-        lastmod: undefined,
-      }));
-
-      const allUrls = [...staticUrls, ...catUrls, ...productUrls];
-      const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${allUrls.map(u => `  <url>
-    <loc>${u.loc}</loc>
-    ${u.lastmod ? `<lastmod>${u.lastmod}</lastmod>` : ''}
-    <changefreq>${u.changefreq}</changefreq>
-    <priority>${u.priority}</priority>
-  </url>`).join('\n')}
-</urlset>`;
-
-      res.header('Content-Type', 'application/xml');
-      return res.send(xml);
-    } catch (err) {
-      return res.status(500).send('<?xml version="1.0"?><error/>');
-    }
-  });
+  app.get('/sitemap.xml', (_req: Request, res: Response) => sendDiscoverySitemap(res));
 
   // GET /robots.txt
   app.get('/robots.txt', (_req: Request, res: Response) => {
     res.type('text/plain');
     res.send(`User-agent: *
-Allow: /web/
-Allow: /web/catalog
-Allow: /web/product/
 Disallow: /api/
 Disallow: /web-api/
+Allow: /web-api/categories$
+Allow: /web-api/products
+Allow: /web-api/editorial/
+Disallow: /web-api/editorial/*/price-submissions
+Disallow: /web/admin
 Disallow: /web/cart
 Disallow: /web/checkout
 Disallow: /web/account
+Disallow: /web/orders/
+Disallow: /web/order-success/
+Disallow: /web/wishlist
 
 Sitemap: https://dongiulioselect.ru/sitemap.xml
 `);

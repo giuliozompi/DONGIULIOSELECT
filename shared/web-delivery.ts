@@ -6,6 +6,10 @@ export const WEB_PICKUP = {
   label: 'Магазин Don Giulio',
   address: 'г. Москва, ул. Покровка, 27, стр. 1',
 };
+export const WEB_MOSCOW_DELIVERY_TEXT =
+  `Заказ по Москве, оформленный до ${MOSCOW_SAME_DAY_CUTOFF}:00 по московскому времени, можно получить в тот же день или в другой удобный день.`;
+export const WEB_REGIONAL_DELIVERY_TEXT =
+  'Стоимость доставки по Московской области и регионам зависит от тарифов курьерской службы: менеджер согласует сумму до оплаты.';
 export const WEB_DELIVERY_LABELS = {
   web_moscow: 'Курьерская доставка по Москве',
   web_regional: 'Курьерская доставка по Московской области и регионам',

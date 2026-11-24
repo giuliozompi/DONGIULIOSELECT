@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { getCountryBounds, matchCountryFeature, type CountryFeature } from '../client/src/web/admin/editorial/cheeseCountryMap';
 import { ATLAS_MARKER_SIZE, atlasCountryPath, atlasMarkerGroups, fitAtlasMap } from '../client/src/web/editorial/atlasMap';
 import { createTodayCountryResolver } from '../shared/editorial-geography';
+import { atlasRegionCountries, atlasRegionCountry, type AtlasRegion } from '../client/src/web/editorial/atlasRegions';
 
 const features: CountryFeature[] = JSON.parse(readFileSync('client/public/editorial/world.geojson', 'utf8')).features;
 const boundsFor = (country: string) => {
@@ -46,6 +47,32 @@ test('the rendered Russian outline fits completely, including both sides of the 
       assert.ok(Number(y) >= 15.99 && Number(y) <= height - 15.99, `Latitude clipped: ${y}`);
     }
   }
+});
+
+test('offline region outlines are unique and fit the available map frame in every supported country', () => {
+  const expected: Record<string, number> = { IT: 20, FR: 13, ES: 19, NL: 12, CH: 26, DE: 16, AT: 9, GR: 14, PT: 20, GB: 4 };
+  for (const [code, name] of Object.entries(atlasRegionCountries)) {
+    const feature = matchCountryFeature(features, name);
+    assert.ok(feature, name);
+    assert.equal(atlasRegionCountry(feature, name), code);
+    const regions: AtlasRegion[] = JSON.parse(readFileSync(`client/public/editorial/regions-v1/${code}.geojson`, 'utf8')).features;
+    assert.equal(regions.length, expected[code], name);
+    assert.equal(new Set(regions.map(region => region.properties.id)).size, regions.length);
+    for (const region of regions) {
+      const bounds = getCountryBounds(region, true);
+      assert.ok(bounds && bounds.longitudeSpan > 0 && bounds.north > bounds.south, region.properties.name);
+      const fitted = fitAtlasMap(340, 320, bounds);
+      const path = atlasCountryPath(region, fitted);
+      const pairs = [...path.matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g)];
+      assert.ok(pairs.length >= 4);
+      for (const [, x, y] of pairs) {
+        assert.ok(Number(x) >= 15.99 && Number(x) <= 324.01, `${region.properties.name}: x=${x}`);
+        assert.ok(Number(y) >= 15.99 && Number(y) <= 304.01, `${region.properties.name}: y=${y}`);
+      }
+    }
+  }
+  assert.equal(atlasRegionCountry(matchCountryFeature(features, 'Голландия'), 'Голландия'), 'NL');
+  assert.equal(atlasRegionCountry(matchCountryFeature(features, 'Япония'), 'Япония'), undefined);
 });
 
 test('renamed countries use a current name; dissolved states use their saved location without guessing', () => {

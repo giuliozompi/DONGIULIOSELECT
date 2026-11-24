@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useParams } from 'wouter';
+import { Link, useParams, useSearch } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, ExternalLink, Globe2, MapPin, Milk, Play, Search, ShoppingCart } from 'lucide-react';
 import { editorialPublicApi, type PublicCheese, type PublicCheeseSummary, type PublicMarketPrice, type PublicVideo } from './editorialPublicApi';
@@ -8,15 +8,18 @@ import { useWebCart } from '../hooks/useWebCart';
 import { useWebAuth } from '../hooks/useWebAuth';
 import { getCartQuantityRules } from '@shared/order-quantity';
 import { cheeseMilkText } from '@shared/editorial-cheese-milk';
+import { ATLAS_DEFAULT_COUNTRY, discoveryUrl, readDiscoveryPage, STORE_ORIGIN, storefrontPath } from '@shared/web-discovery';
+import { useWebMeta } from '../hooks/useWebMeta';
 import { getCountryBounds, loadWorldCountryFeatures, matchCountryFeature, type CountryFeature } from '../admin/editorial/cheeseCountryMap';
 import { ATLAS_MARKER_SIZE, atlasCountryPath, atlasMarkerGroups, fitAtlasMap } from './atlasMap';
+import { atlasRegionCountries, atlasRegionCountry, loadAtlasRegions } from './atlasRegions';
 import CheesePriceSubmissions from './CheesePriceSubmissions';
 import RubleConversion from './RubleConversion';
 import './cheese-price-submissions.css';
 import './editorial.css';
 
 const PAGE_SIZE = 12;
-const DEFAULT_ATLAS_COUNTRY = 'Италия';
+const DEFAULT_ATLAS_COUNTRY = ATLAS_DEFAULT_COUNTRY;
 const categoryLabels: Record<string, string> = {
   recipe: 'Рецепты', interview: 'Интервью', review: 'Обзоры', places: 'Места',
 };
@@ -88,9 +91,14 @@ function CheeseMilkBadge({ milk }: { milk: PublicCheeseSummary['milk'] }) {
 }
 
 export function VideosPage() {
+  const urlSearch = useSearch();
+  const urlPage = readDiscoveryPage(new URLSearchParams(urlSearch).get('page'));
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(urlPage);
+  useEffect(() => { setPage(urlPage); }, [urlPage]);
+  useWebMeta({ title: 'Видеотека Don Giulio', description: 'Рецепты, интервью, обзоры продуктов и гастрономические места.',
+    url: STORE_ORIGIN + discoveryUrl('/web/videos', { page: urlPage > 1 ? urlPage : undefined }) });
   const query = useQuery({
     queryKey: ['/web-api/editorial/videos', search, category, page],
     queryFn: () => editorialPublicApi.videos({ search: search.trim() || undefined, category: category || undefined, page, limit: PAGE_SIZE }),
@@ -118,6 +126,8 @@ export function VideoDetailPage() {
   const query = useQuery({ queryKey: ['/web-api/editorial/video', id], queryFn: () => editorialPublicApi.video(id!), enabled: !!id });
   useEffect(() => { setPlaying(false); }, [id]);
   const video = query.data?.id === id ? query.data : undefined;
+  useWebMeta({ title: video?.title, description: video?.description || undefined, image: video?.cover,
+    url: video ? STORE_ORIGIN + storefrontPath.video(video.id) : undefined, noindex: !query.isLoading && !video, defer: query.isLoading });
   const embed = video ? youtubeEmbed(video.url) : null;
   return <div className="ed-page">
     <Link className="ed-back" href="/web/videos"><ArrowLeft size={16} /> Все видео</Link>
@@ -134,12 +144,20 @@ export function VideoDetailPage() {
 }
 
 export function CheeseAtlasPage() {
+  const urlSearch = useSearch();
+  const urlParams = new URLSearchParams(urlSearch);
+  const urlCountry = urlParams.get('country') === 'all' ? '' : DEFAULT_ATLAS_COUNTRY;
+  const urlPage = readDiscoveryPage(urlParams.get('page'));
   const [search, setSearch] = useState('');
-  const [country, setCountry] = useState(DEFAULT_ATLAS_COUNTRY);
-  const [page, setPage] = useState(1);
-  const [view, setView] = useState<'country' | 'world'>('country');
+  const [country, setCountry] = useState(urlCountry);
+  const [page, setPage] = useState(urlPage);
+  const [view, setView] = useState<'country' | 'world'>(urlCountry ? 'country' : 'world');
+  const [regionId, setRegionId] = useState('');
+  useEffect(() => { setCountry(urlCountry); setPage(urlPage); setView(urlCountry ? 'country' : 'world'); setRegionId(''); }, [urlCountry, urlPage]);
+  useWebMeta({ title: 'Атлас сыров', description: 'История, происхождение, виды молока, характеристики и кулинарное использование сыров.',
+    url: STORE_ORIGIN + discoveryUrl('/web/cheeses', { country: urlCountry ? undefined : 'all', page: urlPage > 1 ? urlPage : undefined }) });
   const [selected, setSelected] = useState<string | null>(null);
-  useEffect(() => { setSelected(null); }, [search, country, view]);
+  useEffect(() => { setSelected(null); }, [search, country, view, regionId]);
   const [features, setFeatures] = useState<CountryFeature[]>([]);
   const [geometryError, setGeometryError] = useState(false);
   const mapBoxRef = useRef<HTMLDivElement>(null);
@@ -177,36 +195,63 @@ export function CheeseAtlasPage() {
   }, []);
   const countryName = country || DEFAULT_ATLAS_COUNTRY;
   const countryFeature = useMemo(() => view === 'country' ? matchCountryFeature(features, countryName) : null, [features, countryName, view]);
-  const bounds = useMemo(() => countryFeature && getCountryBounds(countryFeature, true), [countryFeature]);
+  const regionCountry = view === 'country' ? atlasRegionCountry(countryFeature, countryName) : undefined;
+  const regions = useQuery({
+    queryKey: ['atlas-region-outlines', regionCountry],
+    queryFn: ({ signal }) => loadAtlasRegions(regionCountry!, signal),
+    enabled: !!regionCountry,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const region = regions.data?.find(item => item.properties.id === regionId);
+  const countryBounds = useMemo(() => countryFeature && getCountryBounds(countryFeature, true), [countryFeature]);
+  const regionBounds = useMemo(() => region ? getCountryBounds(region, true) : null, [region]);
+  const bounds = regionBounds || countryBounds;
+  const mapLabel = regionBounds && region ? `Карта: ${countryName} — ${region.properties.name}` : bounds ? `Карта: ${countryName}` : 'Карта мира';
   const frame = useMemo(() => fitAtlasMap(size.width, size.height, bounds), [size, bounds]);
   const shapes = useMemo(() => size.width && size.height ? features.map((feature, index) => ({
     key: index, d: atlasCountryPath(feature, frame), focused: feature === countryFeature,
   })).filter(shape => shape.d) : [], [features, frame, countryFeature, size]);
+  const regionPath = useMemo(() => region && regionBounds && size.width && size.height ? atlasCountryPath(region, frame) : '',
+    [region, regionBounds, size, frame]);
   const groups = useMemo(() => size.width && size.height ? atlasMarkerGroups(map.data?.items || [], frame) : [], [map.data, frame, size]);
   const selectedGroup = groups.find(group => group.items.some(item => item.id === selected));
   const focus = selectedGroup?.items.length === 1 ? selectedGroup.items[0] : null;
   const nearbyCheeses = selectedGroup && selectedGroup.items.length > 1 ? selectedGroup.items : [];
   const availableCountries = list.data?.countries ?? [];
-  const countries = country && !availableCountries.includes(country) ? [country, ...availableCountries] : availableCountries;
+  const countries = Array.from(new Set([...(country ? [country] : []), ...availableCountries, ...Object.values(atlasRegionCountries)]));
   const cheesePage = list.data;
   function changeCountry(value: string) {
     setCountry(value);
     setView(value ? 'country' : 'world');
+    setRegionId('');
     setPage(1);
     setSelected(null);
   }
   return <div className="ed-page">
     <Intro eyebrow="ATLANTE DEI FORMAGGI · СЫРНЫЙ АТЛАС" title="У каждого вкуса есть адрес." text="Энциклопедия сырной географии: статьи о традициях и регионах. Географическое происхождение не подтверждает место производства конкретного продукта." />
-    <div className="ed-map-controls"><button className={view === 'country' ? 'active' : ''} aria-pressed={view === 'country'} onClick={() => country ? setView('country') : changeCountry(DEFAULT_ATLAS_COUNTRY)}><MapPin size={16} /> {countryName}</button><button className={view === 'world' ? 'active' : ''} aria-pressed={view === 'world'} onClick={() => setView('world')}><Globe2 size={16} /> Весь мир</button></div>
+    <div className="ed-map-controls"><button className={view === 'country' && !regionBounds ? 'active' : ''} aria-pressed={view === 'country' && !regionBounds} onClick={() => { if (country) { setView('country'); setRegionId(''); } else changeCountry(DEFAULT_ATLAS_COUNTRY); }}><MapPin size={16} /> {countryName}</button><button className={view === 'world' ? 'active' : ''} aria-pressed={view === 'world'} onClick={() => { setView('world'); setRegionId(''); }}><Globe2 size={16} /> Весь мир</button></div>
     <div className="ed-filter-row"><label className="ed-search"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); setSelected(null); }} placeholder="Название, страна или регион" aria-label="Поиск сырных статей" /></label><label className="ed-filter-select">Страна <select value={country} onChange={e => changeCountry(e.target.value)}><option value="">Все страны</option>{countries.map(value => <option key={value} value={value}>{value}</option>)}</select></label></div>
     {map.isError && <ErrorBox error={map.error} retry={() => map.refetch()} />}
     {map.data?.truncated && <div className="ed-note">Показаны первые 1000 статей на карте. Используйте поиск или список, чтобы найти другие.</div>}
     <div className="ed-map-layout">
       <section className="ed-map-box">
+        {regionCountry && <div className="ed-map-region-controls">
+          <label className="ed-filter-select">Регион на карте
+            <select value={region?.properties.id ?? ''} disabled={!regions.data?.length} onChange={e => setRegionId(e.target.value)}>
+              <option value="">{regions.isLoading ? 'Загружаем регионы…' : 'Вся страна'}</option>
+              {regions.data?.map(item => <option key={item.properties.id} value={item.properties.id}>{item.properties.name}</option>)}
+            </select>
+          </label>
+          {regions.isError ? <button type="button" onClick={() => void regions.refetch()}>Не удалось загрузить регионы. Повторить</button> :
+            <p>Выберите регион, чтобы приблизить карту.</p>}
+        </div>}
         {geometryError && <div className="ed-map-warning" role="status">Контур карты не загрузился. Список статей ниже остаётся доступен.</div>}
         {features.length > 0 && view === 'country' && !bounds && <div className="ed-map-warning" role="status">Контур выбранной страны не найден. Показана карта мира.</div>}
         <div ref={mapBoxRef} className={`ed-map-canvas ${view === 'world' ? 'ed-map-world' : ''}`}>
-          {size.width > 0 && size.height > 0 && <svg viewBox={`0 0 ${size.width} ${size.height}`} role="img" aria-label={bounds ? `Карта: ${countryName}` : 'Карта мира'}>{shapes.map(shape => <path key={shape.key} className={shape.focused ? 'ed-map-country-focus' : undefined} d={shape.d} fill={shape.focused ? '#aab99f' : '#d2d7c7'} fillRule="evenodd" stroke={shape.focused ? '#819776' : '#f8f5ed'} strokeWidth={shape.focused ? 1.2 : .7} />)}</svg>}
+          {size.width > 0 && size.height > 0 && <svg viewBox={`0 0 ${size.width} ${size.height}`} role="img" aria-label={mapLabel}>{shapes.map(shape => <path key={shape.key} className={shape.focused ? 'ed-map-country-focus' : undefined} d={shape.d} fill={shape.focused ? '#aab99f' : '#d2d7c7'} fillRule="evenodd" stroke={shape.focused ? '#819776' : '#f8f5ed'} strokeWidth={shape.focused ? 1.2 : .7} />)}
+            {regionPath && <path className="ed-map-region-focus" d={regionPath} fill="#708867" fillRule="evenodd" />}
+          </svg>}
           {groups.map(group => {
             const sole = group.items.length === 1 ? group.items[0] : null;
             const label = sole ? `${sole.title}, ${sole.region || sole.country}` : `Группа: ${group.items.length} · ${group.items.map(item => item.title).join(', ')}`;
@@ -275,7 +320,7 @@ function ProductPurchase({ item }: { item: PublicCheese['products'][number] }) {
   }
   return <div className="ed-product">
     <Image src={item.images?.[0]} alt={item.name} className="ed-product-image" />
-    <div className="ed-product-info"><Link href={`/web/product/${item.slug}`}><strong>{live.name}</strong></Link><p>{live.price} ₽ / {live.unit}{live.inStock ? '' : ' · Нет в наличии'}</p>
+    <div className="ed-product-info"><Link href={storefrontPath.product(item.slug)}><strong>{live.name}</strong></Link><p>{live.price} ₽ / {live.unit}{live.inStock ? '' : ' · Нет в наличии'}</p>
       <button disabled={!live.inStock || busy} onClick={() => { void addLatest(); }}><ShoppingCart size={15} />{busy ? 'Проверяем…' : live.inStock ? 'В корзину' : 'Нет в наличии'}</button>
       {cartItem && <small>В корзине: {cartItem.quantity} {cartItem.unit}</small>}
       {notice && <small role="status">{notice}</small>}{error && <small role="alert" className="ed-product-error">{error}</small>}
@@ -298,6 +343,10 @@ export function CheeseDetailPage() {
   const pricesQuery = useQuery({ queryKey: ['/web-api/editorial/cheese-prices', id, pricePage], queryFn: () => editorialPublicApi.prices(id!, pricePage, 10), enabled: !!id });
   useEffect(() => { setPricePage(1); }, [id]);
   const cheese = cheeseQuery.data?.id === id ? cheeseQuery.data : undefined;
+  useWebMeta({ title: cheese ? [cheese.title, cheese.nameOriginal && cheese.nameOriginal !== cheese.title ? `(${cheese.nameOriginal})` : ''].filter(Boolean).join(' ') : undefined,
+    description: cheese?.description || undefined, image: cheese?.photo, type: 'article',
+    url: cheese ? STORE_ORIGIN + storefrontPath.cheese(cheese.id) : undefined,
+    noindex: !cheeseQuery.isLoading && !cheese, defer: cheeseQuery.isLoading });
   const priceData = pricesQuery.data;
   return <div className="ed-page">
     <Link className="ed-back" href="/web/cheeses"><ArrowLeft size={16} /> Назад к атласу</Link>

@@ -82,6 +82,13 @@ export async function publicCheeseDetail(id: string, database = pool): Promise<P
       ...(p.description_short === null ? {} : { descriptionShort: p.description_short }),
     })) };
 }
+export async function publicCheesesForProduct(id: string, database = pool): Promise<PublicCheeseSummary[]> {
+  const result = await database.query(`SELECT e.* FROM editorial_publications e
+    JOIN products p ON p.id=$1 AND p.is_visible=true
+    WHERE e.kind='cheese' AND (e.data->'productIds') ? p.id
+    ORDER BY (e.data->>'sortOrder')::int,e.published_at DESC,e.entry_id`, [id]);
+  return result.rows.map(row => cheeseSummary(row));
+}
 export async function publicCheesePrices(id: string, page: number, limit: number, database = pool): Promise<EditorialPage<PublicMarketPrice>> {
   // Both the parent and observations are checked in the same SQL snapshot.
   const result = await database.query(`WITH parent AS (

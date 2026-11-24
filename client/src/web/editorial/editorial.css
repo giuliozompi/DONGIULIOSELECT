@@ -69,6 +69,11 @@
 .ed-map-controls { display: flex; gap: 9px; margin: 20px 0 14px; flex-wrap: wrap; }
 .ed-map-controls button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 15px; border: 1px solid #aab3a5; background: transparent; color: var(--ed-olive); cursor: pointer; font-size: 12px; }
 .ed-map-controls button.active { border-color: var(--ed-olive); background: var(--ed-olive); color: white; }
+.ed-map-region-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px 16px; padding: 12px 14px; background: #f8f7ed; border-bottom: 1px solid #d8ddcf; }
+.ed-map-region-controls label { flex: 0 1 260px; min-width: 0; }
+.ed-map-region-controls select { width: 100%; min-height: 44px; }
+.ed-map-region-controls p { color: var(--ed-muted); font-size: 12px; margin: 0 0 9px; }
+.ed-map-region-controls button { min-height: 44px; text-decoration: underline; color: var(--ed-olive); padding: 0 4px; font-size: 12px; }
 .ed-map-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(260px, .78fr); gap: 18px; align-items: stretch; }
 .ed-map-box { padding: 12px; min-width: 0; }
 .ed-map-canvas { position: relative; width: 100%; min-height: 320px; aspect-ratio: 860 / 540; overflow: hidden; background: #e7eee8; }

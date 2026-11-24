@@ -69,6 +69,22 @@ function AdminRouter() {
 function WebRouter() {
   const [location] = useLocation();
   const isAdmin = location.startsWith('/web/admin');
+  useEffect(() => {
+    const page = window.location.pathname.replace(/\/+$/, '');
+    document.querySelectorAll<HTMLElement>('[data-document-discovery]').forEach(el => {
+      if (el.dataset.documentDiscovery !== page) el.remove();
+    });
+    if (/^\/web\/(?:admin|account|orders|order-success|wishlist|cart|checkout)(?:\/|$)/.test(page)) {
+      let meta = document.querySelector('meta[name="robots"]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', 'robots');
+        document.head.append(meta);
+      }
+      meta.setAttribute('content', 'noindex, follow');
+      document.querySelector('link[rel="canonical"]')?.remove();
+    }
+  }, [location]);
 
   if (isAdmin) {
     return <AdminRouter />;

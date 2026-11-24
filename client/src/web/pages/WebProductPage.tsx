@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useLocation } from 'wouter';
+import { Link, useParams, useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Plus, Minus, ShoppingCart, ArrowLeft, Package, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,11 @@ import { Separator } from '@/components/ui/separator';
 import { useWebCart } from '../hooks/useWebCart';
 import { webApi } from '../lib/webApi';
 import { useWebMeta } from '../hooks/useWebMeta';
-import { ProductJsonLd, BreadcrumbJsonLd } from '../components/WebJsonLd';
+import { BreadcrumbJsonLd } from '../components/WebJsonLd';
 import WebFavoriteButton from '../components/WebFavoriteButton';
 import { areCartUnitsEqual, getCartQuantityRules, isKilogramUnit } from '@shared/order-quantity';
+import { STORE_ORIGIN, storefrontPath } from '@shared/web-discovery';
+import type { PublicCheeseSummary } from '@shared/public-editorial';
 
 interface Product {
   id: string; name: string; slug: string; price: string; priceOld?: string;
@@ -30,16 +32,24 @@ export default function WebProductPage() {
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['/web-api/products', slug],
-    queryFn: () => webApi.get<Product>(`/products/${slug}`),
+    queryFn: () => webApi.get<Product>(`/products/${encodeURIComponent(slug || '')}`),
     enabled: !!slug,
+  });
+  const { data: relatedCheeses } = useQuery({
+    queryKey: ['/web-api/editorial/products/cheeses', product?.id],
+    queryFn: () => webApi.get<PublicCheeseSummary[]>(`/editorial/products/${encodeURIComponent(product!.id)}/cheeses`),
+    enabled: Boolean(product?.id),
   });
 
   useWebMeta({
     title: product?.name,
-    description: product?.descriptionShort || `Купить ${product?.name ?? ''} с доставкой по России. Don Giulio Select — итальянские деликатесы премиум качества.`,
+    description: product?.descriptionShort || product?.descriptionFull || (product ? `${product.name}: цена, наличие и доставка.` : undefined),
     image: product?.images?.[0],
     type: 'product',
     price: product?.price,
+    url: product ? `${STORE_ORIGIN}${storefrontPath.product(product.slug)}` : undefined,
+    noindex: !isLoading && !product,
+    defer: isLoading,
   });
 
   const images = product?.images?.filter(Boolean) ?? [];
@@ -106,19 +116,10 @@ export default function WebProductPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <ProductJsonLd
-        name={product.name}
-        description={product.descriptionShort}
-        image={product.images?.[0]}
-        price={product.price}
-        availability={product.inStock}
-        sku={product.id}
-        url={typeof window !== 'undefined' ? window.location.href : ''}
-      />
       <BreadcrumbJsonLd items={[
         { name: 'Главная', url: 'https://dongiulioselect.ru/web' },
         { name: 'Каталог', url: 'https://dongiulioselect.ru/web/catalog' },
-        { name: product.name, url: `https://dongiulioselect.ru/web/product/${product.slug}` },
+        { name: product.name, url: `${STORE_ORIGIN}${storefrontPath.product(product.slug)}` },
       ]} />
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1 text-xs text-neutral-500 mb-6 flex-wrap">
@@ -293,6 +294,14 @@ export default function WebProductPage() {
               <p className="text-sm text-neutral-600 leading-relaxed whitespace-pre-line">{product.descriptionFull}</p>
             </div>
           )}
+          <Link href="/web/delivery" className="text-sm text-amber-800 underline">Условия доставки и самовывоза</Link>
+          {Array.isArray(relatedCheeses) && relatedCheeses.length > 0 && <section>
+            <h2 className="font-medium text-sm text-neutral-900 mb-2">Об этом сыре в Атласе</h2>
+            <p className="text-sm text-neutral-600">Атлас описывает историю и традиции сыра, а не подтверждает место производства этого товара.</p>
+            <ul className="mt-2 space-y-1">{relatedCheeses.map(cheese => <li key={cheese.id}>
+              <Link href={storefrontPath.cheese(cheese.id)} className="text-sm text-amber-800 underline">{cheese.title}</Link>
+            </li>)}</ul>
+          </section>}
         </div>
       </div>
     </div>

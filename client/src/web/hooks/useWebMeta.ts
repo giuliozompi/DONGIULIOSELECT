@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { useLocation } from 'wouter';
+import { publicMediaUrl, STORE_ORIGIN } from '@shared/web-discovery';
 
 interface MetaOptions {
   title?: string;
@@ -8,6 +10,8 @@ interface MetaOptions {
   type?: 'website' | 'product' | 'article';
   price?: string;
   currency?: string;
+  noindex?: boolean;
+  defer?: boolean;
 }
 
 const SITE_NAME = 'Don Giulio Select';
@@ -25,15 +29,18 @@ function setMeta(name: string, content: string, attr: 'name' | 'property' = 'nam
 }
 
 export function useWebMeta(options: MetaOptions = {}) {
+  const [path] = useLocation();
+  const canonical = options.url || `${STORE_ORIGIN}${path.replace(/\/+$/, '') || '/web'}`;
   useEffect(() => {
+    if (options.defer) return;
     const {
       title,
       description = DEFAULT_DESC,
       image = DEFAULT_IMAGE,
-      url = typeof window !== 'undefined' ? window.location.href : '',
       type = 'website',
       price,
       currency = 'RUB',
+      noindex,
     } = options;
 
     // Title
@@ -42,14 +49,14 @@ export function useWebMeta(options: MetaOptions = {}) {
 
     // Standard meta
     setMeta('description', description);
-    setMeta('robots', 'index, follow');
+    setMeta('robots', noindex ? 'noindex, follow' : 'index, follow');
 
     // Open Graph
     setMeta('og:title', fullTitle, 'property');
     setMeta('og:description', description, 'property');
-    setMeta('og:image', image, 'property');
-    setMeta('og:url', url, 'property');
-    setMeta('og:type', type === 'product' ? 'og:product' : 'website', 'property');
+    setMeta('og:image', publicMediaUrl(image) ?? DEFAULT_IMAGE, 'property');
+    setMeta('og:url', canonical, 'property');
+    setMeta('og:type', type, 'property');
     setMeta('og:site_name', SITE_NAME, 'property');
     setMeta('og:locale', 'ru_RU', 'property');
 
@@ -57,26 +64,29 @@ export function useWebMeta(options: MetaOptions = {}) {
     setMeta('twitter:card', 'summary_large_image');
     setMeta('twitter:title', fullTitle);
     setMeta('twitter:description', description);
-    setMeta('twitter:image', image);
+    setMeta('twitter:image', publicMediaUrl(image) ?? DEFAULT_IMAGE);
 
     // Product-specific
     if (type === 'product' && price) {
       setMeta('product:price:amount', price, 'property');
       setMeta('product:price:currency', currency, 'property');
+    } else {
+      document.querySelector('meta[property="product:price:amount"]')?.remove();
+      document.querySelector('meta[property="product:price:currency"]')?.remove();
     }
 
     // Canonical link
-    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (!canonical) {
-      canonical = document.createElement('link');
-      canonical.setAttribute('rel', 'canonical');
-      document.head.appendChild(canonical);
+    let canonicalLink = document.querySelector('link[rel="canonical"]');
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalLink);
     }
-    canonical.setAttribute('href', url);
+    canonicalLink.setAttribute('href', canonical);
 
     return () => {
       // Reset to defaults on unmount
       document.title = SITE_NAME;
     };
-  }, [options.title, options.description, options.image, options.url, options.price]);
+  }, [options.title, options.description, options.image, canonical, options.price, options.currency, options.type, options.noindex, options.defer]);
 }

@@ -2,7 +2,7 @@ import type { Express, Request, RequestHandler } from 'express';
 import { z } from 'zod';
 import { pool } from './db';
 import { EditorialError } from './services/editorial';
-import { publicEditorialList, publicCheeseMap, publicVideoDetail, publicCheeseDetail, publicCheesePrices } from './services/public-editorial';
+import { publicEditorialList, publicCheeseMap, publicVideoDetail, publicCheeseDetail, publicCheesePrices, publicCheesesForProduct } from './services/public-editorial';
 
 const pagination = { page: z.coerce.number().int().min(1).max(100000).default(1),
   limit: z.coerce.number().int().min(1).max(48).default(12) };
@@ -27,6 +27,7 @@ export function registerPublicEditorialRoutes(app: Express, database = pool) {
   app.get(`${base}/videos/:id`, route(req => publicVideoDetail(id(req), database)));
   app.get(`${base}/cheeses`, route(req => publicEditorialList('cheese', filters.parse(req.query), database)));
   app.get(`${base}/map`, route(req => publicCheeseMap(filters.parse(req.query), database)));
+  app.get(`${base}/products/:id/cheeses`, route(req => publicCheesesForProduct(z.string().min(1).max(100).parse(req.params.id), database)));
   app.get(`${base}/cheeses/:id/prices`, route(req => {
     const query = z.object(pagination).strict().parse(req.query);
     return publicCheesePrices(id(req), query.page, query.limit, database);

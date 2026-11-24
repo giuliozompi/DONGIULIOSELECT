@@ -20,6 +20,7 @@ export function normalizeCountryName(value: string) {
 const aliases: Record<string, string[]> = {
   RU: ['РФ', 'Российская Федерация', 'Russia', 'РСФСР', 'RSFSR'],
   GB: ['UK', 'Соединённое Королевство', 'United Kingdom'],
+  NL: ['Голландия', 'Holland'],
   US: ['США', 'USA', 'Соединённые Штаты', 'United States of America'],
   CZ: ['Чешская Республика', 'Czech Republic', 'Repubblica Ceca'],
   DE: ['ФРГ', 'ГДР', 'Германская Демократическая Республика', 'East Germany', 'West Germany', 'DDR', 'RDT'],

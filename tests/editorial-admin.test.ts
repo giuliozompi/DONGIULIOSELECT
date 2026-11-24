@@ -19,6 +19,8 @@ import { changePublication, publishApprovedCheeses } from '../server/services/ed
 import { publicEditorialList, publicCheeseMap, publicCheeseDetail, publicCheesePrices, publicVideoDetail } from '../server/services/public-editorial';
 import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg, type CheeseData, type PriceData } from '../shared/editorial';
 import { cheeseEditorialStage } from '../shared/editorial-stages';
+import { sendDiscoverySitemap, sendStorefrontDocument } from '../server/services/web-discovery';
+import { discoveryUrl, storefrontPath } from '../shared/web-discovery';
 
 const exec = promisify(execFile);
 let directory: string;
@@ -43,10 +45,11 @@ before(async () => {
   started = true;
   database = new pg.Pool({ host: directory, port: 5432, user: 'editorial_test', database: 'postgres', max: 10 });
   await database.query(`CREATE TABLE web_users(id varchar PRIMARY KEY);
+    CREATE TABLE categories(id varchar PRIMARY KEY,name text,slug text,is_visible boolean DEFAULT true,sort_order integer DEFAULT 0);
     CREATE TABLE products(id varchar PRIMARY KEY, price numeric NOT NULL DEFAULT 100,
       name text DEFAULT 'Test product',slug text DEFAULT 'test-product',images text[] DEFAULT '{}',
       price_old numeric,unit text DEFAULT 'кг',in_stock boolean DEFAULT true,is_visible boolean DEFAULT true,
-      description_short text);
+      description_short text,description_full text,nutrition jsonb,category_id varchar,sort_priority integer DEFAULT 0);
     CREATE TABLE admin_action_logs(
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), admin_user_id varchar NOT NULL, action_type text NOT NULL,
       entity_type text NOT NULL, entity_id varchar, action_data jsonb NOT NULL, created_at timestamptz DEFAULT now());`);
@@ -64,6 +67,11 @@ before(async () => {
     (req, res, next) => req.headers.authorization ? next() : void res.status(401).json({ error: 'auth' }),
     req => ['owner-a', 'owner-b'].includes(req.headers.authorization ?? '') ? req.headers.authorization : undefined,
     database);
+  const clientTemplate = await readFile('client/index.html', 'utf8');
+  app.get('/sitemap.xml', (_req, res) => sendDiscoverySitemap(res, database));
+  app.use('*', async (req, res, next) => {
+    if (!await sendStorefrontDocument(req, res, clientTemplate, database)) next();
+  });
   server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as any).port}/web-api/admin/editorial`;
@@ -75,7 +83,7 @@ after(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 beforeEach(async () => {
-  await database.query('TRUNCATE editorial_price_submissions,editorial_publications,editorial_entries,admin_action_logs,products,web_users');
+  await database.query('TRUNCATE editorial_price_submissions,editorial_publications,editorial_entries,admin_action_logs,products,web_users,categories');
   await database.query("INSERT INTO web_users(id) VALUES('owner-a'),('owner-b')");
   await database.query("INSERT INTO products(id) VALUES('catalogue-test')");
 });
@@ -539,6 +547,117 @@ test('manual milk composition is stored in the draft, replaces text only after p
   c = await saveEditorial('cheese', { ...c.data, milkComposition: undefined }, 'editor', c, database, true);
   assert.deepEqual((await detail()).milk, auto);
 });
+
+const discoveryBase = () => base.replace('/web-api/admin/editorial', '');
+const discoveryFetch = (path: string, init?: RequestInit) => fetch(`${discoveryBase()}${path}`, init);
+
+test('initial HTML describes public products, cheese and video with canonical URLs and approved reciprocal links', async () => {
+  const slug = 'сыр-состав';
+  await database.query(`INSERT INTO categories(id,name,slug) VALUES('internal-category','Твёрдые сыры','tverdye-syry');
+    UPDATE products SET name='Сыр из каталога',description_short='Проверенное описание товара',
+      description_full='Текст о производстве товара',nutrition='{"composition":["молоко", "соль"]}',
+      category_id='internal-category', price=350.25,in_stock=false WHERE id='catalogue-test'`);
+  await database.query('UPDATE products SET slug=$1 WHERE id=$2', [slug, 'catalogue-test']);
+  const unpublished = await saveEditorial('cheese', { ...cheese(), title: 'ЧЕРНОВИК, НЕ ПОКАЗЫВАТЬ',
+    productIds: ['catalogue-test'] }, 'editor', undefined, database);
+  const c = await saveEditorial('cheese', { ...readyCheese(), title: 'Сыр <традиционный>', nameOriginal: 'Formaggio tradizionale',
+    description: 'Публичное описание сыра', country: 'Италия', productionCountry: 'Россия',
+    culinaryUses: 'Используют в горячих блюдах.', milkComposition: [{ type: 'cow', percentage: 80.25 }, { type: 'goat' }],
+    productIds: ['catalogue-test'] }, 'editor', undefined, database, true);
+  const videoEntry = await saveEditorial('video', { ...video(), description: 'Разговор о сыре', status: 'ready', cheeseIds: [c.id] }, 'editor', undefined, database);
+  await changePublication(videoEntry.id, videoEntry.revision, true, 'editor', database);
+
+  const [p, article, hostedVideo] = await Promise.all([
+    discoveryFetch(`${storefrontPath.product(slug)}?utm_source=probe`),
+    discoveryFetch(storefrontPath.cheese(c.id)),
+    discoveryFetch(storefrontPath.video(videoEntry.id)),
+  ]);
+  for (const response of [p, article, hostedVideo]) {
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+  }
+  const [productHtml, articleHtml, videoHtml] = await Promise.all([p.text(), article.text(), hostedVideo.text()]);
+  assert.ok(productHtml.includes(`rel="canonical" href="https://dongiulioselect.ru${storefrontPath.product(slug)}"`));
+  assert.match(productHtml, /<h1>Сыр из каталога<\/h1>/);
+  assert.match(productHtml, /350,25 ₽ \/ кг · Нет в наличии/);
+  assert.match(productHtml, /молоко, соль/);
+  assert.ok(productHtml.includes(storefrontPath.cheese(c.id)));
+  assert.ok(!productHtml.includes(unpublished.id));
+  assert.match(productHtml, /"@type":"Product".*"availability":"https:\/\/schema.org\/OutOfStock"/);
+  assert.match(articleHtml, /<h1>Сыр &lt;традиционный&gt; \(Formaggio tradizionale\)<\/h1>/);
+  assert.match(articleHtml, /"headline":"Сыр \\u003cтрадиционный\\u003e/);
+  assert.match(articleHtml, /Вид молока: смесь \(коровье 80,25%, козье\)/);
+  assert.match(articleHtml, /Историческое происхождение: Италия/);
+  assert.match(articleHtml, /Страна производства, указанная редакцией: Россия/);
+  assert.match(articleHtml, /Используют в горячих блюдах/);
+  assert.match(articleHtml, /"@type":"Article"/);
+  assert.doesNotMatch(articleHtml, /"@type":"Offer"/);
+  assert.ok(articleHtml.includes(storefrontPath.product(slug)));
+  assert.match(videoHtml, /<h1>Разговор с производителем<\/h1>/);
+  assert.match(videoHtml, /Разговор о сыре/);
+  assert.match(videoHtml, /href="https:\/\/www.youtube.com\/watch\?v=abc123"/);
+  assert.doesNotMatch(videoHtml, /<iframe/);
+  const reverse = await discoveryFetch('/web-api/editorial/products/catalogue-test/cheeses');
+  assert.deepEqual((await reverse.json()).map((item: { id: string }) => item.id), [c.id]);
+});
+
+test('sitemap contains only canonical public pages; withdrawing a snapshot removes all public entry points', async () => {
+  const c = await saveEditorial('cheese', { ...readyCheese(), productIds: ['catalogue-test'] }, 'editor', undefined, database, true);
+  const draft = await saveEditorial('cheese', cheese(), 'editor', undefined, database);
+  const v = await saveEditorial('video', { ...video(), status: 'ready' }, 'editor', undefined, database);
+  await changePublication(v.id, v.revision, true, 'editor', database);
+  await database.query(`INSERT INTO categories(id,name,slug) VALUES('staff-id','Сыры','syry'),('empty','Пустая','empty');
+    UPDATE products SET category_id='staff-id' WHERE id='catalogue-test';
+    INSERT INTO products(id,slug,is_visible) VALUES('hidden','hidden-product',false)`);
+  const sitemap = async () => (await discoveryFetch('/sitemap.xml')).text();
+  const xml = await sitemap();
+  for (const path of ['/web/cheeses', '/web/videos', '/web/delivery', storefrontPath.cheese(c.id),
+    storefrontPath.video(v.id), '/web/product/test-product', '/web/catalog?category=syry']) {
+    assert.ok(xml.includes(`<loc>https://dongiulioselect.ru${path}</loc>`), path);
+  }
+  for (const privateText of [draft.id, '/web/account', '/web/admin', '/web/cart', 'hidden-product', 'category=empty', 'category=staff-id'])
+    assert.ok(!xml.includes(privateText), privateText);
+  assert.match(xml, /<lastmod>\d{4}-\d\d-\d\dT/);
+  const alias = await discoveryFetch(discoveryUrl('/web/catalog', { category: 'staff-id' }));
+  assert.match(await alias.text(), /rel="canonical" href="https:\/\/dongiulioselect.ru\/web\/catalog\?category=syry"/);
+  await changePublication(c.id, c.revision, false, 'editor', database);
+  assert.ok(!(await sitemap()).includes(c.id));
+  const reverse = await discoveryFetch('/web-api/editorial/products/catalogue-test/cheeses');
+  assert.deepEqual(await reverse.json(), []);
+  for (const path of [storefrontPath.cheese(c.id), storefrontPath.cheese(draft.id), '/web/cheeses/not-an-id',
+    '/web/product/hidden-product', '/web/catalog?page=999', '/web/does-not-exist']) {
+    const response = await discoveryFetch(path);
+    assert.equal(response.status, 404, path);
+    assert.match(response.headers.get('x-robots-tag') || '', /noindex/);
+    assert.doesNotMatch(await response.text(), /rel="canonical"/);
+  }
+  const admin = await discoveryFetch('/web/admin');
+  assert.equal(admin.status, 200, 'private SPA login behavior is unchanged');
+  assert.match(admin.headers.get('x-robots-tag') || '', /noindex/);
+  assert.doesNotMatch(await admin.text(), /data-discovery-content/);
+  assert.equal((await discoveryFetch('/web/about')).status, 200, 'existing About route remains accessible');
+  const search = await discoveryFetch('/web/search?q=сыр');
+  assert.match(search.headers.get('x-robots-tag') || '', /noindex/);
+});
+
+test('public navigation and Moscow delivery information work without executing scripts', async () => {
+  const c = await publishedCheese();
+  const delivery = await discoveryFetch('/web/delivery');
+  const html = await delivery.text();
+  assert.match(html, /<h1>Доставка и оплата<\/h1>/);
+  assert.match(html, /1[  ]000 ₽/);
+  assert.match(html, /до 16:00 по московскому времени/);
+  assert.match(html, /Покровка, 27, стр\. 1/);
+  assert.match(html, /href="\/web\/catalog"/);
+  const robot = await discoveryFetch('/web/delivery', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; YandexBot/3.0)' } });
+  assert.equal(await robot.text(), html, 'no different HTML based on the crawler identity');
+  const atlas = await discoveryFetch('/web/cheeses?country=all');
+  assert.match(await atlas.text(), new RegExp(storefrontPath.cheese(c.id)));
+  const head = await discoveryFetch('/web/delivery', { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+});
+
 test('public relationships use both published directions and exclude unpublished related content', async () => {
   let c = await saveEditorial('cheese', readyCheese(), 'operator', undefined, database);
   let v = await saveEditorial('video', { ...video(), status: 'ready', cheeseIds: [c.id] }, 'operator', undefined, database);

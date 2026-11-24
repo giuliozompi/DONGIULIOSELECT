@@ -7,7 +7,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { initTelegramApp, getTelegramStartParam } from '@/lib/telegram';
 import { TelegramThemeProvider } from '@/components/TelegramThemeProvider';
 
-const WebApp = lazy(() => import('./web/WebApp'));
+let storefrontImport: ReturnType<typeof importStorefront> | undefined;
+const importStorefront = () => import('./web/WebApp');
+export const loadStorefront = () => storefrontImport ??= importStorefront();
+const WebApp = lazy(loadStorefront);
 
 class WebAppErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
   constructor(props: { children: ReactNode }) {

@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import WebProductCard from '../components/WebProductCard';
 import { webApi } from '../lib/webApi';
 import { useWebMeta } from '../hooks/useWebMeta';
-import { OrganizationJsonLd } from '../components/WebJsonLd';
 
 interface Product {
   id: string;
@@ -56,7 +55,6 @@ export default function WebHomePage() {
 
   return (
     <div className="min-h-screen">
-      <OrganizationJsonLd />
       {/* HERO */}
       <section className="relative overflow-hidden bg-neutral-900 text-white">
         <div

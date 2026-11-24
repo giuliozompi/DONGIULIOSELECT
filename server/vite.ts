@@ -6,6 +6,7 @@ import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import { nanoid } from "nanoid";
+import { sendStorefrontDocument } from "./services/web-discovery";
 
 const viteLogger = createLogger();
 
@@ -60,7 +61,9 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      if (!await sendStorefrontDocument(req, res, page)) {
+        res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      }
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
@@ -96,9 +99,14 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+  const template = fs.readFileSync(path.join(distPath, "index.html"), "utf8");
+  // The public storefront gets its initial content before the same SPA takes over.
+  app.use("*", async (req, res, next) => {
+    try {
+      if (!await sendStorefrontDocument(req, res, template)) res.type("html").send(template);
+    } catch (error) {
+      next(error);
+    }
   });
   return true;
 }

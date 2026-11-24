@@ -31,6 +31,7 @@ test('atlas filters by country, shows world pins and opens articles at the top',
   const page = await browser.newPage();
   const errors = [];
   const geometry = await readFile('client/public/editorial/world.geojson');
+  let failSpainOnce = true;
   await page.send('Network.enable');
   await page.send('Network.setBypassServiceWorker', { bypass: true });
   await page.send('Page.addScriptToEvaluateOnNewDocument', {
@@ -49,6 +50,12 @@ test('atlas filters by country, shows world pins and opens articles at the top',
       type = path.endsWith('.css') ? 'text/css' : 'application/javascript';
     } else if (path === '/editorial/world.geojson') {
       body = geometry;
+    } else if (/^\/editorial\/regions-v1\/[A-Z]{2}\.geojson$/.test(path)) {
+      if (path.endsWith('/ES.geojson') && failSpainOnce) {
+        failSpainOnce = false;
+        status = 503;
+        body = '{}';
+      } else body = await readFile(join(build, path));
     } else if (path === '/web-api/editorial/map' || path === '/web-api/editorial/cheeses') {
       const country = searchParams.get('country');
       const search = searchParams.get('search')?.toLowerCase();
@@ -80,11 +87,18 @@ test('atlas filters by country, shows world pins and opens articles at the top',
   const cards = '.ed-cheese-grid a[href^="/web/cheeses/"]';
   const visibleCards = () => page.evaluate(`Array.from(document.querySelectorAll('${cards}'), a => a.pathname.split('/').pop())`);
   const italianCards = ['castelmagno', 'nearby', 'gorgonzola', 'sicilia', 'sardegna'];
-  const country = async value => page.evaluate(`(() => {
-    const select=document.querySelector('.ed-filter-select select');
+  const select = async (selector, value) => page.evaluate(`(() => {
+    const select=document.querySelector(${JSON.stringify(selector)});
     select.value=${JSON.stringify(value)};
     select.dispatchEvent(new Event('change',{bubbles:true}));
   })()`);
+  const country = value => select('.ed-filter-row select', value);
+  const regionSelect = '.ed-map-region-controls select';
+  const region = async code => {
+    await page.wait(`!!document.querySelector(${JSON.stringify(`${regionSelect} option[value="${code}"]`)})`);
+    await select(regionSelect, code);
+  };
+  const mapLabel = name => `.ed-map-canvas > svg[aria-label="Карта: ${name}"]`;
   const fit = async () => {
     const v = await page.evaluate(`(() => {
       const shape=document.querySelector('${focused}').getBoundingClientRect();
@@ -111,6 +125,19 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     await page.wait(`!!document.querySelector('.ed-map-aside a[href="/web/cheeses/gorgonzola"]')`);
     await page.click(pin('Группа: 2'));
     await page.wait(`document.querySelectorAll('.ed-pin-list-item').length === 2`);
+    await region('IT-21');
+    await page.wait(`!!document.querySelector('${mapLabel('Италия — Пьемонт')} .ed-map-region-focus')`);
+    await page.wait(`!!document.querySelector('${pin('Группа: 2')}') && !document.querySelector('${pin('Пекорино')}')`);
+    assert.deepEqual(await visibleCards(), italianCards, 'region zoom does not change the article list');
+    const regionFit = await page.evaluate(`(() => {
+      const map=document.querySelector('.ed-map-canvas').getBoundingClientRect();
+      const region=document.querySelector('.ed-map-region-focus').getBoundingClientRect();
+      return [region.left-map.left, region.top-map.top, map.right-region.right, map.bottom-region.bottom];
+    })()`);
+    assert.ok(regionFit.every(padding => padding >= 15.8));
+    assert.ok(regionFit.some(padding => Math.abs(padding - 16) < .2), 'the region fills one map dimension');
+    await page.click('.ed-map-controls button:first-child');
+    await page.wait(`!!document.querySelector('${mapLabel('Италия')}') && !document.querySelector('.ed-map-region-focus')`);
 
     await page.setViewport({ width: 390, height: 850, mobile: true });
     await page.send('Page.reload', { ignoreCache: true });
@@ -131,10 +158,24 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     await page.wait(`!!document.querySelector('${cards}[href="/web/cheeses/camembert"]')`);
     assert.deepEqual(await visibleCards(), ['camembert']);
     assert.equal(await page.evaluate(`document.querySelector('.ed-map-controls button').getAttribute('aria-pressed')`), 'true');
+    await region('FR-NOR');
+    await page.wait(`!!document.querySelector('${mapLabel('Франция — Нормандия')} .ed-map-region-focus') && !!document.querySelector('${pin('Камамбер')}')`);
+    assert.ok(await page.evaluate(`document.querySelector('${regionSelect}').getBoundingClientRect().height >= 44`));
+    await country('Испания');
+    await page.wait(`!!document.querySelector('.ed-map-region-controls button') && !!document.querySelector('${mapLabel('Испания')}')`);
+    await page.tap('.ed-map-region-controls button');
+    await region('ES-CM');
+    await page.wait(`!!document.querySelector('${mapLabel('Испания — Кастилия — Ла-Манча')} .ed-map-region-focus')`);
+    await country('Нидерланды');
+    await region('NLD-3485');
+    await page.wait(`!!document.querySelector('${mapLabel('Нидерланды — Южная Голландия')} .ed-map-region-focus')`);
+    await country('Франция');
+    await page.wait(`!!document.querySelector('${mapLabel('Франция')}') && !document.querySelector('.ed-map-region-focus')`);
     const searchInput = 'input[aria-label="Поиск сырных статей"]';
     await page.fill(searchInput, 'Камамбер');
     await page.tap('.ed-map-controls button:last-child');
     await page.wait(`document.querySelector('.ed-map-canvas > svg[aria-label="Карта мира"]') && !document.querySelector('${focused}')`);
+    assert.equal(await page.evaluate(`!!document.querySelector('${regionSelect}')`), false);
     await page.wait(`!!document.querySelector('${pin('Вермонтский чеддер')}') && !!document.querySelector('${pin('Сыр Токати')}')`);
     const globalPins = await page.evaluate(`Array.from(document.querySelectorAll('.ed-map-pin'), button => button.getAttribute('aria-label'))`);
     for (const item of items) assert.ok(globalPins.some(label => label.includes(item.title)), item.title);

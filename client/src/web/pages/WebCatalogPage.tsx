@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import WebProductCard from '../components/WebProductCard';
 import { webApi } from '../lib/webApi';
 import { useWebMeta } from '../hooks/useWebMeta';
+import { discoveryUrl, readDiscoveryPage, STORE_ORIGIN } from '@shared/web-discovery';
 
 interface Product {
   id: string; name: string; slug: string; price: string; priceOld?: string;
@@ -24,28 +25,42 @@ export default function WebCatalogPage() {
   const [searchInput, setSearchInput] = useState(params.get('q') || '');
   const [activeCategory, setActiveCategory] = useState(params.get('category') || '');
   const [sortBy, setSortBy] = useState('default');
-  const [page, setPage] = useState(1);
-
-  useWebMeta({
-    title: searchInput ? `Поиск: ${searchInput}` : 'Каталог товаров',
-    description: 'Весь ассортимент итальянских деликатесов Don Giulio Select: сыры, мясные деликатесы, паста, соусы с доставкой по России.',
-    type: 'website',
-  });
+  const [page, setPage] = useState(() => readDiscoveryPage(params.get('page')));
+  useEffect(() => {
+    const url = new URLSearchParams(searchStr);
+    setActiveCategory(url.get('category') || '');
+    setSearchInput(url.get('q') || '');
+    setPage(readDiscoveryPage(url.get('page')));
+  }, [searchStr]);
 
   const { data: categories } = useQuery({
     queryKey: ['/web-api/categories'],
     queryFn: () => webApi.get<Category[]>('/categories'),
   });
+  const categoryFor = (value: string | null) =>
+    categories?.find(category => category.slug === value) ?? categories?.find(category => category.id === value);
+  const selectedCategory = categoryFor(activeCategory);
+  const canonicalCategory = categoryFor(params.get('category'));
+  const canonicalPage = readDiscoveryPage(params.get('page'));
+  useWebMeta({
+    title: canonicalCategory ? `Каталог: ${canonicalCategory.name}` : 'Каталог товаров',
+    description: 'Сыры, мясные деликатесы, паста и соусы Don Giulio Select. Цены, наличие и доставка по России.',
+    url: STORE_ORIGIN + discoveryUrl('/web/catalog', { category: canonicalCategory?.slug,
+      page: canonicalPage > 1 && !params.get('q') ? canonicalPage : undefined }),
+    noindex: !!params.get('q') || window.location.pathname === '/web/search' || (!!params.get('category') && !!categories && !canonicalCategory),
+    defer: !!params.get('category') && !categories,
+  });
 
   const queryParams = new URLSearchParams();
-  if (activeCategory) queryParams.set('category', activeCategory);
+  if (activeCategory) queryParams.set('category', selectedCategory?.id || activeCategory);
   if (searchInput.trim()) queryParams.set('search', searchInput.trim());
   queryParams.set('page', String(page));
   queryParams.set('limit', '24');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['/web-api/products', activeCategory, searchInput, page],
+    queryKey: ['/web-api/products', selectedCategory?.id || activeCategory, searchInput, page],
     queryFn: () => webApi.get<{ products: Product[]; pagination: any }>(`/products?${queryParams}`),
+    enabled: !activeCategory || !!categories,
   });
 
   const rootCategories = categories?.filter(c => !c.parentId) ?? [];
@@ -57,9 +72,9 @@ export default function WebCatalogPage() {
 
   const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); };
   const clearSearch = () => { setSearchInput(''); setPage(1); };
-  const selectCategory = (id: string) => { setActiveCategory(id === activeCategory ? '' : id); setPage(1); };
+  const selectCategory = (id: string) => { setActiveCategory(id && id !== selectedCategory?.id ? id : ''); setPage(1); };
 
-  const selectedCategoryName = rootCategories.find(c => c.id === activeCategory)?.name;
+  const selectedCategoryName = selectedCategory?.name;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -89,7 +104,7 @@ export default function WebCatalogPage() {
                 <button
                   key={cat.id}
                   onClick={() => selectCategory(cat.id)}
-                  className={`w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${activeCategory === cat.id ? 'bg-amber-50 text-amber-800 font-medium' : 'text-neutral-600 hover:bg-neutral-50'}`}
+                  className={`w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${selectedCategory?.id === cat.id ? 'bg-amber-50 text-amber-800 font-medium' : 'text-neutral-600 hover:bg-neutral-50'}`}
                   data-testid={`filter-category-${cat.id}`}
                 >
                   {cat.name}
