@@ -54,6 +54,23 @@ test('the selected country uses the largest uniform scale inside the centered pa
   }
 });
 
+test('France focuses on European territory including Corsica, not overseas territories', () => {
+  const bounds = boundsFor('FR');
+  assert.ok(bounds.south >= 41 && bounds.north <= 52);
+  assert.ok(bounds.west >= -6 && bounds.east <= 10);
+  for (const [width, height] of [[710, 452], [320, 320]]) {
+    const map = fitAtlasMap(width, height, bounds);
+    for (const [longitude, latitude] of [[2.35, 48.86], [8.74, 41.92]]) {
+      const { x, y } = map.project(longitude, latitude);
+      assert.ok(x >= 16 && x <= width - 16 && y >= 16 && y <= height - 16);
+    }
+    for (const [longitude, latitude] of [[-52.33, 4.94], [55.45, -20.88], [45.23, -12.78]]) {
+      const { x, y } = map.project(longitude, latitude);
+      assert.ok(x < 0 || x > width || y < 0 || y > height);
+    }
+  }
+});
+
 test('the rendered Russian outline fits completely, including both sides of the antimeridian', () => {
   const feature = matchCountryFeature(features, 'Россия')!;
   const bounds = boundsFor('RU');

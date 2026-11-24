@@ -90,9 +90,17 @@ function minimalLongitudeArc(longitudes: number[]): { center: number; span: numb
   return { center, span, west, east };
 }
 
-/** The atlas fits the entire country; the editor can keep the local working area. */
+/** France focuses on metropolitan territory, including Corsica, in both maps. */
+function isFrance(feature: CountryFeature) {
+  return feature.properties.ISO_A2_EH === 'FR' || feature.properties.ISO_A2 === 'FR';
+}
+
+/** The atlas fits the entire country except France's overseas territories. */
 export function getCountryBounds(feature: CountryFeature, includeAllTerritories = false): CountryBounds | null {
-  const polygons = includeAllTerritories ? countryPolygons(feature) : chooseCountryPolygons(feature);
+  const polygons = isFrance(feature)
+    ? countryPolygons(feature).filter(polygon => polygon[0]?.length && polygon[0].every(
+      ([longitude, latitude]) => longitude >= -6 && longitude <= 10 && latitude >= 41 && latitude <= 52))
+    : includeAllTerritories ? countryPolygons(feature) : chooseCountryPolygons(feature);
   const positions = polygons.flatMap(polygon => polygon.flat());
   if (!positions.length) return null;
   const longitudes: number[] = [];
