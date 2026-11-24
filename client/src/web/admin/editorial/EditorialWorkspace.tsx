@@ -21,8 +21,9 @@ import EditorialProductLinks from './EditorialProductLinks';
 import CheeseGeoEditor from './CheeseGeoEditor';
 import CheeseMilkEditor, { milkCompositionForSave } from './CheeseMilkEditor';
 import CheeseEditorialMenu from './CheeseEditorialMenu';
+import PublishedCheeseList, { PublishedOriginFilter } from './PublishedCheeseList';
 import CheeseBatchAction, { type CheeseBatchSelection } from './CheeseBatchAction';
-import { cheeseEditorialStage, type CheeseEditorialStage } from '@shared/editorial-stages';
+import { cheeseEditorialStage, type CheeseEditorialStage, type PublishedCheeseFilter } from '@shared/editorial-stages';
 import { cheeseMilkText, detectCheeseMilk, resolveCheeseMilk } from '@shared/editorial-cheese-milk';
 import MarketMonitor from './market/MarketMonitor';
 import {
@@ -101,6 +102,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   const { toast } = useToast();
   const [page, setPage] = useState(0);
   const [cheeseStage, setCheeseStage] = useState<CheeseEditorialStage>('drafts');
+  const [publishedOrigin, setPublishedOrigin] = useState<PublishedCheeseFilter>({});
   const [batchSelection, setBatchSelection] = useState<Record<string, number>>({});
   const [batchReview, setBatchReview] = useState<{ action: CheeseEditorialBatchAction; items: CheeseBatchSelection[] } | null>(null);
   const [dialog, setDialog] = useState(false);
@@ -134,15 +136,21 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
   }, []);
 
   const stage = kind === 'cheese' ? cheeseStage : undefined;
-  const listKey = ['/web-api/admin/editorial', kind, page, PAGE_SIZE, stage ?? 'all'];
+  const origin = stage === 'published' ? publishedOrigin : {};
+  const listKey = ['/web-api/admin/editorial', kind, page, PAGE_SIZE, stage ?? 'all', origin.originCountry ?? null, origin.originRegion ?? null];
   const listQuery = useQuery({
     queryKey: listKey,
-    queryFn: () => editorialApi.list(kind, page * PAGE_SIZE, PAGE_SIZE, stage),
+    queryFn: () => editorialApi.list(kind, page * PAGE_SIZE, PAGE_SIZE, stage, origin),
   });
   function selectCheeseStage(value: CheeseEditorialStage) {
     setBatchSelection({});
     setBatchReview(null);
     setCheeseStage(value);
+    setPublishedOrigin({});
+    setPage(0);
+  }
+  function selectPublishedOrigin(value: PublishedCheeseFilter) {
+    setPublishedOrigin(value);
     setPage(0);
   }
   function showSavedEntry(saved: EditorialEntry, publishedNow = false) {
@@ -150,7 +158,8 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     if (publishedNow) {
       // Continue with the preparation queue, without resetting a valid page.
       if (cheeseStage !== 'drafts') selectCheeseStage('drafts');
-    } else selectCheeseStage(cheeseEditorialStage(saved));
+    } else if (cheeseStage !== 'published' || cheeseEditorialStage(saved) !== 'published')
+      selectCheeseStage(cheeseEditorialStage(saved));
   }
   const linkedEntryId = new URLSearchParams(window.location.search).get('entry');
   const linkedPriceQuery = useQuery({
@@ -264,7 +273,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     Boolean(batchReview && (batchReview.action !== batchAction ||
       batchReview.items.some(item => !selectedCheeses.some(selected => selected.id === item.id && selected.revision === item.revision))));
   useEffect(() => {
-    if ((stage !== 'drafts' && stage !== 'approved') || !listQuery.isSuccess || listQuery.isFetching) return;
+    if (!stage || !listQuery.isSuccess || listQuery.isFetching) return;
     const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
     if (page > lastPage) {
       setBatchSelection({});
@@ -504,7 +513,10 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     deleteMutation.reset();
     requestLock.current = true;
     setRequestBusy(true);
-    try { await deleteMutation.mutateAsync(entry); }
+    try {
+      await deleteMutation.mutateAsync(entry);
+      if (editorDialogRef.current && editing?.id === entry.id) closeDialog(true);
+    }
     catch { /* mutation error is shown in the workspace alert */ }
     finally { requestLock.current = false; setRequestBusy(false); }
   }
@@ -531,6 +543,7 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
     try {
       if (action === 'publish') await publishMutation.mutateAsync(entry);
       else await unpublishMutation.mutateAsync(entry);
+      if (editorDialogRef.current && editing?.id === entry.id) closeDialog(true);
     } catch { /* mutation error is shown in the workspace alert */ }
     finally { requestLock.current = false; setRequestBusy(false); }
   }
@@ -724,9 +737,20 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
             onClose={() => { if (!requestLock.current) setBatchReview(null); }}
             onConfirm={() => { void confirmBatch(); }} onRefresh={refreshBatchList} />}
 
+        {stage === 'published' && <PublishedOriginFilter origins={listQuery.data?.origins || []}
+          value={publishedOrigin} onChange={selectPublishedOrigin} loading={listQuery.isFetching}
+          unavailable={listQuery.isError} onRetry={() => { void listQuery.refetch(); }} />}
+
         {listQuery.isLoading ? <div className="space-y-3" aria-label="Загрузка записей">{[0, 1, 2].map(i => <div key={i} className="h-24 animate-pulse rounded-lg bg-[#e5e3d9]" />)}</div> :
           listQuery.isError ? <Card className="border-[#dfdcd0] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center gap-3 py-12 text-center"><AlertCircle className="h-8 w-8 text-[#a05d41]" /><p className="font-medium">Не удалось загрузить записи</p><Button variant="outline" onClick={() => listQuery.refetch()}><RefreshCw className="mr-2 h-4 w-4" />Повторить</Button></CardContent></Card> :
+            entries.length === 0 && stage === 'published' && publishedOrigin.originCountry
+              ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="py-12 text-center">
+                <h2 className="font-serif text-xl">Нет опубликованных статей для выбранного места</h2>
+                <p className="mt-2 text-sm text-muted-foreground">Выберите другую страну или регион происхождения.</p>
+                <Button variant="outline" className="mt-4" onClick={() => selectPublishedOrigin({})}>Сбросить фильтр</Button>
+              </CardContent></Card> :
             entries.length === 0 ? <Card className="border-dashed border-[#c9cbbf] bg-[#fbfaf6]"><CardContent className="flex flex-col items-center py-16 text-center"><div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#e6ebe4] text-[#315647]"><FilePlus2 className="h-5 w-5" /></div><h2 className="font-serif text-xl">{kind === 'cheese' ? 'В этом разделе пока нет статей' : 'Пока нет записей'}</h2><p className="mt-1 max-w-sm text-sm text-muted-foreground">{kind === 'cheese' ? 'Выберите другой раздел или создайте новую статью. Одобрение и публикация выполняются отдельно.' : 'Создайте первую запись редакции. Публикация выполняется отдельно от статуса «Готово».'}</p><Button className="mt-5 bg-[#315647] hover:bg-[#244537]" onClick={openCreate}>Создать запись</Button></CardContent></Card> :
+              stage === 'published' ? <PublishedCheeseList entries={entries} disabled={requestBusy} onEdit={openEdit} /> :
               <div className="space-y-3">
                 {entries.map(entry => {
                   const data = entry.data as FormData;
@@ -960,6 +984,20 @@ export default function EditorialWorkspace({ kind }: { kind: EditorialKind }) {
                  <CheeseAiDraft mode="editor" entry={editing} onApplied={handleAiProposalUpdated} actionsDisabled={dirty || Boolean(aiProposal) || uploading || photoUploadLock.current} onBusyChange={onEditorAiBusyChange} />
               </section>}
             </div>
+            {kind === 'cheese' && editing?.publication && <section className="space-y-2 border-t border-[#d7d8cc] pt-3">
+              <p className="text-xs text-muted-foreground">Действия с опубликованной статьёй доступны после сохранения изменений.</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={saving || dirty || Boolean(aiProposal)}
+                  onClick={() => { void changePublication(editing, 'unpublish'); }}>Снять с публикации</Button>
+                {(editing.data as CheeseData).status === 'ready' && editing.publication.publishedRevision !== editing.revision &&
+                  <Button type="button" variant="outline" size="sm" disabled={saving || dirty || Boolean(aiProposal)}
+                    onClick={() => { void changePublication(editing, 'publish'); }}>Опубликовать изменения</Button>}
+                <Button type="button" variant="ghost" size="sm" className="text-[#9d4d3f]" disabled={saving || dirty || Boolean(aiProposal)}
+                  onClick={() => { void deleteEntry(editing, entryName(editing)); }}>Удалить статью</Button>
+              </div>
+              {(publishMutation.error || unpublishMutation.error || deleteMutation.error) &&
+                <p role="alert" className="text-sm text-[#8b4535]">{errorText(publishMutation.error || unpublishMutation.error || deleteMutation.error)}</p>}
+            </section>}
             <DialogFooter className="gap-2 sm:gap-2"><Button variant="outline" disabled={saving} onClick={() => closeDialog()}>Отмена</Button>{saveButton('bottom')}</DialogFooter>
           </DialogContent>
         </Dialog>

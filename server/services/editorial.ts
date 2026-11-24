@@ -2,7 +2,7 @@ import type pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { pool } from '../db';
 import { cheeseDataSchema, cheeseEditorialBatchSchema, editorialSchemas, type EditorialKind, type EditorialEntry, type CheeseData, type VideoData, type PriceData } from '../../shared/editorial';
-import type { CheeseEditorialStage } from '../../shared/editorial-stages';
+import type { CheeseEditorialStage, PublishedCheeseFilter } from '../../shared/editorial-stages';
 import { hasPendingBatchDraft, pendingBatchDraft, pendingBatchMessage, pendingBatchTablesAvailable } from './editorial-batch-pending';
 
 export class EditorialError extends Error {
@@ -24,8 +24,19 @@ export function entry(row: Row): EditorialEntry {
     } : null };
 }
 export async function listEditorial(kind: EditorialKind, offset: number, limit: number, database = pool,
-  stage?: CheeseEditorialStage) {
+  stage?: CheeseEditorialStage, origin: PublishedCheeseFilter = {}) {
   if (stage && kind !== 'cheese') throw new EditorialError(400, 'Разделы доступны только для сырных статей');
+  const published = kind === 'cheese' && stage === 'published';
+  if ((origin.originCountry !== undefined || origin.originRegion !== undefined) && !published)
+    throw new EditorialError(400, 'Фильтр происхождения доступен только для опубликованных сырных статей');
+  if (origin.originRegion !== undefined && !origin.originCountry)
+    throw new EditorialError(400, 'Для выбора региона укажите страну происхождения');
+  const order = published
+    ? "lower(btrim(coalesce(data->>'country',''))),lower(btrim(coalesce(data->>'region',''))),lower(coalesce(data->>'title','')),id"
+    : 'updated_at DESC,id';
+  const pageOrder = published
+    ? "lower(btrim(coalesce(page.data->>'country',''))),lower(btrim(coalesce(page.data->>'region',''))),lower(coalesce(page.data->>'title','')),page.id"
+    : 'page.updated_at DESC,page.id';
   const excludePrepared = kind === 'cheese' && await pendingBatchTablesAvailable(database);
   // One statement keeps count and page on the same snapshot.
   const { rows } = await database.query(`
@@ -36,14 +47,23 @@ export async function listEditorial(kind: EditorialKind, offset: number, limit: 
         OR ($4='published' AND p.entry_id IS NOT NULL)
         OR ($4='approved' AND p.entry_id IS NULL AND e.data->>'status'='ready')
         OR ($4='drafts' AND p.entry_id IS NULL AND (e.data->>'status') IS DISTINCT FROM 'ready'))
+    ), filtered AS (
+      SELECT * FROM eligible
+      WHERE ($5::text IS NULL OR lower(btrim(data->>'country'))=lower(btrim($5)))
+        AND ($6::text IS NULL OR lower(btrim(coalesce(data->>'region','')))=lower(btrim($6)))
     )
-    SELECT (SELECT count(*)::int FROM eligible) AS total,
-      COALESCE(jsonb_agg(page ORDER BY page.updated_at DESC, page.id), '[]'::jsonb) AS items
-    FROM (SELECT * FROM eligible ORDER BY updated_at DESC,id LIMIT $2 OFFSET $3) page`,
-    [kind, limit, offset, stage ?? null]);
+    SELECT (SELECT count(*)::int FROM filtered) AS total,
+      ${published ? `COALESCE((SELECT jsonb_agg(o ORDER BY lower(o.country),lower(o.region)) FROM (
+        SELECT min(btrim(coalesce(data->>'country',''))) AS country,
+          min(btrim(coalesce(data->>'region',''))) AS region,count(*)::int AS count
+        FROM eligible GROUP BY lower(btrim(coalesce(data->>'country',''))),lower(btrim(coalesce(data->>'region','')))
+      ) o),'[]'::jsonb)` : 'NULL::jsonb'} AS origins,
+      COALESCE(jsonb_agg(page ORDER BY ${pageOrder}), '[]'::jsonb) AS items
+    FROM (SELECT * FROM filtered ORDER BY ${order} LIMIT $2 OFFSET $3) page`,
+    [kind, limit, offset, stage ?? null, origin.originCountry ?? null, origin.originRegion ?? null]);
   return { total: rows[0].total, items: rows[0].items.map((r: Row) => entry({
     ...r, created_at: new Date(r.created_at), updated_at: new Date(r.updated_at),
-  })) };
+  })), ...(published ? { origins: rows[0].origins } : {}) };
 }
 export async function references(client: pg.PoolClient, kind: EditorialKind, data: any) {
   const checks: [string, string[]][] = kind === 'cheese'

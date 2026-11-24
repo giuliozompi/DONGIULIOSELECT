@@ -17,7 +17,7 @@ import { submitPrice, ownPriceSubmissions, PriceSubmissionLimitError } from '../
 import { priceSubmissionSchema } from '../shared/price-submissions';
 import { changePublication, publishApprovedCheeses } from '../server/services/editorial-publication';
 import { publicEditorialList, publicCheeseMap, publicCheeseDetail, publicCheesePrices, publicVideoDetail } from '../server/services/public-editorial';
-import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg, type CheeseData, type PriceData } from '../shared/editorial';
+import { videoDataSchema, cheeseDataSchema, priceDataSchema, pricePerKg, type CheeseData, type PriceData, type EditorialEntry } from '../shared/editorial';
 import { cheeseEditorialStage } from '../shared/editorial-stages';
 import { sendDiscoverySitemap, sendStorefrontDocument } from '../server/services/web-discovery';
 import { discoveryUrl, storefrontPath } from '../shared/web-discovery';
@@ -245,6 +245,59 @@ function readyCheese(): CheeseData {
     photos: ['https://example.org/cheese.jpg'], history: 'History', characteristics: 'Characteristics',
     culinaryUses: 'Uses', sources: ['https://example.org/source'] });
 }
+test('published cheeses sort globally by origin before paging and filter with complete origin choices', async () => {
+  const publish = async (title: string, country: string, region: string) => {
+    const saved = await saveEditorial('cheese', { ...readyCheese(), title, country, region,
+      productionCountry: 'Россия' }, 'operator', undefined, database);
+    return changePublication(saved.id, saved.revision, true, 'operator', database);
+  };
+  const france = await publish('Альфа Франция', 'Франция', 'Нормандия');
+  const tuscany = await publish('Альфа Тоскана', 'Италия', 'Тоскана');
+  const piedmont = [];
+  for (let i = 20; i >= 0; i--) piedmont.push(await publish(`Сыр ${String(i).padStart(2, '0')}`, 'Италия', 'Пьемонт'));
+  const noRegion = await publish('Без региона', 'Италия', '');
+  await saveEditorial('cheese', { ...readyCheese(), country: 'Испания', region: 'Кастилия' }, 'operator', undefined, database);
+  const first = await (await api('GET', '?kind=cheese&stage=published&limit=2')).json();
+  assert.equal(first.total, 24);
+  assert.deepEqual(first.items.map((item: EditorialEntry) => item.id), [noRegion.id, piedmont[20].id]);
+  assert.deepEqual(first.origins, [
+    { country: 'Италия', region: '', count: 1 },
+    { country: 'Италия', region: 'Пьемонт', count: 21 },
+    { country: 'Италия', region: 'Тоскана', count: 1 },
+    { country: 'Франция', region: 'Нормандия', count: 1 },
+  ]);
+  const last = await (await api('GET', '?kind=cheese&stage=published&limit=2&offset=22')).json();
+  assert.deepEqual(last.items.map((item: EditorialEntry) => item.id), [tuscany.id, france.id]);
+  const filteredUrl = '?kind=cheese&stage=published&limit=20&originCountry=Италия&originRegion=Пьемонт';
+  const filtered = await (await api('GET', filteredUrl)).json();
+  const second = await (await api('GET', `${filteredUrl}&offset=20`)).json();
+  assert.equal(filtered.total, 21);
+  assert.equal(second.total, 21);
+  assert.deepEqual([...filtered.items, ...second.items].map((item: EditorialEntry) => item.id), piedmont.map(item => item.id).reverse());
+  assert.deepEqual(filtered.origins, first.origins, 'selector covers all origins, not just the filtered page');
+  const empty = await (await api('GET', '?kind=cheese&stage=published&originCountry=Россия')).json();
+  assert.equal(empty.total, 0, 'production country must not be treated as historical origin');
+  assert.equal(empty.items.length, 0);
+  assert.deepEqual(empty.origins, first.origins);
+  const noRegionFilter = await listEditorial('cheese', 0, 20, database, 'published', { originCountry: 'Италия', originRegion: '' });
+  assert.deepEqual(noRegionFilter.items.map((item: EditorialEntry) => item.id), [noRegion.id]);
+});
+test('origin filters reject unsupported stages, malformed values and unauthorized readers', async () => {
+  for (const query of [
+    '?kind=cheese&stage=drafts&originCountry=Италия',
+    '?kind=cheese&originCountry=Италия',
+    '?kind=video&originCountry=Италия',
+    '?kind=cheese&stage=published&originRegion=Пьемонт',
+    '?kind=cheese&stage=published&originCountry[]=Италия',
+    '?kind=cheese&stage=published&originCountry=',
+    `?kind=cheese&stage=published&originCountry=${'x'.repeat(101)}`,
+  ]) assert.equal((await api('GET', query)).status, 400, query);
+  for (const token of [null, 'customer']) {
+    const response = await api('GET', '?kind=cheese&stage=published&originCountry=Италия', undefined, token);
+    assert.equal(response.status, token ? 403 : 401);
+  }
+  assert.equal((await api('GET', "?kind=cheese&stage=published&originCountry=%27%20OR%201%3D1--")).status, 200);
+});
 test('cheese menu filters before pagination, includes review drafts and keeps live snapshots in published', async () => {
   const drafts = [];
   for (let i = 0; i < 21; i++)

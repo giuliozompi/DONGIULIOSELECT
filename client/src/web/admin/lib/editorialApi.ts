@@ -1,11 +1,16 @@
 import { webApi } from '../../lib/webApi';
 import type { EditorialKind, EditorialData, EditorialEntry } from '@shared/editorial';
-import type { CheeseEditorialStage } from '@shared/editorial-stages';
+import type { CheeseEditorialStage, PublishedCheeseFilter, PublishedCheeseOrigin } from '@shared/editorial-stages';
 
 const base = '/admin/editorial';
 export const editorialApi = {
-  list: (kind: EditorialKind, offset = 0, limit = 50, stage?: CheeseEditorialStage) =>
-    webApi.get<{ items: EditorialEntry[]; total: number }>(`${base}?kind=${kind}&offset=${offset}&limit=${limit}${stage ? `&stage=${stage}` : ''}`),
+  list: (kind: EditorialKind, offset = 0, limit = 50, stage?: CheeseEditorialStage, origin: PublishedCheeseFilter = {}) => {
+    const params = new URLSearchParams({ kind, offset: String(offset), limit: String(limit) });
+    if (stage) params.set('stage', stage);
+    if (origin.originCountry !== undefined) params.set('originCountry', origin.originCountry);
+    if (origin.originRegion !== undefined) params.set('originRegion', origin.originRegion);
+    return webApi.get<{ items: EditorialEntry[]; total: number; origins?: PublishedCheeseOrigin[] }>(`${base}?${params}`);
+  },
   create: (kind: EditorialKind, data: EditorialData, publish = false) =>
     webApi.post<EditorialEntry>(base, { kind, data, ...(publish ? { publish: true } : {}) }),
   update: (record: EditorialEntry, data: EditorialData, publish = false) =>
