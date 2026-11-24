@@ -22,6 +22,8 @@ const items = [
   { ...cheese('sulguni', 'Сулугуни', 41.71, 44.79, 'СССР'), atlasCountry: 'Грузия' },
   cheese('vermont', 'Вермонтский чеддер', 44.26, -72.57, 'США'),
   cheese('tokachi', 'Сыр Токати', 42.92, 143.20, 'Япония'),
+  cheese('cheddar', 'Английский чеддер', 51.28, -2.77, 'Великобритания'),
+  cheese('scottish', 'Шотландский сыр', 56.4, -3.4, 'Великобритания'),
 ];
 
 test('atlas filters by country, shows world pins and opens articles at the top', {
@@ -60,7 +62,7 @@ test('atlas filters by country, shows world pins and opens articles at the top',
       const country = searchParams.get('country');
       const search = searchParams.get('search')?.toLowerCase();
       const chosenRegion = searchParams.get('region');
-      const regionById = { castelmagno: 'IT-21', nearby: 'IT-21', gorgonzola: 'IT-25', sicilia: 'IT-82', sardegna: 'IT-88', camembert: 'FR-NOR' };
+      const regionById = { castelmagno: 'IT-21', nearby: 'IT-21', gorgonzola: 'IT-25', sicilia: 'IT-82', sardegna: 'IT-88', camembert: 'FR-NOR', cheddar: 'GB-ENG', scottish: 'GB-SCT' };
       if (chosenRegion === 'IT-21') await new Promise(resolve => setTimeout(resolve, 200));
       const filtered = items.filter(item => (!country || (item.atlasCountry || item.country) === country) &&
         (!chosenRegion || regionById[item.id] === chosenRegion) && (!search || item.title.toLowerCase().includes(search)));
@@ -120,6 +122,9 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     await page.setViewport({ width: 1280, height: 1000 });
     await page.send('Page.navigate', { url: base + '/web/cheeses' });
     await page.wait(`document.querySelector('${focused}') && document.querySelectorAll('.ed-map-pin').length === 4`);
+    assert.deepEqual(await page.evaluate(`Array.from(document.querySelectorAll('.ed-country-shortcuts button'), button => button.textContent)`),
+      ['Италия', 'Франция', 'Нидерланды', 'Испания', 'Греция', 'Великобритания', 'Россия']);
+    assert.equal(await page.evaluate(`document.querySelector('.ed-country-shortcuts button[aria-pressed="true"]').textContent`), 'Италия');
     assert.equal(await page.evaluate(`document.querySelector('.ed-map-canvas > svg').getAttribute('aria-label')`), 'Карта: Италия');
     await page.wait(`document.querySelectorAll('${cards}').length === 5`);
     assert.deepEqual(await visibleCards(), italianCards);
@@ -246,6 +251,49 @@ test('atlas filters by country, shows world pins and opens articles at the top',
     await captureScroll(listCard);
     await page.click(listCard);
     await expectArticleStart('Горгонзола');
+    await page.click('.ed-back');
+    await page.wait(`document.querySelectorAll('.ed-country-shortcuts button').length === 7`);
+    const shortcuts = [
+      ['Италия', 'Италия', italianCards],
+      ['Франция', 'Франция', ['camembert']],
+      ['Нидерланды', 'Нидерланды', []],
+      ['Испания', 'Испания', []],
+      ['Греция', 'Греция', []],
+      ['Великобритания', 'Великобритания', ['cheddar', 'scottish']],
+      ['Россия', 'Россия', ['vologda']],
+    ];
+    for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 850, mobile: true }]) {
+      await page.setViewport(viewport);
+      for (const [index, [selectedCountry, label, expectedCards]] of shortcuts.entries()) {
+        const button = `.ed-country-shortcuts button:nth-child(${index + 1})`;
+        await page.tap(button);
+        await page.wait(`document.querySelector('${mapLabel(label)}') &&
+          document.querySelectorAll('${cards}').length === ${expectedCards.length} &&
+          !document.querySelector('.ed-loading')`);
+        assert.deepEqual(await visibleCards(), expectedCards);
+        assert.equal(await page.evaluate(`document.querySelector('.ed-filter-row select').value`), selectedCountry);
+        assert.equal(await page.evaluate(`document.querySelector('${button}').getAttribute('aria-pressed')`), 'true');
+        assert.equal(await page.evaluate(`document.querySelectorAll('.ed-country-shortcuts button[aria-pressed="true"]').length`), 1);
+        if (selectedCountry === 'Великобритания') {
+          assert.equal(await page.evaluate(`document.querySelector('${regionSelect}').value`), '');
+          assert.equal(await page.evaluate(`!!document.querySelector('${pin('Шотландский сыр')}')`), true);
+        }
+      }
+      assert.ok(await page.evaluate(`Array.from(document.querySelectorAll('.ed-country-shortcuts button')).every(button => {
+        const rect=button.getBoundingClientRect(); return rect.height >= 44 && rect.left >= 0 && rect.right <= window.innerWidth;
+      })`), 'country shortcuts fit the viewport and remain easy to tap');
+      await page.tap('.ed-map-controls button:last-child');
+      await page.wait(`!!document.querySelector('.ed-map-canvas > svg[aria-label="Карта мира"]')`);
+      assert.equal(await page.evaluate(`document.querySelectorAll('.ed-country-shortcuts button[aria-pressed="true"]').length`), 0);
+    }
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    await page.evaluate(`document.querySelector('.ed-country-shortcuts button').focus()`);
+    assert.equal(await page.evaluate(`document.activeElement === document.querySelector('.ed-country-shortcuts button')`), true);
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await page.wait(`document.querySelector('${mapLabel('Италия')}') && document.querySelectorAll('${cards}').length === 5`);
+    assert.equal(await page.evaluate(`document.querySelector('.ed-country-shortcuts button').getAttribute('aria-pressed')`), 'true');
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

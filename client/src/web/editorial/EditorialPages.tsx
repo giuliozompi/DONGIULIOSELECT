@@ -13,6 +13,7 @@ import { useWebMeta } from '../hooks/useWebMeta';
 import { getCountryBounds, loadWorldCountryFeatures, matchCountryFeature, type CountryFeature } from '../admin/editorial/cheeseCountryMap';
 import { ATLAS_MARKER_SIZE, atlasCountryPath, atlasMarkerGroups, fitAtlasMap } from './atlasMap';
 import { atlasRegionCountries, atlasRegionCountry, loadAtlasRegions } from './atlasRegions';
+import AtlasCountryShortcuts from './AtlasCountryShortcuts';
 import CheesePriceSubmissions from './CheesePriceSubmissions';
 import RubleConversion from './RubleConversion';
 import './cheese-price-submissions.css';
@@ -231,6 +232,7 @@ export function CheeseAtlasPage() {
   }
   return <div className="ed-page">
     <Intro eyebrow="ATLANTE DEI FORMAGGI · СЫРНЫЙ АТЛАС" title="У каждого вкуса есть адрес." text="Энциклопедия сырной географии: статьи о традициях и регионах. Географическое происхождение не подтверждает место производства конкретного продукта." />
+    <AtlasCountryShortcuts country={country} world={view === 'world'} onSelect={changeCountry} />
     <div className="ed-map-controls"><button className={view === 'country' && !regionBounds ? 'active' : ''} aria-pressed={view === 'country' && !regionBounds} onClick={() => { if (country) { setView('country'); setRegionId(''); setPage(1); } else changeCountry(DEFAULT_ATLAS_COUNTRY); }}><MapPin size={16} /> {countryName}</button><button className={view === 'world' ? 'active' : ''} aria-pressed={view === 'world'} onClick={() => { setView('world'); setRegionId(''); setPage(1); }}><Globe2 size={16} /> Весь мир</button></div>
     <div className="ed-filter-row"><label className="ed-search"><Search size={17} /><input value={search} onChange={e => { setSearch(e.target.value); setPage(1); setSelected(null); }} placeholder="Название, страна или регион" aria-label="Поиск сырных статей" /></label><label className="ed-filter-select">Страна <select value={country} onChange={e => changeCountry(e.target.value)}><option value="">Все страны</option>{countries.map(value => <option key={value} value={value}>{value}</option>)}</select></label></div>
     {map.isError && <ErrorBox error={map.error} retry={() => map.refetch()} />}

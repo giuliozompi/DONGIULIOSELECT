@@ -66,9 +66,12 @@
 .ed-error button:disabled, .ed-pager button:disabled { cursor: not-allowed; opacity: .45; }
 .ed-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--ed-line); color: var(--ed-muted); font-size: 12px; }
 .ed-pager > div { display: flex; gap: 8px; }
-.ed-map-controls { display: flex; gap: 9px; margin: 20px 0 14px; flex-wrap: wrap; }
-.ed-map-controls button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 15px; border: 1px solid #aab3a5; background: transparent; color: var(--ed-olive); cursor: pointer; font-size: 12px; }
-.ed-map-controls button.active { border-color: var(--ed-olive); background: var(--ed-olive); color: white; }
+.ed-map-controls, .ed-country-shortcuts { display: flex; gap: 9px; margin: 20px 0 14px; flex-wrap: wrap; }
+.ed-map-controls button, .ed-country-shortcuts button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 15px; border: 1px solid #aab3a5; background: transparent; color: var(--ed-olive); cursor: pointer; font-size: 12px; }
+.ed-map-controls button.active, .ed-country-shortcuts button.active { border-color: var(--ed-olive); background: var(--ed-olive); color: white; }
+.ed-country-shortcuts { margin-bottom: 0; }
+.ed-country-shortcuts + .ed-map-controls { margin-top: 12px; }
+.ed-country-shortcuts button:focus-visible { outline: 2px solid var(--ed-olive); outline-offset: 3px; }
 .ed-map-region-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px 16px; padding: 12px 14px; background: #f8f7ed; border-bottom: 1px solid #d8ddcf; }
 .ed-map-region-controls label { flex: 0 1 260px; min-width: 0; }
 .ed-map-region-controls select { width: 100%; min-height: 44px; }
